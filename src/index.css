@@ -3,6 +3,7 @@
 @layer base {
   :root {
     --color-accent: #ea5b62;
+    --color-accent-faded: #ea5b625a;
     --color-primary: #eeeff8;
     --color-secondary: #9596a9;
     --color-bg-dark: #3b3c51;
@@ -25,5 +26,11 @@
   }
   .bg-light {
     background-color: var(--color-bg-light);
+  }
+  .outline-accent {
+    border: 1px solid var(--color-accent);
+  }
+  .bg-accent-faded {
+    background-color: var(--color-accent-faded);
   }
 }

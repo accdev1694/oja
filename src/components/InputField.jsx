@@ -1,8 +1,9 @@
-const InputField = ({placeholder}) => {
+const InputField = ({placeholder, type, className}) => {
   return (
+    
     <input
-      className=" text-center w-full font-bold"
-      type="number"
+      className={`${className}  focus:outline-none transition`}
+      type={type}
       placeholder={placeholder}
     />
   );
