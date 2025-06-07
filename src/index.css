@@ -1,2 +1,29 @@
-@import "tailwindcss" ;
+@import "tailwindcss";
 
+@layer base {
+  :root {
+    --color-accent: #ea5b62;
+    --color-primary: #eeeff8;
+    --color-secondary: #9596a9;
+    --color-bg-dark: #3b3c51;
+    --color-bg-light: #d9d8de;
+  }
+}
+
+@layer utilities {
+  .text-accent {
+    color: var(--color-accent);
+  }
+  .text-primary {
+    color: var(--color-primary);
+  }
+  .text-secondary {
+    color: var(--color-secondary);
+  }
+  .bg-dark {
+    background-color: var(--color-bg-dark);
+  }
+  .bg-light {
+    background-color: var(--color-bg-light);
+  }
+}
