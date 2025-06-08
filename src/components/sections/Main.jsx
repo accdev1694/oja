@@ -5,7 +5,7 @@ import StoreSelect from "../StoreSelect";
 const Main = ({ setBalance }) => {
   return (
     <>
-      <div className="flex gap-4">
+      <div className="flex gap-2">
         {/* Add Budget */}
         {/* (ensure user CANT type 0 or lower) */}
 
