@@ -1,8 +1,9 @@
 const Balance = ({ balance }) => {
+  
   return (
-    <div className="flex gap-2 items-end  mb-6">
-      <p className="text-sm text-secondary">Balance:</p>
-      <h1 className="font-bold text-5xl">£{balance}</h1>
+    <div className="flex flex-col justify-center text-center align-center w-30">
+      <h1 className="font-bold text-3xl">£{balance}</h1>
+      <p className="text-xs text-secondary">Balance:</p>      
     </div>
   );
 };

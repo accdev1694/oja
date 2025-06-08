@@ -1,6 +1,5 @@
 const InputField = ({placeholder, type, className, value, onChange}) => {
-  return (
-    
+  return (    
     <input
       className={`${className}  focus:outline-none transition`}
       type={type}
@@ -12,3 +11,6 @@ const InputField = ({placeholder, type, className, value, onChange}) => {
 };
 
 export default InputField;
+
+
+

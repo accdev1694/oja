@@ -2,6 +2,7 @@ import InputField from "../InputField"
 import StoreSelect from "../StoreSelect"
 
 const Main = ({setBalance}) => {
+  
   return (
     <>
       <div className="flex gap-4">
