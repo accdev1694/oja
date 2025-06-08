@@ -6,6 +6,7 @@ const InputField = ({placeholder, type, className, value, onChange}) => {
       placeholder={placeholder}
       value={value}
       onChange={onChange}
+      required
     />
   );
 };

@@ -1,6 +1,6 @@
 const StoreSelect = ({className}) => {
   return (
-    <select className={`${className}`} name="store" id="store">
+    <select className={`${className}`} name="store" id="store" required>
       <option className="text-xs" value={null}>Select a Store</option>
       <option className="text-xs"  value="asda">Asda</option>
       <option className="text-xs"  value="lidl">Lidl</option>

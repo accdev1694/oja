@@ -1,8 +1,8 @@
-import InputField from "../InputField"
-import StoreSelect from "../StoreSelect"
+import AddItem from "../AddItem";
+import InputField from "../InputField";
+import StoreSelect from "../StoreSelect";
 
-const Main = ({setBalance}) => {
-  
+const Main = ({ setBalance }) => {
   return (
     <>
       <div className="flex gap-4">
@@ -22,6 +22,7 @@ const Main = ({setBalance}) => {
         {/* Select Store */}
         <StoreSelect className="w-[50%] rounded-[0_24px_24px_0] px-4 py-2 bg-light focus:outline-none transition" />
       </div>
+      <AddItem />
     </>
   );
 };
