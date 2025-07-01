@@ -1,0 +1,7 @@
+{    
+    "items": [
+        {"name": "Rice", "desc": "Lorem Ipsum Dolor set enat", "size": 2, "price": 12, "id": 1},
+        {"name": "Beans", "desc": "Lorem Ipsum Dolor set enat", "size": 2, "price": 12, "id": 2},
+        {"name": "Eggs", "desc": "Lorem Ipsum Dolor set enat", "size": 2, "price": 12, "id": 3}
+    ]    
+}
