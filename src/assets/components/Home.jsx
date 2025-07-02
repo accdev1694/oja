@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import ItemsList from "./ItemsList";
+import ItemsInput from "./ItemInput";
 
 const Home = () => {
   const [items, setItems] = useState([]);
@@ -24,8 +24,8 @@ const Home = () => {
     })
   }, []);
   return (
-    <div className="mx-100 my-12 ">
-      <ItemsList items={items} error={error} loading={loading}/>
+    <div className=" flex justify-center">
+      <ItemsInput items={items} setItems={setItems} error={error} loading={loading}/>
     </div>
   );
 };
