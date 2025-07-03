@@ -26,7 +26,7 @@ const ItemInput = ({ items, error, loading }) => {
   };
 
   return (
-    <>
+    <div className="flex flex-col justify-center">
       <form
         onSubmit={handleSubmit}
         className="flex justify-between items-center gap-12 bg-orange-500/20 w-80 p-2 rounded-full mt-2"
@@ -55,14 +55,24 @@ const ItemInput = ({ items, error, loading }) => {
         </button>
       </form>
 
-      <div className="">
+      <div className="text-[10px] mt-4">
+        <div className="flex font-bold">
+          <p className="w-[15%]">Item</p>
+          <p className="italic w-[40%]">Description</p>
+          <p className="w-[15%]">Price</p>
+          <p className="w-[15%]">Qty</p>
+          <p className="w-[15%]">Amt</p>
+        </div>
         {itemsList.map((i) => (
-          <div key={i.id} className="">
-            <p>{i.name}</p>
+          <div key={i.id} className="flex items-baseline ">
+            <p className="w-[15%]">{i.name}</p>
+            <p className="italic w-[40%]">{i.desc}</p>
+            <p className="w-[15%]">{i.price}</p>
+            <input className="w-[15%]"  type="number" />
           </div>
         ))}
       </div>
-    </>
+    </div>
   );
 };
 

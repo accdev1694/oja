@@ -24,7 +24,7 @@ const Home = () => {
     })
   }, []);
   return (
-    <div className=" flex justify-center">
+    <div className="flex justify-center">
       <ItemsInput items={items} setItems={setItems} error={error} loading={loading}/>
     </div>
   );
