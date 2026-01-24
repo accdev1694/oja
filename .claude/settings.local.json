@@ -12,7 +12,8 @@
       "Bash(git remote add:*)",
       "Bash(git push:*)",
       "Bash(git commit:*)",
-      "Skill(bmad:bmm:workflows:testarch-test-design)"
+      "Skill(bmad:bmm:workflows:testarch-test-design)",
+      "Skill(bmad:bmm:workflows:sprint-planning)"
     ]
   }
 }

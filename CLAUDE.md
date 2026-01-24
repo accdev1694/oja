@@ -56,7 +56,7 @@ The table in this file shows high-level phase completion status. Update status t
 | 4. UX Design | UX Designer | `/bmad:bmm:workflows:create-ux-design` | COMPLETE |
 | 5. Epics & Stories | Scrum Master | `/bmad:bmm:workflows:create-epics-and-stories` | COMPLETE |
 | 6. Test Strategy | Test Architect | `/bmad:bmm:workflows:testarch-test-design` | COMPLETE |
-| 7. Sprint Planning | Scrum Master | `/bmad:bmm:workflows:sprint-planning` | Pending |
+| 7. Sprint Planning | Scrum Master | `/bmad:bmm:workflows:sprint-planning` | COMPLETE |
 | 8. Story Development | Developer | `/bmad:bmm:workflows:dev-story` | Pending |
 | 9. Code Review | Developer | `/bmad:bmm:workflows:code-review` | Pending |
 | 10. Test Automation | Test Architect | `/bmad:bmm:workflows:testarch-automate` | Pending |
