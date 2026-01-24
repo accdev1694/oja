@@ -1,5 +1,12 @@
 # Dependencies
 node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 .pnpm-store/
 
 # Next.js
@@ -37,6 +44,7 @@ coverage/
 # OS
 .DS_Store
 Thumbs.db
+*.pem
 
 # Vercel
 .vercel
@@ -50,7 +58,9 @@ public/workbox-*.js.map
 # Supabase
 .supabase/
 
-# Misc
-*.log
+# TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Misc
+*.log

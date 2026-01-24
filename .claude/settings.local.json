@@ -14,7 +14,9 @@
       "Bash(git commit:*)",
       "Skill(bmad:bmm:workflows:testarch-test-design)",
       "Skill(bmad:bmm:workflows:sprint-planning)",
-      "Skill(bmad:bmm:workflows:create-story)"
+      "Skill(bmad:bmm:workflows:create-story)",
+      "Skill(bmad:bmm:workflows:dev-story)",
+      "Bash(npm install:*)"
     ]
   }
 }
