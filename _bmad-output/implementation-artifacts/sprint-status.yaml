@@ -44,7 +44,7 @@ development_status:
   # Epic 1: Project Foundation & PWA Setup (7 stories)
   epic-1: in-progress
   1-1-initialize-nextjs-project-with-core-dependencies: review
-  1-2-configure-serwist-pwa-with-service-worker: backlog
+  1-2-configure-serwist-pwa-with-service-worker: ready-for-dev
   1-3-set-up-supabase-project-with-core-schema: backlog
   1-4-configure-dexiejs-offline-storage-layer: backlog
   1-5-set-up-tanstack-query-and-zustand-state-management: backlog
