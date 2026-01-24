@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(bmad:bmm:workflows:prd)",
+      "Skill(bmad:bmm:workflows:create-ux-design)",
+      "WebSearch",
+      "Skill(bmad:bmm:workflows:create-epics-and-stories)",
+      "Bash(gh:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

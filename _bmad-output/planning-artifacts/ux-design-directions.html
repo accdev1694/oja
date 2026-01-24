@@ -1,0 +1,1693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oja - Design Direction Exploration</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Brand Colors */
+            --color-orange: #FF6B35;
+            --color-orange-light: #FF8A5C;
+            --color-orange-dark: #E55A2B;
+            --color-charcoal: #2D3436;
+            --color-warm-white: #FFFAF8;
+            --color-cream: #FFF5F0;
+
+            /* Safe Zone Colors */
+            --safe-zone-green: #10B981;
+            --safe-zone-amber: #F59E0B;
+            --safe-zone-red: #EF4444;
+
+            /* Semantic */
+            --color-muted: #9CA3AF;
+            --color-border: #E5E7EB;
+
+            /* Spacing */
+            --space-1: 4px;
+            --space-2: 8px;
+            --space-3: 12px;
+            --space-4: 16px;
+            --space-6: 24px;
+            --space-8: 32px;
+
+            /* Border Radius */
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-full: 9999px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #1a1a2e;
+            color: var(--color-charcoal);
+            line-height: 1.5;
+        }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(26, 26, 46, 0.95);
+            backdrop-filter: blur(10px);
+            padding: var(--space-4);
+            z-index: 100;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .nav-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav h1 {
+            color: white;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .nav h1 span {
+            color: var(--color-orange);
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: var(--space-2);
+            flex-wrap: wrap;
+        }
+
+        .nav-tab {
+            padding: var(--space-2) var(--space-4);
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: var(--radius-full);
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .nav-tab:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .nav-tab.active {
+            background: var(--color-orange);
+            color: white;
+        }
+
+        /* Main Content */
+        .main {
+            padding-top: 80px;
+        }
+
+        /* Direction Section */
+        .direction {
+            min-height: 100vh;
+            padding: var(--space-8);
+            display: none;
+        }
+
+        .direction.active {
+            display: block;
+        }
+
+        .direction-header {
+            text-align: center;
+            color: white;
+            margin-bottom: var(--space-8);
+        }
+
+        .direction-header h2 {
+            font-size: 28px;
+            margin-bottom: var(--space-2);
+        }
+
+        .direction-header p {
+            color: rgba(255,255,255,0.7);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Phone Frame */
+        .phone-frame {
+            width: 375px;
+            height: 812px;
+            background: var(--color-warm-white);
+            border-radius: 40px;
+            overflow: hidden;
+            margin: 0 auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .phone-notch {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 150px;
+            height: 30px;
+            background: black;
+            border-radius: 0 0 20px 20px;
+            z-index: 10;
+        }
+
+        .phone-content {
+            height: 100%;
+            overflow-y: auto;
+            padding-top: 44px;
+        }
+
+        /* Direction 1: Card-Heavy Layout */
+        .d1 .safe-zone-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(180deg, rgba(16, 185, 129, 0.15) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .d1 .header {
+            padding: var(--space-4);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .d1 .greeting {
+            font-size: 14px;
+            color: var(--color-muted);
+        }
+
+        .d1 .greeting strong {
+            display: block;
+            font-size: 20px;
+            color: var(--color-charcoal);
+        }
+
+        .d1 .budget-ring {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: conic-gradient(var(--safe-zone-green) 65%, var(--color-border) 65%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .d1 .budget-ring-inner {
+            width: 52px;
+            height: 52px;
+            background: var(--color-warm-white);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .d1 .budget-amount {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--color-charcoal);
+        }
+
+        .d1 .budget-label {
+            font-size: 8px;
+            color: var(--color-muted);
+        }
+
+        .d1 .card {
+            background: white;
+            border-radius: var(--radius-md);
+            margin: var(--space-4);
+            padding: var(--space-4);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .d1 .card-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--color-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: var(--space-3);
+        }
+
+        .d1 .list-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: var(--space-3) 0;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .d1 .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .d1 .checkbox {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--color-border);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .d1 .checkbox.checked {
+            background: var(--color-orange);
+            border-color: var(--color-orange);
+            color: white;
+        }
+
+        .d1 .item-info {
+            flex: 1;
+        }
+
+        .d1 .item-name {
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .d1 .item-meta {
+            font-size: 12px;
+            color: var(--color-muted);
+        }
+
+        .d1 .item-price {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--color-charcoal);
+        }
+
+        .d1 .bottom-nav {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 64px;
+            background: white;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border-top: 1px solid var(--color-border);
+        }
+
+        .d1 .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            color: var(--color-muted);
+            font-size: 10px;
+        }
+
+        .d1 .nav-item.active {
+            color: var(--color-orange);
+        }
+
+        .d1 .nav-icon {
+            width: 24px;
+            height: 24px;
+            background: currentColor;
+            border-radius: 4px;
+            opacity: 0.3;
+        }
+
+        .d1 .nav-item.active .nav-icon {
+            opacity: 1;
+        }
+
+        /* Direction 2: Minimal Clean */
+        .d2 .phone-content {
+            background: white;
+        }
+
+        .d2 .top-bar {
+            padding: var(--space-6) var(--space-4);
+            text-align: center;
+        }
+
+        .d2 .budget-display {
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--safe-zone-green);
+        }
+
+        .d2 .budget-subtext {
+            font-size: 14px;
+            color: var(--color-muted);
+        }
+
+        .d2 .progress-bar {
+            height: 4px;
+            background: var(--color-border);
+            margin: var(--space-4);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .d2 .progress-fill {
+            height: 100%;
+            width: 65%;
+            background: var(--safe-zone-green);
+            border-radius: 2px;
+        }
+
+        .d2 .section-title {
+            padding: var(--space-4);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--color-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .d2 .minimal-item {
+            display: flex;
+            align-items: center;
+            padding: var(--space-4);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .d2 .minimal-checkbox {
+            width: 20px;
+            height: 20px;
+            border: 1.5px solid var(--color-border);
+            border-radius: 50%;
+            margin-right: var(--space-3);
+        }
+
+        .d2 .minimal-checkbox.checked {
+            background: var(--color-orange);
+            border-color: var(--color-orange);
+        }
+
+        .d2 .minimal-item-text {
+            flex: 1;
+            font-size: 16px;
+        }
+
+        .d2 .minimal-item-text.checked {
+            text-decoration: line-through;
+            color: var(--color-muted);
+        }
+
+        .d2 .minimal-price {
+            font-size: 14px;
+            color: var(--color-muted);
+        }
+
+        .d2 .fab {
+            position: absolute;
+            bottom: 80px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background: var(--color-orange);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+        }
+
+        /* Direction 3: Dashboard Focus */
+        .d3 .phone-content {
+            background: #F8FAFC;
+        }
+
+        .d3 .dash-header {
+            background: var(--color-orange);
+            padding: var(--space-6) var(--space-4);
+            color: white;
+        }
+
+        .d3 .dash-title {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .d3 .dash-amount {
+            font-size: 36px;
+            font-weight: 700;
+        }
+
+        .d3 .dash-subtitle {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .d3 .stat-row {
+            display: flex;
+            gap: var(--space-3);
+            padding: var(--space-4);
+            margin-top: -20px;
+        }
+
+        .d3 .stat-card {
+            flex: 1;
+            background: white;
+            border-radius: var(--radius-md);
+            padding: var(--space-3);
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .d3 .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--color-charcoal);
+        }
+
+        .d3 .stat-label {
+            font-size: 10px;
+            color: var(--color-muted);
+            text-transform: uppercase;
+        }
+
+        .d3 .list-section {
+            background: white;
+            margin: var(--space-4);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .d3 .list-header {
+            padding: var(--space-3) var(--space-4);
+            background: var(--color-cream);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--color-charcoal);
+        }
+
+        .d3 .dash-item {
+            display: flex;
+            align-items: center;
+            padding: var(--space-3) var(--space-4);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .d3 .priority-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: var(--space-3);
+        }
+
+        .d3 .priority-high {
+            background: var(--safe-zone-red);
+        }
+
+        .d3 .priority-medium {
+            background: var(--safe-zone-amber);
+        }
+
+        .d3 .priority-low {
+            background: var(--safe-zone-green);
+        }
+
+        /* Direction 4: List-Centric */
+        .d4 .phone-content {
+            background: var(--color-warm-white);
+        }
+
+        .d4 .sticky-budget {
+            position: sticky;
+            top: 0;
+            background: var(--color-warm-white);
+            padding: var(--space-3) var(--space-4);
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 5;
+        }
+
+        .d4 .budget-pill {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--safe-zone-green);
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-full);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .d4 .items-count {
+            font-size: 13px;
+            color: var(--color-muted);
+        }
+
+        .d4 .list-group {
+            margin: var(--space-4);
+        }
+
+        .d4 .group-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--color-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: var(--space-2);
+        }
+
+        .d4 .swipeable-item {
+            background: white;
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            margin-bottom: var(--space-2);
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .d4 .drag-handle {
+            width: 4px;
+            height: 20px;
+            background: var(--color-border);
+            border-radius: 2px;
+        }
+
+        .d4 .item-checkbox {
+            width: 22px;
+            height: 22px;
+            border: 2px solid var(--color-orange);
+            border-radius: 50%;
+        }
+
+        .d4 .item-checkbox.checked {
+            background: var(--color-orange);
+        }
+
+        .d4 .item-content {
+            flex: 1;
+        }
+
+        .d4 .item-title {
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .d4 .item-detail {
+            font-size: 12px;
+            color: var(--color-muted);
+        }
+
+        /* Direction 5: Visual/Illustrated */
+        .d5 .phone-content {
+            background: linear-gradient(180deg, var(--color-cream) 0%, var(--color-warm-white) 100%);
+        }
+
+        .d5 .hero-section {
+            padding: var(--space-6) var(--space-4);
+            text-align: center;
+        }
+
+        .d5 .hero-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--color-orange) 0%, var(--color-orange-light) 100%);
+            border-radius: 20px;
+            margin: 0 auto var(--space-4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+
+        .d5 .hero-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--color-charcoal);
+            margin-bottom: var(--space-2);
+        }
+
+        .d5 .hero-subtitle {
+            font-size: 14px;
+            color: var(--color-muted);
+        }
+
+        .d5 .safe-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--safe-zone-green);
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-full);
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: var(--space-3);
+        }
+
+        .d5 .category-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--space-3);
+            padding: var(--space-4);
+        }
+
+        .d5 .category-card {
+            background: white;
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .d5 .category-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--color-cream);
+            border-radius: var(--radius-md);
+            margin: 0 auto var(--space-2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .d5 .category-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--color-charcoal);
+        }
+
+        .d5 .category-count {
+            font-size: 11px;
+            color: var(--color-muted);
+        }
+
+        /* Direction 6: Compact/Dense */
+        .d6 .phone-content {
+            background: white;
+            font-size: 13px;
+        }
+
+        .d6 .compact-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-3) var(--space-4);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .d6 .compact-budget {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .d6 .compact-status {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-size: 12px;
+            color: var(--safe-zone-green);
+        }
+
+        .d6 .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--safe-zone-green);
+            border-radius: 50%;
+        }
+
+        .d6 .compact-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .d6 .compact-tab {
+            flex: 1;
+            padding: var(--space-3);
+            text-align: center;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--color-muted);
+        }
+
+        .d6 .compact-tab.active {
+            color: var(--color-orange);
+            border-bottom: 2px solid var(--color-orange);
+        }
+
+        .d6 .dense-list {
+            padding: var(--space-2) 0;
+        }
+
+        .d6 .dense-item {
+            display: flex;
+            align-items: center;
+            padding: var(--space-2) var(--space-4);
+            gap: var(--space-2);
+        }
+
+        .d6 .dense-check {
+            width: 16px;
+            height: 16px;
+            border: 1.5px solid var(--color-border);
+            border-radius: 4px;
+        }
+
+        .d6 .dense-check.checked {
+            background: var(--color-orange);
+            border-color: var(--color-orange);
+        }
+
+        .d6 .dense-text {
+            flex: 1;
+            font-size: 13px;
+        }
+
+        .d6 .dense-price {
+            font-size: 12px;
+            color: var(--color-muted);
+            font-weight: 500;
+        }
+
+        .d6 .dense-divider {
+            height: 1px;
+            background: var(--color-border);
+            margin: var(--space-2) var(--space-4);
+        }
+
+        /* Features Panel */
+        .features-panel {
+            max-width: 1200px;
+            margin: var(--space-8) auto;
+            padding: 0 var(--space-4);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-4);
+        }
+
+        .feature-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+        }
+
+        .feature-card h3 {
+            color: var(--color-orange);
+            font-size: 14px;
+            margin-bottom: var(--space-2);
+        }
+
+        .feature-card p {
+            color: rgba(255,255,255,0.7);
+            font-size: 13px;
+        }
+
+        /* Comparison View */
+        .comparison-view {
+            display: none;
+            padding: var(--space-8);
+        }
+
+        .comparison-view.active {
+            display: block;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: var(--space-6);
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .comparison-item {
+            text-align: center;
+        }
+
+        .comparison-item h3 {
+            color: white;
+            margin-top: var(--space-4);
+            font-size: 16px;
+        }
+
+        .comparison-item p {
+            color: rgba(255,255,255,0.6);
+            font-size: 13px;
+            margin-top: var(--space-2);
+        }
+
+        .comparison-item .phone-frame {
+            transform: scale(0.85);
+            margin: 0 auto;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-tabs {
+                display: none;
+            }
+
+            .comparison-item .phone-frame {
+                transform: scale(0.7);
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <div class="nav-content">
+            <h1><span>Oja</span> Design Directions</h1>
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-view="d1">1. Card-Heavy</button>
+                <button class="nav-tab" data-view="d2">2. Minimal</button>
+                <button class="nav-tab" data-view="d3">3. Dashboard</button>
+                <button class="nav-tab" data-view="d4">4. List-Centric</button>
+                <button class="nav-tab" data-view="d5">5. Visual</button>
+                <button class="nav-tab" data-view="d6">6. Compact</button>
+                <button class="nav-tab" data-view="compare">Compare All</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main">
+        <!-- Direction 1: Card-Heavy -->
+        <section class="direction d1 active" id="d1">
+            <div class="direction-header">
+                <h2>Direction 1: Card-Heavy Layout</h2>
+                <p>Prominent cards for each section. Clear visual hierarchy with contained elements. Friendly and approachable feel.</p>
+            </div>
+
+            <div class="phone-frame">
+                <div class="phone-notch"></div>
+                <div class="phone-content">
+                    <div class="safe-zone-bg"></div>
+
+                    <div class="header">
+                        <div class="greeting">
+                            Good morning
+                            <strong>Diloc</strong>
+                        </div>
+                        <div class="budget-ring">
+                            <div class="budget-ring-inner">
+                                <div class="budget-amount">£52</div>
+                                <div class="budget-label">of £80</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">Shopping List</div>
+                        <div class="list-item">
+                            <div class="checkbox checked">✓</div>
+                            <div class="item-info">
+                                <div class="item-name">Semi-Skimmed Milk</div>
+                                <div class="item-meta">2L • Tesco</div>
+                            </div>
+                            <div class="item-price">£1.65</div>
+                        </div>
+                        <div class="list-item">
+                            <div class="checkbox checked">✓</div>
+                            <div class="item-info">
+                                <div class="item-name">Wholemeal Bread</div>
+                                <div class="item-meta">800g • Hovis</div>
+                            </div>
+                            <div class="item-price">£1.40</div>
+                        </div>
+                        <div class="list-item">
+                            <div class="checkbox"></div>
+                            <div class="item-info">
+                                <div class="item-name">Free Range Eggs</div>
+                                <div class="item-meta">6 pack • Large</div>
+                            </div>
+                            <div class="item-price">£2.10</div>
+                        </div>
+                        <div class="list-item">
+                            <div class="checkbox"></div>
+                            <div class="item-info">
+                                <div class="item-name">Chicken Breast</div>
+                                <div class="item-meta">500g • Fresh</div>
+                            </div>
+                            <div class="item-price">£4.50</div>
+                        </div>
+                        <div class="list-item">
+                            <div class="checkbox"></div>
+                            <div class="item-info">
+                                <div class="item-name">Bananas</div>
+                                <div class="item-meta">Loose • ~5</div>
+                            </div>
+                            <div class="item-price">£0.85</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">Running Low</div>
+                        <div class="list-item">
+                            <div class="checkbox"></div>
+                            <div class="item-info">
+                                <div class="item-name">Butter</div>
+                                <div class="item-meta">250g • Lurpak</div>
+                            </div>
+                            <div class="item-price">£3.25</div>
+                        </div>
+                    </div>
+
+                    <div class="bottom-nav">
+                        <div class="nav-item active">
+                            <div class="nav-icon"></div>
+                            <span>List</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Pantry</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Scan</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Insights</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="features-panel">
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <h3>Visual Hierarchy</h3>
+                        <p>Cards create clear content boundaries. Each section feels contained and purposeful.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Safe Zone Integration</h3>
+                        <p>Subtle green gradient glow behind content. Budget ring in header shows status at a glance.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Touch-Friendly</h3>
+                        <p>Large checkboxes (44px) with generous padding. Easy one-handed operation.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Information Density</h3>
+                        <p>Moderate density - shows essential info without overwhelming. Good for Sarah persona.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Direction 2: Minimal Clean -->
+        <section class="direction d2" id="d2">
+            <div class="direction-header">
+                <h2>Direction 2: Minimal Clean</h2>
+                <p>Maximum white space, subtle elements. Budget takes center stage. Calm, focused experience.</p>
+            </div>
+
+            <div class="phone-frame">
+                <div class="phone-notch"></div>
+                <div class="phone-content">
+                    <div class="top-bar">
+                        <div class="budget-display">£52.40</div>
+                        <div class="budget-subtext">of £80.00 budget</div>
+                    </div>
+
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+
+                    <div class="section-title">To Buy</div>
+
+                    <div class="minimal-item">
+                        <div class="minimal-checkbox checked"></div>
+                        <div class="minimal-item-text checked">Semi-Skimmed Milk</div>
+                        <div class="minimal-price">£1.65</div>
+                    </div>
+                    <div class="minimal-item">
+                        <div class="minimal-checkbox checked"></div>
+                        <div class="minimal-item-text checked">Wholemeal Bread</div>
+                        <div class="minimal-price">£1.40</div>
+                    </div>
+                    <div class="minimal-item">
+                        <div class="minimal-checkbox"></div>
+                        <div class="minimal-item-text">Free Range Eggs</div>
+                        <div class="minimal-price">£2.10</div>
+                    </div>
+                    <div class="minimal-item">
+                        <div class="minimal-checkbox"></div>
+                        <div class="minimal-item-text">Chicken Breast</div>
+                        <div class="minimal-price">£4.50</div>
+                    </div>
+                    <div class="minimal-item">
+                        <div class="minimal-checkbox"></div>
+                        <div class="minimal-item-text">Bananas</div>
+                        <div class="minimal-price">£0.85</div>
+                    </div>
+                    <div class="minimal-item">
+                        <div class="minimal-checkbox"></div>
+                        <div class="minimal-item-text">Butter</div>
+                        <div class="minimal-price">£3.25</div>
+                    </div>
+                    <div class="minimal-item">
+                        <div class="minimal-checkbox"></div>
+                        <div class="minimal-item-text">Pasta</div>
+                        <div class="minimal-price">£1.20</div>
+                    </div>
+
+                    <div class="fab">+</div>
+
+                    <div class="bottom-nav" style="background: white;">
+                        <div class="nav-item active">
+                            <div class="nav-icon"></div>
+                            <span>List</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Pantry</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Scan</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Insights</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="features-panel">
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <h3>Budget First</h3>
+                        <p>Large budget display dominates the view. Users always know their status immediately.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Minimal Distractions</h3>
+                        <p>No unnecessary elements. Perfect for David persona who values clean data presentation.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Linear Progress</h3>
+                        <p>Simple progress bar instead of circular. Easy to scan and understand at a glance.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Floating Action</h3>
+                        <p>FAB for quick-add keeps interface clean while maintaining easy access to add items.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Direction 3: Dashboard Focus -->
+        <section class="direction d3" id="d3">
+            <div class="direction-header">
+                <h2>Direction 3: Dashboard Focus</h2>
+                <p>Data-rich interface with metrics prominent. Great for power users who want visibility into their shopping patterns.</p>
+            </div>
+
+            <div class="phone-frame">
+                <div class="phone-notch"></div>
+                <div class="phone-content">
+                    <div class="dash-header">
+                        <div class="dash-title">This Week's Budget</div>
+                        <div class="dash-amount">£52.40</div>
+                        <div class="dash-subtitle">£27.60 remaining of £80.00</div>
+                    </div>
+
+                    <div class="stat-row">
+                        <div class="stat-card">
+                            <div class="stat-value">7</div>
+                            <div class="stat-label">Items Left</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">£3.92</div>
+                            <div class="stat-label">Avg/Item</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">65%</div>
+                            <div class="stat-label">Budget Used</div>
+                        </div>
+                    </div>
+
+                    <div class="list-section">
+                        <div class="list-header">High Priority</div>
+                        <div class="dash-item">
+                            <div class="priority-dot priority-high"></div>
+                            <div class="item-info">
+                                <div class="item-name">Chicken Breast</div>
+                            </div>
+                            <div class="item-price">£4.50</div>
+                        </div>
+                        <div class="dash-item">
+                            <div class="priority-dot priority-high"></div>
+                            <div class="item-info">
+                                <div class="item-name">Free Range Eggs</div>
+                            </div>
+                            <div class="item-price">£2.10</div>
+                        </div>
+                    </div>
+
+                    <div class="list-section">
+                        <div class="list-header">Medium Priority</div>
+                        <div class="dash-item">
+                            <div class="priority-dot priority-medium"></div>
+                            <div class="item-info">
+                                <div class="item-name">Butter</div>
+                            </div>
+                            <div class="item-price">£3.25</div>
+                        </div>
+                        <div class="dash-item">
+                            <div class="priority-dot priority-medium"></div>
+                            <div class="item-info">
+                                <div class="item-name">Bananas</div>
+                            </div>
+                            <div class="item-price">£0.85</div>
+                        </div>
+                    </div>
+
+                    <div class="list-section">
+                        <div class="list-header">Low Priority</div>
+                        <div class="dash-item">
+                            <div class="priority-dot priority-low"></div>
+                            <div class="item-info">
+                                <div class="item-name">Pasta</div>
+                            </div>
+                            <div class="item-price">£1.20</div>
+                        </div>
+                    </div>
+
+                    <div class="bottom-nav" style="background: white; position: absolute;">
+                        <div class="nav-item active">
+                            <div class="nav-icon"></div>
+                            <span>List</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Pantry</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Scan</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Insights</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="features-panel">
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <h3>Metrics Forward</h3>
+                        <p>Key stats visible at all times. Perfect for Priya persona who treats shopping as precision operation.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Priority System</h3>
+                        <p>Color-coded dots show item priority. Helps users make quick decisions when over budget.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Branded Header</h3>
+                        <p>Orange header creates strong brand presence. Budget info prominently displayed.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Grouped Lists</h3>
+                        <p>Items organized by priority. Supports quick scanning and decision making in-store.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Direction 4: List-Centric -->
+        <section class="direction d4" id="d4">
+            <div class="direction-header">
+                <h2>Direction 4: List-Centric</h2>
+                <p>Efficient, scrollable lists with reordering. Sticky budget bar keeps status visible while scrolling.</p>
+            </div>
+
+            <div class="phone-frame">
+                <div class="phone-notch"></div>
+                <div class="phone-content">
+                    <div class="sticky-budget">
+                        <div class="budget-pill">£27.60 left</div>
+                        <div class="items-count">5 of 12 items</div>
+                    </div>
+
+                    <div class="list-group">
+                        <div class="group-title">Dairy & Eggs</div>
+                        <div class="swipeable-item">
+                            <div class="drag-handle"></div>
+                            <div class="item-checkbox checked"></div>
+                            <div class="item-content">
+                                <div class="item-title">Semi-Skimmed Milk</div>
+                                <div class="item-detail">2L • Tesco • £1.65</div>
+                            </div>
+                        </div>
+                        <div class="swipeable-item">
+                            <div class="drag-handle"></div>
+                            <div class="item-checkbox"></div>
+                            <div class="item-content">
+                                <div class="item-title">Free Range Eggs</div>
+                                <div class="item-detail">6 pack • £2.10</div>
+                            </div>
+                        </div>
+                        <div class="swipeable-item">
+                            <div class="drag-handle"></div>
+                            <div class="item-checkbox"></div>
+                            <div class="item-content">
+                                <div class="item-title">Butter</div>
+                                <div class="item-detail">250g • Lurpak • £3.25</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="list-group">
+                        <div class="group-title">Bakery</div>
+                        <div class="swipeable-item">
+                            <div class="drag-handle"></div>
+                            <div class="item-checkbox checked"></div>
+                            <div class="item-content">
+                                <div class="item-title">Wholemeal Bread</div>
+                                <div class="item-detail">800g • Hovis • £1.40</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="list-group">
+                        <div class="group-title">Meat & Fish</div>
+                        <div class="swipeable-item">
+                            <div class="drag-handle"></div>
+                            <div class="item-checkbox"></div>
+                            <div class="item-content">
+                                <div class="item-title">Chicken Breast</div>
+                                <div class="item-detail">500g • Fresh • £4.50</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="list-group">
+                        <div class="group-title">Fruit & Veg</div>
+                        <div class="swipeable-item">
+                            <div class="drag-handle"></div>
+                            <div class="item-checkbox"></div>
+                            <div class="item-content">
+                                <div class="item-title">Bananas</div>
+                                <div class="item-detail">Loose • ~5 • £0.85</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bottom-nav" style="background: white; position: absolute;">
+                        <div class="nav-item active">
+                            <div class="nav-icon"></div>
+                            <span>List</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Pantry</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Scan</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Insights</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="features-panel">
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <h3>Sticky Budget</h3>
+                        <p>Budget pill stays visible while scrolling. Always aware of remaining amount.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Drag Handles</h3>
+                        <p>Reorder items by priority with visible drag handles. Power user friendly.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Category Groups</h3>
+                        <p>Items grouped by store section. Matches supermarket layout for efficient shopping.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Swipeable Items</h3>
+                        <p>Swipe for quick actions. Efficient list management without extra taps.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Direction 5: Visual/Illustrated -->
+        <section class="direction d5" id="d5">
+            <div class="direction-header">
+                <h2>Direction 5: Visual/Illustrated</h2>
+                <p>More imagery and icons. Category-focused navigation. Warm, inviting feel with playful elements.</p>
+            </div>
+
+            <div class="phone-frame">
+                <div class="phone-notch"></div>
+                <div class="phone-content">
+                    <div class="hero-section">
+                        <div class="hero-icon">🛒</div>
+                        <div class="hero-title">£27.60 to spend</div>
+                        <div class="hero-subtitle">5 items left on your list</div>
+                        <div class="safe-indicator">
+                            <span style="width: 8px; height: 8px; background: var(--safe-zone-green); border-radius: 50%; display: inline-block;"></span>
+                            Safe Zone
+                        </div>
+                    </div>
+
+                    <div class="category-grid">
+                        <div class="category-card">
+                            <div class="category-icon">🥛</div>
+                            <div class="category-name">Dairy</div>
+                            <div class="category-count">3 items</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-icon">🍞</div>
+                            <div class="category-name">Bakery</div>
+                            <div class="category-count">1 item</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-icon">🍗</div>
+                            <div class="category-name">Meat</div>
+                            <div class="category-count">1 item</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-icon">🍌</div>
+                            <div class="category-name">Produce</div>
+                            <div class="category-count">1 item</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-icon">🍝</div>
+                            <div class="category-name">Pantry</div>
+                            <div class="category-count">2 items</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-icon">🧊</div>
+                            <div class="category-name">Frozen</div>
+                            <div class="category-count">0 items</div>
+                        </div>
+                    </div>
+
+                    <div class="bottom-nav" style="background: white; position: absolute;">
+                        <div class="nav-item active">
+                            <div class="nav-icon"></div>
+                            <span>Shop</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Pantry</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Scan</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Insights</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="features-panel">
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <h3>Visual Navigation</h3>
+                        <p>Category cards with icons make navigation intuitive. Great for James persona.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Friendly Aesthetic</h3>
+                        <p>Emoji icons and warm gradients create approachable feel. Reduces shopping anxiety.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Clear Safe Zone</h3>
+                        <p>Prominent "Safe Zone" badge with green indicator. Budget status impossible to miss.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Category Focus</h3>
+                        <p>Matches mental model of store sections. Users think in categories, not flat lists.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Direction 6: Compact/Dense -->
+        <section class="direction d6" id="d6">
+            <div class="direction-header">
+                <h2>Direction 6: Compact/Dense</h2>
+                <p>Information-dense for power users. Maximum items visible. Efficient for quick in-store checking.</p>
+            </div>
+
+            <div class="phone-frame">
+                <div class="phone-notch"></div>
+                <div class="phone-content">
+                    <div class="compact-header">
+                        <div class="compact-budget">£52.40 / £80</div>
+                        <div class="compact-status">
+                            <div class="status-dot"></div>
+                            Under budget
+                        </div>
+                    </div>
+
+                    <div class="compact-tabs">
+                        <div class="compact-tab active">All (12)</div>
+                        <div class="compact-tab">To Buy (7)</div>
+                        <div class="compact-tab">Done (5)</div>
+                    </div>
+
+                    <div class="dense-list">
+                        <div class="dense-item">
+                            <div class="dense-check checked"></div>
+                            <div class="dense-text">Semi-Skimmed Milk 2L</div>
+                            <div class="dense-price">£1.65</div>
+                        </div>
+                        <div class="dense-item">
+                            <div class="dense-check checked"></div>
+                            <div class="dense-text">Wholemeal Bread 800g</div>
+                            <div class="dense-price">£1.40</div>
+                        </div>
+                        <div class="dense-divider"></div>
+                        <div class="dense-item">
+                            <div class="dense-check"></div>
+                            <div class="dense-text">Free Range Eggs x6</div>
+                            <div class="dense-price">£2.10</div>
+                        </div>
+                        <div class="dense-item">
+                            <div class="dense-check"></div>
+                            <div class="dense-text">Chicken Breast 500g</div>
+                            <div class="dense-price">£4.50</div>
+                        </div>
+                        <div class="dense-item">
+                            <div class="dense-check"></div>
+                            <div class="dense-text">Bananas x5</div>
+                            <div class="dense-price">£0.85</div>
+                        </div>
+                        <div class="dense-item">
+                            <div class="dense-check"></div>
+                            <div class="dense-text">Butter 250g Lurpak</div>
+                            <div class="dense-price">£3.25</div>
+                        </div>
+                        <div class="dense-item">
+                            <div class="dense-check"></div>
+                            <div class="dense-text">Pasta 500g</div>
+                            <div class="dense-price">£1.20</div>
+                        </div>
+                        <div class="dense-item">
+                            <div class="dense-check"></div>
+                            <div class="dense-text">Tinned Tomatoes x2</div>
+                            <div class="dense-price">£1.60</div>
+                        </div>
+                        <div class="dense-item">
+                            <div class="dense-check"></div>
+                            <div class="dense-text">Onions 1kg</div>
+                            <div class="dense-price">£0.89</div>
+                        </div>
+                        <div class="dense-item">
+                            <div class="dense-check"></div>
+                            <div class="dense-text">Garlic Bulb</div>
+                            <div class="dense-price">£0.45</div>
+                        </div>
+                    </div>
+
+                    <div class="bottom-nav" style="background: white; position: absolute;">
+                        <div class="nav-item active">
+                            <div class="nav-icon"></div>
+                            <span>List</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Pantry</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Scan</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon"></div>
+                            <span>Insights</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="features-panel">
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <h3>Maximum Density</h3>
+                        <p>See more items at once. Perfect for quick scanning while walking through store.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Tab Filtering</h3>
+                        <p>Quick tabs to filter view. See all, to-buy only, or completed items.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Inline Status</h3>
+                        <p>Budget and status in compact header. No wasted vertical space.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Power User Focus</h3>
+                        <p>Designed for Priya persona. Efficiency over aesthetics. Data-focused like David prefers.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Comparison View -->
+        <section class="comparison-view" id="compare">
+            <div class="direction-header">
+                <h2>Compare All Directions</h2>
+                <p>Side-by-side comparison of all design approaches. Consider which elements work best for your users.</p>
+            </div>
+
+            <div class="comparison-grid">
+                <div class="comparison-item">
+                    <div class="phone-frame d1">
+                        <div class="phone-notch"></div>
+                        <div class="phone-content">
+                            <div class="safe-zone-bg"></div>
+                            <div class="header">
+                                <div class="greeting">Good morning<strong>Diloc</strong></div>
+                                <div class="budget-ring"><div class="budget-ring-inner"><div class="budget-amount">£52</div><div class="budget-label">of £80</div></div></div>
+                            </div>
+                            <div class="card">
+                                <div class="card-title">Shopping List</div>
+                                <div class="list-item"><div class="checkbox checked">✓</div><div class="item-info"><div class="item-name">Milk</div></div><div class="item-price">£1.65</div></div>
+                                <div class="list-item"><div class="checkbox"></div><div class="item-info"><div class="item-name">Eggs</div></div><div class="item-price">£2.10</div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <h3>1. Card-Heavy</h3>
+                    <p>Friendly, contained sections</p>
+                </div>
+
+                <div class="comparison-item">
+                    <div class="phone-frame d2">
+                        <div class="phone-notch"></div>
+                        <div class="phone-content">
+                            <div class="top-bar"><div class="budget-display">£52.40</div><div class="budget-subtext">of £80.00 budget</div></div>
+                            <div class="progress-bar"><div class="progress-fill"></div></div>
+                            <div class="minimal-item"><div class="minimal-checkbox checked"></div><div class="minimal-item-text checked">Milk</div><div class="minimal-price">£1.65</div></div>
+                            <div class="minimal-item"><div class="minimal-checkbox"></div><div class="minimal-item-text">Eggs</div><div class="minimal-price">£2.10</div></div>
+                        </div>
+                    </div>
+                    <h3>2. Minimal</h3>
+                    <p>Clean, budget-focused</p>
+                </div>
+
+                <div class="comparison-item">
+                    <div class="phone-frame d3">
+                        <div class="phone-notch"></div>
+                        <div class="phone-content">
+                            <div class="dash-header"><div class="dash-title">This Week</div><div class="dash-amount">£52.40</div></div>
+                            <div class="stat-row"><div class="stat-card"><div class="stat-value">7</div><div class="stat-label">Items</div></div><div class="stat-card"><div class="stat-value">65%</div><div class="stat-label">Used</div></div></div>
+                        </div>
+                    </div>
+                    <h3>3. Dashboard</h3>
+                    <p>Data-rich, metrics first</p>
+                </div>
+
+                <div class="comparison-item">
+                    <div class="phone-frame d4">
+                        <div class="phone-notch"></div>
+                        <div class="phone-content">
+                            <div class="sticky-budget"><div class="budget-pill">£27.60 left</div><div class="items-count">5 of 12</div></div>
+                            <div class="list-group"><div class="group-title">Dairy</div><div class="swipeable-item"><div class="drag-handle"></div><div class="item-checkbox"></div><div class="item-content"><div class="item-title">Milk</div></div></div></div>
+                        </div>
+                    </div>
+                    <h3>4. List-Centric</h3>
+                    <p>Efficient, reorderable</p>
+                </div>
+
+                <div class="comparison-item">
+                    <div class="phone-frame d5">
+                        <div class="phone-notch"></div>
+                        <div class="phone-content">
+                            <div class="hero-section"><div class="hero-icon">🛒</div><div class="hero-title">£27.60</div><div class="safe-indicator">Safe Zone</div></div>
+                            <div class="category-grid"><div class="category-card"><div class="category-icon">🥛</div><div class="category-name">Dairy</div></div><div class="category-card"><div class="category-icon">🍞</div><div class="category-name">Bakery</div></div></div>
+                        </div>
+                    </div>
+                    <h3>5. Visual</h3>
+                    <p>Friendly, category-based</p>
+                </div>
+
+                <div class="comparison-item">
+                    <div class="phone-frame d6">
+                        <div class="phone-notch"></div>
+                        <div class="phone-content">
+                            <div class="compact-header"><div class="compact-budget">£52 / £80</div><div class="compact-status"><div class="status-dot"></div>OK</div></div>
+                            <div class="compact-tabs"><div class="compact-tab active">All</div><div class="compact-tab">To Buy</div></div>
+                            <div class="dense-list"><div class="dense-item"><div class="dense-check"></div><div class="dense-text">Milk 2L</div><div class="dense-price">£1.65</div></div></div>
+                        </div>
+                    </div>
+                    <h3>6. Compact</h3>
+                    <p>Dense, power-user</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Tab navigation
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Update active tab
+                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Show corresponding view
+                const viewId = tab.dataset.view;
+                document.querySelectorAll('.direction, .comparison-view').forEach(d => d.classList.remove('active'));
+                document.getElementById(viewId).classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>
