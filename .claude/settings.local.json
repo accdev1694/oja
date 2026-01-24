@@ -7,7 +7,11 @@
       "Skill(bmad:bmm:workflows:create-epics-and-stories)",
       "Bash(gh:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial commit: Oja project with complete BMAD planning artifacts\n\n- Product Brief: Budget-first shopping confidence app\n- PRD: 190 FRs, 59 NFRs across all domains\n- Architecture: Next.js 16, PWA, Supabase, offline-first\n- UX Design: Complete specification with design system\n- Epics: 10 epics, 107 stories with Given/When/Then ACs\n- BMAD framework: Agents, workflows, templates\n\nTech Stack: Next.js 16 \\(App Router\\), TypeScript, Tailwind CSS,\nSupabase \\(Auth/DB/Realtime\\), PWA \\(Serwist\\), Zustand, TanStack Query\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
