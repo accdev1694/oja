@@ -364,32 +364,18 @@ Camera capture → Tesseract.js OCR → Gemini parse → User confirm → Save
 | 1-2: Configure Serwist PWA | review | Complete |
 | 1-3: Set Up Supabase | review | Complete |
 | 1-4: Configure DexieJS | review | Complete |
-| **1-5: TanStack Query + Zustand** | **in-progress** | **RESUME HERE** |
-| 1-6: Design System Foundation | backlog | |
+| 1-5: TanStack Query + Zustand | review | Complete |
+| **1-6: Design System Foundation** | **backlog** | **NEXT STORY** |
 | 1-7: CI/CD and Dev Tooling | backlog | |
 
-### Story 1.5 Progress (IN PROGRESS)
+### Next Steps
 
-**Files Already Created:**
-- `src/lib/query/client.ts` - QueryClient with offline-first defaults
-- `src/lib/query/keys.ts` - Query key factory
-- `src/lib/query/QueryProvider.tsx` - Provider component with DevTools
-- `src/lib/query/optimistic.ts` - Optimistic update helpers
-- `src/lib/query/index.ts` - Re-exports
+**Ready to start Story 1-6: Design System Foundation**
 
-**Remaining Tasks:**
-1. Create `src/lib/stores/uiStore.ts` - Zustand store for UI state (modals, toasts, online status)
-2. Create `src/lib/stores/index.ts` - Re-exports
-3. Install `@tanstack/react-query-devtools` (dev dependency)
-4. Update `src/app/layout.tsx` to wrap with QueryProvider
-5. Run build and lint to verify
-6. Update story file and sprint status to "review"
-7. Commit and push
-
-**To Continue:**
-```
-Say "continue story 1.5" or just "carry on"
-```
+To continue development, either:
+1. Manually start Story 1-6 implementation
+2. Run code review on completed stories: `/bmad:bmm:workflows:code-review`
+3. Check workflow status: `/bmad:bmm:workflows:workflow-status`
 
 ---
 
