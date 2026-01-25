@@ -14,8 +14,7 @@ export default function WelcomePage() {
 
   const handleContinue = () => {
     // Navigate to next onboarding step (seeded products selection)
-    // For now, redirect to pantry until Story 2.6 is implemented
-    router.push('/pantry');
+    router.push('/products');
   };
 
   return <WelcomeScreen onContinue={handleContinue} />;

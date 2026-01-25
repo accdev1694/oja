@@ -4,48 +4,23 @@ import { WelcomeScreen } from '@/components/onboarding/WelcomeScreen';
 
 // Mock framer-motion to avoid animation issues in tests
 jest.mock('framer-motion', () => {
-  // Create named components with displayName for ESLint compliance
-  const MotionDiv = React.forwardRef<
-    HTMLDivElement,
-    React.PropsWithChildren<Record<string, unknown>>
-  >(function MotionDiv({ children, ...props }, ref) {
-    return (
-      <div ref={ref} {...props}>
-        {children}
-      </div>
-    );
-  });
-  MotionDiv.displayName = 'MotionDiv';
-
-  const MotionH1 = React.forwardRef<
-    HTMLHeadingElement,
-    React.PropsWithChildren<Record<string, unknown>>
-  >(function MotionH1({ children, ...props }, ref) {
-    return (
-      <h1 ref={ref} {...props}>
-        {children}
-      </h1>
-    );
-  });
-  MotionH1.displayName = 'MotionH1';
-
-  const MotionP = React.forwardRef<
-    HTMLParagraphElement,
-    React.PropsWithChildren<Record<string, unknown>>
-  >(function MotionP({ children, ...props }, ref) {
-    return (
-      <p ref={ref} {...props}>
-        {children}
-      </p>
-    );
-  });
-  MotionP.displayName = 'MotionP';
+  // Simple mocks that pass children through
+  const createMotionComponent = (Tag: string) => {
+    const Component = React.forwardRef<any, any>(function MotionComponent(
+      { children, ...props },
+      ref
+    ) {
+      return React.createElement(Tag, { ...props, ref }, children);
+    });
+    Component.displayName = `Motion${Tag.charAt(0).toUpperCase() + Tag.slice(1)}`;
+    return Component;
+  };
 
   return {
     motion: {
-      div: MotionDiv,
-      h1: MotionH1,
-      p: MotionP,
+      div: createMotionComponent('div'),
+      h1: createMotionComponent('h1'),
+      p: createMotionComponent('p'),
     },
     useReducedMotion: () => false,
   };
