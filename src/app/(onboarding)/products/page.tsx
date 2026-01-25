@@ -29,12 +29,11 @@ export default function ProductsPage() {
       }
 
       // Navigate to next onboarding step (budget setting)
-      // For now, redirect to pantry until Story 2.7 is implemented
-      router.push('/pantry');
+      router.push('/budget');
     } catch (error) {
       console.error('Failed to save products:', error);
       // Still navigate even on error for now
-      router.push('/pantry');
+      router.push('/budget');
     } finally {
       setIsLoading(false);
     }

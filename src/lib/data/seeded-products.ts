@@ -21,7 +21,9 @@ export type ProductCategory =
   | 'beverages'
   | 'produce'
   | 'meat'
-  | 'frozen';
+  | 'frozen'
+  | 'household'
+  | 'personal-care';
 
 export interface CategoryInfo {
   id: ProductCategory;
@@ -39,6 +41,8 @@ export const PRODUCT_CATEGORIES: CategoryInfo[] = [
   { id: 'produce', name: 'Produce', emoji: '🥬' },
   { id: 'meat', name: 'Meat', emoji: '🥩' },
   { id: 'frozen', name: 'Frozen', emoji: '❄️' },
+  { id: 'household', name: 'Household', emoji: '🧹' },
+  { id: 'personal-care', name: 'Personal Care', emoji: '🧴' },
 ];
 
 /**
