@@ -6,10 +6,13 @@ import Link from 'next/link';
 import {
   getShoppingList,
   getItemsForList,
+  addShoppingListItem,
   type ShoppingList,
   type ShoppingListItem,
+  type NewShoppingListItem,
 } from '@/lib/utils/shoppingListStorage';
 import { Card } from '@/components/ui';
+import { AddItemToListSheet } from '@/components/lists';
 
 /**
  * Format budget for display
@@ -162,6 +165,11 @@ export default function ListDetailPage() {
   const [items, setItems] = useState<ShoppingListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Add item sheet state
+  const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
   // Load list and items from localStorage
   useEffect(() => {
     const loadData = () => {
@@ -180,6 +188,61 @@ export default function ListDetailPage() {
   const handleBack = useCallback(() => {
     router.push('/lists');
   }, [router]);
+
+  // Handle opening add item sheet
+  const handleOpenAddSheet = useCallback(() => {
+    setAddError(null);
+    setIsAddSheetOpen(true);
+  }, []);
+
+  // Handle closing add item sheet
+  const handleCloseAddSheet = useCallback(() => {
+    if (!isAdding) {
+      setIsAddSheetOpen(false);
+      setAddError(null);
+    }
+  }, [isAdding]);
+
+  // Handle adding an item
+  const handleAddItem = useCallback(
+    (newItem: NewShoppingListItem) => {
+      setIsAdding(true);
+      setAddError(null);
+
+      try {
+        // Check for duplicate names
+        const existingItem = items.find(
+          (item) =>
+            item.name.toLowerCase() === newItem.name.trim().toLowerCase()
+        );
+
+        if (existingItem) {
+          setAddError(`"${newItem.name}" is already in this list`);
+          setIsAdding(false);
+          return;
+        }
+
+        // Add the item
+        const addedItem = addShoppingListItem(listId, newItem);
+
+        // Update local state immediately
+        setItems((prev) => [...prev, addedItem]);
+
+        // Close the sheet
+        setIsAddSheetOpen(false);
+      } catch {
+        setAddError('Failed to add item. Please try again.');
+      } finally {
+        setIsAdding(false);
+      }
+    },
+    [items, listId]
+  );
+
+  // Get existing pantry item IDs in this list
+  const existingPantryItemIds = items
+    .filter((item) => item.pantryItemId)
+    .map((item) => item.pantryItemId as string);
 
   if (isLoading) {
     return (
@@ -355,12 +418,12 @@ export default function ListDetailPage() {
         )}
       </main>
 
-      {/* FAB - Add Item Button (functionality in Story 4.3) */}
+      {/* FAB - Add Item Button */}
       <button
         type="button"
-        className="fixed right-4 bottom-20 w-14 h-14 rounded-full bg-[var(--color-primary)] text-white shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2 z-20 opacity-50"
-        aria-label="Add item (coming soon)"
-        disabled
+        onClick={handleOpenAddSheet}
+        className="fixed right-4 bottom-20 w-14 h-14 rounded-full bg-[var(--color-primary)] text-white shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2 z-20"
+        aria-label="Add item"
         data-testid="fab-add-item"
       >
         <svg
@@ -378,6 +441,16 @@ export default function ListDetailPage() {
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
       </button>
+
+      {/* Add Item Sheet */}
+      <AddItemToListSheet
+        isOpen={isAddSheetOpen}
+        onClose={handleCloseAddSheet}
+        onAdd={handleAddItem}
+        existingPantryItemIds={existingPantryItemIds}
+        isLoading={isAdding}
+        error={addError}
+      />
 
       {/* Bottom Navigation */}
       <nav
