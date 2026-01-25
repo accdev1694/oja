@@ -5,7 +5,11 @@ export type SyncStatus = 'synced' | 'pending' | 'conflict' | 'error';
 export type StockLevel = 'stocked' | 'good' | 'low' | 'out';
 
 // Shopping list status
-export type ShoppingListStatus = 'active' | 'shopping' | 'completed' | 'archived';
+export type ShoppingListStatus =
+  | 'active'
+  | 'shopping'
+  | 'completed'
+  | 'archived';
 
 // Item priority
 export type ItemPriority = 'need' | 'want' | 'impulse';

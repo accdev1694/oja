@@ -1,0 +1,33 @@
+{
+  "recommendations": [
+    // Essential
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+
+    // TypeScript/JavaScript
+    "ms-vscode.vscode-typescript-next",
+
+    // React
+    "dsznajder.es7-react-js-snippets",
+
+    // Testing
+    "ms-playwright.playwright",
+
+    // Git
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+
+    // Productivity
+    "christian-kohler.path-intellisense",
+    "usernamehw.errorlens",
+    "streetsidesoftware.code-spell-checker",
+
+    // Supabase
+    "supabase.supabase-vscode",
+
+    // Icons
+    "pkief.material-icon-theme"
+  ],
+  "unwantedRecommendations": []
+}

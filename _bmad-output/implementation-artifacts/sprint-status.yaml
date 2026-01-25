@@ -49,7 +49,7 @@ development_status:
   1-4-configure-dexiejs-offline-storage-layer: review
   1-5-set-up-tanstack-query-and-zustand-state-management: review
   1-6-establish-design-system-foundation: review
-  1-7-configure-cicd-and-development-tooling: backlog
+  1-7-configure-cicd-and-development-tooling: review
   epic-1-retrospective: optional
 
   # Epic 2: User Authentication & Onboarding (11 stories)

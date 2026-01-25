@@ -36,7 +36,8 @@ coverage/
 
 # IDE
 .idea/
-.vscode/
+# Keep .vscode for project settings (extensions, settings)
+# .vscode/
 *.swp
 *.swo
 *~

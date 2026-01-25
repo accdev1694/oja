@@ -10,8 +10,7 @@ export function createQueryClient(): QueryClient {
         gcTime: 30 * 60 * 1000,
         // Retry failed requests 3 times with exponential backoff
         retry: 3,
-        retryDelay: (attemptIndex) =>
-          Math.min(1000 * 2 ** attemptIndex, 30000),
+        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
         // Don't refetch on window focus for offline-first
         refetchOnWindowFocus: false,
         // Use cached data when offline

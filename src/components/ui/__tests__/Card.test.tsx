@@ -1,5 +1,10 @@
 import { render, screen } from '@testing-library/react';
-import { Card, CardHeader, CardContent, CardFooter } from '../Card';
+import {
+  Card,
+  CardHeader,
+  CardContent,
+  CardFooter,
+} from '@/components/ui/Card';
 
 describe('Card', () => {
   describe('Rendering', () => {
@@ -23,13 +28,21 @@ describe('Card', () => {
     });
 
     it('renders with compact padding', () => {
-      render(<Card padding="compact" data-testid="card">Test</Card>);
+      render(
+        <Card padding="compact" data-testid="card">
+          Test
+        </Card>
+      );
       const card = screen.getByTestId('card');
       expect(card.className).toContain('p-3');
     });
 
     it('renders with spacious padding', () => {
-      render(<Card padding="spacious" data-testid="card">Test</Card>);
+      render(
+        <Card padding="spacious" data-testid="card">
+          Test
+        </Card>
+      );
       const card = screen.getByTestId('card');
       expect(card.className).toContain('p-6');
     });
@@ -43,7 +56,11 @@ describe('Card', () => {
     });
 
     it('renders as interactive with hover styles', () => {
-      render(<Card interactive data-testid="card">Test</Card>);
+      render(
+        <Card interactive data-testid="card">
+          Test
+        </Card>
+      );
       const card = screen.getByTestId('card');
       expect(card.className).toContain('hover:shadow-md');
       expect(card.className).toContain('cursor-pointer');
@@ -58,7 +75,11 @@ describe('Card', () => {
     });
 
     it('accepts custom className', () => {
-      render(<Card className="custom-class" data-testid="card">Test</Card>);
+      render(
+        <Card className="custom-class" data-testid="card">
+          Test
+        </Card>
+      );
       const card = screen.getByTestId('card');
       expect(card.className).toContain('custom-class');
     });

@@ -128,7 +128,8 @@ export const useUIStore = create<UIState>()(
 
       // Sidebar state
       sidebarOpen: false,
-      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+      toggleSidebar: () =>
+        set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
     }),
     { name: 'UIStore' }

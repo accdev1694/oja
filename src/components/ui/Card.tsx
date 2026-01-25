@@ -1,4 +1,4 @@
-import { HTMLAttributes, forwardRef } from 'react';
+import { type HTMLAttributes, forwardRef } from 'react';
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   padding?: 'compact' | 'default' | 'spacious';
@@ -24,7 +24,13 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
  */
 export const Card = forwardRef<HTMLDivElement, CardProps>(
   (
-    { padding = 'default', interactive = false, className = '', children, ...props },
+    {
+      padding = 'default',
+      interactive = false,
+      className = '',
+      children,
+      ...props
+    },
     ref
   ) => {
     const baseStyles =
@@ -57,19 +63,20 @@ Card.displayName = 'Card';
  *
  * Header section for Card with bottom border.
  */
-export const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className = '', children, ...props }, ref) => {
-    return (
-      <div
-        ref={ref}
-        className={`border-b border-[var(--color-border)] pb-3 mb-4 ${className}`}
-        {...props}
-      >
-        {children}
-      </div>
-    );
-  }
-);
+export const CardHeader = forwardRef<
+  HTMLDivElement,
+  HTMLAttributes<HTMLDivElement>
+>(({ className = '', children, ...props }, ref) => {
+  return (
+    <div
+      ref={ref}
+      className={`border-b border-[var(--color-border)] pb-3 mb-4 ${className}`}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+});
 
 CardHeader.displayName = 'CardHeader';
 
@@ -78,15 +85,16 @@ CardHeader.displayName = 'CardHeader';
  *
  * Main content section for Card.
  */
-export const CardContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className = '', children, ...props }, ref) => {
-    return (
-      <div ref={ref} className={className} {...props}>
-        {children}
-      </div>
-    );
-  }
-);
+export const CardContent = forwardRef<
+  HTMLDivElement,
+  HTMLAttributes<HTMLDivElement>
+>(({ className = '', children, ...props }, ref) => {
+  return (
+    <div ref={ref} className={className} {...props}>
+      {children}
+    </div>
+  );
+});
 
 CardContent.displayName = 'CardContent';
 
@@ -95,18 +103,19 @@ CardContent.displayName = 'CardContent';
  *
  * Footer section for Card with top border.
  */
-export const CardFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className = '', children, ...props }, ref) => {
-    return (
-      <div
-        ref={ref}
-        className={`border-t border-[var(--color-border)] pt-3 mt-4 flex items-center gap-2 ${className}`}
-        {...props}
-      >
-        {children}
-      </div>
-    );
-  }
-);
+export const CardFooter = forwardRef<
+  HTMLDivElement,
+  HTMLAttributes<HTMLDivElement>
+>(({ className = '', children, ...props }, ref) => {
+  return (
+    <div
+      ref={ref}
+      className={`border-t border-[var(--color-border)] pt-3 mt-4 flex items-center gap-2 ${className}`}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+});
 
 CardFooter.displayName = 'CardFooter';

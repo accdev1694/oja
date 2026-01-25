@@ -1,5 +1,10 @@
 // Database instance and utilities
-export { db, OjaDatabase, clearOfflineData, getStorageEstimate } from './database';
+export {
+  db,
+  OjaDatabase,
+  clearOfflineData,
+  getStorageEstimate,
+} from './database';
 
 // Schema types
 export type {

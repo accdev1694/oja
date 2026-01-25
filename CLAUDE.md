@@ -9,6 +9,7 @@
 **John (PM Agent)** leads this project through the BMAD product development lifecycle, orchestrating the right specialist agents at each phase.
 
 To invoke the project lead:
+
 ```
 /bmad:bmm:agents:pm
 ```
@@ -24,62 +25,68 @@ To invoke the project lead:
 Project progress is tracked through multiple mechanisms:
 
 ### 1. Workflow Status (Quick Check)
+
 ```
 /bmad:bmm:workflows:workflow-status
 ```
+
 Answers "What should I do now?" - reads current state and recommends next action.
 
 ### 2. Sprint Status File
+
 Location: `_bmad-output/implementation-artifacts/sprint-status.yaml`
 
 Tracks:
+
 - Current sprint number
 - Active epic and story
 - Story statuses (pending, in_progress, completed, blocked)
 - Blockers and notes
 
 ### 3. Document Frontmatter
+
 Each BMAD document (PRD, Architecture, etc.) contains `stepsCompleted` in its frontmatter, showing workflow progress.
 
 ### 4. CLAUDE.md Workflow Phases Table
+
 The table in this file shows high-level phase completion status. Update status to "IN PROGRESS" or "COMPLETE" as phases finish.
 
 ---
 
 ## BMAD Workflow Phases
 
-| Phase | Agent | Command | Status |
-|-------|-------|---------|--------|
-| 1. Product Brief | PM + Analyst | `/bmad:bmm:workflows:create-product-brief` | COMPLETE |
-| 2. PRD | PM | `/bmad:bmm:workflows:prd` | COMPLETE |
-| 3. Architecture | Architect | `/bmad:bmm:workflows:create-architecture` | COMPLETE |
-| 4. UX Design | UX Designer | `/bmad:bmm:workflows:create-ux-design` | COMPLETE |
-| 5. Epics & Stories | Scrum Master | `/bmad:bmm:workflows:create-epics-and-stories` | COMPLETE |
-| 6. Test Strategy | Test Architect | `/bmad:bmm:workflows:testarch-test-design` | COMPLETE |
-| 7. Sprint Planning | Scrum Master | `/bmad:bmm:workflows:sprint-planning` | COMPLETE |
-| 8. Story Development | Developer | `/bmad:bmm:workflows:dev-story` | Pending |
-| 9. Code Review | Developer | `/bmad:bmm:workflows:code-review` | Pending |
-| 10. Test Automation | Test Architect | `/bmad:bmm:workflows:testarch-automate` | Pending |
+| Phase                | Agent          | Command                                        | Status   |
+| -------------------- | -------------- | ---------------------------------------------- | -------- |
+| 1. Product Brief     | PM + Analyst   | `/bmad:bmm:workflows:create-product-brief`     | COMPLETE |
+| 2. PRD               | PM             | `/bmad:bmm:workflows:prd`                      | COMPLETE |
+| 3. Architecture      | Architect      | `/bmad:bmm:workflows:create-architecture`      | COMPLETE |
+| 4. UX Design         | UX Designer    | `/bmad:bmm:workflows:create-ux-design`         | COMPLETE |
+| 5. Epics & Stories   | Scrum Master   | `/bmad:bmm:workflows:create-epics-and-stories` | COMPLETE |
+| 6. Test Strategy     | Test Architect | `/bmad:bmm:workflows:testarch-test-design`     | COMPLETE |
+| 7. Sprint Planning   | Scrum Master   | `/bmad:bmm:workflows:sprint-planning`          | COMPLETE |
+| 8. Story Development | Developer      | `/bmad:bmm:workflows:dev-story`                | Pending  |
+| 9. Code Review       | Developer      | `/bmad:bmm:workflows:code-review`              | Pending  |
+| 10. Test Automation  | Test Architect | `/bmad:bmm:workflows:testarch-automate`        | Pending  |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| **Framework** | Next.js 14 (App Router) |
-| **Platform** | Progressive Web App (PWA) |
-| **Language** | TypeScript (strict mode) |
-| **Styling** | Tailwind CSS |
-| **State** | Zustand (client) + TanStack Query (server) |
-| **Animations** | Framer Motion |
-| **Icons** | Phosphor Icons (@phosphor-icons/react) |
-| **Backend** | Supabase (Postgres + Auth + Realtime + Edge Functions) |
-| **PWA** | next-pwa + Workbox |
-| **OCR** | Tesseract.js (client-side) |
-| **AI** | Gemini 1.5 Flash (receipt parsing) |
-| **Payments** | Stripe Checkout (direct, ~3% fees) |
-| **Hosting** | Vercel |
+| Layer          | Technology                                             |
+| -------------- | ------------------------------------------------------ |
+| **Framework**  | Next.js 14 (App Router)                                |
+| **Platform**   | Progressive Web App (PWA)                              |
+| **Language**   | TypeScript (strict mode)                               |
+| **Styling**    | Tailwind CSS                                           |
+| **State**      | Zustand (client) + TanStack Query (server)             |
+| **Animations** | Framer Motion                                          |
+| **Icons**      | Phosphor Icons (@phosphor-icons/react)                 |
+| **Backend**    | Supabase (Postgres + Auth + Realtime + Edge Functions) |
+| **PWA**        | next-pwa + Workbox                                     |
+| **OCR**        | Tesseract.js (client-side)                             |
+| **AI**         | Gemini 1.5 Flash (receipt parsing)                     |
+| **Payments**   | Stripe Checkout (direct, ~3% fees)                     |
+| **Hosting**    | Vercel                                                 |
 
 ---
 
@@ -175,18 +182,18 @@ vercel --prod                     # Production deploy
 
 ```typescript
 // Primary
-orange: '#FF6B35'        // Energy, confidence, action
-grey: '#F5F5F5'          // Clean, spacious, calm
-charcoal: '#2D3436'      // Grounding, trust, readability
+orange: '#FF6B35'; // Energy, confidence, action
+grey: '#F5F5F5'; // Clean, spacious, calm
+charcoal: '#2D3436'; // Grounding, trust, readability
 
 // Semantic
-success: '#10B981'       // Under budget
-warning: '#F59E0B'       // Approaching limit
-danger: '#EF4444'        // Over budget
+success: '#10B981'; // Under budget
+warning: '#F59E0B'; // Approaching limit
+danger: '#EF4444'; // Over budget
 
 // Warm tones
-peach: '#FFE8E0'         // Card highlights
-warmWhite: '#FFFAF8'     // Base background
+peach: '#FFE8E0'; // Card highlights
+warmWhite: '#FFFAF8'; // Base background
 ```
 
 ### Typography
@@ -198,6 +205,7 @@ warmWhite: '#FFFAF8'     // Base background
 ### Icons
 
 Use Phosphor Icons (@phosphor-icons/react) with appropriate weights:
+
 - **Navigation:** Duotone weight
 - **Actions:** Bold weight
 - **Stock states:** Fill (full) → Thin (empty)
@@ -213,11 +221,13 @@ Testing is integrated throughout development, led by **Murat (Test Architect)**:
 3. **E2E Tests** - Critical user flows (Maestro or Detox)
 
 **Test execution points:**
+
 - Before each PR/story completion
 - After each sprint
 - Before release
 
 **Invoke test workflows:**
+
 ```
 /bmad:bmm:workflows:testarch-test-design    # Test strategy
 /bmad:bmm:workflows:testarch-automate       # Generate tests
@@ -229,12 +239,14 @@ Testing is integrated throughout development, led by **Murat (Test Architect)**:
 ## Code Conventions
 
 ### File Naming
+
 - Components: `PascalCase.tsx` (e.g., `BudgetRing.tsx`)
 - Utilities: `camelCase.ts` (e.g., `formatCurrency.ts`)
 - Types: `PascalCase` in `types/index.ts`
 - Hooks: `useCamelCase.ts` (e.g., `useStockLevel.ts`)
 
 ### Component Structure
+
 ```typescript
 // 1. Imports
 // 2. Types/Interfaces
@@ -244,6 +256,7 @@ Testing is integrated throughout development, led by **Murat (Test Architect)**:
 ```
 
 ### State Management
+
 - **Local UI state:** `useState`
 - **Complex local state:** `useReducer`
 - **Global client state:** Zustand stores
@@ -284,27 +297,32 @@ NEXT_PUBLIC_SENTRY_DSN=
 ## Important Patterns
 
 ### Offline-First (PWA)
+
 - IndexedDB for local data (via `idb` library)
 - Service Worker caches static assets and API responses
 - Sync queue for offline operations (uses Background Sync API)
 - Receipt photos stored in IndexedDB, processed when online
 
 ### Budget Calculations
+
 - Always use decimal arithmetic (avoid floating point)
 - Store prices in smallest currency unit (pence) internally
 - Display formatted with proper locale
 
 ### Stock State Machine
+
 ```
 STOCKED → GOOD → LOW → OUT → (auto-add to next list)
 ```
 
 ### Receipt Processing Pipeline
+
 ```
 Camera capture → Tesseract.js OCR → Gemini parse → User confirm → Save
 ```
 
 ### PWA Install Flow
+
 - Detect `beforeinstallprompt` event
 - Show custom "Add to Home Screen" prompt in onboarding
 - Track install via `appinstalled` event
@@ -313,21 +331,22 @@ Camera capture → Tesseract.js OCR → Gemini parse → User confirm → Save
 
 ## BMAD Artifacts Location
 
-| Artifact | Path |
-|----------|------|
-| Product Brief | `_bmad-output/planning-artifacts/product-brief.md` |
-| PRD | `_bmad-output/planning-artifacts/prd.md` |
-| Architecture | `_bmad-output/planning-artifacts/architecture.md` |
-| UX Design | `_bmad-output/planning-artifacts/ux-design-specification.md` |
-| Epics & Stories | `_bmad-output/planning-artifacts/epics/` |
-| Sprint Status | `_bmad-output/implementation-artifacts/sprint-status.yaml` |
-| Story Files | `_bmad-output/implementation-artifacts/stories/` |
+| Artifact        | Path                                                         |
+| --------------- | ------------------------------------------------------------ |
+| Product Brief   | `_bmad-output/planning-artifacts/product-brief.md`           |
+| PRD             | `_bmad-output/planning-artifacts/prd.md`                     |
+| Architecture    | `_bmad-output/planning-artifacts/architecture.md`            |
+| UX Design       | `_bmad-output/planning-artifacts/ux-design-specification.md` |
+| Epics & Stories | `_bmad-output/planning-artifacts/epics/`                     |
+| Sprint Status   | `_bmad-output/implementation-artifacts/sprint-status.yaml`   |
+| Story Files     | `_bmad-output/implementation-artifacts/stories/`             |
 
 ---
 
 ## Quick Start for New Session
 
 1. **Check current phase:**
+
    ```
    /bmad:bmm:workflows:workflow-status
    ```
@@ -358,25 +377,26 @@ Camera capture → Tesseract.js OCR → Gemini parse → User confirm → Save
 
 ### Epic 1 Progress
 
-| Story | Status | Notes |
-|-------|--------|-------|
+| Story                           | Status | Notes    |
+| ------------------------------- | ------ | -------- |
 | 1-1: Initialize Next.js Project | review | Complete |
-| 1-2: Configure Serwist PWA | review | Complete |
-| 1-3: Set Up Supabase | review | Complete |
-| 1-4: Configure DexieJS | review | Complete |
-| 1-5: TanStack Query + Zustand | review | Complete |
-| **1-6: Design System Foundation** | **backlog** | **NEXT STORY** |
-| 1-7: CI/CD and Dev Tooling | backlog | |
+| 1-2: Configure Serwist PWA      | review | Complete |
+| 1-3: Set Up Supabase            | review | Complete |
+| 1-4: Configure DexieJS          | review | Complete |
+| 1-5: TanStack Query + Zustand   | review | Complete |
+| 1-6: Design System Foundation   | review | Complete |
+| 1-7: CI/CD and Dev Tooling      | review | Complete |
 
 ### Next Steps
 
-**Ready to start Story 1-6: Design System Foundation**
+**Epic 1 Complete! All stories in review status.**
 
-To continue development, either:
-1. Manually start Story 1-6 implementation
-2. Run code review on completed stories: `/bmad:bmm:workflows:code-review`
-3. Check workflow status: `/bmad:bmm:workflows:workflow-status`
+To continue development:
+
+1. Run code review on completed stories: `/bmad:bmm:workflows:code-review`
+2. After review approval, mark Epic 1 as done
+3. Start Epic 2: User Authentication & Onboarding
 
 ---
 
-*This file configures Claude Code for the Oja project. Maintained by BMAD workflow.*
+_This file configures Claude Code for the Oja project. Maintained by BMAD workflow._

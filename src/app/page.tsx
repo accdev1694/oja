@@ -1,6 +1,13 @@
 'use client';
 
-import { Button, Card, CardHeader, CardContent, CardFooter, Input } from '@/components/ui';
+import {
+  Button,
+  Card,
+  CardHeader,
+  CardContent,
+  CardFooter,
+  Input,
+} from '@/components/ui';
 import { useState } from 'react';
 
 export default function Home() {
@@ -38,7 +45,11 @@ export default function Home() {
               <Button variant="secondary">Secondary</Button>
               <Button variant="ghost">Ghost</Button>
               <Button variant="destructive">Destructive</Button>
-              <Button variant="primary" isLoading={isLoading} onClick={handleLoadingDemo}>
+              <Button
+                variant="primary"
+                isLoading={isLoading}
+                onClick={handleLoadingDemo}
+              >
                 {isLoading ? 'Loading...' : 'Loading Demo'}
               </Button>
             </div>
@@ -88,10 +99,7 @@ export default function Home() {
                 onChange={(e) => setInputValue(e.target.value)}
                 helperText="Set your shopping budget"
               />
-              <Input
-                label="Error State"
-                error="This field is required"
-              />
+              <Input label="Error State" error="This field is required" />
               <Input
                 label="Disabled Input"
                 disabled
@@ -135,7 +143,9 @@ export default function Home() {
             </p>
           </CardContent>
           <CardFooter>
-            <Button size="small" variant="ghost">Learn More</Button>
+            <Button size="small" variant="ghost">
+              Learn More
+            </Button>
             <Button size="small">Get Started</Button>
           </CardFooter>
         </Card>
