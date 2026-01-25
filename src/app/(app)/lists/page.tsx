@@ -9,13 +9,18 @@ import {
   type ShoppingList,
 } from '@/lib/utils/shoppingListStorage';
 import { getDefaultBudget } from '@/lib/utils/onboardingStorage';
-import { ShoppingListGrid } from '@/components/lists';
+import {
+  ShoppingListGrid,
+  ListFilterTabs,
+  type ListFilter,
+} from '@/components/lists';
 import { Toast, useToast } from '@/components/ui/Toast';
 
 export default function ListsPage() {
   const router = useRouter();
   const [lists, setLists] = useState<ShoppingList[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedFilter, setSelectedFilter] = useState<ListFilter>('active');
   const { toast, showToast, hideToast } = useToast();
 
   // Load lists from localStorage
@@ -99,20 +104,21 @@ export default function ListsPage() {
       {/* Header */}
       <header className="sticky top-0 z-10 bg-[var(--color-background)] border-b border-[var(--color-border)]">
         <div className="max-w-2xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-[var(--color-text)]">
-                Shopping Lists
-              </h1>
-              {lists.length > 0 && (
-                <p className="text-sm text-[var(--color-text-secondary)]">
-                  {activeLists.length} active
-                  {completedLists.length > 0 &&
-                    `, ${completedLists.length} completed`}
-                </p>
-              )}
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <h1 className="text-2xl font-bold text-[var(--color-text)]">
+              Shopping Lists
+            </h1>
           </div>
+
+          {/* Filter Tabs */}
+          {lists.length > 0 && (
+            <ListFilterTabs
+              selectedFilter={selectedFilter}
+              onFilterChange={setSelectedFilter}
+              activeCount={activeLists.length}
+              completedCount={completedLists.length}
+            />
+          )}
         </div>
       </header>
 
@@ -122,6 +128,7 @@ export default function ListsPage() {
           lists={lists}
           onListClick={handleListClick}
           onNewList={handleNewList}
+          filter={selectedFilter}
         />
       </main>
 

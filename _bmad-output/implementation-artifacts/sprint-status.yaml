@@ -82,7 +82,7 @@ development_status:
   # Epic 4: Shopping Lists & Budget Control (16 stories)
   epic-4: in-progress
   4-1-create-new-shopping-list: review
-  4-2-view-all-shopping-lists: backlog
+  4-2-view-all-shopping-lists: review
   4-3-add-items-to-shopping-list: backlog
   4-4-search-and-add-from-pantry: backlog
   4-5-remove-items-from-shopping-list: backlog

@@ -224,4 +224,163 @@ describe('ShoppingListGrid', () => {
       ).toBeInTheDocument();
     });
   });
+
+  describe('Filtering', () => {
+    const allStatusLists: ShoppingList[] = [
+      {
+        id: 'active-1',
+        name: 'Active List 1',
+        status: 'active',
+        budget: 5000,
+        createdAt: '2024-01-15T10:00:00.000Z',
+        completedAt: null,
+      },
+      {
+        id: 'shopping-1',
+        name: 'Shopping List 1',
+        status: 'shopping',
+        budget: 3000,
+        createdAt: '2024-01-14T10:00:00.000Z',
+        completedAt: null,
+      },
+      {
+        id: 'completed-1',
+        name: 'Completed List 1',
+        status: 'completed',
+        budget: 4000,
+        createdAt: '2024-01-13T10:00:00.000Z',
+        completedAt: '2024-01-13T18:00:00.000Z',
+      },
+      {
+        id: 'archived-1',
+        name: 'Archived List 1',
+        status: 'archived',
+        budget: null,
+        createdAt: '2024-01-12T10:00:00.000Z',
+        completedAt: '2024-01-12T18:00:00.000Z',
+      },
+    ];
+
+    it('shows only active and shopping lists when filter is active', () => {
+      render(<ShoppingListGrid lists={allStatusLists} filter="active" />);
+
+      expect(
+        screen.getByTestId('shopping-list-card-active-1')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('shopping-list-card-shopping-1')
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByTestId('shopping-list-card-completed-1')
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('shopping-list-card-archived-1')
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows only completed and archived lists when filter is completed', () => {
+      render(<ShoppingListGrid lists={allStatusLists} filter="completed" />);
+
+      expect(
+        screen.queryByTestId('shopping-list-card-active-1')
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('shopping-list-card-shopping-1')
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByTestId('shopping-list-card-completed-1')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('shopping-list-card-archived-1')
+      ).toBeInTheDocument();
+    });
+
+    it('shows all lists when filter is all', () => {
+      render(<ShoppingListGrid lists={allStatusLists} filter="all" />);
+
+      expect(
+        screen.getByTestId('shopping-list-card-active-1')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('shopping-list-card-shopping-1')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('shopping-list-card-completed-1')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('shopping-list-card-archived-1')
+      ).toBeInTheDocument();
+    });
+
+    it('shows all lists when filter is undefined', () => {
+      render(<ShoppingListGrid lists={allStatusLists} />);
+
+      expect(
+        screen.getByTestId('shopping-list-card-active-1')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('shopping-list-card-shopping-1')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('shopping-list-card-completed-1')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('shopping-list-card-archived-1')
+      ).toBeInTheDocument();
+    });
+
+    it('shows empty state for active filter when no active lists', () => {
+      const completedOnlyLists = allStatusLists.filter(
+        (list) => list.status === 'completed' || list.status === 'archived'
+      );
+
+      render(
+        <ShoppingListGrid
+          lists={completedOnlyLists}
+          filter="active"
+          onNewList={jest.fn()}
+        />
+      );
+
+      expect(
+        screen.getByTestId('lists-empty-state-active')
+      ).toBeInTheDocument();
+      expect(screen.getByText('No active lists')).toBeInTheDocument();
+    });
+
+    it('shows empty state for completed filter when no completed lists', () => {
+      const activeOnlyLists = allStatusLists.filter(
+        (list) => list.status === 'active' || list.status === 'shopping'
+      );
+
+      render(<ShoppingListGrid lists={activeOnlyLists} filter="completed" />);
+
+      expect(
+        screen.getByTestId('lists-empty-state-completed')
+      ).toBeInTheDocument();
+      expect(screen.getByText('No completed trips yet')).toBeInTheDocument();
+    });
+
+    it('renders New List button in active empty state', () => {
+      render(
+        <ShoppingListGrid lists={[]} filter="active" onNewList={jest.fn()} />
+      );
+
+      expect(screen.getByTestId('new-list-button')).toBeInTheDocument();
+    });
+
+    it('does not render New List button in completed empty state', () => {
+      render(<ShoppingListGrid lists={[]} filter="completed" />);
+
+      expect(screen.queryByTestId('new-list-button')).not.toBeInTheDocument();
+    });
+
+    it('sets correct role and id on grid panel', () => {
+      render(<ShoppingListGrid lists={allStatusLists} filter="active" />);
+
+      const grid = screen.getByTestId('shopping-list-grid');
+      expect(grid).toHaveAttribute('role', 'tabpanel');
+      expect(grid).toHaveAttribute('id', 'list-panel-active');
+    });
+  });
 });

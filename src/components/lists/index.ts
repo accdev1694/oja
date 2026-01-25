@@ -6,3 +6,4 @@
 
 export { ShoppingListGrid } from './ShoppingListGrid';
 export { ShoppingListCard } from './ShoppingListCard';
+export { ListFilterTabs, type ListFilter } from './ListFilterTabs';
