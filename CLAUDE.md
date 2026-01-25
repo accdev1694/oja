@@ -379,71 +379,88 @@ Camera capture → Tesseract.js OCR → Gemini parse → User confirm → Save
 
 All 7 stories completed and in review status.
 
-### Epic 2: Authentication & Onboarding - IN PROGRESS
+### Epic 2: Authentication & Onboarding - COMPLETE
 
-| Story                             | Status   | Notes                                      |
-| --------------------------------- | -------- | ------------------------------------------ |
-| 2-1: User Registration            | review   | Complete - RegisterForm, validation, tests |
-| 2-2: User Login                   | review   | Complete - LoginForm with rate limiting    |
-| 2-3: Password Reset Flow          | review   | Complete - Forgot/reset password pages     |
-| 2-4: User Sign Out                | review   | Complete - SignOutButton, settings page    |
-| 2-5: Animated Welcome Experience  | review   | Complete - Framer Motion, reduced motion   |
-| 2-6: Seeded Products Selection    | review   | Complete - 31 UK staples, search/filter    |
-| **2-7: Budget Setting with Dial** | **NEXT** | Haptic dial for weekly budget              |
-| 2-8: Onboarding Completion        | pending  |                                            |
+All 11 stories completed and in review status.
+
+### Epic 3: Pantry Stock Tracker - COMPLETE
+
+All 8 stories completed and in review status.
+
+### Epic 4: Shopping Lists & Budget Control - IN PROGRESS
+
+| Story                                | Status  | Notes                                        |
+| ------------------------------------ | ------- | -------------------------------------------- |
+| 4-1: Create New Shopping List        | review  | Complete - Lists page, detail page, auto-add |
+| 4-2: View All Shopping Lists         | backlog |                                              |
+| 4-3: Add Items to Shopping List      | backlog |                                              |
+| 4-4: Search and Add from Pantry      | backlog |                                              |
+| 4-5: Remove Items from Shopping List | backlog |                                              |
+| 4-6: Check Off Items While Shopping  | backlog |                                              |
+| 4-7: Edit Item Prices                | backlog |                                              |
+| 4-8: Set Item Priority               | backlog |                                              |
+| 4-9: View Running Total              | backlog |                                              |
+| 4-10: Set Budget for Shopping List   | backlog |                                              |
+| 4-11: Safe Zone Indicator            | backlog |                                              |
+| 4-12: Budget Lock Mode               | backlog |                                              |
+| 4-13: Impulse Fund                   | backlog |                                              |
+| 4-14: Smart Suggestions Over Budget  | backlog |                                              |
+| 4-15: Archive Completed List         | backlog |                                              |
+| 4-16: View Archived Lists            | backlog |                                              |
 
 ### Test Status
 
-**175 tests passing** across 12 test suites
+**819 tests passing** across 39 test suites
 
-### Key Files Created This Session
+### Story 4-1 Implementation Summary
 
-**Auth Components:**
+**What was built:**
 
-- `src/components/auth/RegisterForm.tsx`
-- `src/components/auth/LoginForm.tsx`
-- `src/components/auth/ForgotPasswordForm.tsx`
-- `src/components/auth/ResetPasswordForm.tsx`
-- `src/components/auth/SignOutButton.tsx`
+- `ShoppingListCard` - Individual list card with status, item count, budget, auto-added badge
+- `ShoppingListGrid` - Grid display with sorting (active first) and empty state
+- `/lists` page - All lists view with FAB, navigation
+- `/lists/[id]` page - List detail view with budget progress bar, item sorting
+- Navigation from Pantry to Lists enabled
 
-**Onboarding Components:**
+**Key Features:**
 
-- `src/components/onboarding/WelcomeScreen.tsx`
-- `src/components/onboarding/ProductSelection.tsx`
+- Auto-add "Out" pantry items when creating new list
+- Default budget from onboarding settings
+- Date-based list naming (e.g., "Saturday, 25 Jan")
+- Budget progress bar with color indicators (green/yellow/red)
 
-**Auth Pages:**
+### Key Files Created
 
-- `src/app/(auth)/login/page.tsx`
-- `src/app/(auth)/register/page.tsx`
-- `src/app/(auth)/forgot-password/page.tsx`
-- `src/app/(auth)/reset-password/page.tsx`
+**Lists Components (Story 4-1):**
 
-**Onboarding Pages:**
+- `src/components/lists/ShoppingListCard.tsx`
+- `src/components/lists/ShoppingListGrid.tsx`
+- `src/components/lists/index.ts`
+- `src/components/lists/__tests__/ShoppingListCard.test.tsx`
+- `src/components/lists/__tests__/ShoppingListGrid.test.tsx`
 
-- `src/app/(onboarding)/welcome/page.tsx`
-- `src/app/(onboarding)/products/page.tsx`
+**Lists Pages:**
 
-**Other:**
+- `src/app/(app)/lists/page.tsx`
+- `src/app/(app)/lists/[id]/page.tsx`
 
-- `src/app/(app)/settings/page.tsx`
-- `src/lib/data/seeded-products.ts` (31 UK staples)
+**Storage (from Story 3-6):**
+
+- `src/lib/utils/shoppingListStorage.ts` - Complete CRUD and auto-add logic
+- `src/lib/utils/__tests__/shoppingListStorage.test.ts`
 
 ### Next Steps
 
-1. **Continue with Story 2-7:** Budget Setting with Haptic Dial
-   - Create dial/slider component for weekly budget
-   - Haptic feedback on round numbers (10, 20, etc.)
-   - Safe Zone preview (green glow)
-   - Skip option available
+1. **Continue Epic 4:** Story 4-2 onwards
+   - Add items to list
+   - Check off items while shopping
+   - Budget tracking and smart features
 
-2. **Then Story 2-8:** Onboarding Completion
-   - Finalize onboarding flow
-   - Save settings to Supabase
-   - Navigate to main app (pantry)
+2. **Alternative:** Run code review on Story 4-1
 
 ### Instructions for New Session
 
-Just say: **"Continue with Story 2-7"** or **"Carry on from where you left off"**
+Just say: **"Start Epic 4"** or **"Run Epic 3 retrospective"** or **"What's next?"**
 
 ---
 
