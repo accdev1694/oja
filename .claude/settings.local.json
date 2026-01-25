@@ -24,7 +24,13 @@
       "Bash(npm run lint:*)",
       "Skill(bmad:bmm:workflows:workflow-status)",
       "Bash(cat:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(npm run dev:*)",
+      "Bash(mkdir:*)",
+      "Bash(npx husky init)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm run format:check:*)",
+      "Bash(npm run format:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
