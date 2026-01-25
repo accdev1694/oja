@@ -161,6 +161,10 @@ export function AddItemToListSheet({
     if (suggestion.type === 'pantry') {
       setSelectedPantryItem(suggestion.item);
       setSearchTerm(suggestion.item.name);
+      // Pre-fill price from last known price if available
+      if (suggestion.item.lastKnownPrice != null) {
+        setEstimatedPrice((suggestion.item.lastKnownPrice / 100).toFixed(2));
+      }
     } else {
       setSelectedPantryItem(null);
       setSearchTerm(suggestion.name);
@@ -207,7 +211,7 @@ export function AddItemToListSheet({
       const newItem: NewShoppingListItem = {
         name,
         quantity: 1,
-        estimatedPrice: null,
+        estimatedPrice: pantryItem?.lastKnownPrice ?? null,
         priority: 'need',
         pantryItemId: pantryItem?.id ?? null,
         category: pantryItem?.category ?? null,
@@ -378,21 +382,35 @@ export function AddItemToListSheet({
                           className="flex-1 text-left"
                           data-testid={`suggestion-${suggestion.type === 'pantry' ? suggestion.item.id : 'custom'}`}
                         >
-                          <span className="font-medium text-[var(--color-text)]">
-                            {suggestion.type === 'pantry'
-                              ? suggestion.item.name
-                              : suggestion.name}
-                          </span>
-                          {suggestion.type === 'pantry' && (
-                            <span className="ml-2 text-xs text-[var(--color-text-secondary)] capitalize">
-                              {suggestion.item.category}
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-[var(--color-text)]">
+                              {suggestion.type === 'pantry'
+                                ? suggestion.item.name
+                                : suggestion.name}
                             </span>
-                          )}
-                          {suggestion.type === 'custom' && (
-                            <span className="ml-2 text-xs text-[var(--color-primary)]">
-                              Add new
-                            </span>
-                          )}
+                            {suggestion.type === 'pantry' && (
+                              <span className="text-xs text-[var(--color-text-secondary)] capitalize">
+                                {suggestion.item.category}
+                              </span>
+                            )}
+                            {suggestion.type === 'custom' && (
+                              <span className="text-xs text-[var(--color-primary)]">
+                                Add new
+                              </span>
+                            )}
+                          </div>
+                          {suggestion.type === 'pantry' &&
+                            suggestion.item.lastKnownPrice != null && (
+                              <span
+                                className="text-xs text-[var(--color-text-secondary)] font-mono"
+                                data-testid={`price-${suggestion.item.id}`}
+                              >
+                                ~£
+                                {(suggestion.item.lastKnownPrice / 100).toFixed(
+                                  2
+                                )}
+                              </span>
+                            )}
                         </button>
                         <button
                           type="button"

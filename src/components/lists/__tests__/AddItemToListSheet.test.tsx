@@ -37,21 +37,25 @@ describe('AddItemToListSheet', () => {
       name: 'Milk',
       category: 'dairy',
       level: 'stocked',
-      addedAt: '2024-01-01T00:00:00.000Z',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      lastKnownPrice: 165, // £1.65
+      priceUpdatedAt: '2024-01-15T00:00:00.000Z',
     },
     {
       id: 'pantry-2',
       name: 'Bread',
       category: 'bakery',
       level: 'low',
-      addedAt: '2024-01-01T00:00:00.000Z',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      // No lastKnownPrice
     },
     {
       id: 'pantry-3',
       name: 'Eggs',
       category: 'dairy',
       level: 'out',
-      addedAt: '2024-01-01T00:00:00.000Z',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      lastKnownPrice: 350, // £3.50
     },
   ];
 
@@ -393,6 +397,94 @@ describe('AddItemToListSheet', () => {
       expect(screen.getByRole('dialog')).toHaveAttribute(
         'aria-labelledby',
         'add-item-title'
+      );
+    });
+  });
+
+  describe('Last Known Price (Story 4-4)', () => {
+    it('displays last known price for pantry items with prices', async () => {
+      render(<AddItemToListSheet {...defaultProps} />);
+
+      const input = screen.getByTestId('item-search-input');
+      fireEvent.change(input, { target: { value: 'milk' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('price-pantry-1')).toBeInTheDocument();
+        expect(screen.getByTestId('price-pantry-1')).toHaveTextContent('£1.65');
+      });
+    });
+
+    it('does not display price for items without lastKnownPrice', async () => {
+      render(<AddItemToListSheet {...defaultProps} />);
+
+      const input = screen.getByTestId('item-search-input');
+      fireEvent.change(input, { target: { value: 'bread' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('suggestion-pantry-2')).toBeInTheDocument();
+        expect(screen.queryByTestId('price-pantry-2')).not.toBeInTheDocument();
+      });
+    });
+
+    it('pre-fills price input when selecting item with lastKnownPrice', async () => {
+      render(<AddItemToListSheet {...defaultProps} />);
+
+      const input = screen.getByTestId('item-search-input');
+      fireEvent.change(input, { target: { value: 'milk' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('suggestion-pantry-1')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('suggestion-pantry-1'));
+
+      await waitFor(() => {
+        const priceInput = screen.getByTestId(
+          'price-input'
+        ) as HTMLInputElement;
+        expect(priceInput.value).toBe('1.65');
+      });
+    });
+
+    it('quick-add uses lastKnownPrice as estimatedPrice', async () => {
+      const handleAdd = jest.fn();
+      render(<AddItemToListSheet {...defaultProps} onAdd={handleAdd} />);
+
+      const input = screen.getByTestId('item-search-input');
+      fireEvent.change(input, { target: { value: 'milk' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('quick-add-pantry-1')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('quick-add-pantry-1'));
+
+      expect(handleAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Milk',
+          estimatedPrice: 165, // pence
+        })
+      );
+    });
+
+    it('quick-add passes null for items without lastKnownPrice', async () => {
+      const handleAdd = jest.fn();
+      render(<AddItemToListSheet {...defaultProps} onAdd={handleAdd} />);
+
+      const input = screen.getByTestId('item-search-input');
+      fireEvent.change(input, { target: { value: 'bread' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('quick-add-pantry-2')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('quick-add-pantry-2'));
+
+      expect(handleAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Bread',
+          estimatedPrice: null,
+        })
       );
     });
   });

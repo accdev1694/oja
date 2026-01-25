@@ -17,6 +17,7 @@ import {
   generatePantryItemId,
   addPantryItem,
   updatePantryItem,
+  updatePantryItemPrice,
   removePantryItem,
   pantryItemExists,
   type StockItem,
@@ -487,6 +488,82 @@ describe('onboardingStorage', () => {
 
       const items = getPantryItems();
       expect(items[0].level).toBe('out');
+    });
+  });
+
+  describe('updatePantryItemPrice', () => {
+    it('updates the price for an existing item', () => {
+      const item = addPantryItem({
+        name: 'Test',
+        category: 'pantry',
+      });
+
+      const updated = updatePantryItemPrice(item.id, 250);
+
+      expect(updated).not.toBeNull();
+      expect(updated?.lastKnownPrice).toBe(250);
+      expect(updated?.priceUpdatedAt).toBeDefined();
+    });
+
+    it('returns null for non-existent item', () => {
+      const result = updatePantryItemPrice('non-existent-id', 100);
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null for deleted item', () => {
+      const item = addPantryItem({
+        name: 'Test',
+        category: 'pantry',
+      });
+
+      removePantryItem(item.id);
+      const result = updatePantryItemPrice(item.id, 100);
+
+      expect(result).toBeNull();
+    });
+
+    it('preserves other item fields', () => {
+      const item = addPantryItem({
+        name: 'Test',
+        category: 'pantry',
+        level: 'low',
+      });
+
+      const updated = updatePantryItemPrice(item.id, 150);
+
+      expect(updated?.name).toBe('Test');
+      expect(updated?.category).toBe('pantry');
+      expect(updated?.level).toBe('low');
+    });
+
+    it('persists price to storage', () => {
+      const item = addPantryItem({
+        name: 'Test',
+        category: 'pantry',
+      });
+
+      updatePantryItemPrice(item.id, 350);
+
+      const items = getPantryItems();
+      expect(items[0].lastKnownPrice).toBe(350);
+    });
+
+    it('updates priceUpdatedAt timestamp', () => {
+      const item = addPantryItem({
+        name: 'Test',
+        category: 'pantry',
+      });
+
+      const before = new Date();
+      updatePantryItemPrice(item.id, 200);
+      const after = new Date();
+
+      const items = getPantryItems();
+      const timestamp = new Date(items[0].priceUpdatedAt!);
+
+      expect(timestamp.getTime()).toBeGreaterThanOrEqual(before.getTime());
+      expect(timestamp.getTime()).toBeLessThanOrEqual(after.getTime());
     });
   });
 

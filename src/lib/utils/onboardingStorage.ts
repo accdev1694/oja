@@ -33,6 +33,8 @@ export interface StockItem {
   level: StockLevel;
   createdAt: string;
   deletedAt?: string; // ISO timestamp for soft-delete (items can be restored within 7 days)
+  lastKnownPrice?: number | null; // Last recorded price in pence
+  priceUpdatedAt?: string; // ISO timestamp of last price update
 }
 
 // Onboarding summary for display
@@ -264,6 +266,29 @@ export function updatePantryItem(
   items[index] = {
     ...items[index],
     ...updates,
+  };
+
+  savePantryItems(items);
+  return items[index];
+}
+
+/**
+ * Update the last known price for a pantry item
+ * Called when an item's actual price is recorded during shopping
+ */
+export function updatePantryItemPrice(
+  id: string,
+  priceInPence: number
+): StockItem | null {
+  const items = getAllPantryItems();
+  const index = items.findIndex((item) => item.id === id && !item.deletedAt);
+
+  if (index === -1) return null;
+
+  items[index] = {
+    ...items[index],
+    lastKnownPrice: priceInPence,
+    priceUpdatedAt: new Date().toISOString(),
   };
 
   savePantryItems(items);
