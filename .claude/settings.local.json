@@ -21,7 +21,17 @@
       "Bash(npm run build:*)",
       "Bash(node -e:*)",
       "Bash(npx next build:*)",
-      "Bash(npm run lint:*)"
+      "Bash(npm run lint:*)",
+      "Skill(bmad:bmm:workflows:workflow-status)",
+      "Bash(cat:*)",
+      "Bash(npm test:*)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "playwright",
+    "github",
+    "context7",
+    "vercel"
+  ]
 }
