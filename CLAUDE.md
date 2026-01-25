@@ -375,27 +375,75 @@ Camera capture → Tesseract.js OCR → Gemini parse → User confirm → Save
 
 **Last Updated:** 2026-01-25
 
-### Epic 1 Progress
+### Epic 1: Project Foundation - COMPLETE
 
-| Story                           | Status | Notes    |
-| ------------------------------- | ------ | -------- |
-| 1-1: Initialize Next.js Project | review | Complete |
-| 1-2: Configure Serwist PWA      | review | Complete |
-| 1-3: Set Up Supabase            | review | Complete |
-| 1-4: Configure DexieJS          | review | Complete |
-| 1-5: TanStack Query + Zustand   | review | Complete |
-| 1-6: Design System Foundation   | review | Complete |
-| 1-7: CI/CD and Dev Tooling      | review | Complete |
+All 7 stories completed and in review status.
+
+### Epic 2: Authentication & Onboarding - IN PROGRESS
+
+| Story                             | Status   | Notes                                      |
+| --------------------------------- | -------- | ------------------------------------------ |
+| 2-1: User Registration            | review   | Complete - RegisterForm, validation, tests |
+| 2-2: User Login                   | review   | Complete - LoginForm with rate limiting    |
+| 2-3: Password Reset Flow          | review   | Complete - Forgot/reset password pages     |
+| 2-4: User Sign Out                | review   | Complete - SignOutButton, settings page    |
+| 2-5: Animated Welcome Experience  | review   | Complete - Framer Motion, reduced motion   |
+| 2-6: Seeded Products Selection    | review   | Complete - 31 UK staples, search/filter    |
+| **2-7: Budget Setting with Dial** | **NEXT** | Haptic dial for weekly budget              |
+| 2-8: Onboarding Completion        | pending  |                                            |
+
+### Test Status
+
+**175 tests passing** across 12 test suites
+
+### Key Files Created This Session
+
+**Auth Components:**
+
+- `src/components/auth/RegisterForm.tsx`
+- `src/components/auth/LoginForm.tsx`
+- `src/components/auth/ForgotPasswordForm.tsx`
+- `src/components/auth/ResetPasswordForm.tsx`
+- `src/components/auth/SignOutButton.tsx`
+
+**Onboarding Components:**
+
+- `src/components/onboarding/WelcomeScreen.tsx`
+- `src/components/onboarding/ProductSelection.tsx`
+
+**Auth Pages:**
+
+- `src/app/(auth)/login/page.tsx`
+- `src/app/(auth)/register/page.tsx`
+- `src/app/(auth)/forgot-password/page.tsx`
+- `src/app/(auth)/reset-password/page.tsx`
+
+**Onboarding Pages:**
+
+- `src/app/(onboarding)/welcome/page.tsx`
+- `src/app/(onboarding)/products/page.tsx`
+
+**Other:**
+
+- `src/app/(app)/settings/page.tsx`
+- `src/lib/data/seeded-products.ts` (31 UK staples)
 
 ### Next Steps
 
-**Epic 1 Complete! All stories in review status.**
+1. **Continue with Story 2-7:** Budget Setting with Haptic Dial
+   - Create dial/slider component for weekly budget
+   - Haptic feedback on round numbers (10, 20, etc.)
+   - Safe Zone preview (green glow)
+   - Skip option available
 
-To continue development:
+2. **Then Story 2-8:** Onboarding Completion
+   - Finalize onboarding flow
+   - Save settings to Supabase
+   - Navigate to main app (pantry)
 
-1. Run code review on completed stories: `/bmad:bmm:workflows:code-review`
-2. After review approval, mark Epic 1 as done
-3. Start Epic 2: User Authentication & Onboarding
+### Instructions for New Session
+
+Just say: **"Continue with Story 2-7"** or **"Carry on from where you left off"**
 
 ---
 
