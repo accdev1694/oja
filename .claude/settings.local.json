@@ -16,7 +16,12 @@
       "Skill(bmad:bmm:workflows:sprint-planning)",
       "Skill(bmad:bmm:workflows:create-story)",
       "Skill(bmad:bmm:workflows:dev-story)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(timeout 30 npm run dev:*)",
+      "Bash(npm run build:*)",
+      "Bash(node -e:*)",
+      "Bash(npx next build:*)",
+      "Bash(npm run lint:*)"
     ]
   }
 }
