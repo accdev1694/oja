@@ -475,5 +475,5 @@ npm run lint
 - [x] All acceptance criteria met
 - [x] Code builds without errors
 - [x] Lint passes
-- [ ] Changes committed with descriptive message
+- [x] Changes committed with descriptive message
 - [x] Sprint status updated
