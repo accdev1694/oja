@@ -7,12 +7,13 @@ import {
   getShoppingList,
   getItemsForList,
   addShoppingListItem,
+  removeShoppingListItem,
   type ShoppingList,
   type ShoppingListItem,
   type NewShoppingListItem,
 } from '@/lib/utils/shoppingListStorage';
-import { Card } from '@/components/ui';
-import { AddItemToListSheet } from '@/components/lists';
+import { Card, Toast, useToast } from '@/components/ui';
+import { AddItemToListSheet, SwipeableListItem } from '@/components/lists';
 
 /**
  * Format budget for display
@@ -170,6 +171,9 @@ export default function ListDetailPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
+  // Toast for undo functionality
+  const { toast, showToast, hideToast } = useToast();
+
   // Load list and items from localStorage
   useEffect(() => {
     const loadData = () => {
@@ -237,6 +241,49 @@ export default function ListDetailPage() {
       }
     },
     [items, listId]
+  );
+
+  // Handle removing an item with undo
+  const handleRemoveItem = useCallback(
+    (itemToRemove: ShoppingListItem) => {
+      // Store the item and its index for undo
+      const itemIndex = items.findIndex((item) => item.id === itemToRemove.id);
+
+      // Remove from localStorage
+      removeShoppingListItem(itemToRemove.id);
+
+      // Update local state immediately
+      setItems((prev) => prev.filter((item) => item.id !== itemToRemove.id));
+
+      // Show toast with undo option
+      showToast(`"${itemToRemove.name}" removed`, {
+        type: 'info',
+        onUndo: () => {
+          // Restore the item to localStorage by re-adding it
+          // We need to restore using the original item data
+          const restoredItem = addShoppingListItem(listId, {
+            name: itemToRemove.name,
+            quantity: itemToRemove.quantity,
+            unit: itemToRemove.unit,
+            estimatedPrice: itemToRemove.estimatedPrice,
+            priority: itemToRemove.priority,
+            isAutoAdded: itemToRemove.isAutoAdded,
+            pantryItemId: itemToRemove.pantryItemId,
+            category: itemToRemove.category,
+          });
+
+          // Restore to state at original position
+          setItems((prev) => {
+            const newItems = [...prev];
+            // Insert at original position or at end if position is invalid
+            const insertIndex = Math.min(itemIndex, newItems.length);
+            newItems.splice(insertIndex, 0, restoredItem);
+            return newItems;
+          });
+        },
+      });
+    },
+    [items, listId, showToast]
   );
 
   // Get existing pantry item IDs in this list
@@ -409,9 +456,15 @@ export default function ListDetailPage() {
           <Card className="p-0 overflow-hidden">
             <div className="divide-y divide-[var(--color-border)]">
               {sortedItems.map((item) => (
-                <div key={item.id} className="px-4">
-                  <ListItemRow item={item} />
-                </div>
+                <SwipeableListItem
+                  key={item.id}
+                  onRemove={() => handleRemoveItem(item)}
+                  testId={`swipeable-${item.id}`}
+                >
+                  <div className="px-4">
+                    <ListItemRow item={item} />
+                  </div>
+                </SwipeableListItem>
               ))}
             </div>
           </Card>
@@ -450,6 +503,16 @@ export default function ListDetailPage() {
         existingPantryItemIds={existingPantryItemIds}
         isLoading={isAdding}
         error={addError}
+      />
+
+      {/* Toast for undo */}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onDismiss={hideToast}
+        onUndo={toast.onUndo}
+        duration={5000}
       />
 
       {/* Bottom Navigation */}

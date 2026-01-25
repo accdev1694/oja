@@ -8,3 +8,4 @@ export { ShoppingListGrid } from './ShoppingListGrid';
 export { ShoppingListCard } from './ShoppingListCard';
 export { ListFilterTabs, type ListFilter } from './ListFilterTabs';
 export { AddItemToListSheet } from './AddItemToListSheet';
+export { SwipeableListItem } from './SwipeableListItem';
