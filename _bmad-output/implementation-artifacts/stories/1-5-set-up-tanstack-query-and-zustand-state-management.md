@@ -5,7 +5,7 @@
 - **ID**: 1-5
 - **Epic**: Epic 1 - Project Foundation & PWA Setup
 - **Title**: Set Up TanStack Query and Zustand State Management
-- **Status**: ready-for-dev
+- **Status**: review
 
 ## Description
 
@@ -13,11 +13,11 @@ As a developer, I want configured state management libraries, so that I can effi
 
 ## Acceptance Criteria
 
-- [ ] `lib/query/client.ts` exports a QueryClient with default options (staleTime, gcTime, retry logic)
-- [ ] `lib/query/keys.ts` exports a query key factory following Architecture patterns
-- [ ] `lib/query/QueryProvider.tsx` wraps the app with QueryClientProvider
-- [ ] `lib/stores/uiStore.ts` creates a Zustand store for UI state (offline status, modals)
-- [ ] Optimistic update patterns are documented and ready for use
+- [x] `lib/query/client.ts` exports a QueryClient with default options (staleTime, gcTime, retry logic)
+- [x] `lib/query/keys.ts` exports a query key factory following Architecture patterns
+- [x] `lib/query/QueryProvider.tsx` wraps the app with QueryClientProvider
+- [x] `lib/stores/uiStore.ts` creates a Zustand store for UI state (offline status, modals)
+- [x] Optimistic update patterns are documented and ready for use
 
 ## Technical Notes
 
@@ -472,8 +472,8 @@ npm run lint
 ## Story Wrap-Up
 
 ### Completion Checklist
-- [ ] All acceptance criteria met
-- [ ] Code builds without errors
-- [ ] Lint passes
+- [x] All acceptance criteria met
+- [x] Code builds without errors
+- [x] Lint passes
 - [ ] Changes committed with descriptive message
-- [ ] Sprint status updated
+- [x] Sprint status updated
