@@ -80,11 +80,11 @@ export function RegisterForm() {
     }
 
     if (user) {
-      // Redirect to onboarding or email confirmation page
+      // Redirect to welcome screen or email confirmation page
       if (user.email_confirmed_at) {
-        router.push('/onboarding');
+        router.push('/welcome');
       } else {
-        router.push('/auth/verify-email');
+        router.push('/verify-email');
       }
     }
 
