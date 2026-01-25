@@ -8,12 +8,14 @@ import {
   getItemsForList,
   addShoppingListItem,
   removeShoppingListItem,
+  updateShoppingListItem,
   type ShoppingList,
   type ShoppingListItem,
   type NewShoppingListItem,
 } from '@/lib/utils/shoppingListStorage';
 import { Card, Toast, useToast } from '@/components/ui';
 import { AddItemToListSheet, SwipeableListItem } from '@/components/lists';
+import { hapticLight } from '@/lib/utils/haptics';
 
 /**
  * Format budget for display
@@ -64,7 +66,13 @@ function getStatusConfig(status: ShoppingList['status']) {
 /**
  * List Item Component
  */
-function ListItemRow({ item }: { item: ShoppingListItem }) {
+function ListItemRow({
+  item,
+  onToggleCheck,
+}: {
+  item: ShoppingListItem;
+  onToggleCheck: (item: ShoppingListItem) => void;
+}) {
   return (
     <div
       className={`flex items-center gap-3 py-3 border-b border-[var(--color-border)] last:border-0 ${
@@ -72,13 +80,19 @@ function ListItemRow({ item }: { item: ShoppingListItem }) {
       }`}
       data-testid={`list-item-${item.id}`}
     >
-      {/* Checkbox placeholder (interactive in Story 4.6) */}
-      <div
-        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+      {/* Interactive Checkbox */}
+      <button
+        type="button"
+        onClick={() => onToggleCheck(item)}
+        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
           item.isChecked
             ? 'bg-[var(--color-success)] border-[var(--color-success)]'
-            : 'border-gray-300'
+            : 'border-gray-300 hover:border-gray-400'
         }`}
+        aria-label={
+          item.isChecked ? `Uncheck ${item.name}` : `Check off ${item.name}`
+        }
+        data-testid={`checkbox-${item.id}`}
       >
         {item.isChecked && (
           <svg
@@ -95,7 +109,7 @@ function ListItemRow({ item }: { item: ShoppingListItem }) {
             />
           </svg>
         )}
-      </div>
+      </button>
 
       {/* Item info */}
       <div className="flex-1 min-w-0">
@@ -242,6 +256,29 @@ export default function ListDetailPage() {
     },
     [items, listId]
   );
+
+  // Handle toggling check state
+  const handleToggleCheck = useCallback((itemToToggle: ShoppingListItem) => {
+    // Provide haptic feedback
+    hapticLight();
+
+    // Toggle the checked state
+    const newCheckedState = !itemToToggle.isChecked;
+
+    // Update in localStorage
+    updateShoppingListItem(itemToToggle.id, {
+      isChecked: newCheckedState,
+    });
+
+    // Update local state
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemToToggle.id
+          ? { ...item, isChecked: newCheckedState }
+          : item
+      )
+    );
+  }, []);
 
   // Handle removing an item with undo
   const handleRemoveItem = useCallback(
@@ -462,7 +499,10 @@ export default function ListDetailPage() {
                   testId={`swipeable-${item.id}`}
                 >
                   <div className="px-4">
-                    <ListItemRow item={item} />
+                    <ListItemRow
+                      item={item}
+                      onToggleCheck={handleToggleCheck}
+                    />
                   </div>
                 </SwipeableListItem>
               ))}
