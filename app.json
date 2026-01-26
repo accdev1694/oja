@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "Oja",
+    "slug": "oja",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "oja",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FF6B35"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.oja.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Oja needs camera access to scan receipts",
+        "NSPhotoLibraryUsageDescription": "Oja needs photo access to select receipt images"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FF6B35"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.oja.app",
+      "permissions": ["CAMERA", "VIBRATE", "RECEIVE_BOOT_COMPLETED"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-haptics",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FF6B35"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Oja to access your camera to scan receipts"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

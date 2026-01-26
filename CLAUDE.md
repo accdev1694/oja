@@ -1,6 +1,35 @@
 # Oja - Claude Code Project Configuration
 
-> Budget-First Shopping Confidence - A mobile app that gives shoppers control over their spending before, during, and after shopping trips.
+> Budget-First Shopping Confidence - A native mobile app giving shoppers control over spending before, during, and after shopping trips.
+
+---
+
+## BUILD PROGRESS TRACKER
+
+**📊 Track full build progress:** `_bmad-output/implementation-artifacts/v2-build-progress.md`
+
+| Phase | Status |
+|-------|--------|
+| 0. Project Setup | 🔄 In Progress |
+| 1-7. Epics | ⏳ Pending |
+
+**Current Task:** Initialize Expo + Convex + Clerk
+
+---
+
+## ARCHITECTURE PIVOT NOTICE
+
+**As of 2026-01-26, Oja has pivoted from Next.js PWA to React Native (Expo) with a completely new backend architecture. v1 code has been deleted.**
+
+### Required Reading Before Implementation
+
+1. **`project-context.md`** - Developer quick reference (START HERE)
+2. **`_bmad-output/implementation-artifacts/v2-build-progress.md`** - Build progress tracker
+3. **`_bmad-output/planning-artifacts/architecture-v2-expo-convex.md`** - Full architecture specification
+4. **`_bmad-output/planning-artifacts/coding-conventions-expo.md`** - Coding patterns and standards
+5. **`_bmad-output/planning-artifacts/security-guidelines-expo.md`** - Security requirements
+
+**CRITICAL**: All agents MUST read `project-context.md` before writing ANY code.
 
 ---
 
@@ -20,345 +49,323 @@ To invoke the project lead:
 
 ---
 
-## Progress Tracking
+## Tech Stack (v2 - Expo/Convex)
 
-Project progress is tracked through multiple mechanisms:
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| **Framework** | Expo SDK 55+ | React Native with native capabilities |
+| **Language** | TypeScript (strict) | Type-safe development |
+| **Routing** | Expo Router | File-based native navigation |
+| **UI Design** | Platform-Adaptive | iOS: Liquid Glass / Android: Material You |
+| **Authentication** | Clerk | Managed auth with social providers |
+| **Backend** | Convex | Real-time database + serverless functions |
+| **AI/ML** | Jina AI + Gemini | Embeddings + Receipt parsing |
+| **State** | React hooks + Convex | Real-time reactive state |
+| **Animations** | React Native Reanimated | Smooth native animations |
+| **Icons** | Expo Symbols / SF Symbols | Native iOS icons |
+| **Haptics** | Expo Haptics | Tactile feedback |
+| **Payments** | Stripe | Subscription management |
 
-### 1. Workflow Status (Quick Check)
+### Previous Stack (v1 - Deprecated)
+
+The following are from the original Next.js PWA implementation and are being replaced:
+- ~~Next.js 14~~ → Expo
+- ~~Supabase~~ → Convex + Clerk
+- ~~Tailwind CSS~~ → StyleSheet + Liquid Glass
+- ~~TanStack Query~~ → Convex useQuery
+- ~~IndexedDB~~ → Convex + local cache
+
+---
+
+## Project Structure (v2)
 
 ```
-/bmad:bmm:workflows:workflow-status
+oja/
+├── app/                          # Expo Router (file-based routing)
+│   ├── _layout.tsx              # Root layout (providers)
+│   ├── (app)/                   # Authenticated routes
+│   │   ├── _layout.tsx          # Protected layout
+│   │   ├── (tabs)/              # Tab navigator
+│   │   │   ├── _layout.tsx      # Tab configuration
+│   │   │   ├── index.tsx        # Pantry (home)
+│   │   │   ├── lists.tsx        # Shopping lists
+│   │   │   ├── scan.tsx         # Receipt scanner
+│   │   │   └── profile.tsx      # User profile
+│   │   ├── list/[id].tsx        # List detail
+│   │   ├── item/[id].tsx        # Item detail
+│   │   └── edit-profile.tsx     # Edit profile
+│   ├── (auth)/                   # Auth routes
+│   │   ├── sign-in.tsx
+│   │   └── sign-up.tsx
+│   └── onboarding/               # Onboarding flow
+│       ├── _layout.tsx
+│       ├── name.tsx
+│       ├── budget.tsx
+│       └── complete.tsx
+│
+├── components/                   # Reusable components
+│   ├── ui/                      # Design system (Glass components)
+│   ├── pantry/                  # Pantry components
+│   ├── lists/                   # Shopping list components
+│   ├── receipt/                 # Receipt scanning
+│   └── onboarding/              # Onboarding components
+│
+├── hooks/                        # Custom React hooks
+│   ├── useCurrentUser.ts
+│   ├── usePhotoPicker.ts
+│   └── useOptimisticUpdates.ts
+│
+├── lib/                          # Utilities
+│   ├── utils/
+│   └── constants/
+│
+├── convex/                       # Convex backend
+│   ├── _generated/              # Auto-generated (don't edit)
+│   ├── schema.ts                # Database schema
+│   ├── users.ts                 # User functions
+│   ├── pantryItems.ts           # Pantry functions
+│   ├── shoppingLists.ts         # List functions
+│   ├── listItems.ts             # List item functions
+│   ├── receipts.ts              # Receipt functions
+│   ├── files.ts                 # File storage
+│   ├── ai.ts                    # AI/OpenAI functions
+│   └── lib/                     # Backend utilities
+│
+├── project-context.md            # Developer reference (READ FIRST)
+├── guidelines.md                 # Source tutorial transcript
+│
+└── _bmad-output/                 # BMAD artifacts
+    ├── planning-artifacts/
+    │   ├── product-brief.md
+    │   ├── prd.md
+    │   ├── architecture-v2-expo-convex.md  # NEW
+    │   ├── coding-conventions-expo.md      # NEW
+    │   ├── security-guidelines-expo.md     # NEW
+    │   └── epics/
+    └── implementation-artifacts/
+        ├── sprint-status.yaml
+        └── stories/
 ```
 
-Answers "What should I do now?" - reads current state and recommends next action.
+---
 
-### 2. Sprint Status File
+## Key Commands (v2)
 
-Location: `_bmad-output/implementation-artifacts/sprint-status.yaml`
+```bash
+# Development
+npx expo start                    # Start Expo dev server
+npx expo start --ios              # iOS simulator
+npx expo start --android          # Android emulator
 
-Tracks:
+# Build
+npx expo run:ios                  # Development build (iOS)
+npx expo run:android              # Development build (Android)
+eas build --platform ios          # Production build (iOS)
+eas build --platform android      # Production build (Android)
 
-- Current sprint number
-- Active epic and story
-- Story statuses (pending, in_progress, completed, blocked)
-- Blockers and notes
+# Convex
+npx convex dev                    # Start Convex dev server
+npx convex deploy                 # Deploy to production
 
-### 3. Document Frontmatter
+# Testing
+npm test                          # Run unit tests
+npm run test:watch                # Watch mode
 
-Each BMAD document (PRD, Architecture, etc.) contains `stepsCompleted` in its frontmatter, showing workflow progress.
-
-### 4. CLAUDE.md Workflow Phases Table
-
-The table in this file shows high-level phase completion status. Update status to "IN PROGRESS" or "COMPLETE" as phases finish.
+# Linting
+npm run lint                      # ESLint
+npm run format                    # Prettier
+```
 
 ---
 
 ## BMAD Workflow Phases
 
-| Phase                | Agent          | Command                                        | Status   |
-| -------------------- | -------------- | ---------------------------------------------- | -------- |
-| 1. Product Brief     | PM + Analyst   | `/bmad:bmm:workflows:create-product-brief`     | COMPLETE |
-| 2. PRD               | PM             | `/bmad:bmm:workflows:prd`                      | COMPLETE |
-| 3. Architecture      | Architect      | `/bmad:bmm:workflows:create-architecture`      | COMPLETE |
-| 4. UX Design         | UX Designer    | `/bmad:bmm:workflows:create-ux-design`         | COMPLETE |
-| 5. Epics & Stories   | Scrum Master   | `/bmad:bmm:workflows:create-epics-and-stories` | COMPLETE |
-| 6. Test Strategy     | Test Architect | `/bmad:bmm:workflows:testarch-test-design`     | COMPLETE |
-| 7. Sprint Planning   | Scrum Master   | `/bmad:bmm:workflows:sprint-planning`          | COMPLETE |
-| 8. Story Development | Developer      | `/bmad:bmm:workflows:dev-story`                | Pending  |
-| 9. Code Review       | Developer      | `/bmad:bmm:workflows:code-review`              | Pending  |
-| 10. Test Automation  | Test Architect | `/bmad:bmm:workflows:testarch-automate`        | Pending  |
+| Phase | Agent | Command | Status |
+|-------|-------|---------|--------|
+| 1. Product Brief | PM + Analyst | `/bmad:bmm:workflows:create-product-brief` | COMPLETE |
+| 2. PRD | PM | `/bmad:bmm:workflows:prd` | COMPLETE |
+| 3. Architecture | Architect | `/bmad:bmm:workflows:create-architecture` | **NEEDS UPDATE (v2)** |
+| 4. UX Design | UX Designer | `/bmad:bmm:workflows:create-ux-design` | COMPLETE |
+| 5. Epics & Stories | Scrum Master | `/bmad:bmm:workflows:create-epics-and-stories` | **NEEDS UPDATE** |
+| 6. Test Strategy | Test Architect | `/bmad:bmm:workflows:testarch-test-design` | Pending |
+| 7. Sprint Planning | Scrum Master | `/bmad:bmm:workflows:sprint-planning` | Pending |
+| 8. Story Development | Developer | `/bmad:bmm:workflows:dev-story` | Pending |
+| 9. Code Review | Developer | `/bmad:bmm:workflows:code-review` | Pending |
+| 10. Test Automation | Test Architect | `/bmad:bmm:workflows:testarch-automate` | Pending |
 
 ---
 
-## Tech Stack
+## Convex Backend Patterns
 
-| Layer          | Technology                                             |
-| -------------- | ------------------------------------------------------ |
-| **Framework**  | Next.js 14 (App Router)                                |
-| **Platform**   | Progressive Web App (PWA)                              |
-| **Language**   | TypeScript (strict mode)                               |
-| **Styling**    | Tailwind CSS                                           |
-| **State**      | Zustand (client) + TanStack Query (server)             |
-| **Animations** | Framer Motion                                          |
-| **Icons**      | Phosphor Icons (@phosphor-icons/react)                 |
-| **Backend**    | Supabase (Postgres + Auth + Realtime + Edge Functions) |
-| **PWA**        | next-pwa + Workbox                                     |
-| **OCR**        | Tesseract.js (client-side)                             |
-| **AI**         | Gemini 1.5 Flash (receipt parsing)                     |
-| **Payments**   | Stripe Checkout (direct, ~3% fees)                     |
-| **Hosting**    | Vercel                                                 |
-
----
-
-## Project Structure
-
-```
-oja/
-├── app/                          # Next.js App Router
-│   ├── (app)/                    # Authenticated app routes
-│   │   ├── pantry/              # Stock tracker (home)
-│   │   ├── list/                # Shopping lists
-│   │   ├── list/[id]/           # Individual list detail
-│   │   ├── scan/                # Receipt scanner
-│   │   ├── insights/            # Weekly/monthly insights
-│   │   └── settings/            # User settings
-│   ├── (auth)/                   # Auth routes
-│   │   ├── login/
-│   │   └── register/
-│   ├── (marketing)/              # Public pages
-│   ├── api/                      # API routes
-│   │   ├── receipts/parse/      # Receipt parsing
-│   │   └── webhooks/stripe/     # Stripe webhooks
-│   ├── layout.tsx
-│   └── manifest.ts               # PWA manifest
-├── components/
-│   ├── ui/                       # Design system primitives
-│   ├── stock/                    # Stock tracker components
-│   ├── list/                     # Shopping list components
-│   ├── receipt/                  # Receipt scanning
-│   └── insights/                 # Analytics components
-├── lib/
-│   ├── supabase/                 # Supabase client
-│   │   ├── client.ts
-│   │   ├── server.ts
-│   │   └── middleware.ts
-│   ├── stores/                   # Zustand stores
-│   ├── hooks/                    # Custom hooks
-│   ├── ai/                       # AI utilities
-│   └── utils/                    # General utilities
-├── public/
-│   ├── icons/                    # PWA icons (192, 512)
-│   └── sounds/                   # UI sound effects
-├── styles/
-│   └── globals.css               # Tailwind imports
-├── supabase/
-│   ├── migrations/               # Database migrations
-│   └── functions/                # Edge functions
-├── next.config.js                # Next.js + PWA config
-├── tailwind.config.ts
-└── _bmad-output/                 # BMAD artifacts
-    ├── planning-artifacts/
-    └── implementation-artifacts/
-```
-
----
-
-## Key Commands
-
-```bash
-# Development
-npm run dev                       # Start dev server (localhost:3000)
-npm run build                     # Production build
-npm run start                     # Start production server
-
-# Testing
-npm test                          # Run unit tests
-npm run test:watch                # Watch mode
-npm run test:coverage             # Coverage report
-
-# Linting & Formatting
-npm run lint                      # ESLint
-npm run format                    # Prettier
-
-# PWA
-npm run build                     # Generates SW + manifest
-# Test PWA: build, then serve with `npx serve out`
-
-# Database
-npx supabase start                # Local Supabase
-npx supabase db push              # Push migrations
-npx supabase gen types typescript # Generate types
-
-# Deployment
-vercel                            # Deploy to Vercel
-vercel --prod                     # Production deploy
-```
-
----
-
-## Design System
-
-### Colors
+### Query (Read)
 
 ```typescript
-// Primary
-orange: '#FF6B35'; // Energy, confidence, action
-grey: '#F5F5F5'; // Clean, spacious, calm
-charcoal: '#2D3436'; // Grounding, trust, readability
-
-// Semantic
-success: '#10B981'; // Under budget
-warning: '#F59E0B'; // Approaching limit
-danger: '#EF4444'; // Over budget
-
-// Warm tones
-peach: '#FFE8E0'; // Card highlights
-warmWhite: '#FFFAF8'; // Base background
+export const getByUser = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("items")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+  },
+});
 ```
 
-### Typography
-
-- **Headings:** Inter (700)
-- **Body:** Inter (400, 500)
-- **Numbers/Prices:** JetBrains Mono (monospace alignment)
-
-### Icons
-
-Use Phosphor Icons (@phosphor-icons/react) with appropriate weights:
-
-- **Navigation:** Duotone weight
-- **Actions:** Bold weight
-- **Stock states:** Fill (full) → Thin (empty)
-
----
-
-## Testing Strategy
-
-Testing is integrated throughout development, led by **Murat (Test Architect)**:
-
-1. **Unit Tests** - Every component and utility function
-2. **Integration Tests** - Store interactions, API calls
-3. **E2E Tests** - Critical user flows (Maestro or Detox)
-
-**Test execution points:**
-
-- Before each PR/story completion
-- After each sprint
-- Before release
-
-**Invoke test workflows:**
-
-```
-/bmad:bmm:workflows:testarch-test-design    # Test strategy
-/bmad:bmm:workflows:testarch-automate       # Generate tests
-/bmad:bmm:workflows:testarch-test-review    # Review test quality
-```
-
----
-
-## Code Conventions
-
-### File Naming
-
-- Components: `PascalCase.tsx` (e.g., `BudgetRing.tsx`)
-- Utilities: `camelCase.ts` (e.g., `formatCurrency.ts`)
-- Types: `PascalCase` in `types/index.ts`
-- Hooks: `useCamelCase.ts` (e.g., `useStockLevel.ts`)
-
-### Component Structure
+### Mutation (Write)
 
 ```typescript
-// 1. Imports
-// 2. Types/Interfaces
-// 3. Component
-// 4. Styles (if colocated)
-// 5. Export
+export const create = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireCurrentUser(ctx); // ALWAYS verify auth
+    return await ctx.db.insert("items", {
+      userId: user._id,
+      name: args.name,
+      createdAt: Date.now(),
+    });
+  },
+});
 ```
 
-### State Management
+### Action (External API)
 
-- **Local UI state:** `useState`
-- **Complex local state:** `useReducer`
-- **Global client state:** Zustand stores
-- **Server state:** TanStack Query
+```typescript
+export const generateEmbedding = action({
+  args: { text: v.string() },
+  handler: async (ctx, args) => {
+    // Call OpenAI, etc.
+    return await openai.embeddings.create({ ... });
+  },
+});
+```
+
+---
+
+## Critical Rules for All Agents
+
+1. **Read `project-context.md` first** - Before ANY implementation
+2. **Verify authentication** - Every mutation must check user ownership
+3. **Use indexes** - Never scan full tables
+4. **Optimistic updates** - For instant UX feedback
+5. **Haptic feedback** - On all user interactions
+6. **Handle all states** - Loading, error, empty, success
 
 ---
 
 ## Environment Variables
 
-Required in `.env.local`:
+### Client (Expo)
 
 ```bash
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
+EXPO_PUBLIC_CONVEX_URL=https://...
+```
 
-# Google Places
-NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=
+### Server (Convex Dashboard)
 
-# AI
-GEMINI_API_KEY=
-
-# Stripe
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-
-# Analytics
-NEXT_PUBLIC_POSTHOG_API_KEY=
-NEXT_PUBLIC_POSTHOG_HOST=
-
-# Error Tracking
-NEXT_PUBLIC_SENTRY_DSN=
+```bash
+OPENAI_API_KEY=sk_...
+STRIPE_SECRET_KEY=sk_...
+CLERK_SECRET_KEY=sk_...
 ```
 
 ---
 
-## Important Patterns
+## MCP Servers
 
-### Offline-First (PWA)
+**Model Context Protocol (MCP)** servers enable AI agents to interact with external services. The following MCP servers are configured for this project:
 
-- IndexedDB for local data (via `idb` library)
-- Service Worker caches static assets and API responses
-- Sync queue for offline operations (uses Background Sync API)
-- Receipt photos stored in IndexedDB, processed when online
+### Configured MCP Servers
 
-### Budget Calculations
+| Service | Type | Description |
+|---------|------|-------------|
+| **Clerk** | URL | Authentication SDK snippets and user management |
+| **Convex** | CLI | Backend deployment queries, table schemas, function metadata |
+| **Stripe** | URL | Payment processing - customers, products, invoices, subscriptions |
+| **GitHub** | CLI | Repository management - repos, PRs, issues |
 
-- Always use decimal arithmetic (avoid floating point)
-- Store prices in smallest currency unit (pence) internally
-- Display formatted with proper locale
+### Configuration Location
 
-### Stock State Machine
-
+MCP servers are configured in:
 ```
-STOCKED → GOOD → LOW → OUT → (auto-add to next list)
-```
-
-### Receipt Processing Pipeline
-
-```
-Camera capture → Tesseract.js OCR → Gemini parse → User confirm → Save
+C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.json
 ```
 
-### PWA Install Flow
+### Configuration File
 
-- Detect `beforeinstallprompt` event
-- Show custom "Add to Home Screen" prompt in onboarding
-- Track install via `appinstalled` event
+```json
+{
+  "mcpServers": {
+    "clerk": {
+      "url": "https://mcp.clerk.com/mcp",
+      "description": "Clerk authentication - SDK snippets and user management"
+    },
+    "convex": {
+      "command": "npx",
+      "args": ["-y", "convex", "mcp", "start"],
+      "description": "Convex backend - deployment queries, table schemas, function metadata"
+    },
+    "stripe": {
+      "url": "https://mcp.stripe.com",
+      "description": "Stripe payments - customers, products, invoices, subscriptions"
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": ""
+      },
+      "description": "GitHub - repos, PRs, issues (requires GITHUB_PERSONAL_ACCESS_TOKEN)"
+    }
+  }
+}
+```
+
+### Activation
+
+**IMPORTANT:** After modifying the MCP configuration file, restart Claude Desktop for the changes to take effect.
+
+### Usage
+
+- **Clerk MCP**: Query authentication patterns, get SDK code snippets, manage users
+- **Convex MCP**: Query deployment status, inspect schemas, get function signatures
+- **Stripe MCP**: Manage subscriptions, view customer data, handle billing
+- **GitHub MCP**: Create PRs, manage issues, review code (requires personal access token)
 
 ---
 
 ## BMAD Artifacts Location
 
-| Artifact        | Path                                                         |
-| --------------- | ------------------------------------------------------------ |
-| Product Brief   | `_bmad-output/planning-artifacts/product-brief.md`           |
-| PRD             | `_bmad-output/planning-artifacts/prd.md`                     |
-| Architecture    | `_bmad-output/planning-artifacts/architecture.md`            |
-| UX Design       | `_bmad-output/planning-artifacts/ux-design-specification.md` |
-| Epics & Stories | `_bmad-output/planning-artifacts/epics/`                     |
-| Sprint Status   | `_bmad-output/implementation-artifacts/sprint-status.yaml`   |
-| Story Files     | `_bmad-output/implementation-artifacts/stories/`             |
+| Artifact | Path |
+|----------|------|
+| Product Brief | `_bmad-output/planning-artifacts/product-brief.md` |
+| PRD | `_bmad-output/planning-artifacts/prd.md` |
+| Architecture v2 | `_bmad-output/planning-artifacts/architecture-v2-expo-convex.md` |
+| Coding Conventions | `_bmad-output/planning-artifacts/coding-conventions-expo.md` |
+| Security Guidelines | `_bmad-output/planning-artifacts/security-guidelines-expo.md` |
+| UX Design | `_bmad-output/planning-artifacts/ux-design-specification.md` |
+| Epics & Stories | `_bmad-output/planning-artifacts/epics/` |
+| Sprint Status | `_bmad-output/implementation-artifacts/sprint-status.yaml` |
+| Story Files | `_bmad-output/implementation-artifacts/stories/` |
+| Developer Reference | `project-context.md` |
 
 ---
 
 ## Quick Start for New Session
 
-1. **Check current phase:**
+1. **Read the developer reference:**
+   ```
+   Read project-context.md
+   ```
 
+2. **Check current phase:**
    ```
    /bmad:bmm:workflows:workflow-status
    ```
 
-2. **Continue where you left off:**
+3. **Continue implementation:**
    - Review sprint-status.yaml for current story
-   - Load the appropriate agent for the phase
-
-3. **Start fresh planning session:**
-   ```
-   /bmad:bmm:agents:pm
-   ```
+   - Load the Developer agent: `/bmad:bmm:agents:dev`
 
 ---
 
@@ -371,97 +378,36 @@ Camera capture → Tesseract.js OCR → Gemini parse → User confirm → Save
 
 ---
 
-## Current Session Progress (Resume Here)
+## Architecture Pivot Summary
 
-**Last Updated:** 2026-01-25
+**Date:** 2026-01-26
 
-### Epic 1: Project Foundation - COMPLETE
+### What Changed
 
-All 7 stories completed and in review status.
+| Aspect | v1 (PWA) | v2 (Native) |
+|--------|----------|-------------|
+| Platform | Web (PWA) | iOS/Android (React Native) |
+| Framework | Next.js 14 | Expo SDK 55+ |
+| Auth | Supabase Auth | Clerk |
+| Database | Supabase Postgres | Convex (document) |
+| Backend | Supabase Edge Functions | Convex Functions |
+| Styling | Tailwind CSS | Liquid Glass + StyleSheet |
+| AI | Gemini | OpenAI |
+| Offline | IndexedDB + Service Workers | Convex + optimistic updates |
 
-### Epic 2: Authentication & Onboarding - COMPLETE
+### What Stays the Same
 
-All 11 stories completed and in review status.
+- Product vision and requirements
+- User flows and features
+- Epic/Story structure (implementation details update)
+- Business logic concepts
 
-### Epic 3: Pantry Stock Tracker - COMPLETE
+### Migration Status
 
-All 8 stories completed and in review status.
-
-### Epic 4: Shopping Lists & Budget Control - IN PROGRESS
-
-| Story                                | Status  | Notes                                        |
-| ------------------------------------ | ------- | -------------------------------------------- |
-| 4-1: Create New Shopping List        | review  | Complete - Lists page, detail page, auto-add |
-| 4-2: View All Shopping Lists         | backlog |                                              |
-| 4-3: Add Items to Shopping List      | backlog |                                              |
-| 4-4: Search and Add from Pantry      | backlog |                                              |
-| 4-5: Remove Items from Shopping List | backlog |                                              |
-| 4-6: Check Off Items While Shopping  | backlog |                                              |
-| 4-7: Edit Item Prices                | backlog |                                              |
-| 4-8: Set Item Priority               | backlog |                                              |
-| 4-9: View Running Total              | backlog |                                              |
-| 4-10: Set Budget for Shopping List   | backlog |                                              |
-| 4-11: Safe Zone Indicator            | backlog |                                              |
-| 4-12: Budget Lock Mode               | backlog |                                              |
-| 4-13: Impulse Fund                   | backlog |                                              |
-| 4-14: Smart Suggestions Over Budget  | backlog |                                              |
-| 4-15: Archive Completed List         | backlog |                                              |
-| 4-16: View Archived Lists            | backlog |                                              |
-
-### Test Status
-
-**819 tests passing** across 39 test suites
-
-### Story 4-1 Implementation Summary
-
-**What was built:**
-
-- `ShoppingListCard` - Individual list card with status, item count, budget, auto-added badge
-- `ShoppingListGrid` - Grid display with sorting (active first) and empty state
-- `/lists` page - All lists view with FAB, navigation
-- `/lists/[id]` page - List detail view with budget progress bar, item sorting
-- Navigation from Pantry to Lists enabled
-
-**Key Features:**
-
-- Auto-add "Out" pantry items when creating new list
-- Default budget from onboarding settings
-- Date-based list naming (e.g., "Saturday, 25 Jan")
-- Budget progress bar with color indicators (green/yellow/red)
-
-### Key Files Created
-
-**Lists Components (Story 4-1):**
-
-- `src/components/lists/ShoppingListCard.tsx`
-- `src/components/lists/ShoppingListGrid.tsx`
-- `src/components/lists/index.ts`
-- `src/components/lists/__tests__/ShoppingListCard.test.tsx`
-- `src/components/lists/__tests__/ShoppingListGrid.test.tsx`
-
-**Lists Pages:**
-
-- `src/app/(app)/lists/page.tsx`
-- `src/app/(app)/lists/[id]/page.tsx`
-
-**Storage (from Story 3-6):**
-
-- `src/lib/utils/shoppingListStorage.ts` - Complete CRUD and auto-add logic
-- `src/lib/utils/__tests__/shoppingListStorage.test.ts`
-
-### Next Steps
-
-1. **Continue Epic 4:** Story 4-2 onwards
-   - Add items to list
-   - Check off items while shopping
-   - Budget tracking and smart features
-
-2. **Alternative:** Run code review on Story 4-1
-
-### Instructions for New Session
-
-Just say: **"Start Epic 4"** or **"Run Epic 3 retrospective"** or **"What's next?"**
+- **v1 code**: Will be archived/deleted
+- **v2 code**: Fresh implementation following new architecture
+- **Planning docs**: Product Brief, PRD, UX Design remain valid
 
 ---
 
-_This file configures Claude Code for the Oja project. Maintained by BMAD workflow._
+_This file configures Claude Code for the Oja project. Updated 2026-01-26 for architecture pivot._

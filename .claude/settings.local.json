@@ -30,7 +30,22 @@
       "Bash(npx husky init)",
       "Bash(npm run type-check:*)",
       "Bash(npm run format:check:*)",
-      "Bash(npm run format:*)"
+      "Bash(npm run format:*)",
+      "Bash(ls:*)",
+      "Bash(npx eslint:*)",
+      "Bash(git reset:*)",
+      "Bash(npx create-expo-app@latest . --template blank-typescript --yes)",
+      "Skill(bmad:core:workflows:party-mode)",
+      "Skill(bmad:bmm:agents:dev)",
+      "Bash(npx create-expo-app:*)",
+      "Bash(npm view:*)",
+      "Bash(npx expo install:*)",
+      "Bash(test:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(npx convex codegen)",
+      "Skill(bmad:bmm:agents:pm)",
+      "Bash(echo:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

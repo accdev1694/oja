@@ -1,9 +1,9 @@
-# Sprint Status - Oja
-# generated: 2026-01-24
-# project: oja
-# project_key: oja
-# tracking_system: file-system
-# story_location: _bmad-output/implementation-artifacts
+# Sprint Status - Oja v2
+# Architecture: Expo + Convex + Clerk (Mobile Native)
+# Generated: 2026-01-26
+# Project: oja
+# Tracking System: file-system
+# Story Location: _bmad-output/implementation-artifacts/stories
 
 # STATUS DEFINITIONS:
 # ==================
@@ -12,178 +12,27 @@
 #   - in-progress: Epic actively being worked on
 #   - done: All stories in epic completed
 #
-# Epic Status Transitions:
-#   - backlog → in-progress: Automatically when first story is created (via create-story)
-#   - in-progress → done: Manually when all stories reach 'done' status
-#
 # Story Status:
 #   - backlog: Story only exists in epic file
 #   - ready-for-dev: Story file created in stories folder
 #   - in-progress: Developer actively working on implementation
-#   - review: Ready for code review (via Dev's code-review workflow)
+#   - review: Ready for code review
 #   - done: Story completed
-#
-# Retrospective Status:
-#   - optional: Can be completed but not required
-#   - done: Retrospective has been completed
-#
-# WORKFLOW NOTES:
-# ===============
-# - Epic transitions to 'in-progress' automatically when first story is created
-# - Stories can be worked in parallel if team capacity allows
-# - SM typically creates next story after previous one is 'done' to incorporate learnings
-# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: 2026-01-24
-project: oja
-project_key: oja
-tracking_system: file-system
-story_location: _bmad-output/implementation-artifacts
+# ARCHITECTURE NOTE:
+# ==================
+# v1 (PWA with Next.js + Supabase) was archived on 2026-01-26
+# All v1 stories moved to _bmad-output/v1-archive/
+# This file tracks v2 (Expo + Convex + Clerk) implementation only
 
 development_status:
-  # Epic 1: Project Foundation & PWA Setup (7 stories)
-  epic-1: done
-  1-1-initialize-nextjs-project-with-core-dependencies: review
-  1-2-configure-serwist-pwa-with-service-worker: review
-  1-3-set-up-supabase-project-with-core-schema: review
-  1-4-configure-dexiejs-offline-storage-layer: review
-  1-5-set-up-tanstack-query-and-zustand-state-management: review
-  1-6-establish-design-system-foundation: review
-  1-7-configure-cicd-and-development-tooling: review
-  epic-1-retrospective: optional
+  # Phase 0: Project Setup (Manual - not story-driven)
+  phase-0-setup: in-progress
+  # Tasks 0.1-0.3 complete, 0.4 pending service setup
 
-  # Epic 2: User Authentication & Onboarding (11 stories)
-  epic-2: done
-  2-1-user-registration-with-email: review
-  2-2-user-login-with-password: review
-  2-3-password-reset-flow: review
-  2-4-user-sign-out: review
-  2-5-animated-welcome-experience: review
-  2-6-seeded-products-selection: review
-  2-7-budget-setting-with-haptic-dial: review
-  2-8-location-permission-request: review
-  2-9-onboarding-completion: review
-  2-10-subscription-status-management: review
-  2-11-account-deletion: review
-  epic-2-retrospective: optional
-
-  # Epic 3: Pantry Stock Tracker (8 stories)
-  epic-3: done
-  3-1-view-pantry-grid: review
-  3-2-add-new-pantry-item: review
-  3-3-stock-level-display-with-visual-indicators: review
-  3-4-change-stock-level-via-tap-and-hold: review
-  3-5-quick-decrease-stock-via-swipe: review
-  3-6-auto-add-out-items-to-shopping-list: review
-  3-7-assign-categories-to-items: review
-  3-8-remove-pantry-item: review
-  epic-3-retrospective: optional
-
-  # Epic 4: Shopping Lists & Budget Control (16 stories)
-  epic-4: in-progress
-  4-1-create-new-shopping-list: review
-  4-2-view-all-shopping-lists: review
-  4-3-add-items-to-shopping-list: review
-  4-4-search-and-add-from-pantry: review
-  4-5-remove-items-from-shopping-list: review
-  4-6-check-off-items-while-shopping: review
-  4-7-edit-item-prices: backlog
-  4-8-set-item-priority: backlog
-  4-9-view-running-total: backlog
-  4-10-set-budget-for-shopping-list: backlog
-  4-11-safe-zone-indicator: backlog
-  4-12-budget-lock-mode: backlog
-  4-13-impulse-fund: backlog
-  4-14-smart-suggestions-when-over-budget: backlog
-  4-15-archive-completed-shopping-list: backlog
-  4-16-view-archived-lists-trip-history: backlog
-  epic-4-retrospective: optional
-
-  # Epic 5: Offline-First Experience (5 stories)
-  epic-5: backlog
-  5-1-offline-detection-and-status: backlog
-  5-2-offline-pantry-operations: backlog
-  5-3-offline-shopping-list-operations: backlog
-  5-4-cross-device-sync: backlog
-  5-5-sync-queue-management: backlog
-  epic-5-retrospective: optional
-
-  # Epic 6: Receipt Processing & Price Intelligence (11 stories)
-  epic-6: backlog
-  6-1-capture-receipt-photo: backlog
-  6-2-ocr-processing: backlog
-  6-3-ai-receipt-parsing: backlog
-  6-4-review-and-correct-parsed-data: backlog
-  6-5-planned-vs-actual-reconciliation: backlog
-  6-6-receipt-validation-rules: backlog
-  6-7-personal-price-history: backlog
-  6-8-price-estimates-with-confidence: backlog
-  6-9-contribute-to-crowdsourced-prices: backlog
-  6-10-view-item-price-history: backlog
-  6-11-recency-weighted-price-averages: backlog
-  epic-6-retrospective: optional
-
-  # Epic 7: Insights & Progress Tracking (10 stories)
-  epic-7: backlog
-  7-1-weekly-spending-digest: backlog
-  7-2-monthly-trend-reports: backlog
-  7-3-category-breakdown: backlog
-  7-4-budget-adherence-statistics: backlog
-  7-5-progress-indicators: backlog
-  7-6-price-contribution-count: backlog
-  7-7-celebration-on-under-budget-completion: backlog
-  7-8-sound-and-haptic-feedback-settings: backlog
-  7-9-subtle-sound-design: backlog
-  7-10-haptic-feedback-on-key-interactions: backlog
-  epic-7-retrospective: optional
-
-  # Epic 8: Subscription & Monetization (11 stories)
-  epic-8: backlog
-  8-1-stripe-integration-setup: backlog
-  8-2-subscribe-to-monthly-plan: backlog
-  8-3-subscribe-to-annual-plan: backlog
-  8-4-cancel-subscription: backlog
-  8-5-free-tier-feature-limits: backlog
-  8-6-earn-loyalty-points-from-receipts: backlog
-  8-7-daily-receipt-cap: backlog
-  8-8-view-loyalty-point-balance: backlog
-  8-9-loyalty-point-history: backlog
-  8-10-apply-loyalty-discounts: backlog
-  8-11-point-expiration: backlog
-  epic-8-retrospective: optional
-
-  # Epic 9: Location & Store Intelligence (5 stories)
-  epic-9: backlog
-  9-1-auto-detect-country: backlog
-  9-2-auto-detect-currency: backlog
-  9-3-manual-currency-setting: backlog
-  9-4-store-detection-optional: backlog
-  9-5-associate-list-with-store: backlog
-  epic-9-retrospective: optional
-
-  # Epic 10: Admin Dashboard (23 stories)
-  epic-10: backlog
-  10-1-admin-authentication-with-2fa: backlog
-  10-2-admin-role-management: backlog
-  10-3-audit-trail-logging: backlog
-  10-4-user-analytics-dashboard: backlog
-  10-5-retention-and-conversion-metrics: backlog
-  10-6-feature-adoption-metrics: backlog
-  10-7-revenue-dashboard: backlog
-  10-8-loyalty-points-financial-impact: backlog
-  10-9-payment-transaction-management: backlog
-  10-10-user-search-and-management: backlog
-  10-11-user-account-actions: backlog
-  10-12-receipt-quality-metrics: backlog
-  10-13-receipt-moderation: backlog
-  10-14-price-database-management: backlog
-  10-15-seeded-products-management: backlog
-  10-16-store-and-item-normalization: backlog
-  10-17-system-health-monitoring: backlog
-  10-18-infrastructure-monitoring: backlog
-  10-19-customer-support-tools: backlog
-  10-20-gdpr-compliance-tools: backlog
-  10-21-in-app-announcements: backlog
-  10-22-feature-flags-and-configuration: backlog
-  10-23-reporting-and-export: backlog
-  epic-10-retrospective: optional
+  # Epics & Stories will be created via /bmad:bmm:workflows:create-epics-and-stories
+  # Based on:
+  #   - Product Brief: _bmad-output/planning-artifacts/product-brief.md
+  #   - PRD: _bmad-output/planning-artifacts/prd.md
+  #   - Architecture v2: _bmad-output/planning-artifacts/architecture-v2-expo-convex.md
+  #   - UX Design: _bmad-output/planning-artifacts/ux-design-specification.md
