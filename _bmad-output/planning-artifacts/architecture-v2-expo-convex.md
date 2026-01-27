@@ -237,6 +237,189 @@ export const colors = {
 
 ---
 
+## Graceful Degradation & Fallback Strategy
+
+Oja uses a **3-tier progressive enhancement system** to ensure optimal experience across all device capabilities.
+
+### Device Capability Tiers
+
+```
+┌─────────────────────────────────────────┐
+│  PREMIUM TIER (High-end devices)         │
+│  • Full Liquid Glass blur (iOS 13+)     │
+│  • Complex animations (Reanimated)       │
+│  • Comprehensive haptics                 │
+│  • 60fps guaranteed                      │
+└─────────────────────────────────────────┘
+                 ↓ Degrades to
+┌─────────────────────────────────────────┐
+│  ENHANCED TIER (Mid-range devices)       │
+│  • Gradient backgrounds (no blur)        │
+│  • Simpler animations                    │
+│  • Basic haptics                         │
+│  • 30-60fps acceptable                   │
+└─────────────────────────────────────────┘
+                 ↓ Degrades to
+┌─────────────────────────────────────────┐
+│  BASELINE TIER (Low-end/old devices)     │
+│  • Solid colors + simple shadows         │
+│  • Minimal animations                    │
+│  • No haptics (silent skip)              │
+│  • 30fps minimum                         │
+└─────────────────────────────────────────┘
+```
+
+### Tier Detection Logic
+
+| Platform | Premium | Enhanced | Baseline |
+|----------|---------|----------|----------|
+| **iOS** | iOS 15+ (iPhone 12+) | iOS 13-14 (iPhone 8-11) | iOS <13 (iPhone 6s-7) |
+| **Android** | 2022+, 6GB+ RAM | 2020+, 4GB+ RAM | Older/budget devices |
+
+### UI Fallbacks
+
+| Feature | Premium | Enhanced | Baseline |
+|---------|---------|----------|----------|
+| **Card Backgrounds** | BlurView (iOS only) | LinearGradient | Solid color |
+| **Border Radius** | 20px (iOS) / 18px (Android) | 18px / 16px | 16px |
+| **Shadows** | Deep (elevation 4-8) | Medium (elevation 2-4) | Light (elevation 1-2) |
+| **Animations** | 300ms complex | 200ms simple | 150ms minimal |
+
+### Haptics Fallbacks
+
+```typescript
+// lib/haptics/safeHaptics.ts
+export async function haptic(type: HapticType): Promise<void> {
+  // Triple safety check
+  if (!deviceSupports || !isEnabled) return;
+
+  try {
+    // Trigger haptic
+  } catch (error) {
+    // Silent fail - haptics are decorative, not functional
+  }
+}
+```
+
+**Haptics Strategy:**
+- ✅ Premium/Enhanced: Full haptic feedback
+- ✅ Baseline: Silently skipped (no errors)
+- ✅ User preference: Toggleable in settings
+- ✅ Web platform: No haptics (graceful skip)
+
+### Component Implementation
+
+```typescript
+// components/ui/AdaptiveCard.tsx
+export function AdaptiveCard({ children, intensity = 50 }) {
+  const { tier, supportsBlur, platform, tokens } = useDeviceCapabilities();
+
+  // Premium iOS: Liquid Glass blur
+  if (tier === 'premium' && supportsBlur && platform === 'ios') {
+    return <BlurView intensity={intensity}>{children}</BlurView>;
+  }
+
+  // Enhanced: Gradient fallback (looks similar, no performance hit)
+  if (tier === 'enhanced') {
+    return <LinearGradient colors={[...]}>{children}</LinearGradient>;
+  }
+
+  // Baseline: Solid background
+  return <View style={{ backgroundColor: '#FFFAF8' }}>{children}</View>;
+}
+```
+
+### User Control
+
+Users can view their device tier and manage preferences:
+
+```typescript
+// Settings Screen
+<Section title="Visual Quality">
+  <InfoRow
+    label="Current Tier"
+    value={tier.toUpperCase()}
+    info={tierDescriptions[tier]}
+  />
+</Section>
+
+<Section title="Haptic Feedback">
+  {supportsHaptics && (
+    <Switch
+      label="Enable Haptics"
+      value={hapticsEnabled}
+      onValueChange={toggleHaptics}
+    />
+  )}
+</Section>
+```
+
+### Design Tokens System
+
+```typescript
+// lib/design/tokens.ts
+export function getTokensForTier(tier: DeviceTier, platform: Platform) {
+  switch (tier) {
+    case 'premium':
+      return {
+        borderRadius: { card: platform === 'ios' ? 20 : 18 },
+        blur: { medium: 50 },
+        shadow: { medium: { elevation: 4, shadowRadius: 12 } },
+        animation: { normal: 300 },
+      };
+    case 'enhanced':
+      return {
+        borderRadius: { card: platform === 'ios' ? 18 : 16 },
+        blur: { medium: 0 }, // No blur
+        shadow: { medium: { elevation: 3, shadowRadius: 8 } },
+        animation: { normal: 200 },
+      };
+    case 'baseline':
+      return {
+        borderRadius: { card: 16 },
+        blur: { medium: 0 },
+        shadow: { medium: { elevation: 2, shadowRadius: 4 } },
+        animation: { normal: 150 },
+      };
+  }
+}
+```
+
+### Capability Detection
+
+```typescript
+// lib/capabilities/deviceTier.ts
+export async function getDeviceCapabilities(): Promise<DeviceCapabilities> {
+  const tier = await detectDeviceTier();
+  const platform = Platform.OS === 'ios' ? 'ios' : 'android';
+
+  return {
+    tier,
+    platform,
+    osVersion: parseInt(Platform.Version as string, 10),
+    supportsBlur: platform === 'ios' && osVersion >= 13 && tier !== 'baseline',
+    supportsHaptics: platform !== 'web' && tier !== 'baseline',
+    supportsComplexAnimations: tier !== 'baseline',
+  };
+}
+```
+
+### Benefits
+
+**For Users:**
+- Premium devices get full visual experience
+- Mid-range devices get good performance with simpler effects
+- Old devices remain fast and responsive
+- No crashes or errors on any device
+
+**For Development:**
+- Single codebase adapts automatically
+- No platform-specific feature flags
+- Testable with different tier settings
+- Future-proof for new devices
+
+---
+
 ## Gamification & Delight Features
 
 Simple, fun features that make budget shopping feel rewarding.

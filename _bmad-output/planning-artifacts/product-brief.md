@@ -12,7 +12,24 @@
 | **Version** | 0.1.0 (MVP) |
 | **Created** | 2026-01-24 |
 | **Target Market** | United Kingdom (architecture: global) |
-| **Platform** | Progressive Web App (PWA) - Mobile-first |
+| **Platform** | Native Mobile (Expo) - iOS/Android |
+
+---
+
+## 🚨 ARCHITECTURE PIVOT NOTICE (2026-01-26)
+
+**This Product Brief was originally written for v1 (PWA). The platform has pivoted to v2 (Native Mobile).**
+
+| What Changed | v1 → v2 |
+|--------------|---------|
+| Platform | PWA → **Native Mobile (Expo/React Native)** |
+| Backend | Convex → **Convex** |
+| Auth | Convex Auth → **Clerk** |
+| UI | Tailwind → **Liquid Glass (iOS) / Material You (Android)** |
+
+**Product vision, features, and user journeys remain unchanged.**
+
+**For v2 technical details, see:** `architecture-v2-expo-convex.md`
 
 ---
 
@@ -149,7 +166,38 @@ Monthly Trends
 
 ## 4. Technical Architecture
 
-### 4.1 Platform Decision: Progressive Web App (PWA)
+### ⚠️ v1 Architecture Section (See v2 Notice Above)
+
+**This section describes v1 (PWA). For v2 (Native Mobile), see `architecture-v2-expo-convex.md`**
+
+### 4.1 v2 Platform: Native Mobile (Expo)
+
+| Factor | v1 (PWA) | v2 (Native) |
+|--------|----------|-------------|
+| Performance | Good | **60fps native animations** |
+| UI | Web-based | **Platform-adaptive (Liquid Glass/Material You)** |
+| Offline | Service Workers | **Convex optimistic updates** |
+| Haptics | Limited | **Comprehensive (Expo Haptics)** |
+
+### 4.2 v2 Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Framework** | Expo SDK 55+ (React Native) |
+| **Language** | TypeScript (strict) |
+| **Routing** | Expo Router |
+| **UI** | Liquid Glass (iOS) / Material You (Android) |
+| **Auth** | Clerk |
+| **Backend** | Convex |
+| **AI** | Jina AI + Gemini |
+| **Payments** | Stripe |
+| **Animations** | React Native Reanimated |
+
+---
+
+## v1 Technical Architecture (Archived - Not Implemented)
+
+### 4.1 v1 Platform Decision: Progressive Web App (PWA)
 
 **Why PWA over Native Apps:**
 
@@ -160,7 +208,7 @@ Monthly Trends
 | Updates | App review required | Instant deploy |
 | Install | App store download | "Add to Home Screen" |
 
-### 4.2 Stack Decision
+### 4.2 v1 Stack Decision (Not Implemented)
 
 | Layer | Technology | Rationale |
 |-------|------------|-----------|
@@ -172,7 +220,7 @@ Monthly Trends
 | **PWA** | next-pwa + Workbox | Offline, install prompt, caching |
 | **State** | Zustand | Simple, TypeScript-friendly |
 | **Server State** | TanStack Query | Caching, background sync |
-| **Backend** | Supabase | Postgres + Auth + Realtime + Edge Functions |
+| **Backend** | Convex | Postgres + Auth + Realtime + Edge Functions |
 | **OCR** | Tesseract.js | Client-side, free, runs in browser |
 | **AI Parsing** | Gemini 1.5 Flash | Free tier (1500 req/day) |
 | **Payments** | Stripe Checkout | Direct payments, no app store fees |
@@ -226,7 +274,7 @@ oja/
 │       ├── SpendingChart.tsx
 │       └── CategoryBreakdown.tsx
 ├── lib/
-│   ├── supabase/                 # Supabase client
+│   ├── supabase/                 # Convex client
 │   │   ├── client.ts
 │   │   ├── server.ts
 │   │   └── middleware.ts
@@ -258,10 +306,10 @@ oja/
 └── package.json
 ```
 
-### 4.3 Database Schema (Supabase/Postgres)
+### 4.3 Database Schema (Convex/Postgres)
 
 ```sql
--- Users (handled by Supabase Auth, extended)
+-- Users (handled by Convex Auth, extended)
 CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id),
   display_name TEXT,
@@ -388,7 +436,7 @@ CREATE INDEX idx_shopping_lists_user ON shopping_lists(user_id, status);
 
 | Service | Purpose | Free Tier |
 |---------|---------|-----------|
-| **Supabase** | Database, Auth, Storage, Functions | 500MB DB, 1GB storage, 50K MAU |
+| **Convex** | Database, Auth, Storage, Functions | 500MB DB, 1GB storage, 50K MAU |
 | **Tesseract.js** | Client-side OCR | Unlimited (runs in browser) |
 | **Gemini 1.5 Flash** | Receipt parsing AI | 1,500 requests/day |
 | **Google Places API** | Store detection | $200/month credit |
@@ -726,7 +774,7 @@ export const slideUp = {
 
 | Priority | Feature | Status |
 |----------|---------|--------|
-| P0 | User auth (Supabase) | Pending |
+| P0 | User auth (Convex) | Pending |
 | P0 | Basic shopping list CRUD | Pending |
 | P0 | Budget setting & tracking | Pending |
 | P0 | Stock tracker with 4 states | Pending |
@@ -864,7 +912,7 @@ export const slideUp = {
 ```bash
 # .env.local
 
-# Supabase
+# Convex
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 

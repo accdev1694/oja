@@ -12,11 +12,32 @@ inputDocuments: ['_bmad-output/planning-artifacts/product-brief.md', '_bmad-outp
 
 ---
 
+## 🚨 ARCHITECTURE PIVOT NOTICE (2026-01-26)
+
+**This UX Design Spec was originally written for v1 (PWA). As of 2026-01-26, Oja has pivoted to v2:**
+
+| Aspect | v1 (Original) | v2 (Current) |
+|--------|---------------|--------------|
+| Platform | PWA (Web) | **Native Mobile (iOS/Android)** |
+| Framework | Next.js + Platform-adaptive styling | **Expo + Platform-Adaptive UI** |
+| Design System | Platform-adaptive styling + shadcn | **Liquid Glass (iOS) / Material You (Android)** |
+| Animations | React Native Reanimated | **React Native Reanimated** |
+
+**What remains 100% valid:**
+- All user journeys, personas, and emotional response goals
+- UX principles, interaction patterns, and design philosophy
+- Component strategy and accessibility requirements
+- The core "Safe Zone" glow concept and "Liquid Animation System"
+
+**For v2 technical implementation, see:** `architecture-v2-expo-convex.md`
+
+---
+
 ## Executive Summary
 
 ### Project Vision
 
-Oja is a budget-first shopping PWA that transforms grocery shopping from an anxiety-inducing guessing game into a controlled, confident experience. The core innovation is simple but profound: know your total before entering the store, not after.
+Oja is a budget-first shopping mobile app that transforms grocery shopping from an anxiety-inducing guessing game into a controlled, confident experience. The core innovation is simple but profound: know your total before entering the store, not after.
 
 Unlike traditional shopping apps that are glorified notepads, Oja combines:
 - **Stock tracking** that auto-populates lists (you never forget essentials)
@@ -24,7 +45,7 @@ Unlike traditional shopping apps that are glorified notepads, Oja combines:
 - **Receipt intelligence** that learns actual prices for better estimates
 - **Emotional UX** that makes staying under budget feel like winning, not restricting
 
-The platform is a Progressive Web App (PWA) targeting UK shoppers, with Stripe payments avoiding 15-30% app store fees.
+The platform is a Native Mobile App (Expo) targeting UK shoppers.
 
 ### Target Users
 
@@ -81,16 +102,17 @@ Pantry (Out) → Shopping List → In-Store Checkout → Receipt Scan → Pantry
 
 Each stage flows naturally into the next. Stock running out creates the list. The list guides shopping. Shopping creates receipts. Receipts update stock and prices. The cycle reinforces itself.
 
-### Platform Strategy
+### Platform Strategy (v2 Update)
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Platform | PWA (Mobile-First) | Avoid app store fees, instant updates |
+| Platform | **Native Mobile (Expo)** | Better performance, native feel, platform-adaptive UI |
 | Primary Input | Touch | In-store, one-handed use |
 | Offline | 100% Core Features | Store connectivity is unreliable |
-| Camera | Required | Receipt scanning |
+| Camera | Native Camera API | Receipt scanning with better quality |
 | Location | Optional | Store detection, not required |
 | Touch Targets | 44x44px minimum | Accessibility, thumb-friendly |
+| Haptics | Comprehensive | Tactile feedback for all interactions |
 
 **Shopping Mode:** When user begins checking items, interface adapts:
 - Larger touch targets
@@ -288,8 +310,8 @@ Walking out of a store under budget and feeling *good* about it - not like they 
 ### Design System Choice
 
 **Approach:** Themeable Custom System
-**Foundation:** Tailwind CSS + shadcn/ui components
-**Animation:** Framer Motion
+**Foundation:** Platform-adaptive styling CSS + shadcn/ui components
+**Animation:** React Native Reanimated
 **Icons:** Phosphor Icons
 
 This gives us the speed of proven components with full control over Oja's emotional UX.
@@ -301,16 +323,16 @@ This gives us the speed of proven components with full control over Oja's emotio
 | Emotional UX | Full customization of every component |
 | Development Speed | shadcn/ui provides starting points |
 | Accessibility | Built on Radix primitives (WCAG AA) |
-| Animation Control | Framer Motion integrates seamlessly |
-| Offline Performance | Tailwind is lightweight, no runtime |
+| Animation Control | React Native Reanimated integrates seamlessly |
+| Offline Performance | Platform-adaptive styling is lightweight, no runtime |
 | Brand Consistency | Design tokens ensure cohesion |
 
 ### Implementation Approach
 
 **Layer 1 - Foundation:**
-- Tailwind CSS for utilities and responsive design
+- Platform-adaptive styling CSS for utilities and responsive design
 - CSS Variables for design tokens
-- Framer Motion for animation primitives
+- React Native Reanimated for animation primitives
 
 **Layer 2 - Primitives (shadcn/ui):**
 - Button, Card, Dialog, Sheet, Toast
@@ -340,7 +362,7 @@ This gives us the speed of proven components with full control over Oja's emotio
 - Warm, rounded aesthetic (border-radius: 12px+)
 - Orange accent for primary actions
 - Subtle shadows (no harsh borders)
-- Framer Motion for all state transitions
+- React Native Reanimated for all state transitions
 
 ---
 
@@ -732,14 +754,14 @@ This direction was selected as the foundation because it:
 
 ### Design System Components
 
-**Foundation (shadcn/ui + Tailwind):**
+**Foundation (shadcn/ui + Platform-adaptive styling):**
 Button, Card, Checkbox, Dialog, Input, Sheet, Tabs, Toast, Progress, Tooltip
 
 All foundation components customized with Oja tokens:
 - Orange accent (#FF6B35) for primary actions
 - 12px border radius for warmth
 - 44px minimum touch targets
-- Framer Motion transitions
+- React Native Reanimated transitions
 
 ### Custom Components
 
@@ -915,7 +937,7 @@ All foundation components customized with Oja tokens:
 ### Implementation Guidelines
 
 **Responsive:**
-- Mobile-first Tailwind classes
+- Mobile-first Platform-adaptive styling classes
 - Relative units (rem, %)
 - Max-width 480px on desktop
 

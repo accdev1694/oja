@@ -10,15 +10,15 @@ documentCounts:
   brainstorming: 0
   projectDocs: 0
 classification:
-  projectType: pwa
+  projectType: native_mobile
   domain: general_consumer_retail
   complexity: low-medium
   projectContext: greenfield
   keyConcerns:
-    - Offline functionality (Service Workers)
-    - Receipt OCR accuracy (Tesseract.js client-side)
+    - Offline functionality (Convex + optimistic updates)
+    - Receipt OCR accuracy (Gemini AI parsing)
     - Crowdsourced data quality
-    - PWA iOS limitations
+    - Native mobile performance
     - GDPR compliance (UK)
 ---
 
@@ -29,13 +29,36 @@ classification:
 
 ---
 
+## 🚨 ARCHITECTURE PIVOT NOTICE (2026-01-26)
+
+**This PRD was originally written for v1 (PWA/Next.js/Supabase). As of 2026-01-26, Oja has pivoted to v2:**
+
+| Aspect | v1 (Original PRD) | v2 (Current Implementation) |
+|--------|-------------------|------------------------------|
+| Platform | Progressive Web App | **Native Mobile (iOS/Android)** |
+| Framework | Next.js 14 | **Expo SDK 55+** |
+| Backend | Supabase | **Convex (real-time serverless)** |
+| Auth | Supabase Auth | **Clerk** |
+| Styling | Tailwind CSS | **Liquid Glass (iOS) / Material You (Android)** |
+| State | TanStack Query + Zustand | **Convex hooks + React** |
+| Offline | Service Workers + IndexedDB | **Convex + optimistic updates** |
+
+**What remains valid:**
+- All user journeys, requirements, and success criteria
+- Product vision, monetization model, and target market
+- Functional requirements (FR1-FR190) and NFRs
+
+**For v2 technical architecture, see:** `architecture-v2-expo-convex.md`
+
+---
+
 ## Executive Summary
 
-**Oja** is a budget-first shopping PWA that gives UK shoppers control over their spending *before* checkout, not tracking *after*. Unlike traditional shopping list apps that are glorified notepads, Oja combines stock tracking, pre-shop budget simulation, and crowdsourced price intelligence to eliminate checkout anxiety.
+**Oja** is a budget-first shopping mobile app that gives UK shoppers control over their spending *before* checkout, not tracking *after*. Unlike traditional shopping list apps that are glorified notepads, Oja combines stock tracking, pre-shop budget simulation, and crowdsourced price intelligence to eliminate checkout anxiety.
 
 **Core Innovation:** Know your total before entering the store. Stay under budget with real-time visual feedback. Learn from every trip through AI-powered receipt scanning.
 
-**Platform:** Progressive Web App (Next.js 14 + Supabase)
+**Platform:** Native Mobile App (Expo + Convex + Clerk)
 **Target Market:** United Kingdom (architecture: global-ready)
 **Monetization:** £3.99/mo subscription with loyalty points earning up to 50% discount
 
@@ -460,6 +483,35 @@ All user data persists and syncs across devices in real-time:
 
 ## Technical Architecture
 
+### ⚠️ Architecture Section Outdated
+
+**The technical architecture section below describes v1 (PWA/Next.js/Supabase).**
+
+**For current v2 architecture (Expo + Convex + Clerk), see:**
+- **`architecture-v2-expo-convex.md`** - Complete v2 system architecture
+- **`coding-conventions-expo.md`** - Project structure and patterns
+- **`security-guidelines-expo.md`** - Security implementation
+
+### v2 Tech Stack Summary
+
+| Layer | Technology |
+|-------|------------|
+| **Framework** | Expo SDK 55+ (React Native) |
+| **Language** | TypeScript (strict) |
+| **Routing** | Expo Router (file-based) |
+| **UI** | Liquid Glass (iOS) / Material You (Android) |
+| **Auth** | Clerk |
+| **Backend** | Convex (real-time serverless) |
+| **AI** | Jina AI (embeddings) + Gemini (receipt parsing) |
+| **Payments** | Stripe |
+| **Animations** | React Native Reanimated |
+| **Haptics** | Expo Haptics |
+| **Offline** | Convex + optimistic updates |
+
+---
+
+## v1 Technical Architecture (Archived)
+
 ### Platform: Progressive Web App (PWA)
 
 **Why PWA over Native Apps:**
@@ -473,7 +525,7 @@ All user data persists and syncs across devices in real-time:
 | Offline support | Full | Full (Service Workers) |
 | Camera access | Full | Full (Web APIs) |
 
-### Tech Stack (PWA)
+### v1 Tech Stack (PWA - Not Implemented)
 
 | Layer | Technology | Rationale |
 |-------|------------|-----------|
@@ -491,7 +543,7 @@ All user data persists and syncs across devices in real-time:
 | **Payments** | Stripe Checkout | Direct payments, no app store fees |
 | **Analytics** | PostHog | Privacy-friendly, generous free tier |
 
-### Project Structure (PWA)
+### v1 Project Structure (PWA - Not Implemented)
 
 ```
 oja/
@@ -635,7 +687,7 @@ const checkout = await stripe.checkout.sessions.create({
 
 **MVP Approach:** Problem-Solving MVP
 **Philosophy:** Complete solution to budget anxiety from day one - users should feel oja actually solves their problem immediately, not experience a feature skeleton.
-**Resource Requirements:** 1 developer (Claude Code assisted), Supabase backend, Vercel hosting
+**Resource Requirements:** 1 developer (Claude Code assisted), Convex backend, EAS hosting
 
 ### MVP Feature Set (Phase 1)
 
@@ -646,7 +698,7 @@ All 5 journeys (Sarah, Marcus, Priya, James, David) - full functionality for anx
 
 | # | Feature | Rationale |
 |---|---------|-----------|
-| 1 | User auth (Supabase) with 7-day trial | Core infrastructure |
+| 1 | User auth (Clerk) with 7-day trial | Core infrastructure |
 | 2 | Stock tracker with 4 states | Auto-populates lists, reduces friction |
 | 3 | Auto-add "Out" items to shopping list | Core value proposition |
 | 4 | Shopping list CRUD | Basic functionality |
@@ -663,12 +715,12 @@ All 5 journeys (Sarah, Marcus, Priya, James, David) - full functionality for anx
 | 15 | Planned vs Actual reconciliation | Learning from trips |
 | 16 | Personal price history | Improves estimates over time |
 | 17 | Crowdsource contribution | Community price database |
-| 18 | Cross-device sync (Supabase Realtime) | Multi-device households |
+| 18 | Cross-device sync (Convex Realtime) | Multi-device households |
 | 19 | Loyalty points system | Engagement, reduces churn |
 | 20 | Subscription via Stripe | Revenue, ~3% fees |
 | 21 | Seeded UK staples | Solves cold-start problem |
-| 22 | Offline-first (IndexedDB + SW) | Works in stores with bad signal |
-| 23 | Mature animations (Framer Motion) | Emotional, premium UX |
+| 22 | Offline-first (Convex + optimistic updates) | Works in stores with bad signal |
+| 23 | Mature animations (React Native Reanimated) | Emotional, premium UX |
 | 24 | Subtle sounds | Tactile feedback |
 | 25 | Understated celebrations | Motivates without being childish |
 | 26 | Weekly spending digest | David's journey, data visibility |
@@ -702,10 +754,10 @@ All 5 journeys (Sarah, Marcus, Priya, James, David) - full functionality for anx
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Tesseract.js OCR accuracy | Bad prices in DB | User confirmation step + 60% confidence threshold |
-| PWA iOS push limitations | Lower engagement on iOS | Onboarding guides home screen install |
-| IndexedDB storage limits | Data loss on old iOS | Cloud sync primary, efficient local caching |
-| Framer Motion performance | Janky animations | Test on low-end devices, reduce particle counts |
+| Gemini OCR accuracy | Bad prices in DB | User confirmation step + confidence threshold |
+| Push notification limitations | Lower engagement | Onboarding guides notification permissions |
+| Local storage limits | Data loss | Convex sync primary, efficient local caching |
+| Animation performance | Janky animations | Test on low-end devices, use Reanimated worklets |
 
 **Market Risks:**
 
@@ -720,8 +772,8 @@ All 5 journeys (Sarah, Marcus, Priya, James, David) - full functionality for anx
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Solo developer capacity | Slow delivery | Lean stack (Next.js + Supabase), AI-assisted development |
-| Time to market | Competition | PWA = instant deploy, iterate fast, no app review delays |
+| Solo developer capacity | Slow delivery | Lean stack (Expo + Convex), AI-assisted development |
+| Time to market | Competition | EAS = fast deploy, iterate fast, TestFlight for iOS |
 | Cost overruns | Project failure | Free tiers for all services until revenue justifies upgrade |
 
 ---
@@ -1013,9 +1065,9 @@ All 5 journeys (Sarah, Marcus, Priya, James, David) - full functionality for anx
 
 | Requirement | Target | Rationale |
 |-------------|--------|-----------|
-| **NFR-S1:** Data encryption at rest | AES-256 (Supabase default) | Protect user data |
+| **NFR-S1:** Data encryption at rest | AES-256 (Convex/Clerk default) | Protect user data |
 | **NFR-S2:** Data encryption in transit | TLS 1.3 | All API calls encrypted |
-| **NFR-S3:** Authentication tokens | JWT with secure httpOnly cookies | Prevent XSS token theft |
+| **NFR-S3:** Authentication tokens | JWT with SecureStore (Expo) | Prevent XSS token theft |
 | **NFR-S4:** Password requirements | Min 8 chars, complexity check | Basic security hygiene |
 | **NFR-S5:** Session timeout | 30 days (remember me) / 24hr (default) | Balance security/convenience |
 | **NFR-S6:** Admin 2FA | Required for all admin accounts | Protect admin access |
@@ -1035,8 +1087,8 @@ All 5 journeys (Sarah, Marcus, Priya, James, David) - full functionality for anx
 | **NFR-SC3:** Database growth | Handle 1M+ price records | Crowdsourced DB scale |
 | **NFR-SC4:** Receipt storage | 100GB+ image storage | Growing archive |
 | **NFR-SC5:** Graceful degradation | Core features work if non-critical services down | Stripe down ≠ app unusable |
-| **NFR-SC6:** Horizontal scaling | Vercel auto-scales on demand | Traffic spikes (shopping seasons) |
-| **NFR-SC7:** Database connection pooling | Supabase managed | Handle concurrent queries |
+| **NFR-SC6:** Horizontal scaling | Convex auto-scales on demand | Traffic spikes (shopping seasons) |
+| **NFR-SC7:** Database connection pooling | Convex managed | Handle concurrent queries |
 
 ### Reliability
 
@@ -1071,20 +1123,20 @@ All 5 journeys (Sarah, Marcus, Priya, James, David) - full functionality for anx
 | Requirement | Target | Rationale |
 |-------------|--------|-----------|
 | **NFR-I1:** Stripe webhook latency | Process within 5 seconds | Subscription status accuracy |
-| **NFR-I2:** Supabase Realtime | <1 second sync propagation | Cross-device experience |
+| **NFR-I2:** Convex Realtime | <1 second sync propagation | Cross-device experience |
 | **NFR-I3:** Gemini API fallback | Graceful degradation if unavailable | Receipt still saved, parsing queued |
 | **NFR-I4:** Google Places timeout | 3 second timeout, fallback to manual | Don't block user |
 | **NFR-I5:** Third-party monitoring | Alert on integration failures | Proactive issue detection |
 | **NFR-I6:** API versioning | Support deprecated APIs for 6 months | Smooth migrations |
 
-### PWA-Specific
+### Mobile-Native (v2)
 
 | Requirement | Target | Rationale |
 |-------------|--------|-----------|
-| **NFR-PWA1:** Lighthouse PWA score | 100 | Full PWA compliance |
-| **NFR-PWA2:** Service Worker coverage | All critical routes cached | Offline reliability |
-| **NFR-PWA3:** Install prompt | Show after 2 sessions | Encourage home screen install |
-| **NFR-PWA4:** IndexedDB storage | <50MB typical usage | iOS storage limits |
-| **NFR-PWA5:** Cache invalidation | Version-based, max 7-day stale | Fresh content |
-| **NFR-PWA6:** Background sync queue | Persist across app restarts | No lost changes |
+| **NFR-M1:** Native performance | 60fps animations, instant feedback | Premium feel |
+| **NFR-M2:** Platform-adaptive UI | Liquid Glass (iOS) / Material You (Android) | Native look/feel |
+| **NFR-M3:** Offline-first | All core features work offline | Store connectivity unreliable |
+| **NFR-M4:** Local storage | <50MB typical usage | Efficient data management |
+| **NFR-M5:** Optimistic updates | Instant UI response | Perceived performance |
+| **NFR-M6:** Background sync queue | Persist across app restarts via Convex | No lost changes |
 
