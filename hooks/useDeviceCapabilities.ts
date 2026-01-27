@@ -1,75 +1,74 @@
-/**
- * useDeviceCapabilities Hook
- *
- * Provides access to device tier and capabilities
- * Includes design tokens for the current tier
- */
-
-import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { useEffect, useState } from "react";
 import {
-  DeviceCapabilities,
-  DeviceTier,
-  getDeviceCapabilities,
-  TIER_DESCRIPTIONS,
-} from '@/lib/capabilities/deviceTier';
-import { getTokensForTier, DesignTokens, colors } from '@/lib/design/tokens';
-
-interface UseDeviceCapabilitiesReturn extends DeviceCapabilities {
-  tokens: DesignTokens;
-  colors: typeof colors;
-  tierDescription: string;
-}
-
-let cachedCapabilities: DeviceCapabilities | null = null;
+  detectDeviceCapabilities,
+  getVisualConfig,
+  type DeviceCapabilities,
+  type DeviceTier,
+} from "@/lib/capabilities/deviceTier";
 
 /**
- * Hook to access device capabilities and design tokens
- * Capabilities are cached after first detection
+ * Hook to access device capabilities and tier
+ *
+ * Detects device capabilities on mount and provides:
+ * - Device tier (premium, enhanced, baseline)
+ * - Capability flags (blur, haptics, animations)
+ * - Visual configuration for the tier
+ *
+ * @example
+ * const { tier, supportsBlur, visualConfig } = useDeviceCapabilities();
+ *
+ * if (supportsBlur) {
+ *   // Use Liquid Glass blur
+ * } else if (visualConfig.useGradients) {
+ *   // Use gradient fallback
+ * } else {
+ *   // Use solid color fallback
+ * }
  */
-export function useDeviceCapabilities(): UseDeviceCapabilitiesReturn {
-  const [capabilities, setCapabilities] = useState<DeviceCapabilities>(() => {
-    // Return cached if available (for immediate render)
-    if (cachedCapabilities) return cachedCapabilities;
-
-    // Fallback to safe defaults during initial load
-    return {
-      tier: 'enhanced' as DeviceTier,
-      platform: Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web',
-      osVersion: parseInt(Platform.Version as string, 10) || 0,
-      supportsBlur: false,
-      supportsHaptics: false,
-      supportsComplexAnimations: true,
-    };
-  });
+export function useDeviceCapabilities() {
+  const [capabilities, setCapabilities] = useState<DeviceCapabilities | null>(
+    null
+  );
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Only detect once
-    if (cachedCapabilities) return;
-
-    async function detectCapabilities() {
-      const caps = await getDeviceCapabilities();
-      cachedCapabilities = caps;
-      setCapabilities(caps);
-    }
-
-    detectCapabilities();
+    detectDeviceCapabilities()
+      .then((caps) => {
+        setCapabilities(caps);
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        console.error("Failed to detect device capabilities:", error);
+        // Fallback to enhanced tier on error
+        setCapabilities({
+          tier: "enhanced",
+          supportsBlur: false,
+          supportsHaptics: false,
+          supportsAdvancedAnimations: true,
+          osVersion: 0,
+          modelName: null,
+        });
+        setIsLoading(false);
+      });
   }, []);
 
-  const tokens = getTokensForTier(capabilities.tier, capabilities.platform);
-  const tierDescription = TIER_DESCRIPTIONS[capabilities.tier];
+  const visualConfig = capabilities
+    ? getVisualConfig(capabilities.tier)
+    : getVisualConfig("enhanced");
 
   return {
-    ...capabilities,
-    tokens,
-    colors,
-    tierDescription,
-  };
-}
+    // Capabilities
+    tier: capabilities?.tier ?? ("enhanced" as DeviceTier),
+    supportsBlur: capabilities?.supportsBlur ?? false,
+    supportsHaptics: capabilities?.supportsHaptics ?? false,
+    supportsAdvancedAnimations: capabilities?.supportsAdvancedAnimations ?? true,
+    osVersion: capabilities?.osVersion ?? 0,
+    modelName: capabilities?.modelName ?? null,
 
-/**
- * Clear cached capabilities (for testing/debugging)
- */
-export function clearCapabilitiesCache() {
-  cachedCapabilities = null;
+    // Visual configuration
+    visualConfig,
+
+    // Loading state
+    isLoading,
+  };
 }

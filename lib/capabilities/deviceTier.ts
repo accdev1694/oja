@@ -1,94 +1,185 @@
+import { Platform } from "react-native";
+import * as Device from "expo-device";
+import * as Haptics from "expo-haptics";
+
 /**
- * Device Capability Detection & Tiering System
+ * Device capability tiers for graceful degradation
  *
- * Categorizes devices into tiers for progressive enhancement:
- * - Premium: Latest devices with full feature support
- * - Enhanced: Mid-range devices with good performance
- * - Baseline: Older/low-end devices with basic features
+ * Premium: Latest iOS (16+) with full Liquid Glass effects
+ * Enhanced: Android 12+ or older iOS with gradient fallbacks
+ * Baseline: Older devices with solid color fallbacks
  */
-
-import { Platform } from 'react-native';
-import * as Device from 'expo-device';
-
-export type DeviceTier = 'baseline' | 'enhanced' | 'premium';
+export type DeviceTier = "premium" | "enhanced" | "baseline";
 
 export interface DeviceCapabilities {
   tier: DeviceTier;
   supportsBlur: boolean;
   supportsHaptics: boolean;
-  supportsComplexAnimations: boolean;
-  platform: 'ios' | 'android' | 'web';
+  supportsAdvancedAnimations: boolean;
   osVersion: number;
+  modelName: string | null;
 }
 
 /**
- * Detects device tier based on platform, OS version, and hardware
+ * Get iOS version number from Platform.Version
  */
-async function detectDeviceTier(): Promise<DeviceTier> {
-  // iOS tier detection based on iOS version
-  if (Platform.OS === 'ios') {
-    const version = parseInt(Platform.Version as string, 10);
+function getIOSVersion(): number {
+  if (Platform.OS !== "ios") return 0;
 
-    // iOS 15+ (iPhone 12 and newer) - Premium
-    if (version >= 15) return 'premium';
-
-    // iOS 13-14 (iPhone 8, X, 11) - Enhanced
-    if (version >= 13) return 'enhanced';
-
-    // iOS <13 (iPhone 6s, 7) - Baseline
-    return 'baseline';
+  const version = Platform.Version;
+  if (typeof version === "string") {
+    return parseInt(version.split(".")[0], 10);
   }
-
-  // Android tier detection using device year class and memory
-  if (Platform.OS === 'android') {
-    const year = Device.deviceYearClass || 0;
-    const memory = Device.totalMemory || 0;
-    const memoryGB = memory / (1024 * 1024 * 1024);
-
-    // High-end Android (2022+, 6GB+ RAM) - Premium
-    if (year >= 2022 || memoryGB > 6) return 'premium';
-
-    // Mid-range Android (2020+, 4GB+ RAM) - Enhanced
-    if (year >= 2020 || memoryGB > 4) return 'enhanced';
-
-    // Budget/older Android - Baseline
-    return 'baseline';
-  }
-
-  // Web fallback - Enhanced (no blur, but good performance)
-  return 'enhanced';
+  return version;
 }
 
 /**
- * Gets comprehensive device capabilities
- * Call once on app start and cache the result
+ * Get Android API level from Platform.Version
  */
-export async function getDeviceCapabilities(): Promise<DeviceCapabilities> {
-  const tier = await detectDeviceTier();
-  const platform = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
-  const osVersion = parseInt(Platform.Version as string, 10) || 0;
+function getAndroidAPILevel(): number {
+  if (Platform.OS !== "android") return 0;
+
+  const version = Platform.Version;
+  if (typeof version === "number") {
+    return version;
+  }
+  return 0;
+}
+
+/**
+ * Check if device supports haptic feedback
+ */
+async function checkHapticSupport(): Promise<boolean> {
+  try {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Determine if device supports blur effects
+ * iOS 10+ supports blur, Android uses gradients
+ */
+function supportsBlur(osVersion: number): boolean {
+  if (Platform.OS === "ios") {
+    return osVersion >= 10;
+  }
+  // Android doesn't have native blur like iOS, use gradients
+  return false;
+}
+
+/**
+ * Determine device tier based on capabilities
+ *
+ * Premium tier:
+ * - iOS 16+ on iPhone 12 or newer
+ * - Full Liquid Glass blur effects
+ *
+ * Enhanced tier:
+ * - iOS 14-15
+ * - Android 12+ (API 31+)
+ * - Gradient fallbacks for blur
+ *
+ * Baseline tier:
+ * - iOS 13 or older
+ * - Android 11 or older (API 30-)
+ * - Solid color fallbacks
+ */
+function determineDeviceTier(
+  osVersion: number,
+  modelName: string | null,
+  supportsBlur: boolean
+): DeviceTier {
+  if (Platform.OS === "ios") {
+    // Premium: iOS 16+ with blur support
+    if (osVersion >= 16 && supportsBlur) {
+      return "premium";
+    }
+
+    // Enhanced: iOS 14-15
+    if (osVersion >= 14) {
+      return "enhanced";
+    }
+
+    // Baseline: iOS 13 or older
+    return "baseline";
+  }
+
+  if (Platform.OS === "android") {
+    const apiLevel = getAndroidAPILevel();
+
+    // Enhanced: Android 12+ (API 31+)
+    if (apiLevel >= 31) {
+      return "enhanced";
+    }
+
+    // Baseline: Android 11 or older
+    return "baseline";
+  }
+
+  // Web or unknown platform
+  return "enhanced";
+}
+
+/**
+ * Detect device capabilities and assign tier
+ */
+export async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
+  const osVersion = Platform.OS === "ios"
+    ? getIOSVersion()
+    : getAndroidAPILevel();
+
+  const modelName = Device.modelName;
+  const blurSupport = supportsBlur(osVersion);
+  const hapticSupport = await checkHapticSupport();
+
+  const tier = determineDeviceTier(osVersion, modelName, blurSupport);
+
+  // Advanced animations available on Premium and Enhanced tiers
+  const supportsAdvancedAnimations = tier === "premium" || tier === "enhanced";
 
   return {
     tier,
-    platform,
+    supportsBlur: blurSupport && tier === "premium",
+    supportsHaptics: hapticSupport,
+    supportsAdvancedAnimations,
     osVersion,
-
-    // Blur support: iOS 13+ only (requires expo-blur)
-    supportsBlur: platform === 'ios' && osVersion >= 13 && tier !== 'baseline',
-
-    // Haptics: iOS and Android, but not baseline tier or web
-    supportsHaptics: platform !== 'web' && tier !== 'baseline',
-
-    // Complex animations: Premium and Enhanced tiers only
-    supportsComplexAnimations: tier !== 'baseline',
+    modelName,
   };
 }
 
 /**
- * Tier descriptions for settings UI
+ * Get visual effect configuration based on device tier
  */
-export const TIER_DESCRIPTIONS: Record<DeviceTier, string> = {
-  premium: 'Full visual effects with blur and advanced animations',
-  enhanced: 'Good experience with gradient backgrounds and smooth animations',
-  baseline: 'Optimized for performance with minimal effects',
-};
+export function getVisualConfig(tier: DeviceTier) {
+  switch (tier) {
+    case "premium":
+      return {
+        useBlur: true,
+        useGradients: true,
+        blurIntensity: 80,
+        animationDuration: 300,
+        shadowOpacity: 0.15,
+      };
+
+    case "enhanced":
+      return {
+        useBlur: false,
+        useGradients: true,
+        blurIntensity: 0,
+        animationDuration: 250,
+        shadowOpacity: 0.1,
+      };
+
+    case "baseline":
+      return {
+        useBlur: false,
+        useGradients: false,
+        blurIntensity: 0,
+        animationDuration: 200,
+        shadowOpacity: 0.05,
+      };
+  }
+}
