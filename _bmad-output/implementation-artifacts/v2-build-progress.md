@@ -1,6 +1,6 @@
 # Oja v2 Build Progress
 
-> **Last Updated:** 2026-01-26
+> **Last Updated:** 2026-01-27
 > **Stack:** Expo + Clerk + Convex + Jina AI + Gemini
 
 ---
@@ -9,14 +9,16 @@
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| 0. Project Setup | 🔄 In Progress | 3/4 |
-| 1. Foundation (Epic 1) | ⏳ Pending | 0/? |
-| 2. Auth & Onboarding (Epic 2) | ⏳ Pending | 0/? |
-| 3. Pantry Tracker (Epic 3) | ⏳ Pending | 0/? |
-| 4. Shopping Lists (Epic 4) | ⏳ Pending | 0/? |
-| 5. Receipt Intelligence (Epic 5) | ⏳ Pending | 0/? |
-| 6. Insights & Gamification (Epic 6) | ⏳ Pending | 0/? |
-| 7. Premium & Launch (Epic 7) | ⏳ Pending | 0/? |
+| 0. Project Setup | ✅ Complete | 4/4 |
+| 0.5. Epic & Story Design | ✅ Complete | 2/3 |
+| 1. Foundation & Authentication (Epic 1) | ⏳ Pending | 0/? |
+| 2. Pantry Stock Tracker (Epic 2) | ⏳ Pending | 0/? |
+| 3. Shopping Lists with Budget Control (Epic 3) | ⏳ Pending | 0/? |
+| 4. Partner Mode & Collaboration (Epic 4) | ⏳ Pending | 0/? |
+| 5. Receipt Intelligence & Price History (Epic 5) | ⏳ Pending | 0/? |
+| 6. Insights, Gamification & Progress (Epic 6) | ⏳ Pending | 0/? |
+| 7. Subscription, Payments & Loyalty (Epic 7) | ⏳ Pending | 0/? |
+| 8. Admin Dashboard & Operations (Epic 8) | ⏳ Pending | 0/? |
 
 ---
 
@@ -25,9 +27,9 @@
 ### Tasks
 
 - [x] **0.1** Initialize Expo project (SDK 54, TypeScript)
-- [x] **0.2** Set up Convex backend + schema (files ready, needs `npx convex dev`)
-- [x] **0.3** Configure Clerk authentication (files ready, needs keys in .env.local)
-- [ ] **0.4** Verify full stack integration (auth → db round-trip)
+- [x] **0.2** Set up Convex backend + schema (deployed to dev:curious-sockeye-134)
+- [x] **0.3** Configure Clerk authentication (JWT issuer configured)
+- [x] **0.4** Verify full stack integration (auth → db round-trip)
 
 ### What's Done
 
@@ -85,17 +87,77 @@
 
 ---
 
-## Phase 1: Foundation (Epic 1)
+## Phase 0.5: Epic & Story Design
+
+### Tasks
+
+- [x] **0.5.1** Validate prerequisites (PRD, Architecture, UX Design)
+- [x] **0.5.2** Design epic structure (8 user-value-focused epics)
+- [ ] **0.5.3** Create user stories for all epics
+
+### What's Done
+
+**Requirements Extraction:**
+- Validated 7 input documents (PRD, Architecture v2, UX Design, Coding Conventions, Security Guidelines, Guidelines.md, Epic template)
+- Extracted and organized 321 total requirements:
+  - 205 Functional Requirements (FR1-FR205)
+  - 54 Non-Functional Requirements (NFR1-NFR54)
+  - 62 Additional Requirements (GD1-GD8, DT1-DT10, etc.)
+
+**Epic Structure (8 Epics):**
+1. **Epic 1: Foundation & Authentication** (20 FRs)
+   - Expo project setup, Clerk auth, Convex backend, adaptive UI system
+
+2. **Epic 2: Pantry Stock Tracker** (20 FRs)
+   - Pantry grid, stock levels, categories, auto-add to shopping list
+
+3. **Epic 3: Shopping Lists with Budget Control** (25 FRs)
+   - Create lists, budget control, running total, safe zone, impulse fund
+
+4. **Epic 4: Partner Mode & Collaboration** (15 FRs)
+   - Multi-user lists, approval workflow, contest flow, real-time sync
+
+5. **Epic 5: Receipt Intelligence & Price History** (18 FRs)
+   - Receipt scanning, Gemini parsing, price tracking, reconciliation
+
+6. **Epic 6: Insights, Gamification & Progress** (7 FRs)
+   - Weekly digest, budget streaks, savings jar, challenges
+
+7. **Epic 7: Subscription, Payments & Loyalty** (12 FRs)
+   - Stripe integration, £2.99/mo subscription, loyalty points system
+
+8. **Epic 8: Admin Dashboard & Operations** (95 FRs)
+   - Admin panel, user management, analytics, content moderation
+
+**Key Decisions:**
+- Pricing: £2.99/mo, £21.99/yr (38% savings)
+- Loyalty system: Receipt scans earn points → up to 50% off subscription
+- Partner Mode: 3 roles (viewer, approver, editor) with approval/contest workflow
+- MCP servers configured: Clerk, Convex, Stripe, GitHub, Context7, Neon, Playwright
+- Documentation-first implementation: ALWAYS use Context7 + Expo Skills before coding
+
+### Next Steps
+
+1. **Create User Stories (Step 3):**
+   - Break down each epic into detailed user stories
+   - Define acceptance criteria for each story
+   - Estimate story points
+   - Create story files in `_bmad-output/implementation-artifacts/stories/`
+
+---
+
+## Phase 1: Foundation & Authentication (Epic 1)
 
 ### Stories (TBD - need to create for v2)
 
 | ID | Story | Status | Notes |
 |----|-------|--------|-------|
 | 1-1 | Project structure & navigation | ⏳ | Expo Router setup |
-| 1-2 | Design system (Platform-adaptive UI) | ⏳ | Liquid Glass / Material You |
+| 1-2 | Design system (Platform-adaptive UI) | ⏳ | Liquid Glass / Material ui |
 | 1-3 | Convex schema & base functions | ⏳ | All tables from architecture |
 | 1-4 | Global state & error handling | ⏳ | |
 | 1-5 | Haptics system | ⏳ | Comprehensive haptics |
+| 1-6 | Add react-native-reanimated + worklets | ⏳ | **IMPORTANT: Temporarily removed in Phase 0 to fix bundle error. Must add back with proper configuration for animations.** |
 
 ---
 
@@ -208,6 +270,18 @@
 
 | Date | Change |
 |------|--------|
+| 2026-01-27 | **Phase 0.5 Epic Design COMPLETE** - 8 epics designed with 205 FRs mapped |
+| 2026-01-27 | Added Partner Mode requirements (FR191-FR205) - multi-user lists with approval/contest workflow |
+| 2026-01-27 | Added Development Tooling requirements (DT1-DT10) - MCP servers + Expo Skills |
+| 2026-01-27 | Updated pricing: £2.99/mo, £21.99/yr (38% savings, minimum £1.49/mo with loyalty) |
+| 2026-01-27 | Epic structure finalized: 8 user-value-focused epics covering all 205 FRs |
+| 2026-01-26 | **⚠️ TODO Phase 1:** Re-add react-native-reanimated + worklets (temporarily removed to fix bundle error) |
+| 2026-01-26 | **Phase 0 COMPLETE** - All services initialized and tested |
+| 2026-01-26 | Convex project created: `dev:curious-sockeye-134` at https://curious-sockeye-134.convex.cloud |
+| 2026-01-26 | Clerk authentication configured with JWT issuer: https://tolerant-python-28.clerk.accounts.dev |
+| 2026-01-26 | Integration test passed - Clerk + Convex + Schema verified |
+| 2026-01-26 | Fixed expo-haptics plugin configuration issue in app.json |
+| 2026-01-26 | Environment variables configured in .env.local |
 | 2026-01-26 | MCP servers configured (Clerk, Convex, Stripe, GitHub) |
 | 2026-01-26 | v1 artifacts archived to `_bmad-output/v1-archive/` (38 stories + planning docs) |
 | 2026-01-26 | Phase 0 tasks 0.1-0.3 completed (code ready, needs service setup) |

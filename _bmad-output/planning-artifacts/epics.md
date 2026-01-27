@@ -1,11 +1,18 @@
 ---
-stepsCompleted: ['step-01-validate-prerequisites']
+stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics']
 inputDocuments:
   - '_bmad-output/planning-artifacts/prd.md'
   - '_bmad-output/planning-artifacts/architecture-v2-expo-convex.md'
   - '_bmad-output/planning-artifacts/ux-design-specification.md'
   - '_bmad-output/planning-artifacts/coding-conventions-expo.md'
   - '_bmad-output/planning-artifacts/security-guidelines-expo.md'
+  - '_bmad-output/planning-artifacts/product-brief.md'
+  - 'guidelines.md'
+requirementsSummary:
+  totalFunctionalRequirements: 205
+  totalNonFunctionalRequirements: 54
+  totalAdditionalRequirements: 62
+  grandTotal: 321
 ---
 
 # oja - Epic Breakdown
@@ -97,8 +104,8 @@ This document provides the complete epic and story breakdown for oja, decomposin
 - FR64: Users can view their price contribution count
 
 **Subscription & Payments:**
-- FR65: Users can subscribe to monthly plan (£3.99/mo)
-- FR66: Users can subscribe to annual plan (£29.99/yr)
+- FR65: Users can subscribe to monthly plan (£2.99/mo)
+- FR66: Users can subscribe to annual plan (£21.99/yr - 38% savings)
 - FR67: Users can cancel their subscription
 - FR68: System enforces feature limits for expired free tier
 - FR69: Users can earn loyalty points for valid receipt scans
@@ -256,6 +263,23 @@ This document provides the complete epic and story breakdown for oja, decomposin
 - FR189: Admins can schedule automated weekly reports via email
 - FR190: Admins can export audit logs
 
+**Partner Mode (Multi-User Lists):**
+- FR191: Users can invite partners to a shopping list via email or share code
+- FR192: Users can assign partner roles (viewer, approver, editor)
+- FR193: Partners with "viewer" role can see the list in real-time
+- FR194: Partners with "approver" role must approve items before purchase
+- FR195: Partners with "editor" role can add/remove items
+- FR196: Users can see pending approval status on list items (⏳ hourglass indicator)
+- FR197: Partners can approve items with ✅ green checkmark
+- FR198: Partners can contest items with reason (🔴 red badge)
+- FR199: Users can add comments to any list item (💬 speech bubble)
+- FR200: Users can view comment threads on contested items
+- FR201: System sends push notifications when partner approves/contests/comments
+- FR202: System provides haptic feedback for partner actions (partnerApproved, partnerContested, partnerCommented)
+- FR203: Users can accept partner invitations via 6-character invite code
+- FR204: Users can remove partners from lists
+- FR205: List owner can resolve contested items (keep or remove)
+
 ### Non-Functional Requirements
 
 **Performance:**
@@ -354,7 +378,7 @@ This document provides the complete epic and story breakdown for oja, decomposin
 - GF4: **Smart Suggestions** - AI-powered "You might need..." recommendations via Jina embeddings
 - GF5: **Personal Best** - Track and celebrate lowest weekly/monthly spend
 - GF6: **Surprise Delight** - Random toast messages with emojis for mundane actions
-- GF7: **Partner Mode** - Share lists, approve items, contest purchases, add comments
+- GF7: **Partner Mode** - Multi-user lists with real-time sync, 3 role types (viewer/approver/editor), approve/contest flow with comments, push notifications, haptic feedback (see FR191-FR205)
 - GF8: **Continent Seeding** - Generate 200 culturally-appropriate items via Gemini LLM (6 regions)
 - GF9: **Daily Stock Reminder** - Configurable push notifications for pantry updates
 - GF10: **Mid-Shop Add Flow** - Choose to add to budget, impulse fund, or defer to next trip
@@ -385,10 +409,492 @@ This document provides the complete epic and story breakdown for oja, decomposin
 - UX7: **Progressive Disclosure** - Simple for new users, powerful for experts
 - UX8: **Instant Feedback** - <100ms response for all interactions
 
+**Graceful Degradation Requirements:**
+
+- GD1: **3-Tier Device System** - Premium (iOS 15+), Enhanced (iOS 13-14 / mid-range Android), Baseline (older devices)
+- GD2: **Device Capability Detection** - Detect OS version, device year, RAM for tiering
+- GD3: **Tier-Aware Design Tokens** - Platform and tier-specific styling values
+- GD4: **UI Fallbacks** - BlurView → LinearGradient → solid View progression
+- GD5: **Safe Haptics Wrapper** - Triple-check safety (device + preference + try-catch)
+- GD6: **useDeviceCapabilities Hook** - Cached capabilities with design tokens
+- GD7: **Animation Scaling** - Tier-based durations (300ms → 200ms → 150ms)
+- GD8: **Platform-Specific Shadows** - Android elevation vs iOS shadowRadius
+
+**Development Tooling & AI-Assisted Workflow:**
+
+> **🚨 CRITICAL WORKFLOW RULE:**
+> **ALWAYS deploy Expo Skills and Context7 MCP at the START of EVERY implementation session to fetch the latest documentation. This prevents unnecessary bugs, outdated API usage, and wasted time going in circles. Documentation changes frequently - fresh context is non-negotiable.**
+
+- DT1: **MCP Server - Clerk** - Use Clerk MCP (URL-based) for authentication SDK snippets, user management queries, and auth pattern examples
+- DT2: **MCP Server - Convex** - Use Convex MCP (CLI-based) for deployment queries, table schema inspection, function metadata, and backend debugging
+- DT3: **MCP Server - Stripe** - Use Stripe MCP (URL-based) for payment integration, customer management, invoice handling, subscription workflows
+- DT4: **MCP Server - GitHub** - Use GitHub MCP (CLI-based) for repo management, PR creation, issue tracking, code review workflows
+- DT5: **Expo Skills** - Leverage Expo agent skills for SDK upgrades, dependency management, build configuration, and EAS deployment workflows
+- DT6: **MCP Configuration** - Maintain claude_desktop_config.json with all MCP server configurations and restart Claude Desktop after changes
+- DT7: **Context7 MCP** - Use Context7 for retrieving up-to-date library documentation (Expo, React Native, Convex, Clerk, etc.) **BEFORE implementing any feature**
+- DT8: **Neon MCP** - Database management via Neon MCP (if using Neon instead of/alongside Convex for certain features)
+- DT9: **Playwright MCP** - E2E testing and browser automation for web admin dashboard or PWA fallback testing
+- DT10: **Documentation-First Implementation** - MANDATORY: Query Context7 and Expo Skills for latest docs BEFORE writing code for any library integration to avoid deprecated APIs, breaking changes, and implementation bugs
+
 ### FR Coverage Map
 
-(Will be populated in Step 2 after epic design)
+**Epic 1: Foundation & Authentication**
+- FR1: Create account with email/password
+- FR2: Sign in to existing account
+- FR3: Sign out from any device
+- FR4: Reset password via email
+- FR5: 7-day free trial with full access
+- FR6: View and manage subscription status
+- FR7: Delete account and all data
+- FR16: Pre-seeded pantry items (continent-based)
+- FR75: Auto-detect user's country
+- FR76: Auto-detect currency based on location
+- FR77: Manually set preferred currency
+- FR85: Animated welcome experience
+- FR86: Customize seeded products
+- FR87: Set default weekly budget
+- FR88: Optionally grant location permission
+- FR89: Skip optional onboarding steps
+
+**Epic 2: Pantry Stock Tracker**
+- FR8: View all tracked stock items in pantry grid
+- FR9: Add new items to pantry
+- FR10: Set stock level (Stocked, Good, Low, Out)
+- FR11: Change stock level via tap-and-hold
+- FR12: Quick-decrease stock via swipe gesture
+- FR13: Auto-add "Out" items to next shopping list
+- FR14: Assign categories to stock items
+- FR15: Remove items from pantry
+- FR80: Access data from multiple devices (sync)
+- FR81: Real-time sync across devices
+- FR82: Use core features offline
+- FR83: Queue offline changes for sync
+- FR84: Resolve sync conflicts gracefully
+- FR90: Subtle sounds for key actions
+- FR91: Haptic feedback for interactions
+- FR92: Celebration when trip under budget
+- FR93: Enable/disable sounds
+- FR94: Enable/disable haptics
+- FR95: Auto-mute in detected store locations
+
+**Epic 3: Shopping Lists with Budget Control**
+- FR17: Create new shopping lists
+- FR18: View all shopping lists
+- FR19: Add items to shopping list
+- FR20: Remove items from shopping list
+- FR21: Search and add from pantry
+- FR22: Check off items while shopping
+- FR23: Uncheck items if needed
+- FR24: Set item priority (must-have vs nice-to-have)
+- FR25: Change priority via swipe gesture
+- FR26: Edit estimated price for list items
+- FR27: Edit actual price when checking off
+- FR28: View running total of shopping list
+- FR29: Archive completed shopping lists
+- FR30: View archived lists (trip history)
+- FR31: Auto-update pantry stock when list completed
+- FR32: Set total budget for each list
+- FR33: Enable Budget Lock Mode (hard cap)
+- FR34: Warn before adding items exceeding budget
+- FR35: Set separate Impulse Fund budget
+- FR36: Add impulse items charged against impulse fund
+- FR37: View Safe Zone indicator (budget status)
+- FR38: Suggest removing nice-to-haves when over budget
+- FR39: Real-time budget status while shopping
+- FR78: Detect when user is in known store
+- FR79: Associate shopping lists with specific stores
+
+**Epic 4: Partner Mode & Collaboration**
+- FR191: Invite partners via email or share code
+- FR192: Assign partner roles (viewer, approver, editor)
+- FR193: Partners with "viewer" role see list real-time
+- FR194: Partners with "approver" must approve items
+- FR195: Partners with "editor" can add/remove items
+- FR196: See pending approval status (⏳ hourglass)
+- FR197: Partners approve items (✅ checkmark)
+- FR198: Partners contest items with reason (🔴 badge)
+- FR199: Add comments to any list item (💬 bubble)
+- FR200: View comment threads on contested items
+- FR201: Push notifications for partner actions
+- FR202: Haptic feedback for partner actions
+- FR203: Accept partner invitations via 6-char code
+- FR204: Remove partners from lists
+- FR205: List owner resolves contested items
+
+**Epic 5: Receipt Intelligence & Price History**
+- FR40: Capture receipt photos using camera
+- FR41: OCR on captured receipts
+- FR42: Extract structured data (store, date, items, prices)
+- FR43: Review and correct AI-parsed data
+- FR44: Manually add missing items to receipt
+- FR45: View reconciliation of planned vs actual
+- FR46: Identify items bought but not on list
+- FR47: Identify items on list but not bought
+- FR48: Save receipt without points if validation fails
+- FR49: Validate receipt freshness (≤3 days)
+- FR50: Validate receipt legibility (≥60% OCR confidence)
+- FR51: Detect duplicate receipts
+- FR52: Maintain personal price history
+- FR53: Provide price estimates when adding items
+- FR54: Contribute validated prices to crowdsourced DB
+- FR55: Show price confidence level
+- FR56: View price history for specific items
+- FR57: Filter crowdsourced prices by recency
+
+**Epic 6: Insights, Gamification & Progress**
+- FR58: View weekly spending digest
+- FR59: View monthly trend reports
+- FR60: View category breakdown of spending
+- FR61: View budget adherence statistics
+- FR62: View total savings achieved
+- FR63: Display progress indicators (trips, streaks)
+- FR64: View price contribution count
+
+**Epic 7: Subscription, Payments & Loyalty**
+- FR65: Subscribe to monthly plan (£2.99/mo)
+- FR66: Subscribe to annual plan (£21.99/yr)
+- FR67: Cancel subscription
+- FR68: Enforce feature limits for expired free tier
+- FR69: Earn loyalty points for valid receipt scans
+- FR70: Apply loyalty point discounts (up to 50%)
+- FR71: View loyalty point balance
+- FR72: View point earning history
+- FR73: Enforce daily receipt scan cap (5/day)
+- FR74: Expire unused points after 12 months
+
+**Epic 8: Admin Dashboard & Operations**
+- FR96: Admin sign-in with enhanced security
+- FR97: Admin 2FA required
+- FR98: Audit trail for all admin actions
+- FR99: Super-admins manage other admin accounts
+- FR100: Role-based permissions (viewer, support, manager, super-admin)
+- FR101: View real-time user count
+- FR102: View DAU/WAU/MAU metrics with trends
+- FR103: View user retention cohort analysis
+- FR104: View onboarding funnel completion rates
+- FR105: View trial-to-paid conversion rate
+- FR106: View churn rate and reasons
+- FR107: View feature adoption metrics
+- FR108: Filter analytics by date range
+- FR109: Compare metrics period-over-period
+- FR110: View Monthly Recurring Revenue (MRR)
+- FR111: View Annual Recurring Revenue (ARR)
+- FR112: View revenue growth trends
+- FR113: View subscriber breakdown (monthly vs annual)
+- FR114: View average revenue per user (ARPU)
+- FR115: View customer lifetime value (LTV)
+- FR116: View loyalty point discount impact on revenue
+- FR117: View total loyalty points liability
+- FR118: View all payment transactions
+- FR119: View failed payment attempts
+- FR120: View payment retry status
+- FR121: Issue refunds for transactions
+- FR122: View subscription lifecycle events
+- FR123: View upcoming renewals
+- FR124: View revenue by payment method
+- FR125: Sync payment data from Stripe webhooks
+- FR126: Manually reconcile payment discrepancies
+- FR127: Search users by email, name, or ID
+- FR128: View detailed user profile
+- FR129: View user's subscription history
+- FR130: View user's loyalty point history
+- FR131: View user's receipt scan history
+- FR132: Extend user's trial period
+- FR133: Grant complimentary subscription
+- FR134: Add loyalty points manually
+- FR135: Reset user's password
+- FR136: Deactivate user account
+- FR137: Reactivate deactivated accounts
+- FR138: View user's activity timeline
+- FR139: View receipt scan volume metrics
+- FR140: View OCR success rate metrics
+- FR141: View AI parsing accuracy metrics
+- FR142: View rejected receipts and reasons
+- FR143: Review flagged/suspicious receipts
+- FR144: Manually approve/reject flagged receipts
+- FR145: View crowdsourced price database
+- FR146: Search prices by item, store, or region
+- FR147: Edit incorrect crowdsourced prices
+- FR148: Delete spam/fraudulent price entries
+- FR149: View price outlier reports
+- FR150: Bulk approve/reject price entries
+- FR151: View and manage seeded products
+- FR152: Add new seeded products
+- FR153: Edit seeded product details
+- FR154: Remove seeded products
+- FR155: Manage product categories
+- FR156: Manage store name normalization rules
+- FR157: View/edit item name canonicalization rules
+- FR158: View system uptime metrics
+- FR159: View API response time metrics
+- FR160: View error rate trends
+- FR161: View recent error logs
+- FR162: View third-party service status
+- FR163: View database storage usage
+- FR164: View sync queue status
+- FR165: View background job status
+- FR166: Send alerts when error thresholds exceeded
+- FR167: View support ticket queue
+- FR168: Impersonate user view (read-only)
+- FR169: View user's recent shopping lists
+- FR170: View user's stock tracker state
+- FR171: Trigger password reset email for user
+- FR172: Export user's data (GDPR request)
+- FR173: Permanently delete user's data (GDPR)
+- FR174: Create in-app announcements
+- FR175: Schedule announcements for future dates
+- FR176: Target announcements to user segments
+- FR177: View announcement read/dismiss rates
+- FR178: Create email campaigns (future)
+- FR179: Toggle feature flags on/off
+- FR180: Enable features for specific user segments
+- FR181: Configure loyalty point earning rules
+- FR182: Configure receipt validation thresholds
+- FR183: Configure subscription pricing
+- FR184: Configure trial period length
+- FR185: Configure daily receipt scan cap
+- FR186: Export user list to CSV
+- FR187: Export revenue reports to CSV
+- FR188: Export analytics data to CSV
+- FR189: Schedule automated weekly reports
+- FR190: Export audit logs
+
+**Non-Functional & Additional Requirements** are addressed across all epics as cross-cutting concerns (performance, security, scalability, accessibility, graceful degradation, development tooling).
 
 ## Epic List
 
-(Will be populated in Step 2 after epic design)
+### Epic 1: Foundation & Authentication
+
+**Goal:** Users can sign up, authenticate securely, and complete culturally-aware onboarding with 200 continent-specific pantry items
+
+**Key Capabilities:**
+- Clerk authentication with email/password, password reset, secure sessions
+- SecureStore token caching (JWT)
+- Convex backend integration with real-time sync
+- Platform-adaptive UI foundation (Liquid Glass iOS / Material You Android)
+- 3-tier graceful degradation system (Premium/Enhanced/Baseline)
+- Safe haptics wrapper with device detection
+- Tier-aware design tokens
+- Onboarding flow with continent selection (6 regions)
+- LLM-generated seed items (200 culturally-appropriate items via Gemini)
+- Location/currency auto-detection
+- MCP servers configured (Clerk, Convex, Stripe, GitHub, Context7, Neon, Playwright)
+- Expo Skills ready for SDK management
+
+**FRs Covered:** FR1-FR7, FR16, FR75-FR77, FR85-FR89 (20 FRs)
+
+**Additional Requirements:** AR1-AR10, CR1-CR4, SR1-SR4, DT1-DT10, GD1-GD8, GF8
+
+**Dependencies:** None (foundation epic)
+
+---
+
+### Epic 2: Pantry Stock Tracker
+
+**Goal:** Users can track household stock levels, see what's running low, and have items auto-add to shopping lists
+
+**Key Capabilities:**
+- Pantry grid view with categories
+- 4 stock levels (Stocked, Good, Low, Out)
+- Tap-and-hold interaction with liquid drain animation
+- Swipe gesture for quick stock decrease
+- Auto-add "Out" items to next shopping list with fly animation
+- Add/edit/delete pantry items
+- Real-time cross-device sync
+- Offline-first with optimistic updates
+- Stock check streak gamification
+- Daily stock reminder push notifications (configurable times)
+- Haptic feedback for all stock interactions
+- Mature sounds (subtle, professional)
+
+**FRs Covered:** FR8-FR15, FR80-FR84, FR90-FR95 (20 FRs)
+
+**Additional Requirements:** GF11, GF9, UX2, UX6
+
+**Dependencies:** Epic 1 (authentication, user identity)
+
+---
+
+### Epic 3: Shopping Lists with Budget Control
+
+**Goal:** Users can create shopping lists with budgets, see real-time totals, and stay within budget using Safe Zone indicators
+
+**Key Capabilities:**
+- Create/view/archive shopping lists
+- Add items manually or from pantry
+- Check off items with haptic feedback
+- Set priority (must-have vs nice-to-have) via swipe gesture
+- Edit estimated/actual prices
+- Real-time running total (<100ms update)
+- Budget setting per list
+- Budget Lock Mode (hard cap with warnings)
+- Impulse Fund (separate flex budget)
+- Safe Zone indicator (green/amber/red glow)
+- Auto-suggest removing nice-to-haves when over budget
+- Shopping Mode (larger touch targets)
+- Mid-shop add flow (budget / impulse / defer)
+- Auto-update pantry stock when list completed
+- Store association
+
+**FRs Covered:** FR17-FR39, FR78-FR79 (25 FRs)
+
+**Additional Requirements:** UX1, UX3, UX8, GF10
+
+**Dependencies:** Epic 1 (auth), Epic 2 (pantry items for adding to lists)
+
+---
+
+### Epic 4: Partner Mode & Collaboration
+
+**Goal:** Users can share lists with partners, approve/contest items together, and communicate via comments
+
+**Key Capabilities:**
+- Invite partners via email or 6-character share code
+- 3 role types (viewer, approver, editor)
+- Real-time list sharing with Convex sync
+- Pending approval status (⏳ hourglass indicator)
+- Approve items (✅ green checkmark + success haptic)
+- Contest items (🔴 red badge + reason + warning haptic)
+- Comment threads on items (💬 speech bubble)
+- Push notifications for partner actions
+- Haptic feedback (partnerApproved, partnerContested, partnerCommented)
+- List owner resolution powers (keep/remove contested items)
+- Remove partners from lists
+
+**FRs Covered:** FR191-FR205 (15 FRs)
+
+**Additional Requirements:** GF7
+
+**Dependencies:** Epic 1 (auth), Epic 3 (shopping lists)
+
+---
+
+### Epic 5: Receipt Intelligence & Price History
+
+**Goal:** Users can scan receipts, reconcile planned vs actual spending, and build personal price history
+
+**Key Capabilities:**
+- Camera capture with auto-detect
+- Client-side OCR processing (Tesseract.js)
+- AI parsing via Gemini 1.5 Flash (structured data extraction)
+- User confirmation/correction step
+- Planned vs Actual reconciliation view
+- Identify missed items (bought but not on list)
+- Identify skipped items (on list but not bought)
+- Personal price history per user
+- Crowdsourced price database contributions
+- Receipt validation (freshness ≤3 days, legibility ≥60%, duplicate detection)
+- Save receipt without points if validation fails
+- Price estimates when adding items to lists
+- Price confidence levels
+- Store-specific price tracking
+- Convex file storage for receipt photos
+
+**FRs Covered:** FR40-FR57 (18 FRs)
+
+**Additional Requirements:** None (uses AR5 for file storage, AR6 for AI)
+
+**Dependencies:** Epic 1 (auth), Epic 3 (shopping lists for reconciliation)
+
+---
+
+### Epic 6: Insights, Gamification & Progress
+
+**Goal:** Users see spending patterns, budget streaks, savings, and get quiet motivation to stay on track
+
+**Key Capabilities:**
+- Weekly spending digest
+- Monthly trend reports with charts
+- Category breakdown analytics
+- Budget adherence statistics (trips under/over budget)
+- Total savings calculation
+- Budget streak 🔥 (consecutive under-budget trips with fire emoji)
+- Savings jar 💰 (animated jar filling based on cumulative savings)
+- Weekly challenge 🏆 (random goal per week with confetti on completion)
+- Smart suggestions 🔮 (AI "You might need..." via Jina embeddings + vector search)
+- Personal best 📈 (track lowest weekly/monthly spend)
+- Surprise delight 🎁 (random toast messages for mundane actions)
+- Mature celebrations (brief confetti, warm sounds, no childish badges)
+- Progress indicators (personal milestones, not competition)
+- Price contribution count visibility
+
+**FRs Covered:** FR58-FR64 (7 FRs)
+
+**Additional Requirements:** GF1-GF6, UX4-UX5, UX7
+
+**Dependencies:** Epic 1-3 (auth, pantry, lists for data sources)
+
+---
+
+### Epic 7: Subscription, Payments & Loyalty
+
+**Goal:** Users can subscribe to premium tier, earn loyalty points from receipts, and reduce subscription cost up to 50%
+
+**Key Capabilities:**
+- Stripe Checkout integration
+- Monthly plan (£2.99/mo)
+- Annual plan (£21.99/yr - 38% savings)
+- 7-day free trial with full access
+- Loyalty points system (earn from valid receipt scans)
+- Points earning rules (10 pts/receipt, +20 first receipt bonus, weekly streak bonus)
+- Discount tiers (10%, 20%, 35%, 50% max → as low as £1.49/mo)
+- Daily receipt scan cap (5 receipts/day)
+- Point expiry (12 months rolling)
+- Feature limits for expired free tier (1 list, no scan, no sync)
+- Subscription management (view status, cancel, update payment method)
+- Payment webhook handling (idempotent Stripe webhook processing)
+- Subscription lifecycle events
+
+**FRs Covered:** FR5-FR6 (from Epic 1), FR65-FR74 (12 FRs total)
+
+**Additional Requirements:** None (uses AR3 Stripe integration)
+
+**Dependencies:** Epic 1 (auth), Epic 5 (receipts for earning points)
+
+---
+
+### Epic 8: Admin Dashboard & Operations
+
+**Goal:** Admins can monitor business metrics, manage users, moderate content, and configure system settings
+
+**Key Capabilities:**
+- Admin authentication with mandatory 2FA
+- Role-based permissions (viewer, support, manager, super-admin)
+- Comprehensive audit logging
+- Business analytics dashboard (DAU/WAU/MAU, retention, funnels, cohorts)
+- Revenue dashboard (MRR, ARR, ARPU, LTV, churn analysis, point liability)
+- Stripe payment management (transactions, refunds, failed payments, reconciliation)
+- User management (search, profiles, subscription history, trial extensions, complimentary subs)
+- Receipt moderation (review flagged, OCR accuracy, AI parsing metrics, bulk approve/reject)
+- Price database management (edit/delete prices, outlier detection, spam removal)
+- Product catalog management (seeded items, categories, store normalization, item canonicalization)
+- System health monitoring (uptime, API response times, error rates, service status, storage usage)
+- Customer support tools (read-only impersonation, password reset triggers, GDPR exports/deletion)
+- In-app announcements (create, schedule, segment targeting, read/dismiss tracking)
+- Feature flags and configuration (toggle features, segment rollouts, loyalty rules, receipt thresholds)
+- Automated reporting (CSV exports for users/revenue/analytics, scheduled weekly email reports)
+
+**FRs Covered:** FR96-FR190 (95 FRs)
+
+**Additional Requirements:** None (consumes data from all previous epics)
+
+**Dependencies:** Epic 1-7 (all user data to manage and monitor)
+
+---
+
+## Epic Summary
+
+| Epic | Title | User Value | FR Count | Standalone |
+|------|-------|------------|----------|------------|
+| **1** | Foundation & Authentication | Users can sign up and onboard with seeded pantry | 20 FRs | ✅ Yes |
+| **2** | Pantry Stock Tracker | Users track stock and auto-populate lists | 20 FRs | ✅ Yes (uses Epic 1) |
+| **3** | Shopping Lists & Budget | Users create lists and stay under budget | 25 FRs | ✅ Yes (uses Epic 1-2) |
+| **4** | Partner Mode | Users collaborate on lists together | 15 FRs | ✅ Yes (uses Epic 1, 3) |
+| **5** | Receipt Intelligence | Users scan receipts and build price history | 18 FRs | ✅ Yes (uses Epic 1, 3) |
+| **6** | Insights & Gamification | Users see progress and stay motivated | 7 FRs | ✅ Yes (uses Epic 1-3) |
+| **7** | Subscription & Loyalty | Users subscribe and earn discounts | 12 FRs | ✅ Yes (uses Epic 1, 5) |
+| **8** | Admin Dashboard | Admins manage and monitor system | 95 FRs | ✅ Yes (uses Epic 1-7) |
+
+**Total: 212 Functional Requirements** mapped across 8 epics
+**All 54 NFRs** addressed as cross-cutting concerns
+**All 62 Additional Requirements** integrated throughout
