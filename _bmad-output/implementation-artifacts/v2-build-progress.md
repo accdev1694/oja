@@ -99,34 +99,39 @@
 
 **Requirements Extraction:**
 - Validated 7 input documents (PRD, Architecture v2, UX Design, Coding Conventions, Security Guidelines, Guidelines.md, Epic template)
-- Extracted and organized 321 total requirements:
-  - 205 Functional Requirements (FR1-FR205)
+- Extracted and organized 322 total requirements:
+  - 206 Functional Requirements (FR1-FR206) - **See:** `planning-artifacts/requirements/requirements-inventory.md`
   - 54 Non-Functional Requirements (NFR1-NFR54)
   - 62 Additional Requirements (GD1-GD8, DT1-DT10, etc.)
 
-**Epic Structure (8 Epics):**
-1. **Epic 1: Foundation & Authentication** (20 FRs)
-   - Expo project setup, Clerk auth, Convex backend, adaptive UI system
+**File Organization:**
+- **Epic Files:** `planning-artifacts/epics/` - 8 individual epic files + index.md with coverage map
+- **Story Files:** `implementation-artifacts/stories/epic-01/` through `epic-08/` - 47 individual story files
+- **Requirements:** `planning-artifacts/requirements/requirements-inventory.md` - Complete FR/NFR/AR inventory
 
-2. **Epic 2: Pantry Stock Tracker** (20 FRs)
+**Epic Structure (8 Epics):** - **See:** `planning-artifacts/epics/index.md` for complete coverage map
+1. **Epic 1: Foundation & Authentication** (21 FRs) - [epic-01-foundation-authentication.md](../planning-artifacts/epics/epic-01-foundation-authentication.md)
+   - Expo project setup, Clerk auth, Convex backend, adaptive UI system, hybrid pantry seeding
+
+2. **Epic 2: Pantry Stock Tracker** (20 FRs) - [epic-02-pantry-stock-tracker.md](../planning-artifacts/epics/epic-02-pantry-stock-tracker.md)
    - Pantry grid, stock levels, categories, auto-add to shopping list
 
-3. **Epic 3: Shopping Lists with Budget Control** (25 FRs)
+3. **Epic 3: Shopping Lists with Budget Control** (25 FRs) - [epic-03-shopping-lists-budget-control.md](../planning-artifacts/epics/epic-03-shopping-lists-budget-control.md)
    - Create lists, budget control, running total, safe zone, impulse fund
 
-4. **Epic 4: Partner Mode & Collaboration** (15 FRs)
-   - Multi-user lists, approval workflow, contest flow, real-time sync
+4. **Epic 4: Partner Mode & Collaboration** (15 FRs) - [epic-04-partner-mode-collaboration.md](../planning-artifacts/epics/epic-04-partner-mode-collaboration.md)
+   - Multi-user lists, bidirectional approval workflow, contest flow, real-time sync
 
-5. **Epic 5: Receipt Intelligence & Price History** (18 FRs)
+5. **Epic 5: Receipt Intelligence & Price History** (18 FRs) - [epic-05-receipt-intelligence-price-history.md](../planning-artifacts/epics/epic-05-receipt-intelligence-price-history.md)
    - Receipt scanning, Gemini parsing, price tracking, reconciliation
 
-6. **Epic 6: Insights, Gamification & Progress** (7 FRs)
+6. **Epic 6: Insights, Gamification & Progress** (7 FRs) - [epic-06-insights-gamification-progress.md](../planning-artifacts/epics/epic-06-insights-gamification-progress.md)
    - Weekly digest, budget streaks, savings jar, challenges
 
-7. **Epic 7: Subscription, Payments & Loyalty** (12 FRs)
+7. **Epic 7: Subscription, Payments & Loyalty** (12 FRs) - [epic-07-subscription-payments-loyalty.md](../planning-artifacts/epics/epic-07-subscription-payments-loyalty.md)
    - Stripe integration, £2.99/mo subscription, loyalty points system
 
-8. **Epic 8: Admin Dashboard & Operations** (95 FRs)
+8. **Epic 8: Admin Dashboard & Operations** (95 FRs) - [epic-08-admin-dashboard-operations.md](../planning-artifacts/epics/epic-08-admin-dashboard-operations.md)
    - Admin panel, user management, analytics, content moderation
 
 **Key Decisions:**
@@ -155,9 +160,14 @@
 
 ### Next Steps
 
-1. **Sprint Planning:**
+1. **Review Epic & Story Files:**
+   - Browse epic files in `_bmad-output/planning-artifacts/epics/`
+   - Review story files in `_bmad-output/implementation-artifacts/stories/epic-01/` through `epic-08/`
+   - Check coverage map in `epics/index.md`
+
+2. **Sprint Planning:**
    - Run `/bmad:bmm:workflows:sprint-planning` to create sprint-status.yaml
-   - Begin implementation with Epic 1 stories
+   - Begin implementation with Epic 1 stories using `/bmad:bmm:workflows:dev-story`
 
 ---
 
@@ -285,7 +295,11 @@
 
 | Date | Change |
 |------|--------|
-| 2026-01-27 | **Phase 0.5 Epic Design COMPLETE** - 8 epics designed with 205 FRs mapped |
+| 2026-01-27 | **Phase 0.5 File Organization COMPLETE** - Reorganized epics and stories into individual files for better maintainability |
+| 2026-01-27 | Created `epics/` folder with 8 individual epic files + index.md with coverage map |
+| 2026-01-27 | Created `stories/` folder with 47 individual story files organized by epic (epic-01/ through epic-08/) |
+| 2026-01-27 | Extracted requirements inventory to `requirements/requirements-inventory.md` (206 FRs + 54 NFRs + 62 Additional) |
+| 2026-01-27 | **Phase 0.5 Epic Design COMPLETE** - 8 epics designed with 206 FRs mapped (updated from 205) |
 | 2026-01-27 | Added Partner Mode requirements (FR191-FR205) - multi-user lists with approval/contest workflow |
 | 2026-01-27 | Added Development Tooling requirements (DT1-DT10) - MCP servers + Expo Skills |
 | 2026-01-27 | Updated pricing: £2.99/mo, £21.99/yr (38% savings, minimum £1.49/mo with loyalty) |
