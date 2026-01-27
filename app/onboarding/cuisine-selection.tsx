@@ -82,7 +82,13 @@ export default function CuisineSelectionScreen() {
       });
 
       safeHaptics.success();
-      router.push("/onboarding/pantry-seeding");
+      router.push({
+        pathname: "/onboarding/pantry-seeding",
+        params: {
+          country,
+          cuisines: selectedCuisines.join(","),
+        },
+      });
     } catch (error) {
       console.error("Failed to save onboarding data:", error);
       safeHaptics.error();
