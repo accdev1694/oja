@@ -43,9 +43,9 @@ development_status:
   # Epic 1: Foundation & Authentication (9 stories)
   # Phase 0 (Project Setup) completed: Expo + Routing + Clerk + Convex base
   epic-1: in-progress
-  1-1-project-foundation-routing-setup: in-progress  # Phase 0: Expo + Routing structure done, needs completion
-  1-2-clerk-authentication-integration: in-progress  # Phase 0: Auth configured + screens exist, needs full implementation
-  1-3-convex-backend-user-schema: in-progress  # Phase 0: Schema + user functions exist, needs completion
+  1-1-project-foundation-routing-setup: done  # ✅ Expo 55 + TypeScript + Routing + Reanimated 4.1.1 configured
+  1-2-clerk-authentication-integration: done  # ✅ Email/password + Google/Apple OAuth + verification flow
+  1-3-convex-backend-user-schema: done  # ✅ Schema + queries (getCurrent, getByClerkId) + mutations (getOrCreate, update, setOnboardingData)
   1-4-device-capabilities-graceful-degradation: ready-for-dev
   1-5-adaptive-ui-components-design-system: ready-for-dev
   1-6-haptic-feedback-system: ready-for-dev

@@ -1,4 +1,4 @@
-import { useSignUp } from "@clerk/clerk-expo";
+import { useSignUp, useOAuth } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
 import { useState, useCallback } from "react";
 import {
@@ -12,9 +12,14 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SignUpScreen() {
   const { signUp, setActive, isLoaded } = useSignUp();
+  const { startOAuthFlow: startGoogleOAuth } = useOAuth({ strategy: "oauth_google" });
+  const { startOAuthFlow: startAppleOAuth } = useOAuth({ strategy: "oauth_apple" });
   const router = useRouter();
 
   const [emailAddress, setEmailAddress] = useState("");
@@ -23,6 +28,29 @@ export default function SignUpScreen() {
   const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const onOAuthPress = useCallback(async (provider: "google" | "apple") => {
+    try {
+      setIsLoading(true);
+      setError("");
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      const oAuthFlow = provider === "google" ? startGoogleOAuth : startAppleOAuth;
+      const { createdSessionId, setActive: setActiveSession } = await oAuthFlow();
+
+      if (createdSessionId) {
+        await setActiveSession!({ session: createdSessionId });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.replace("/onboarding/welcome");
+      }
+    } catch (err: any) {
+      const message = err?.errors?.[0]?.message || `${provider} sign up failed`;
+      setError(message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [startGoogleOAuth, startAppleOAuth, router]);
 
   const onSignUpPress = useCallback(async () => {
     if (!isLoaded) return;
@@ -159,6 +187,32 @@ export default function SignUpScreen() {
           )}
         </TouchableOpacity>
 
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or sign up with</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <View style={styles.oauthContainer}>
+          <TouchableOpacity
+            style={[styles.oauthButton, isLoading && styles.buttonDisabled]}
+            onPress={() => onOAuthPress("google")}
+            disabled={isLoading}
+          >
+            <Text style={styles.oauthButtonText}>Google</Text>
+          </TouchableOpacity>
+
+          {Platform.OS === "ios" && (
+            <TouchableOpacity
+              style={[styles.oauthButton, isLoading && styles.buttonDisabled]}
+              onPress={() => onOAuthPress("apple")}
+              disabled={isLoading}
+            >
+              <Text style={styles.oauthButtonText}>Apple</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>Already have an account? </Text>
           <Link href="/(auth)/sign-in" asChild>
@@ -235,6 +289,40 @@ const styles = StyleSheet.create({
   link: {
     color: "#FF6B35",
     fontSize: 14,
+    fontWeight: "600",
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E5E7EB",
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: "#6B7280",
+    fontSize: 14,
+  },
+  oauthContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 8,
+  },
+  oauthButton: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+  },
+  oauthButtonText: {
+    color: "#2D3436",
+    fontSize: 16,
     fontWeight: "600",
   },
 });

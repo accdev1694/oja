@@ -12,6 +12,8 @@ export default defineSchema({
     // Oja-specific
     defaultBudget: v.optional(v.number()),
     currency: v.string(),
+    country: v.optional(v.string()),
+    cuisinePreferences: v.optional(v.array(v.string())),
 
     // Settings
     preferences: v.optional(

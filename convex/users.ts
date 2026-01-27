@@ -59,6 +59,19 @@ export const getCurrent = query({
 });
 
 /**
+ * Get user by Clerk ID
+ */
+export const getByClerkId = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .unique();
+  },
+});
+
+/**
  * Update user profile
  */
 export const update = mutation({
@@ -99,6 +112,43 @@ export const update = mutation({
     if (args.preferences !== undefined) updates.preferences = args.preferences;
 
     await ctx.db.patch(user._id, updates);
+    return await ctx.db.get(user._id);
+  },
+});
+
+/**
+ * Set onboarding data (name, country, cuisinePreferences)
+ */
+export const setOnboardingData = mutation({
+  args: {
+    name: v.string(),
+    country: v.string(),
+    cuisinePreferences: v.array(v.string()),
+    defaultBudget: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    await ctx.db.patch(user._id, {
+      name: args.name,
+      country: args.country,
+      cuisinePreferences: args.cuisinePreferences,
+      defaultBudget: args.defaultBudget,
+      updatedAt: Date.now(),
+    });
+
     return await ctx.db.get(user._id);
   },
 });
