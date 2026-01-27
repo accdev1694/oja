@@ -21,14 +21,14 @@
 
 # ARCHITECTURE NOTE:
 # ==================
-# v1 (PWA with Next.js + Supabase) was archived on 2026-01-26
-# All v1 stories moved to _bmad-output/v1-archive/
+# v1 (PWA with Next.js + Supabase) was deleted on 2026-01-27
 # This file tracks v2 (Expo + Convex + Clerk) implementation only
 
 development_status:
   # Phase 0: Project Setup (Manual - not story-driven)
-  phase-0-setup: in-progress
-  # Tasks 0.1-0.3 complete, 0.4 pending service setup
+  phase-0-setup: done
+  # All tasks 0.1-0.4 complete (Expo, Convex, Clerk, Integration verified)
+  # See: _bmad-output/implementation-artifacts/v2-build-progress.md
 
   # Epics & Stories will be created via /bmad:bmm:workflows:create-epics-and-stories
   # Based on:
@@ -36,3 +36,5 @@ development_status:
   #   - PRD: _bmad-output/planning-artifacts/prd.md
   #   - Architecture v2: _bmad-output/planning-artifacts/architecture-v2-expo-convex.md
   #   - UX Design: _bmad-output/planning-artifacts/ux-design-specification.md
+  #   - Coding Conventions: _bmad-output/planning-artifacts/coding-conventions-expo.md
+  #   - Security Guidelines: _bmad-output/planning-artifacts/security-guidelines-expo.md
