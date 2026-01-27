@@ -1,106 +1,127 @@
-/**
- * AdaptiveCard Component
- *
- * Platform and tier-adaptive card component
- * - Premium tier: Liquid Glass blur (iOS) or elevated surface (Android)
- * - Enhanced tier: Gradient backgrounds
- * - Baseline tier: Solid colors with simple shadows
- */
+import React from "react";
+import { View, StyleSheet, Platform, ViewStyle, StyleProp } from "react-native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { useDeviceCapabilities } from "@/hooks/useDeviceCapabilities";
+import { getDesignTokens, applyPlatformAdjustments } from "@/lib/design/tokens";
 
-import { StyleSheet, View, ViewProps } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useDeviceCapabilities } from '@/hooks/useDeviceCapabilities';
-
-interface AdaptiveCardProps extends ViewProps {
-  /**
-   * Blur intensity (only used on premium iOS)
-   * @default 50
-   */
-  intensity?: number;
-
-  /**
-   * Background color (used for enhanced/baseline tiers)
-   * @default '#FFFAF8'
-   */
-  backgroundColor?: string;
-
-  /**
-   * Shadow size
-   * @default 'medium'
-   */
-  shadowSize?: 'small' | 'medium' | 'large';
+export interface AdaptiveCardProps {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  elevation?: "sm" | "md" | "lg";
+  blurIntensity?: number;
 }
 
+/**
+ * AdaptiveCard - Platform and tier-adaptive card component
+ *
+ * Premium tier (iOS 16+):
+ * - Liquid Glass blur effect with translucent background
+ * - High-quality shadows
+ * - Smooth animations
+ *
+ * Enhanced tier (Android 12+, iOS 14-15):
+ * - Gradient background mimicking blur
+ * - Medium shadows
+ * - Standard animations
+ *
+ * Baseline tier (older devices):
+ * - Solid color background
+ * - Minimal shadows
+ * - Simple animations
+ *
+ * @example
+ * <AdaptiveCard elevation="md">
+ *   <Text>Content here</Text>
+ * </AdaptiveCard>
+ */
 export function AdaptiveCard({
   children,
-  intensity = 50,
-  backgroundColor = '#FFFAF8',
-  shadowSize = 'medium',
   style,
-  ...props
+  elevation = "md",
+  blurIntensity,
 }: AdaptiveCardProps) {
-  const { tier, supportsBlur, platform, tokens } = useDeviceCapabilities();
+  const { tier, supportsBlur } = useDeviceCapabilities();
+  const tokens = applyPlatformAdjustments(getDesignTokens(tier));
 
-  const shadowStyle = tokens.shadow[shadowSize];
+  const shadowStyle = tokens.shadow[elevation];
+  const containerStyle: ViewStyle = {
+    borderRadius: tokens.borderRadius.md,
+    overflow: "hidden",
+    ...shadowStyle,
+  };
 
-  // PREMIUM TIER: iOS with blur support
-  if (tier === 'premium' && supportsBlur && platform === 'ios') {
+  // Premium tier: Liquid Glass blur
+  if (supportsBlur && tier === "premium") {
     return (
-      <BlurView
-        intensity={intensity}
-        tint="light"
-        style={[
-          styles.premiumCard,
-          {
-            borderRadius: tokens.borderRadius.card,
-          },
-          style,
-        ]}
-        {...props}
-      >
-        {children}
-      </BlurView>
+      <View style={[containerStyle, style]}>
+        <BlurView
+          intensity={blurIntensity ?? tokens.blur.intensity}
+          tint={tokens.blur.tint}
+          style={styles.blurContainer}
+        >
+          <View
+            style={[
+              styles.content,
+              {
+                backgroundColor: "rgba(255, 255, 255, 0.1)",
+                padding: tokens.spacing.md,
+              },
+            ]}
+          >
+            {children}
+          </View>
+        </BlurView>
+      </View>
     );
   }
 
-  // ENHANCED TIER: Gradient fallback (looks similar to blur)
-  if (tier === 'enhanced') {
+  // Enhanced tier: Gradient fallback
+  if (tier === "enhanced") {
     return (
-      <LinearGradient
-        colors={['rgba(255,250,248,0.98)', 'rgba(255,250,248,0.95)']}
-        style={[
-          styles.enhancedCard,
-          {
-            borderRadius: tokens.borderRadius.card,
-            ...shadowStyle,
-          },
-          platform === 'ios' && styles.iosEnhanced,
-          platform === 'android' && styles.androidEnhanced,
-          style,
-        ]}
-        {...props}
-      >
-        {children}
-      </LinearGradient>
+      <View style={[containerStyle, style]}>
+        <LinearGradient
+          colors={[
+            "rgba(255, 255, 255, 0.95)",
+            "rgba(255, 250, 248, 0.98)",
+            "rgba(255, 255, 255, 1)",
+          ]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientContainer}
+        >
+          <View
+            style={[
+              styles.content,
+              {
+                padding: tokens.spacing.md,
+                borderWidth: 1,
+                borderColor: tokens.colors.border,
+                borderRadius: tokens.borderRadius.md,
+              },
+            ]}
+          >
+            {children}
+          </View>
+        </LinearGradient>
+      </View>
     );
   }
 
-  // BASELINE TIER or PREMIUM ANDROID: Solid background
+  // Baseline tier: Solid background
   return (
     <View
       style={[
-        styles.baselineCard,
+        containerStyle,
+        styles.solidContainer,
         {
-          backgroundColor,
-          borderRadius: tokens.borderRadius.card,
-          ...shadowStyle,
+          backgroundColor: tokens.colors.surface,
+          padding: tokens.spacing.md,
+          borderWidth: 1,
+          borderColor: tokens.colors.border,
         },
-        platform === 'ios' && styles.iosBaseline,
-        platform === 'android' && styles.androidBaseline,
         style,
       ]}
-      {...props}
     >
       {children}
     </View>
@@ -108,34 +129,16 @@ export function AdaptiveCard({
 }
 
 const styles = StyleSheet.create({
-  // Premium iOS (Liquid Glass)
-  premiumCard: {
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.3)',
+  blurContainer: {
+    flex: 1,
   },
-
-  // Enhanced tier (gradient)
-  enhancedCard: {
-    overflow: 'hidden',
+  gradientContainer: {
+    flex: 1,
   },
-  iosEnhanced: {
-    borderWidth: 0.5,
-    borderColor: 'rgba(0,0,0,0.08)',
+  solidContainer: {
+    // Base styles for solid background
   },
-  androidEnhanced: {
-    // Elevation set via shadowStyle
-  },
-
-  // Baseline tier (solid)
-  baselineCard: {
-    overflow: 'hidden',
-  },
-  iosBaseline: {
-    borderWidth: 0.5,
-    borderColor: 'rgba(0,0,0,0.1)',
-  },
-  androidBaseline: {
-    // Elevation set via shadowStyle
+  content: {
+    flex: 1,
   },
 });

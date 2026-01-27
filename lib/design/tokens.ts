@@ -1,281 +1,313 @@
+import { Platform } from "react-native";
+import type { DeviceTier } from "@/lib/capabilities/deviceTier";
+
 /**
- * Design Tokens System
+ * Design tokens adapted for each device tier
  *
- * Platform-adaptive and tier-aware design tokens
- * Provides consistent styling across different device capabilities
+ * Premium: iOS Liquid Glass aesthetic
+ * Enhanced: Material You with gradients
+ * Baseline: Simplified solid colors
  */
 
-import { DeviceTier } from '@/lib/capabilities/deviceTier';
-
-/**
- * Platform type
- */
-export type Platform = 'ios' | 'android' | 'web';
-
-/**
- * Design tokens for a specific tier and platform
- */
 export interface DesignTokens {
   // Border radius
   borderRadius: {
-    small: number;
-    medium: number;
-    large: number;
-    card: number;
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
   };
 
-  // Blur intensity (0 if not supported)
-  blur: {
-    subtle: number;
-    medium: number;
-    strong: number;
-  };
-
-  // Shadow configuration
+  // Shadows
   shadow: {
-    small: ShadowConfig;
-    medium: ShadowConfig;
-    large: ShadowConfig;
+    sm: {
+      shadowColor: string;
+      shadowOffset: { width: number; height: number };
+      shadowOpacity: number;
+      shadowRadius: number;
+      elevation: number;
+    };
+    md: {
+      shadowColor: string;
+      shadowOffset: { width: number; height: number };
+      shadowOpacity: number;
+      shadowRadius: number;
+      elevation: number;
+    };
+    lg: {
+      shadowColor: string;
+      shadowOffset: { width: number; height: number };
+      shadowOpacity: number;
+      shadowRadius: number;
+      elevation: number;
+    };
   };
 
-  // Animation durations (ms)
-  animation: {
-    fast: number;
-    normal: number;
-    slow: number;
-  };
-
-  // Spacing scale
+  // Spacing
   spacing: {
     xs: number;
     sm: number;
     md: number;
     lg: number;
     xl: number;
+    xxl: number;
+  };
+
+  // Colors
+  colors: {
+    background: string;
+    surface: string;
+    surfaceElevated: string;
+    border: string;
+    text: {
+      primary: string;
+      secondary: string;
+      tertiary: string;
+    };
+    brand: {
+      primary: string;
+      secondary: string;
+      tertiary: string;
+    };
+  };
+
+  // Blur (iOS only)
+  blur: {
+    intensity: number;
+    tint: "light" | "dark" | "default";
   };
 }
 
-interface ShadowConfig {
-  elevation?: number; // Android
-  shadowColor: string;
-  shadowOffset: { width: number; height: number };
-  shadowOpacity: number;
-  shadowRadius: number;
-}
+/**
+ * Premium tier tokens - iOS Liquid Glass
+ */
+const premiumTokens: DesignTokens = {
+  borderRadius: {
+    sm: 12,
+    md: 16,
+    lg: 24,
+    xl: 32,
+  },
+
+  shadow: {
+    sm: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    md: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    lg: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.15,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+  },
+
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    xxl: 48,
+  },
+
+  colors: {
+    background: "#FFFAF8", // Warm white
+    surface: "rgba(255, 255, 255, 0.75)", // Translucent for blur
+    surfaceElevated: "rgba(255, 255, 255, 0.85)",
+    border: "rgba(0, 0, 0, 0.06)",
+    text: {
+      primary: "#2D3436",
+      secondary: "#636E72",
+      tertiary: "#95A5A6",
+    },
+    brand: {
+      primary: "#FF6B35", // Oja orange
+      secondary: "#FFB800", // Golden accent
+      tertiary: "#FF8C61",
+    },
+  },
+
+  blur: {
+    intensity: 80,
+    tint: "light",
+  },
+};
 
 /**
- * Get design tokens for specific tier and platform
+ * Enhanced tier tokens - Material You with gradients
  */
-export function getTokensForTier(tier: DeviceTier, platform: Platform): DesignTokens {
-  const baseTokens = getBaseTokens(platform);
+const enhancedTokens: DesignTokens = {
+  borderRadius: {
+    sm: 12,
+    md: 16,
+    lg: 20,
+    xl: 28,
+  },
 
+  shadow: {
+    sm: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 3,
+      elevation: 2,
+    },
+    md: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 6,
+      elevation: 4,
+    },
+    lg: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      elevation: 6,
+    },
+  },
+
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    xxl: 48,
+  },
+
+  colors: {
+    background: "#FFFAF8",
+    surface: "#FFFFFF",
+    surfaceElevated: "#FFFFFF",
+    border: "rgba(0, 0, 0, 0.08)",
+    text: {
+      primary: "#2D3436",
+      secondary: "#636E72",
+      tertiary: "#95A5A6",
+    },
+    brand: {
+      primary: "#FF6B35",
+      secondary: "#FFB800",
+      tertiary: "#FF8C61",
+    },
+  },
+
+  blur: {
+    intensity: 0,
+    tint: "default",
+  },
+};
+
+/**
+ * Baseline tier tokens - Simplified solid colors
+ */
+const baselineTokens: DesignTokens = {
+  borderRadius: {
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+  },
+
+  shadow: {
+    sm: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 2,
+      elevation: 1,
+    },
+    md: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    lg: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+  },
+
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    xxl: 48,
+  },
+
+  colors: {
+    background: "#FFFAF8",
+    surface: "#FFFFFF",
+    surfaceElevated: "#F8F9FA",
+    border: "rgba(0, 0, 0, 0.1)",
+    text: {
+      primary: "#2D3436",
+      secondary: "#636E72",
+      tertiary: "#95A5A6",
+    },
+    brand: {
+      primary: "#FF6B35",
+      secondary: "#FFB800",
+      tertiary: "#FF8C61",
+    },
+  },
+
+  blur: {
+    intensity: 0,
+    tint: "default",
+  },
+};
+
+/**
+ * Get design tokens for a specific device tier
+ */
+export function getDesignTokens(tier: DeviceTier): DesignTokens {
   switch (tier) {
-    case 'premium':
-      return {
-        ...baseTokens,
-        borderRadius: {
-          small: platform === 'ios' ? 12 : 8,
-          medium: platform === 'ios' ? 16 : 12,
-          large: platform === 'ios' ? 24 : 16,
-          card: platform === 'ios' ? 20 : 18,
-        },
-        blur: {
-          subtle: 30,
-          medium: 50,
-          strong: 80,
-        },
-        shadow: {
-          small: {
-            elevation: platform === 'android' ? 2 : undefined,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-          },
-          medium: {
-            elevation: platform === 'android' ? 4 : undefined,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.12,
-            shadowRadius: 12,
-          },
-          large: {
-            elevation: platform === 'android' ? 8 : undefined,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.15,
-            shadowRadius: 16,
-          },
-        },
-        animation: {
-          fast: 150,
-          normal: 300,
-          slow: 500,
-        },
-      };
-
-    case 'enhanced':
-      return {
-        ...baseTokens,
-        borderRadius: {
-          small: platform === 'ios' ? 10 : 8,
-          medium: platform === 'ios' ? 14 : 12,
-          large: platform === 'ios' ? 20 : 16,
-          card: platform === 'ios' ? 18 : 16,
-        },
-        blur: {
-          subtle: 0, // No blur on enhanced tier
-          medium: 0,
-          strong: 0,
-        },
-        shadow: {
-          small: {
-            elevation: platform === 'android' ? 1 : undefined,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.08,
-            shadowRadius: 3,
-          },
-          medium: {
-            elevation: platform === 'android' ? 3 : undefined,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-          },
-          large: {
-            elevation: platform === 'android' ? 6 : undefined,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.12,
-            shadowRadius: 12,
-          },
-        },
-        animation: {
-          fast: 100,
-          normal: 200,
-          slow: 350,
-        },
-      };
-
-    case 'baseline':
-      return {
-        ...baseTokens,
-        borderRadius: {
-          small: 8,
-          medium: 12,
-          large: 16,
-          card: 16,
-        },
-        blur: {
-          subtle: 0, // No blur on baseline
-          medium: 0,
-          strong: 0,
-        },
-        shadow: {
-          small: {
-            elevation: platform === 'android' ? 1 : undefined,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.06,
-            shadowRadius: 2,
-          },
-          medium: {
-            elevation: platform === 'android' ? 2 : undefined,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 4,
-          },
-          large: {
-            elevation: platform === 'android' ? 3 : undefined,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.1,
-            shadowRadius: 6,
-          },
-        },
-        animation: {
-          fast: 50,
-          normal: 150,
-          slow: 250,
-        },
-      };
+    case "premium":
+      return premiumTokens;
+    case "enhanced":
+      return enhancedTokens;
+    case "baseline":
+      return baselineTokens;
   }
 }
 
 /**
- * Base tokens shared across all tiers
+ * Platform-specific adjustments
  */
-function getBaseTokens(platform: Platform): DesignTokens {
-  return {
-    borderRadius: {
-      small: 8,
-      medium: 12,
-      large: 16,
-      card: 16,
-    },
-    blur: {
-      subtle: 0,
-      medium: 0,
-      strong: 0,
-    },
-    shadow: {
-      small: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-      medium: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
-      large: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
-    },
-    animation: {
-      fast: 100,
-      normal: 200,
-      slow: 300,
-    },
-    spacing: {
-      xs: 4,
-      sm: 8,
-      md: 16,
-      lg: 24,
-      xl: 32,
-    },
-  };
+export function applyPlatformAdjustments(tokens: DesignTokens): DesignTokens {
+  if (Platform.OS === "android") {
+    // Android uses elevation instead of shadows
+    return {
+      ...tokens,
+      shadow: {
+        sm: { ...tokens.shadow.sm, shadowOpacity: 0 },
+        md: { ...tokens.shadow.md, shadowOpacity: 0 },
+        lg: { ...tokens.shadow.lg, shadowOpacity: 0 },
+      },
+    };
+  }
+
+  return tokens;
 }
-
-/**
- * Oja brand colors (shared across all platforms and tiers)
- */
-export const colors = {
-  // Primary brand color
-  primary: '#FF6B35',
-  primaryLight: '#FF8F66',
-  primaryDark: '#E84A1A',
-
-  // Background
-  background: '#FFFAF8',
-  surface: '#FFFFFF',
-
-  // Text
-  text: '#2D3436',
-  textSecondary: '#636E72',
-  textTertiary: '#B2BEC3',
-
-  // Semantic colors
-  success: '#10B981',
-  warning: '#F59E0B',
-  danger: '#EF4444',
-  info: '#3B82F6',
-
-  // Stock levels
-  stockStocked: '#10B981',
-  stockGood: '#3B82F6',
-  stockLow: '#F59E0B',
-  stockOut: '#EF4444',
-
-  // Budget status (Safe Zone)
-  budgetSafe: '#10B981',
-  budgetWarning: '#F59E0B',
-  budgetDanger: '#EF4444',
-
-  // Borders
-  border: '#E5E7EB',
-  borderLight: '#F3F4F6',
-};
