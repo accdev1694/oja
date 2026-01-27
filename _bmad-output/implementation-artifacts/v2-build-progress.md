@@ -10,7 +10,7 @@
 | Phase | Status | Progress |
 |-------|--------|----------|
 | 0. Project Setup | ✅ Complete | 4/4 |
-| 0.5. Epic & Story Design | ✅ Complete | 2/3 |
+| 0.5. Epic & Story Design | ✅ Complete | 3/3 |
 | 1. Foundation & Authentication (Epic 1) | ⏳ Pending | 0/? |
 | 2. Pantry Stock Tracker (Epic 2) | ⏳ Pending | 0/? |
 | 3. Shopping Lists with Budget Control (Epic 3) | ⏳ Pending | 0/? |
@@ -93,7 +93,7 @@
 
 - [x] **0.5.1** Validate prerequisites (PRD, Architecture, UX Design)
 - [x] **0.5.2** Design epic structure (8 user-value-focused epics)
-- [ ] **0.5.3** Create user stories for all epics
+- [x] **0.5.3** Create user stories for all epics (47 stories total)
 
 ### What's Done
 
@@ -136,13 +136,28 @@
 - MCP servers configured: Clerk, Convex, Stripe, GitHub, Context7, Neon, Playwright
 - Documentation-first implementation: ALWAYS use Context7 + Expo Skills before coding
 
+**User Stories (47 stories total):**
+- Epic 1: Foundation & Authentication (9 stories)
+- Epic 2: Pantry Stock Tracker (6 stories)
+- Epic 3: Shopping Lists with Budget Control (10 stories)
+- Epic 4: Partner Mode & Collaboration (5 stories) - with bidirectional approval
+- Epic 5: Receipt Intelligence & Price History (6 stories)
+- Epic 6: Insights, Gamification & Progress (3 stories)
+- Epic 7: Subscription, Payments & Loyalty (3 stories)
+- Epic 8: Admin Dashboard & Operations (5 stories)
+
+**Key Story Highlights:**
+- Hybrid AI pantry seeding (60% local + 40% cultural items)
+- Bidirectional approval workflow for partners
+- Smart suggestions with Jina AI embeddings
+- Gamification (streaks, savings jar, challenges)
+- Loyalty points system (receipt scans → subscription discounts)
+
 ### Next Steps
 
-1. **Create User Stories (Step 3):**
-   - Break down each epic into detailed user stories
-   - Define acceptance criteria for each story
-   - Estimate story points
-   - Create story files in `_bmad-output/implementation-artifacts/stories/`
+1. **Sprint Planning:**
+   - Run `/bmad:bmm:workflows:sprint-planning` to create sprint-status.yaml
+   - Begin implementation with Epic 1 stories
 
 ---
 
