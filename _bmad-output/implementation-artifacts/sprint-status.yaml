@@ -42,7 +42,7 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   # Epic 1: Foundation & Authentication (9 stories)
   # Phase 0 (Project Setup) completed: Expo + Routing + Clerk + Convex base
-  epic-1: in-progress
+  epic-1: done
   1-1-project-foundation-routing-setup: done  # ✅ Expo 55 + TypeScript + Routing + Reanimated 4.1.1 configured
   1-2-clerk-authentication-integration: done  # ✅ Email/password + Google/Apple OAuth + verification flow
   1-3-convex-backend-user-schema: done  # ✅ Schema + queries (getCurrent, getByClerkId) + mutations (getOrCreate, update, setOnboardingData)
@@ -51,7 +51,7 @@ development_status:
   1-6-haptic-feedback-system: done  # ✅ safeHaptics wrapper with 7 types + graceful degradation + support caching
   1-7-location-detection-multi-select-cuisine-preferences: done  # ✅ Location detection + 15 countries + 14 cuisines + multi-select + haptic feedback
   1-8-ai-powered-hybrid-pantry-seeding-with-gemini: done  # ✅ OpenAI integration + 200 hybrid items (60% local + 40% cultural) + loading/error states
-  1-9-seed-item-review-customization: ready-for-dev
+  1-9-seed-item-review-customization: done  # ✅ Grid view + category grouping + checkboxes + haptic feedback + bulk save mutation
   epic-1-retrospective: optional
 
   # Epic 2: Pantry Stock Tracker (6 stories)
