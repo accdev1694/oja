@@ -115,6 +115,8 @@ export default function ListDetailScreen() {
   const addFromPantryOut = useMutation(api.listItems.addFromPantryOut);
   const toggleBudgetLock = useMutation(api.shoppingLists.toggleBudgetLock);
   const updateList = useMutation(api.shoppingLists.update);
+  const addItemMidShop = useMutation(api.listItems.addItemMidShop);
+  const impulseUsage = useQuery(api.listItems.getImpulseUsage, { listId: id });
 
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState("");
@@ -125,6 +127,13 @@ export default function ListDetailScreen() {
   const [showEditBudgetModal, setShowEditBudgetModal] = useState(false);
   const [editBudgetValue, setEditBudgetValue] = useState("");
   const [isSavingBudget, setIsSavingBudget] = useState(false);
+
+  // Mid-shop add flow state
+  const [showMidShopModal, setShowMidShopModal] = useState(false);
+  const [midShopItemName, setMidShopItemName] = useState("");
+  const [midShopItemPrice, setMidShopItemPrice] = useState(0);
+  const [midShopItemQuantity, setMidShopItemQuantity] = useState(1);
+  const [isAddingMidShop, setIsAddingMidShop] = useState(false);
 
   // Loading state
   if (list === undefined || items === undefined) {
@@ -371,7 +380,12 @@ export default function ListDetailScreen() {
             text: "Add as Separate",
             onPress: async () => {
               setIsAddingItem(true);
-              await addAsNewItem();
+              // If in shopping mode with budget, show mid-shop modal
+              if (list?.status === "shopping" && budget > 0) {
+                openMidShopModal();
+              } else {
+                await addAsNewItem();
+              }
               setIsAddingItem(false);
             },
           },
@@ -380,9 +394,90 @@ export default function ListDetailScreen() {
       return;
     }
 
+    // If in shopping mode with budget, show mid-shop modal
+    if (list?.status === "shopping" && budget > 0) {
+      openMidShopModal();
+      return;
+    }
+
     setIsAddingItem(true);
     await addAsNewItem();
     setIsAddingItem(false);
+  }
+
+  // Mid-shop modal handlers
+  function openMidShopModal() {
+    const itemName = newItemName.trim();
+    const quantity = parseInt(newItemQuantity) || 1;
+    const price = parseFloat(newItemPrice) || 0;
+
+    setMidShopItemName(itemName);
+    setMidShopItemQuantity(quantity);
+    setMidShopItemPrice(price);
+    setShowMidShopModal(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }
+
+  function closeMidShopModal() {
+    setShowMidShopModal(false);
+    setMidShopItemName("");
+    setMidShopItemPrice(0);
+    setMidShopItemQuantity(1);
+  }
+
+  async function handleMidShopAdd(source: "budget" | "impulse" | "next_trip") {
+    if (!midShopItemName) return;
+
+    setIsAddingMidShop(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const result = await addItemMidShop({
+        listId: id,
+        name: midShopItemName,
+        estimatedPrice: midShopItemPrice,
+        quantity: midShopItemQuantity,
+        source,
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Show appropriate confirmation
+      if (source === "budget") {
+        Alert.alert("Added to Budget", `"${midShopItemName}" added to your list`);
+      } else if (source === "impulse") {
+        Alert.alert("Added from Impulse Fund", `"${midShopItemName}" added using impulse fund`);
+      } else if (source === "next_trip") {
+        Alert.alert("Saved for Later", `"${midShopItemName}" added to pantry for next trip`);
+      }
+
+      // Clear the form
+      setNewItemName("");
+      setNewItemQuantity("1");
+      setNewItemPrice("");
+      closeMidShopModal();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+      if (errorMessage === "BUDGET_EXCEEDED") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert(
+          "Budget Exceeded",
+          "This item would exceed your budget + impulse fund. Try using the impulse fund or defer to next trip."
+        );
+      } else if (errorMessage === "IMPULSE_EXCEEDED") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert(
+          "Impulse Fund Exceeded",
+          "Not enough remaining in your impulse fund. Try adding to budget or defer to next trip."
+        );
+      } else {
+        console.error("Failed to add mid-shop item:", error);
+        Alert.alert("Error", "Failed to add item");
+      }
+    } finally {
+      setIsAddingMidShop(false);
+    }
   }
 
   async function handleRemoveItem(itemId: Id<"listItems">, itemName: string) {
@@ -860,6 +955,165 @@ export default function ListDetailScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Mid-Shop Add Flow Modal */}
+      <Modal
+        visible={showMidShopModal}
+        transparent
+        animationType="slide"
+        onRequestClose={closeMidShopModal}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={closeMidShopModal} />
+          <View style={styles.midShopModalContent}>
+            {/* Header */}
+            <View style={styles.midShopHeader}>
+              <View style={styles.midShopIconContainer}>
+                <MaterialCommunityIcons
+                  name="cart-plus"
+                  size={28}
+                  color={colors.accent.primary}
+                />
+              </View>
+              <View style={styles.midShopHeaderText}>
+                <Text style={styles.midShopTitle}>Add "{midShopItemName}"?</Text>
+                <Text style={styles.midShopSubtitle}>
+                  {midShopItemPrice > 0
+                    ? `Est. £${(midShopItemPrice * midShopItemQuantity).toFixed(2)}`
+                    : "No price set"}
+                  {midShopItemQuantity > 1 && ` (×${midShopItemQuantity})`}
+                </Text>
+              </View>
+            </View>
+
+            {/* Budget Status */}
+            <View style={styles.midShopBudgetStatus}>
+              <View style={styles.midShopBudgetRow}>
+                <Text style={styles.midShopBudgetLabel}>Current Total</Text>
+                <Text style={styles.midShopBudgetValue}>£{currentTotal.toFixed(2)}</Text>
+              </View>
+              <View style={styles.midShopBudgetRow}>
+                <Text style={styles.midShopBudgetLabel}>Budget</Text>
+                <Text style={styles.midShopBudgetValue}>£{budget.toFixed(2)}</Text>
+              </View>
+              <View style={styles.midShopBudgetRow}>
+                <Text style={styles.midShopBudgetLabel}>Remaining</Text>
+                <Text style={[
+                  styles.midShopBudgetValue,
+                  remainingBudget < 0 && styles.midShopBudgetNegative
+                ]}>
+                  £{remainingBudget.toFixed(2)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Option Cards */}
+            <View style={styles.midShopOptions}>
+              {/* Option 1: Add to Budget */}
+              <Pressable
+                style={[
+                  styles.midShopOptionCard,
+                  isAddingMidShop && styles.midShopOptionDisabled,
+                ]}
+                onPress={() => handleMidShopAdd("budget")}
+                disabled={isAddingMidShop}
+              >
+                <View style={[styles.midShopOptionIcon, { backgroundColor: `${colors.accent.primary}15` }]}>
+                  <MaterialCommunityIcons
+                    name="wallet-outline"
+                    size={24}
+                    color={colors.accent.primary}
+                  />
+                </View>
+                <View style={styles.midShopOptionText}>
+                  <Text style={styles.midShopOptionTitle}>Add to Budget</Text>
+                  <Text style={styles.midShopOptionDesc}>
+                    Counts toward £{budget.toFixed(0)} limit
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={24}
+                  color={colors.text.tertiary}
+                />
+              </Pressable>
+
+              {/* Option 2: Use Impulse Fund */}
+              <Pressable
+                style={[
+                  styles.midShopOptionCard,
+                  isAddingMidShop && styles.midShopOptionDisabled,
+                ]}
+                onPress={() => handleMidShopAdd("impulse")}
+                disabled={isAddingMidShop}
+              >
+                <View style={[styles.midShopOptionIcon, { backgroundColor: `${colors.accent.secondary}15` }]}>
+                  <MaterialCommunityIcons
+                    name="lightning-bolt"
+                    size={24}
+                    color={colors.accent.secondary}
+                  />
+                </View>
+                <View style={styles.midShopOptionText}>
+                  <Text style={styles.midShopOptionTitle}>Use Impulse Fund</Text>
+                  <Text style={styles.midShopOptionDesc}>
+                    £{(impulseUsage?.remaining ?? impulseFund).toFixed(2)} remaining
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={24}
+                  color={colors.text.tertiary}
+                />
+              </Pressable>
+
+              {/* Option 3: Add to Next Trip */}
+              <Pressable
+                style={[
+                  styles.midShopOptionCard,
+                  isAddingMidShop && styles.midShopOptionDisabled,
+                ]}
+                onPress={() => handleMidShopAdd("next_trip")}
+                disabled={isAddingMidShop}
+              >
+                <View style={[styles.midShopOptionIcon, { backgroundColor: `${colors.text.tertiary}15` }]}>
+                  <MaterialCommunityIcons
+                    name="clock-outline"
+                    size={24}
+                    color={colors.text.secondary}
+                  />
+                </View>
+                <View style={styles.midShopOptionText}>
+                  <Text style={styles.midShopOptionTitle}>Add to Next Trip</Text>
+                  <Text style={styles.midShopOptionDesc}>
+                    Save to pantry for later
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={24}
+                  color={colors.text.tertiary}
+                />
+              </Pressable>
+            </View>
+
+            {/* Cancel Button */}
+            <GlassButton
+              variant="secondary"
+              onPress={closeMidShopModal}
+              style={styles.midShopCancelButton}
+            >
+              Cancel
+            </GlassButton>
+
+            {isAddingMidShop && (
+              <View style={styles.midShopLoadingOverlay}>
+                <ActivityIndicator size="large" color={colors.accent.primary} />
+              </View>
+            )}
+          </View>
+        </View>
       </Modal>
     </GlassScreen>
   );
@@ -1421,5 +1675,117 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
+  },
+
+  // Mid-Shop Modal Styles
+  midShopModalContent: {
+    width: "90%",
+    maxWidth: 400,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  midShopHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  midShopIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: `${colors.accent.primary}15`,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  midShopHeaderText: {
+    flex: 1,
+  },
+  midShopTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  midShopSubtitle: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+  },
+  midShopBudgetStatus: {
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  midShopBudgetRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
+  midShopBudgetLabel: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+  },
+  midShopBudgetValue: {
+    ...typography.labelLarge,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  midShopBudgetNegative: {
+    color: colors.semantic.danger,
+  },
+  midShopOptions: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  midShopOptionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    gap: spacing.md,
+  },
+  midShopOptionDisabled: {
+    opacity: 0.5,
+  },
+  midShopOptionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  midShopOptionText: {
+    flex: 1,
+  },
+  midShopOptionTitle: {
+    ...typography.labelLarge,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  midShopOptionDesc: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+  },
+  midShopCancelButton: {
+    marginTop: spacing.xs,
+  },
+  midShopLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: borderRadius.xl,
   },
 });
