@@ -119,3 +119,25 @@ development_status:
   8-4-receipt-price-moderation: ready-for-dev
   8-5-product-catalog-system-health: ready-for-dev
   epic-8-retrospective: optional
+
+  # Epic UI: Glass UI Redesign (17 stories) - PRIORITY
+  # Based on moodboard analysis - glassmorphism design system
+  epic-ui-glass: in-progress
+  ui-1-glass-design-foundation: done  # ✅ glassTokens.ts with colors, typography, spacing, animations
+  ui-2-glasscard-component: done  # ✅ GlassCard with 4 variants + blur support
+  ui-3-glassbutton-component: done  # ✅ GlassButton with 4 variants + icons + loading
+  ui-4-glassinput-component: ready-for-dev
+  ui-5-glasslistitem-component: ready-for-dev
+  ui-6-glasscheckbox-component: ready-for-dev
+  ui-7-glassprogressbar-component: ready-for-dev
+  ui-8-glasstabbar-component: ready-for-dev
+  ui-9-glassheader-component: ready-for-dev
+  ui-10-gradient-background: done  # ✅ GradientBackground + GlassScreen wrapper
+  ui-11-update-pantry-screen: ready-for-dev
+  ui-12-update-lists-screen: ready-for-dev
+  ui-13-update-list-detail-screen: ready-for-dev
+  ui-14-update-profile-screen: ready-for-dev
+  ui-15-update-onboarding-flow: ready-for-dev
+  ui-16-loading-error-states: ready-for-dev
+  ui-17-animation-polish: ready-for-dev
+  epic-ui-glass-retrospective: optional

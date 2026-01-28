@@ -10,10 +10,14 @@
 
 | Phase | Status |
 |-------|--------|
-| 0. Project Setup | 🔄 In Progress |
-| 1-7. Epics | ⏳ Pending |
+| 0. Project Setup | ✅ Complete |
+| 1. Foundation & Auth | ✅ Complete |
+| 2. Pantry Tracker | ✅ Complete |
+| 3. Shopping Lists | 🔄 In Progress |
+| **UI. Glass Redesign** | **🔄 In Progress (Priority)** |
+| 4-8. Remaining Epics | ⏳ Pending |
 
-**Current Task:** Initialize Expo + Convex + Clerk
+**Current Priority:** Glass UI Redesign (based on moodboard analysis)
 
 ---
 
@@ -28,8 +32,21 @@
 3. **`_bmad-output/planning-artifacts/architecture-v2-expo-convex.md`** - Full architecture specification
 4. **`_bmad-output/planning-artifacts/coding-conventions-expo.md`** - Coding patterns and standards
 5. **`_bmad-output/planning-artifacts/security-guidelines-expo.md`** - Security requirements
+6. **`_bmad-output/planning-artifacts/ui-redesign-glass-system.md`** - Glass UI Design System (NEW)
+7. **`_bmad-output/planning-artifacts/epics/epic-ui-redesign.md`** - UI Redesign Epic & Stories (NEW)
 
 **CRITICAL**: All agents MUST read `project-context.md` before writing ANY code.
+
+### Glass UI Design System
+
+The app uses a glassmorphism-inspired design with:
+- **Deep blue gradient backgrounds** (#0B1426 to #1A2744)
+- **Semi-transparent glass cards** with blur effects
+- **Teal accent color** (#00D4AA) for primary actions
+- **Validated MaterialCommunityIcons** only
+
+Import glass components from: `@/components/ui/glass`
+Import design tokens from: `@/lib/design/glassTokens`
 
 ---
 
@@ -56,7 +73,7 @@ To invoke the project lead:
 | **Framework** | Expo SDK 55+ | React Native with native capabilities |
 | **Language** | TypeScript (strict) | Type-safe development |
 | **Routing** | Expo Router | File-based native navigation |
-| **UI Design** | Platform-Adaptive | iOS: Liquid Glass / Android: Material You |
+| **UI Design** | Glass Design System | Glassmorphism with deep blue gradients |
 | **Authentication** | Clerk | Managed auth with social providers |
 | **Backend** | Convex | Real-time database + serverless functions |
 | **AI/ML** | Jina AI + Gemini | Embeddings + Receipt parsing |
@@ -343,11 +360,14 @@ C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.json
 | Architecture v2 | `_bmad-output/planning-artifacts/architecture-v2-expo-convex.md` |
 | Coding Conventions | `_bmad-output/planning-artifacts/coding-conventions-expo.md` |
 | Security Guidelines | `_bmad-output/planning-artifacts/security-guidelines-expo.md` |
-| UX Design | `_bmad-output/planning-artifacts/ux-design-specification.md` |
+| **Glass UI Design** | `_bmad-output/planning-artifacts/ui-redesign-glass-system.md` |
+| **UI Redesign Epic** | `_bmad-output/planning-artifacts/epics/epic-ui-redesign.md` |
 | Epics & Stories | `_bmad-output/planning-artifacts/epics/` |
 | Sprint Status | `_bmad-output/implementation-artifacts/sprint-status.yaml` |
 | Story Files | `_bmad-output/implementation-artifacts/stories/` |
 | Developer Reference | `project-context.md` |
+| **Glass Tokens** | `lib/design/glassTokens.ts` |
+| **Glass Components** | `components/ui/glass/` |
 
 ---
 
@@ -411,4 +431,4 @@ C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.json
 
 ---
 
-_This file configures Claude Code for the Oja project. Updated 2026-01-26 for architecture pivot._
+_This file configures Claude Code for the Oja project. Updated 2026-01-28 for Glass UI redesign._
