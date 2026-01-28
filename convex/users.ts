@@ -181,3 +181,25 @@ export const completeOnboarding = mutation({
     return true;
   },
 });
+
+/**
+ * DEVELOPMENT ONLY: Clear all users and pantry items
+ */
+export const clearAllData = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Delete all users
+    const users = await ctx.db.query("users").collect();
+    for (const user of users) {
+      await ctx.db.delete(user._id);
+    }
+
+    // Delete all pantry items
+    const pantryItems = await ctx.db.query("pantryItems").collect();
+    for (const item of pantryItems) {
+      await ctx.db.delete(item._id);
+    }
+
+    return { deletedUsers: users.length, deletedPantryItems: pantryItems.length };
+  },
+});

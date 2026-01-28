@@ -219,8 +219,8 @@ export const create = mutation({
 export const generateEmbedding = action({
   args: { text: v.string() },
   handler: async (ctx, args) => {
-    // Call OpenAI, Stripe, etc.
-    const result = await openai.embeddings.create({ ... });
+    // Call Jina AI, Stripe, Gemini, etc.
+    const result = await jinaAI.embeddings.create({ ... });
     return result.data[0].embedding;
   },
 });

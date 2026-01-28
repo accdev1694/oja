@@ -128,7 +128,7 @@ oja/
 │   ├── listItems.ts             # List item functions
 │   ├── receipts.ts              # Receipt functions
 │   ├── files.ts                 # File storage
-│   ├── ai.ts                    # AI/OpenAI functions
+│   ├── ai.ts                    # AI/Gemini functions
 │   └── lib/                     # Backend utilities
 │
 ├── project-context.md            # Developer reference (READ FIRST)
@@ -233,8 +233,8 @@ export const create = mutation({
 export const generateEmbedding = action({
   args: { text: v.string() },
   handler: async (ctx, args) => {
-    // Call OpenAI, etc.
-    return await openai.embeddings.create({ ... });
+    // Call Jina AI for embeddings
+    return await jinaAI.embeddings.create({ ... });
   },
 });
 ```
@@ -392,7 +392,8 @@ C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.json
 | Database | Supabase Postgres | Convex (document) |
 | Backend | Supabase Edge Functions | Convex Functions |
 | Styling | Tailwind CSS | Liquid Glass + StyleSheet |
-| AI | Gemini | OpenAI |
+| AI | Gemini 1.5 Flash | Gemini 1.5 Flash (pantry seeding, receipt parsing) |
+| Embeddings | N/A | Jina AI (semantic search, 1M tokens/mo free) |
 | Offline | IndexedDB + Service Workers | Convex + optimistic updates |
 
 ### What Stays the Same

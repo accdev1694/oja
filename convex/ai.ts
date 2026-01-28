@@ -1,10 +1,8 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export interface SeedItem {
   name: string;
@@ -70,23 +68,21 @@ IMPORTANT:
 - Exactly ${totalItems} items`;
 
     try {
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are a grocery inventory expert who generates realistic pantry lists. Always respond with valid JSON only.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.8, // Some creativity for variety
-        max_tokens: 4000,
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: {
+          temperature: 0.8, // Some creativity for variety
+          maxOutputTokens: 4000,
+        },
       });
 
-      const responseText = completion.choices[0]?.message?.content?.trim();
+      const fullPrompt = `You are a grocery inventory expert who generates realistic pantry lists. Always respond with valid JSON only.
+
+${prompt}`;
+
+      const result = await model.generateContent(fullPrompt);
+      const response = await result.response;
+      const responseText = response.text().trim();
 
       if (!responseText) {
         throw new Error("No response from AI");

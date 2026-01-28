@@ -1,4 +1,11 @@
-import * as Location from "expo-location";
+import { Platform } from "react-native";
+
+// Conditionally import expo-location only on native platforms
+// expo-location doesn't support web, so we use dynamic require
+let Location: any = null;
+if (Platform.OS !== "web") {
+  Location = require("expo-location");
+}
 
 export interface LocationData {
   country: string;
@@ -67,6 +74,11 @@ export function getCountryName(countryCode: string): string {
  * Request location permission from user
  */
 export async function requestLocationPermission(): Promise<boolean> {
+  // Web platform doesn't support location permissions via expo-location
+  if (Platform.OS === "web" || !Location) {
+    return false;
+  }
+
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     return status === "granted";
@@ -81,10 +93,19 @@ export async function requestLocationPermission(): Promise<boolean> {
  * Falls back to UK if detection fails
  */
 export async function detectLocation(): Promise<LocationData> {
+  // Web platform: return default immediately
+  if (Platform.OS === "web" || !Location) {
+    return {
+      country: "United Kingdom",
+      countryCode: "GB",
+      currency: "GBP",
+    };
+  }
+
   try {
     // Request permission
     const hasPermission = await requestLocationPermission();
-    
+
     if (!hasPermission) {
       // Permission denied - return default
       return {
@@ -125,7 +146,7 @@ export async function detectLocation(): Promise<LocationData> {
     };
   } catch (error) {
     console.error("Location detection failed:", error);
-    
+
     // Fallback to default
     return {
       country: "United Kingdom",

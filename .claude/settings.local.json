@@ -45,7 +45,22 @@
       "mcp__context7__query-docs",
       "Bash(npx convex codegen)",
       "Skill(bmad:bmm:agents:pm)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(npx convex dev --once)",
+      "Bash(npx convex:*)",
+      "Bash(node test-integration.js:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npx expo start)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(curl:*)",
+      "Bash(ipconfig:*)",
+      "Bash(npx expo start:*)",
+      "Bash(xargs:*)",
+      "Bash(rm:*)",
+      "Bash(taskkill:*)",
+      "mcp__playwright__browser_navigate",
+      "Bash(npm uninstall:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

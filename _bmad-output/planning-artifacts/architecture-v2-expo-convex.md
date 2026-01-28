@@ -1703,7 +1703,7 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 **Rationale:**
 - 1024 dimensions (efficient and high quality)
 - 1M tokens/month free tier (generous for MVP)
-- Rivals OpenAI quality at zero cost
+- High quality embeddings at zero cost
 - Enables smart suggestions, receipt matching
 - Convex has native vector index support
 

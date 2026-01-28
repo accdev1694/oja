@@ -102,10 +102,11 @@ oja/
 │   ├── listItems.ts             # List item functions
 │   ├── receipts.ts              # Receipt functions
 │   ├── files.ts                 # File storage
-│   ├── ai.ts                    # AI/OpenAI functions
+│   ├── ai.ts                    # AI/Gemini + Jina functions
 │   ├── seed.ts                  # Development seeding
 │   └── lib/                     # Backend utilities
-│       ├── openai.ts
+│       ├── gemini.ts            # Gemini AI client
+│       ├── jina.ts              # Jina AI embeddings
 │       ├── photos.ts
 │       └── validators.ts
 │
