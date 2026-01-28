@@ -73,7 +73,7 @@ development_status:
   3-5-budget-lock-mode: done  # ✅ Lock toggle + blocking modal + validation + haptics
   3-6-impulse-fund-10-buffer: done  # ✅ 10% buffer + color coding + budget lock respects impulse fund
   3-7-mid-shop-add-flow-3-options: done  # ✅ Mid-shop modal with 3 options (budget/impulse/next trip)
-  3-8-check-off-items-while-shopping: ready-for-dev
+  3-8-check-off-items-while-shopping: done  # ✅ Actual price entry modal when checking items in shopping mode
   3-9-item-priority-with-swipe-gestures: ready-for-dev
   3-10-smart-suggestions-with-jina-ai: ready-for-dev
   epic-3-retrospective: optional

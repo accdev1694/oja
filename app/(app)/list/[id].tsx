@@ -135,6 +135,15 @@ export default function ListDetailScreen() {
   const [midShopItemQuantity, setMidShopItemQuantity] = useState(1);
   const [isAddingMidShop, setIsAddingMidShop] = useState(false);
 
+  // Check-off with actual price state (Story 3.8)
+  const [showActualPriceModal, setShowActualPriceModal] = useState(false);
+  const [checkingItemId, setCheckingItemId] = useState<Id<"listItems"> | null>(null);
+  const [checkingItemName, setCheckingItemName] = useState("");
+  const [checkingItemEstPrice, setCheckingItemEstPrice] = useState(0);
+  const [checkingItemQuantity, setCheckingItemQuantity] = useState(1);
+  const [actualPriceValue, setActualPriceValue] = useState("");
+  const [isSavingActualPrice, setIsSavingActualPrice] = useState(false);
+
   // Loading state
   if (list === undefined || items === undefined) {
     return (
@@ -278,11 +287,82 @@ export default function ListDetailScreen() {
 
   async function handleToggleItem(itemId: Id<"listItems">) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Find the item
+    const item = items?.find((i) => i._id === itemId);
+    if (!item) return;
+
+    // If in shopping mode and checking (not unchecking), show actual price modal
+    if (list?.status === "shopping" && !item.isChecked) {
+      setCheckingItemId(itemId);
+      setCheckingItemName(item.name);
+      setCheckingItemEstPrice(item.estimatedPrice || 0);
+      setCheckingItemQuantity(item.quantity);
+      setActualPriceValue(item.estimatedPrice?.toString() || "");
+      setShowActualPriceModal(true);
+      return;
+    }
+
+    // Otherwise, just toggle (for unchecking or non-shopping mode)
     try {
       await toggleChecked({ id: itemId });
     } catch (error) {
       console.error("Failed to toggle item:", error);
       Alert.alert("Error", "Failed to update item");
+    }
+  }
+
+  // Actual price modal handlers (Story 3.8)
+  function closeActualPriceModal() {
+    setShowActualPriceModal(false);
+    setCheckingItemId(null);
+    setCheckingItemName("");
+    setCheckingItemEstPrice(0);
+    setCheckingItemQuantity(1);
+    setActualPriceValue("");
+  }
+
+  async function handleConfirmActualPrice() {
+    if (!checkingItemId) return;
+
+    setIsSavingActualPrice(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    const actualPrice = parseFloat(actualPriceValue) || 0;
+
+    try {
+      // Update the item with actual price
+      await updateItem({
+        id: checkingItemId,
+        actualPrice: actualPrice,
+      });
+
+      // Then toggle checked
+      await toggleChecked({ id: checkingItemId });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      closeActualPriceModal();
+    } catch (error) {
+      console.error("Failed to check off item:", error);
+      Alert.alert("Error", "Failed to check off item");
+    } finally {
+      setIsSavingActualPrice(false);
+    }
+  }
+
+  async function handleSkipActualPrice() {
+    if (!checkingItemId) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      // Just toggle checked without actual price
+      await toggleChecked({ id: checkingItemId });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      closeActualPriceModal();
+    } catch (error) {
+      console.error("Failed to check off item:", error);
+      Alert.alert("Error", "Failed to check off item");
     }
   }
 
@@ -1115,6 +1195,126 @@ export default function ListDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Actual Price Modal (Story 3.8) */}
+      <Modal
+        visible={showActualPriceModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeActualPriceModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={closeActualPriceModal} />
+          <View style={styles.actualPriceModalContent}>
+            {/* Header */}
+            <View style={styles.actualPriceHeader}>
+              <View style={styles.actualPriceIconContainer}>
+                <MaterialCommunityIcons
+                  name="check-circle-outline"
+                  size={28}
+                  color={colors.semantic.success}
+                />
+              </View>
+              <View style={styles.actualPriceHeaderText}>
+                <Text style={styles.actualPriceTitle}>Check Off Item</Text>
+                <Text style={styles.actualPriceItemName} numberOfLines={1}>
+                  {checkingItemName}
+                  {checkingItemQuantity > 1 && ` (×${checkingItemQuantity})`}
+                </Text>
+              </View>
+            </View>
+
+            {/* Estimated Price Info */}
+            {checkingItemEstPrice > 0 && (
+              <View style={styles.estimatedPriceInfo}>
+                <Text style={styles.estimatedPriceLabel}>Estimated price:</Text>
+                <Text style={styles.estimatedPriceValue}>
+                  £{(checkingItemEstPrice * checkingItemQuantity).toFixed(2)}
+                </Text>
+              </View>
+            )}
+
+            {/* Actual Price Input */}
+            <View style={styles.actualPriceInputGroup}>
+              <Text style={styles.actualPriceInputLabel}>Actual Price (per item)</Text>
+              <View style={styles.actualPriceInputContainer}>
+                <Text style={styles.actualPriceCurrency}>£</Text>
+                <TextInput
+                  style={styles.actualPriceInput}
+                  value={actualPriceValue}
+                  onChangeText={setActualPriceValue}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor={colors.text.tertiary}
+                  autoFocus
+                />
+              </View>
+              {checkingItemQuantity > 1 && actualPriceValue && (
+                <Text style={styles.actualPriceTotalHint}>
+                  Total: £{((parseFloat(actualPriceValue) || 0) * checkingItemQuantity).toFixed(2)}
+                </Text>
+              )}
+            </View>
+
+            {/* Price Difference */}
+            {checkingItemEstPrice > 0 && actualPriceValue && (
+              <View style={styles.priceDifferenceContainer}>
+                {(() => {
+                  const actualPrice = parseFloat(actualPriceValue) || 0;
+                  const diff = (actualPrice - checkingItemEstPrice) * checkingItemQuantity;
+                  const isMore = diff > 0;
+                  const isLess = diff < 0;
+
+                  if (Math.abs(diff) < 0.01) return null;
+
+                  return (
+                    <View style={[
+                      styles.priceDifferenceBadge,
+                      isMore ? styles.priceDifferenceMore : styles.priceDifferenceLess
+                    ]}>
+                      <MaterialCommunityIcons
+                        name={isMore ? "arrow-up" : "arrow-down"}
+                        size={16}
+                        color={isMore ? colors.semantic.danger : colors.semantic.success}
+                      />
+                      <Text style={[
+                        styles.priceDifferenceText,
+                        isMore ? styles.priceDifferenceMoreText : styles.priceDifferenceLessText
+                      ]}>
+                        £{Math.abs(diff).toFixed(2)} {isMore ? "more" : "less"} than estimated
+                      </Text>
+                    </View>
+                  );
+                })()}
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            <View style={styles.actualPriceActions}>
+              <GlassButton
+                variant="secondary"
+                onPress={handleSkipActualPrice}
+                style={styles.actualPriceButton}
+                disabled={isSavingActualPrice}
+              >
+                Skip Price
+              </GlassButton>
+              <GlassButton
+                variant="primary"
+                onPress={handleConfirmActualPrice}
+                loading={isSavingActualPrice}
+                disabled={isSavingActualPrice}
+                style={styles.actualPriceButton}
+              >
+                Check Off
+              </GlassButton>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </GlassScreen>
   );
 }
@@ -1787,5 +1987,133 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderRadius: borderRadius.xl,
+  },
+
+  // Actual Price Modal Styles (Story 3.8)
+  actualPriceModalContent: {
+    width: "85%",
+    maxWidth: 360,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  actualPriceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  actualPriceIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: `${colors.semantic.success}15`,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  actualPriceHeaderText: {
+    flex: 1,
+  },
+  actualPriceTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  actualPriceItemName: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+  },
+  estimatedPriceInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  estimatedPriceLabel: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+  },
+  estimatedPriceValue: {
+    ...typography.labelLarge,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  actualPriceInputGroup: {
+    marginBottom: spacing.md,
+  },
+  actualPriceInputLabel: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  actualPriceInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.lg,
+    borderWidth: 2,
+    borderColor: colors.semantic.success,
+    paddingHorizontal: spacing.md,
+  },
+  actualPriceCurrency: {
+    ...typography.headlineLarge,
+    color: colors.semantic.success,
+    marginRight: spacing.xs,
+  },
+  actualPriceInput: {
+    flex: 1,
+    ...typography.headlineLarge,
+    color: colors.text.primary,
+    paddingVertical: spacing.md,
+  },
+  actualPriceTotalHint: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginTop: spacing.xs,
+    textAlign: "right",
+  },
+  priceDifferenceContainer: {
+    marginBottom: spacing.lg,
+  },
+  priceDifferenceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  priceDifferenceMore: {
+    backgroundColor: `${colors.semantic.danger}15`,
+  },
+  priceDifferenceLess: {
+    backgroundColor: `${colors.semantic.success}15`,
+  },
+  priceDifferenceText: {
+    ...typography.bodyMedium,
+    fontWeight: "500",
+  },
+  priceDifferenceMoreText: {
+    color: colors.semantic.danger,
+  },
+  priceDifferenceLessText: {
+    color: colors.semantic.success,
+  },
+  actualPriceActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  actualPriceButton: {
+    flex: 1,
   },
 });
