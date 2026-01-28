@@ -23,9 +23,7 @@ export default function AppLayout() {
       <Stack.Screen
         name="list/[id]"
         options={{
-          headerShown: true,
-          headerTitle: "Shopping List",
-          headerBackTitle: "Back",
+          headerShown: false, // Using custom GlassHeader
         }}
       />
     </Stack>
