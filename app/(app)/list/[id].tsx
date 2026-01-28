@@ -9,6 +9,7 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -113,11 +114,17 @@ export default function ListDetailScreen() {
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
   const addFromPantryOut = useMutation(api.listItems.addFromPantryOut);
   const toggleBudgetLock = useMutation(api.shoppingLists.toggleBudgetLock);
+  const updateList = useMutation(api.shoppingLists.update);
 
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState("");
   const [newItemQuantity, setNewItemQuantity] = useState("1");
   const [newItemPrice, setNewItemPrice] = useState("");
+
+  // Edit budget modal state
+  const [showEditBudgetModal, setShowEditBudgetModal] = useState(false);
+  const [editBudgetValue, setEditBudgetValue] = useState("");
+  const [isSavingBudget, setIsSavingBudget] = useState(false);
 
   // Loading state
   if (list === undefined || items === undefined) {
@@ -221,6 +228,42 @@ export default function ListDetailScreen() {
     } catch (error) {
       console.error("Failed to toggle budget lock:", error);
       Alert.alert("Error", "Failed to update budget lock");
+    }
+  }
+
+  // Edit budget handlers
+  function handleOpenEditBudget() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEditBudgetValue(budget > 0 ? budget.toString() : "50");
+    setShowEditBudgetModal(true);
+  }
+
+  function handleCloseEditBudget() {
+    setShowEditBudgetModal(false);
+    setEditBudgetValue("");
+  }
+
+  async function handleSaveBudget() {
+    const newBudget = parseFloat(editBudgetValue) || 0;
+    if (newBudget < 0) {
+      Alert.alert("Error", "Budget cannot be negative");
+      return;
+    }
+
+    setIsSavingBudget(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await updateList({
+        id,
+        budget: newBudget > 0 ? newBudget : undefined,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      handleCloseEditBudget();
+    } catch (error) {
+      console.error("Failed to update budget:", error);
+      Alert.alert("Error", "Failed to update budget");
+    } finally {
+      setIsSavingBudget(false);
     }
   }
 
@@ -467,7 +510,39 @@ export default function ListDetailScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Budget Card */}
+          {/* Budget Card - Set Budget Prompt when no budget */}
+          {budget === 0 && (
+            <Pressable onPress={handleOpenEditBudget}>
+              <GlassCard
+                variant="bordered"
+                accentColor={colors.accent.primary}
+                style={styles.setBudgetCard}
+              >
+                <View style={styles.setBudgetContent}>
+                  <View style={styles.setBudgetIcon}>
+                    <MaterialCommunityIcons
+                      name="wallet-plus-outline"
+                      size={32}
+                      color={colors.accent.primary}
+                    />
+                  </View>
+                  <View style={styles.setBudgetText}>
+                    <Text style={styles.setBudgetTitle}>Set Your Budget</Text>
+                    <Text style={styles.setBudgetSubtitle}>
+                      Track spending and stay on target
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={24}
+                    color={colors.text.tertiary}
+                  />
+                </View>
+              </GlassCard>
+            </Pressable>
+          )}
+
+          {/* Budget Card - Budget Tracker when budget is set */}
           {budget > 0 && (
             <GlassCard
               variant="bordered"
@@ -493,20 +568,35 @@ export default function ListDetailScreen() {
                     </View>
                   )}
                 </View>
-                <Pressable
-                  style={[
-                    styles.lockButton,
-                    budgetLocked && styles.lockButtonActive,
-                  ]}
-                  onPress={handleToggleBudgetLock}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <MaterialCommunityIcons
-                    name={budgetLocked ? "lock-open-variant-outline" : "lock-outline"}
-                    size={18}
-                    color={budgetLocked ? colors.semantic.warning : colors.text.secondary}
-                  />
-                </Pressable>
+                <View style={styles.budgetActions}>
+                  {/* Edit Budget Button */}
+                  <Pressable
+                    style={styles.editBudgetButton}
+                    onPress={handleOpenEditBudget}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialCommunityIcons
+                      name="pencil-outline"
+                      size={18}
+                      color={colors.text.secondary}
+                    />
+                  </Pressable>
+                  {/* Lock Budget Button */}
+                  <Pressable
+                    style={[
+                      styles.lockButton,
+                      budgetLocked && styles.lockButtonActive,
+                    ]}
+                    onPress={handleToggleBudgetLock}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialCommunityIcons
+                      name={budgetLocked ? "lock-open-variant-outline" : "lock-outline"}
+                      size={18}
+                      color={budgetLocked ? colors.semantic.warning : colors.text.secondary}
+                    />
+                  </Pressable>
+                </View>
               </View>
 
               {/* Main Budget Progress */}
@@ -690,6 +780,87 @@ export default function ListDetailScreen() {
           <View style={styles.bottomSpacer} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Edit Budget Modal */}
+      <Modal
+        visible={showEditBudgetModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseEditBudget}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={handleCloseEditBudget} />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <MaterialCommunityIcons
+                name="wallet-outline"
+                size={24}
+                color={colors.accent.primary}
+              />
+              <Text style={styles.modalTitle}>
+                {budget > 0 ? "Edit Budget" : "Set Budget"}
+              </Text>
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalInputLabel}>Budget Amount</Text>
+              <View style={styles.budgetInputContainer}>
+                <Text style={styles.currencySymbol}>£</Text>
+                <TextInput
+                  style={styles.budgetInput}
+                  value={editBudgetValue}
+                  onChangeText={setEditBudgetValue}
+                  keyboardType="decimal-pad"
+                  placeholder="50.00"
+                  placeholderTextColor={colors.text.tertiary}
+                  autoFocus
+                />
+              </View>
+            </View>
+
+            {/* Impulse Fund Preview */}
+            {parseFloat(editBudgetValue) > 0 && (
+              <View style={styles.impulseFundPreview}>
+                <View style={styles.impulseFundPreviewRow}>
+                  <MaterialCommunityIcons
+                    name="lightning-bolt"
+                    size={16}
+                    color={colors.accent.secondary}
+                  />
+                  <Text style={styles.impulseFundPreviewText}>
+                    +£{(parseFloat(editBudgetValue) * 0.1).toFixed(2)} impulse fund (10%)
+                  </Text>
+                </View>
+                <Text style={styles.impulseFundPreviewTotal}>
+                  Total spending limit: £{(parseFloat(editBudgetValue) * 1.1).toFixed(2)}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.modalActions}>
+              <GlassButton
+                variant="secondary"
+                onPress={handleCloseEditBudget}
+                style={styles.modalButton}
+              >
+                Cancel
+              </GlassButton>
+              <GlassButton
+                variant="primary"
+                onPress={handleSaveBudget}
+                loading={isSavingBudget}
+                disabled={isSavingBudget}
+                style={styles.modalButton}
+              >
+                {budget > 0 ? "Update" : "Set Budget"}
+              </GlassButton>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </GlassScreen>
   );
 }
@@ -1114,5 +1285,141 @@ const styles = StyleSheet.create({
     backgroundColor: `${colors.semantic.danger}15`,
     justifyContent: "center",
     alignItems: "center",
+  },
+
+  // Set Budget Card (when no budget)
+  setBudgetCard: {
+    marginBottom: spacing.md,
+  },
+  setBudgetContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  setBudgetIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: `${colors.accent.primary}15`,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  setBudgetText: {
+    flex: 1,
+  },
+  setBudgetTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  setBudgetSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+  },
+
+  // Budget Actions (edit + lock buttons)
+  budgetActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  editBudgetButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.glass.background,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  modalContent: {
+    width: "85%",
+    maxWidth: 360,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+  modalTitle: {
+    ...typography.headlineMedium,
+    color: colors.text.primary,
+  },
+  modalInputGroup: {
+    marginBottom: spacing.lg,
+  },
+  modalInputLabel: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  budgetInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    paddingHorizontal: spacing.md,
+  },
+  currencySymbol: {
+    ...typography.headlineLarge,
+    color: colors.accent.primary,
+    marginRight: spacing.xs,
+  },
+  budgetInput: {
+    flex: 1,
+    ...typography.headlineLarge,
+    color: colors.text.primary,
+    paddingVertical: spacing.md,
+  },
+  impulseFundPreview: {
+    backgroundColor: `${colors.accent.secondary}10`,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  impulseFundPreviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  impulseFundPreviewText: {
+    ...typography.bodyMedium,
+    color: colors.accent.secondary,
+    fontWeight: "500",
+  },
+  impulseFundPreviewTotal: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  modalButton: {
+    flex: 1,
   },
 });

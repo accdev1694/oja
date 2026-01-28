@@ -5,6 +5,10 @@ import {
   ScrollView,
   Alert,
   Pressable,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -39,6 +43,11 @@ export default function ListsScreen() {
   const deleteList = useMutation(api.shoppingLists.remove);
   const [isCreating, setIsCreating] = useState(false);
 
+  // Create list modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newListName, setNewListName] = useState("");
+  const [newListBudget, setNewListBudget] = useState("50");
+
   function formatDateTime(timestamp: number) {
     const date = new Date(timestamp);
     return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {
@@ -67,17 +76,43 @@ export default function ListsScreen() {
     ]);
   }
 
-  async function handleCreateList() {
-    setIsCreating(true);
+  function handleOpenCreateModal() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Set default name based on date
+    setNewListName(`Shopping List ${new Date().toLocaleDateString()}`);
+    setNewListBudget("50");
+    setShowCreateModal(true);
+  }
+
+  function handleCloseCreateModal() {
+    setShowCreateModal(false);
+    setNewListName("");
+    setNewListBudget("50");
+  }
+
+  async function handleCreateList() {
+    if (!newListName.trim()) {
+      Alert.alert("Error", "Please enter a list name");
+      return;
+    }
+
+    const budget = parseFloat(newListBudget) || 0;
+    if (budget < 0) {
+      Alert.alert("Error", "Budget cannot be negative");
+      return;
+    }
+
+    setIsCreating(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const listName = `Shopping List ${new Date().toLocaleDateString()}`;
       const listId = await createList({
-        name: listName,
-        budget: 50, // Default budget of £50
+        name: newListName.trim(),
+        budget: budget > 0 ? budget : undefined,
         budgetLocked: false,
       });
 
+      handleCloseCreateModal();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.push(`/list/${listId}`);
     } catch (error) {
       console.error("Failed to create list:", error);
@@ -112,9 +147,7 @@ export default function ListsScreen() {
             variant="primary"
             size="sm"
             icon="plus"
-            onPress={handleCreateList}
-            loading={isCreating}
-            disabled={isCreating}
+            onPress={handleOpenCreateModal}
           >
             New List
           </GlassButton>
@@ -125,7 +158,7 @@ export default function ListsScreen() {
       {lists.length === 0 ? (
         <View style={styles.emptyContainer}>
           <EmptyLists
-            onAction={handleCreateList}
+            onAction={handleOpenCreateModal}
             actionText="Create Your First List"
           />
         </View>
@@ -149,6 +182,100 @@ export default function ListsScreen() {
           <View style={styles.bottomSpacer} />
         </ScrollView>
       )}
+
+      {/* Create List Modal */}
+      <Modal
+        visible={showCreateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseCreateModal}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={handleCloseCreateModal} />
+          <View style={styles.modalContent}>
+            <GlassCard variant="elevated" style={styles.modalCard}>
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Create New List</Text>
+                <Pressable onPress={handleCloseCreateModal} hitSlop={8}>
+                  <MaterialCommunityIcons name="close" size={24} color={colors.text.secondary} />
+                </Pressable>
+              </View>
+
+              {/* List Name Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>List Name</Text>
+                <View style={styles.inputContainer}>
+                  <MaterialCommunityIcons name="clipboard-list" size={20} color={colors.text.tertiary} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={newListName}
+                    onChangeText={setNewListName}
+                    placeholder="e.g., Weekly Shop"
+                    placeholderTextColor={colors.text.tertiary}
+                    autoFocus
+                  />
+                </View>
+              </View>
+
+              {/* Budget Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Budget (£)</Text>
+                <View style={styles.inputContainer}>
+                  <MaterialCommunityIcons name="wallet-outline" size={20} color={colors.text.tertiary} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={newListBudget}
+                    onChangeText={setNewListBudget}
+                    placeholder="50"
+                    placeholderTextColor={colors.text.tertiary}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                <Text style={styles.inputHint}>
+                  Set to 0 for no budget tracking
+                </Text>
+              </View>
+
+              {/* Impulse Fund Preview */}
+              {parseFloat(newListBudget) > 0 && (
+                <View style={styles.impulseFundPreview}>
+                  <MaterialCommunityIcons name="lightning-bolt" size={16} color={colors.accent.secondary} />
+                  <Text style={styles.impulseFundPreviewText}>
+                    +£{(parseFloat(newListBudget) * 0.1).toFixed(2)} impulse fund (10%)
+                  </Text>
+                </View>
+              )}
+
+              {/* Action Buttons */}
+              <View style={styles.modalActions}>
+                <GlassButton
+                  variant="secondary"
+                  size="md"
+                  onPress={handleCloseCreateModal}
+                  style={styles.modalButton}
+                >
+                  Cancel
+                </GlassButton>
+                <GlassButton
+                  variant="primary"
+                  size="md"
+                  icon="plus"
+                  onPress={handleCreateList}
+                  loading={isCreating}
+                  disabled={isCreating}
+                  style={styles.modalButton}
+                >
+                  Create List
+                </GlassButton>
+              </View>
+            </GlassCard>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </GlassScreen>
   );
 }
@@ -445,5 +572,85 @@ const styles = StyleSheet.create({
   metaText: {
     ...typography.bodySmall,
     color: colors.text.tertiary,
+  },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+  },
+  modalContent: {
+    width: "90%",
+    maxWidth: 400,
+  },
+  modalCard: {
+    padding: spacing.lg,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.lg,
+  },
+  modalTitle: {
+    ...typography.headlineMedium,
+    color: colors.text.primary,
+  },
+  inputGroup: {
+    marginBottom: spacing.md,
+  },
+  inputLabel: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  textInput: {
+    flex: 1,
+    ...typography.bodyLarge,
+    color: colors.text.primary,
+    paddingVertical: spacing.md,
+  },
+  inputHint: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginTop: spacing.xs,
+  },
+  impulseFundPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: `${colors.accent.secondary}15`,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    marginBottom: spacing.lg,
+  },
+  impulseFundPreviewText: {
+    ...typography.bodySmall,
+    color: colors.accent.secondary,
+    fontWeight: "500",
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  modalButton: {
+    flex: 1,
   },
 });
