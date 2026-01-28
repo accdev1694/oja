@@ -112,6 +112,7 @@ export default function ListDetailScreen() {
   const startShopping = useMutation(api.shoppingLists.startShopping);
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
   const addFromPantryOut = useMutation(api.listItems.addFromPantryOut);
+  const toggleBudgetLock = useMutation(api.shoppingLists.toggleBudgetLock);
 
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState("");
@@ -167,6 +168,45 @@ export default function ListDetailScreen() {
   // Budget status
   const budget = list.budget || 0;
   const currentTotal = list.status === "shopping" ? actualTotal : estimatedTotal;
+  const budgetLocked = list.budgetLocked || false;
+  const remainingBudget = budget - currentTotal;
+
+  // Check if adding an item would exceed the budget
+  function wouldExceedBudget(itemPrice: number, quantity: number): boolean {
+    if (!budget || !budgetLocked) return false;
+    const itemTotal = itemPrice * quantity;
+    return (currentTotal + itemTotal) > budget;
+  }
+
+  // Show budget exceeded modal
+  function showBudgetExceededModal(itemName: string, itemTotal: number, onUnlock: () => void) {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    Alert.alert(
+      "Budget Locked",
+      `Adding "${itemName}" (£${itemTotal.toFixed(2)}) would exceed your budget of £${budget.toFixed(2)}.\n\nCurrent total: £${currentTotal.toFixed(2)}\nRemaining: £${remainingBudget.toFixed(2)}\n\nRemove items or unlock budget to continue.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unlock Budget",
+          onPress: async () => {
+            await handleToggleBudgetLock();
+            onUnlock();
+          },
+        },
+      ]
+    );
+  }
+
+  // Toggle budget lock
+  async function handleToggleBudgetLock() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await toggleBudgetLock({ id });
+    } catch (error) {
+      console.error("Failed to toggle budget lock:", error);
+      Alert.alert("Error", "Failed to update budget lock");
+    }
+  }
 
   async function handleToggleItem(itemId: Id<"listItems">) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -184,12 +224,32 @@ export default function ListDetailScreen() {
   }
 
   async function addAsNewItem() {
+    const itemName = newItemName.trim();
+    const quantity = parseInt(newItemQuantity) || 1;
+    const price = newItemPrice ? parseFloat(newItemPrice) : 0;
+    const itemTotal = price * quantity;
+
+    // Check budget lock
+    if (budgetLocked && budget > 0 && price > 0 && wouldExceedBudget(price, quantity)) {
+      showBudgetExceededModal(itemName, itemTotal, async () => {
+        // After unlocking, retry adding the item
+        setIsAddingItem(true);
+        await addItemToList(itemName, quantity, price || undefined);
+        setIsAddingItem(false);
+      });
+      return;
+    }
+
+    await addItemToList(itemName, quantity, price || undefined);
+  }
+
+  async function addItemToList(name: string, quantity: number, price?: number) {
     try {
       await addItem({
         listId: id,
-        name: newItemName.trim(),
-        quantity: parseInt(newItemQuantity) || 1,
-        estimatedPrice: newItemPrice ? parseFloat(newItemPrice) : undefined,
+        name,
+        quantity,
+        estimatedPrice: price,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -319,6 +379,29 @@ export default function ListDetailScreen() {
   }
 
   async function handleAddFromPantry() {
+    // Warn if budget is locked (can't block since we don't know prices)
+    if (budgetLocked && budget > 0) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Alert.alert(
+        "Budget Locked",
+        "Your budget is locked. Items from pantry will be added without prices. You may need to update prices manually.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Continue",
+            onPress: async () => {
+              await addFromPantryItems();
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    await addFromPantryItems();
+  }
+
+  async function addFromPantryItems() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       const result = await addFromPantryOut({ listId: id });
@@ -370,19 +453,35 @@ export default function ListDetailScreen() {
         >
           {/* Budget Card */}
           {budget > 0 && (
-            <GlassCard variant="bordered" accentColor={colors.accent.primary} style={styles.budgetCard}>
+            <GlassCard variant="bordered" accentColor={budgetLocked ? colors.semantic.warning : colors.accent.primary} style={styles.budgetCard}>
               <View style={styles.budgetHeader}>
                 <View style={styles.budgetLabelRow}>
                   <MaterialCommunityIcons
-                    name="wallet-outline"
+                    name={budgetLocked ? "lock" : "wallet-outline"}
                     size={20}
-                    color={colors.accent.primary}
+                    color={budgetLocked ? colors.semantic.warning : colors.accent.primary}
                   />
                   <Text style={styles.budgetLabel}>Budget Tracker</Text>
+                  {budgetLocked && (
+                    <View style={styles.lockedBadge}>
+                      <Text style={styles.lockedBadgeText}>LOCKED</Text>
+                    </View>
+                  )}
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: `${status.color}20` }]}>
-                  <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-                </View>
+                <Pressable
+                  style={[
+                    styles.lockButton,
+                    budgetLocked && styles.lockButtonActive,
+                  ]}
+                  onPress={handleToggleBudgetLock}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialCommunityIcons
+                    name={budgetLocked ? "lock-open-variant-outline" : "lock-outline"}
+                    size={18}
+                    color={budgetLocked ? colors.semantic.warning : colors.text.secondary}
+                  />
+                </Pressable>
               </View>
 
               <BudgetProgressBar
@@ -391,6 +490,12 @@ export default function ListDetailScreen() {
                 showAmounts
                 size="lg"
               />
+
+              {budgetLocked && remainingBudget > 0 && (
+                <Text style={styles.remainingNote}>
+                  £{remainingBudget.toFixed(2)} remaining before lock kicks in
+                </Text>
+              )}
 
               {list.status === "shopping" && estimatedTotal > 0 && (
                 <Text style={styles.estimateNote}>
@@ -684,6 +789,41 @@ const styles = StyleSheet.create({
   budgetLabel: {
     ...typography.labelLarge,
     color: colors.text.primary,
+  },
+  lockedBadge: {
+    backgroundColor: `${colors.semantic.warning}20`,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: spacing.xs,
+  },
+  lockedBadgeText: {
+    ...typography.labelSmall,
+    color: colors.semantic.warning,
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  lockButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.glass.background,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  lockButtonActive: {
+    backgroundColor: `${colors.semantic.warning}20`,
+    borderColor: colors.semantic.warning,
+  },
+  remainingNote: {
+    ...typography.bodySmall,
+    color: colors.semantic.warning,
+    marginTop: spacing.sm,
+    textAlign: "center",
+    fontWeight: "500",
   },
   statusBadge: {
     paddingHorizontal: spacing.sm,

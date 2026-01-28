@@ -273,6 +273,41 @@ export const startShopping = mutation({
 });
 
 /**
+ * Toggle budget lock mode
+ */
+export const toggleBudgetLock = mutation({
+  args: { id: v.id("shoppingLists") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const list = await ctx.db.get(args.id);
+    if (!list) {
+      throw new Error("List not found");
+    }
+
+    // Verify ownership
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user || list.userId !== user._id) {
+      throw new Error("Unauthorized");
+    }
+
+    await ctx.db.patch(args.id, {
+      budgetLocked: !list.budgetLocked,
+      updatedAt: Date.now(),
+    });
+
+    return await ctx.db.get(args.id);
+  },
+});
+
+/**
  * Complete shopping (change status to "completed")
  */
 export const completeShopping = mutation({
