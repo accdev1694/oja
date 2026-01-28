@@ -124,6 +124,10 @@ export default defineSchema({
     // Auto-added from pantry
     autoAdded: v.boolean(),
 
+    // Mid-shop add tracking
+    isImpulse: v.optional(v.boolean()), // Added from impulse fund
+    addedMidShop: v.optional(v.boolean()), // Added during shopping
+
     // Notes
     notes: v.optional(v.string()),
 
