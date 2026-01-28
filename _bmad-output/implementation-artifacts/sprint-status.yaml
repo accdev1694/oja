@@ -71,7 +71,7 @@ development_status:
   3-3-running-total-budget-display: done  # ✅ Running total with budget tracking
   3-4-safe-zone-indicator-color-glow: done  # ✅ Budget status with color indicators
   3-5-budget-lock-mode: done  # ✅ Lock toggle + blocking modal + validation + haptics
-  3-6-impulse-fund-10-buffer: ready-for-dev
+  3-6-impulse-fund-10-buffer: done  # ✅ 10% buffer + color coding + budget lock respects impulse fund
   3-7-mid-shop-add-flow-3-options: ready-for-dev
   3-8-check-off-items-while-shopping: ready-for-dev
   3-9-item-priority-with-swipe-gestures: ready-for-dev

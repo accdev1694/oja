@@ -169,21 +169,37 @@ export default function ListDetailScreen() {
   const budget = list.budget || 0;
   const currentTotal = list.status === "shopping" ? actualTotal : estimatedTotal;
   const budgetLocked = list.budgetLocked || false;
-  const remainingBudget = budget - currentTotal;
 
-  // Check if adding an item would exceed the budget
+  // Impulse Fund: 10% buffer
+  const impulseFund = budget > 0 ? budget * 0.1 : 0;
+  const totalLimit = budget + impulseFund; // Total spending limit with impulse fund
+  const remainingBudget = budget - currentTotal;
+  const remainingWithImpulse = totalLimit - currentTotal;
+
+  // Budget state for color coding
+  type BudgetState = "healthy" | "caution" | "impulse" | "exceeded";
+  const getBudgetState = (): BudgetState => {
+    if (currentTotal > totalLimit) return "exceeded";
+    if (currentTotal > budget) return "impulse"; // Using impulse fund
+    if (currentTotal > budget * 0.8) return "caution";
+    return "healthy";
+  };
+  const budgetState = getBudgetState();
+
+  // Check if adding an item would exceed the budget (with impulse fund)
   function wouldExceedBudget(itemPrice: number, quantity: number): boolean {
     if (!budget || !budgetLocked) return false;
     const itemTotal = itemPrice * quantity;
-    return (currentTotal + itemTotal) > budget;
+    // When locked, allow spending up to budget + impulse fund
+    return (currentTotal + itemTotal) > totalLimit;
   }
 
   // Show budget exceeded modal
   function showBudgetExceededModal(itemName: string, itemTotal: number, onUnlock: () => void) {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     Alert.alert(
-      "Budget Locked",
-      `Adding "${itemName}" (£${itemTotal.toFixed(2)}) would exceed your budget of £${budget.toFixed(2)}.\n\nCurrent total: £${currentTotal.toFixed(2)}\nRemaining: £${remainingBudget.toFixed(2)}\n\nRemove items or unlock budget to continue.`,
+      "Budget + Impulse Fund Exceeded",
+      `Adding "${itemName}" (£${itemTotal.toFixed(2)}) would exceed your total limit.\n\nBudget: £${budget.toFixed(2)}\nImpulse Fund (10%): £${impulseFund.toFixed(2)}\nTotal Limit: £${totalLimit.toFixed(2)}\n\nCurrent total: £${currentTotal.toFixed(2)}\nRemaining: £${remainingWithImpulse.toFixed(2)}\n\nRemove items or unlock budget to continue.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -453,7 +469,16 @@ export default function ListDetailScreen() {
         >
           {/* Budget Card */}
           {budget > 0 && (
-            <GlassCard variant="bordered" accentColor={budgetLocked ? colors.semantic.warning : colors.accent.primary} style={styles.budgetCard}>
+            <GlassCard
+              variant="bordered"
+              accentColor={
+                budgetState === "exceeded" ? colors.semantic.danger :
+                budgetState === "impulse" ? colors.semantic.warning :
+                budgetLocked ? colors.semantic.warning :
+                colors.accent.primary
+              }
+              style={styles.budgetCard}
+            >
               <View style={styles.budgetHeader}>
                 <View style={styles.budgetLabelRow}>
                   <MaterialCommunityIcons
@@ -484,6 +509,7 @@ export default function ListDetailScreen() {
                 </Pressable>
               </View>
 
+              {/* Main Budget Progress */}
               <BudgetProgressBar
                 spent={currentTotal}
                 budget={budget}
@@ -491,9 +517,58 @@ export default function ListDetailScreen() {
                 size="lg"
               />
 
-              {budgetLocked && remainingBudget > 0 && (
+              {/* Impulse Fund Display */}
+              <View style={styles.impulseFundContainer}>
+                <View style={styles.impulseFundRow}>
+                  <View style={styles.impulseFundLabel}>
+                    <MaterialCommunityIcons
+                      name="lightning-bolt"
+                      size={16}
+                      color={
+                        budgetState === "exceeded" ? colors.semantic.danger :
+                        budgetState === "impulse" ? colors.semantic.warning :
+                        colors.accent.secondary
+                      }
+                    />
+                    <Text style={styles.impulseFundText}>Impulse Fund (10%)</Text>
+                  </View>
+                  <Text style={[
+                    styles.impulseFundAmount,
+                    budgetState === "exceeded" && styles.impulseFundExceeded,
+                    budgetState === "impulse" && styles.impulseFundActive,
+                  ]}>
+                    £{impulseFund.toFixed(2)}
+                  </Text>
+                </View>
+
+                {/* Impulse Fund Status */}
+                {budgetState === "exceeded" ? (
+                  <View style={styles.impulseFundStatus}>
+                    <MaterialCommunityIcons name="alert-circle" size={14} color={colors.semantic.danger} />
+                    <Text style={[styles.impulseFundStatusText, { color: colors.semantic.danger }]}>
+                      Over total limit by £{Math.abs(remainingWithImpulse).toFixed(2)}
+                    </Text>
+                  </View>
+                ) : budgetState === "impulse" ? (
+                  <View style={styles.impulseFundStatus}>
+                    <MaterialCommunityIcons name="lightning-bolt" size={14} color={colors.semantic.warning} />
+                    <Text style={[styles.impulseFundStatusText, { color: colors.semantic.warning }]}>
+                      Using impulse fund: £{remainingWithImpulse.toFixed(2)} remaining
+                    </Text>
+                  </View>
+                ) : remainingBudget <= impulseFund ? (
+                  <View style={styles.impulseFundStatus}>
+                    <MaterialCommunityIcons name="information-outline" size={14} color={colors.text.tertiary} />
+                    <Text style={styles.impulseFundStatusText}>
+                      £{remainingWithImpulse.toFixed(2)} total remaining (includes impulse)
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {budgetLocked && remainingWithImpulse > 0 && budgetState !== "impulse" && budgetState !== "exceeded" && (
                 <Text style={styles.remainingNote}>
-                  £{remainingBudget.toFixed(2)} remaining before lock kicks in
+                  £{remainingBudget.toFixed(2)} budget + £{impulseFund.toFixed(2)} impulse available
                 </Text>
               )}
 
@@ -824,6 +899,47 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     textAlign: "center",
     fontWeight: "500",
+  },
+  impulseFundContainer: {
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.glass.border,
+  },
+  impulseFundRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  impulseFundLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  impulseFundText: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+  },
+  impulseFundAmount: {
+    ...typography.labelMedium,
+    color: colors.accent.secondary,
+    fontWeight: "600",
+  },
+  impulseFundActive: {
+    color: colors.semantic.warning,
+  },
+  impulseFundExceeded: {
+    color: colors.semantic.danger,
+  },
+  impulseFundStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  impulseFundStatusText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
   },
   statusBadge: {
     paddingHorizontal: spacing.sm,
