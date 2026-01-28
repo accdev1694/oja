@@ -55,13 +55,13 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Pantry Stock Tracker (6 stories)
-  epic-2: in-progress
+  epic-2: done
   2-1-pantry-schema-basic-crud-operations: done  # ✅ Pantry CRUD implemented with grid view
-  2-2-pantry-grid-view-with-categories: ready-for-dev
-  2-3-stock-level-management-tap-and-hold-picker: ready-for-dev
-  2-4-quick-swipe-to-decrease-stock: ready-for-dev
-  2-5-auto-add-out-items-to-shopping-list: ready-for-dev
-  2-6-search-filter-pantry-items: ready-for-dev
+  2-2-pantry-grid-view-with-categories: done  # ✅ Collapsible categories with item count + haptics
+  2-3-stock-level-management-tap-and-hold-picker: done  # ✅ Long-press picker with 4 stock levels
+  2-4-quick-swipe-to-decrease-stock: done  # ✅ Swipe left to decrease stock + haptics
+  2-5-auto-add-out-items-to-shopping-list: done  # ✅ Auto-add "out" items with toast notification
+  2-6-search-filter-pantry-items: done  # ✅ Search bar + stock level filter modal
   epic-2-retrospective: optional
 
   # Epic 3: Shopping Lists with Budget Control (10 stories)

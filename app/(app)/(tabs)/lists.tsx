@@ -3,12 +3,44 @@ import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState } from "react";
+import { Id } from "@/convex/_generated/dataModel";
+import * as Haptics from "expo-haptics";
 
 export default function ListsScreen() {
   const router = useRouter();
   const lists = useQuery(api.shoppingLists.getActive);
   const createList = useMutation(api.shoppingLists.create);
+  const deleteList = useMutation(api.shoppingLists.remove);
   const [isCreating, setIsCreating] = useState(false);
+
+  function formatDateTime(timestamp: number) {
+    const date = new Date(timestamp);
+    return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
+
+  function handleDeleteList(listId: Id<"shoppingLists">, listName: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      "Delete List",
+      `Are you sure you want to delete "${listName}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteList({ id: listId });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch (error) {
+              console.error("Failed to delete list:", error);
+              Alert.alert("Error", "Failed to delete shopping list");
+            }
+          },
+        },
+      ]
+    );
+  }
 
   async function handleCreateList() {
     setIsCreating(true);
@@ -73,14 +105,25 @@ export default function ListsScreen() {
             >
               <View style={styles.listHeader}>
                 <Text style={styles.listName}>{list.name}</Text>
-                <View style={[
-                  styles.statusBadge,
-                  list.status === "shopping" && styles.statusBadgeShopping,
-                  list.status === "completed" && styles.statusBadgeCompleted,
-                ]}>
-                  <Text style={styles.statusText}>
-                    {list.status === "shopping" ? "Shopping" : "Active"}
-                  </Text>
+                <View style={styles.headerActions}>
+                  <View style={[
+                    styles.statusBadge,
+                    list.status === "shopping" && styles.statusBadgeShopping,
+                    list.status === "completed" && styles.statusBadgeCompleted,
+                  ]}>
+                    <Text style={styles.statusText}>
+                      {list.status === "shopping" ? "Shopping" : "Active"}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDeleteList(list._id, list.name);
+                    }}
+                  >
+                    <Text style={styles.deleteButtonText}>🗑️</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -91,7 +134,7 @@ export default function ListsScreen() {
               )}
 
               <Text style={styles.dateText}>
-                Created {new Date(list.createdAt).toLocaleDateString()}
+                Created {formatDateTime(list.createdAt)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -190,6 +233,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#2D3436",
     flex: 1,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  deleteButtonText: {
+    fontSize: 18,
   },
   statusBadge: {
     backgroundColor: "#10B981",

@@ -26,6 +26,8 @@ export default function SignInScreen() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [code, setCode] = useState("");
 
   const onOAuthPress = useCallback(async (provider: "google" | "apple") => {
     try {
@@ -65,6 +67,21 @@ export default function SignInScreen() {
       if (signInAttempt.status === "complete") {
         await setActive({ session: signInAttempt.createdSessionId });
         router.replace("/(app)/(tabs)");
+      } else if (signInAttempt.status === "needs_first_factor") {
+        // Email not verified - prepare verification
+        const emailFactor = signInAttempt.supportedFirstFactors?.find(
+          (factor) => factor.strategy === "email_code"
+        );
+        if (emailFactor && "emailAddressId" in emailFactor) {
+          await signIn.prepareFirstFactor({
+            strategy: "email_code",
+            emailAddressId: emailFactor.emailAddressId,
+          });
+          setPendingVerification(true);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } else {
+          setError("Email verification required. Please check your email.");
+        }
       } else {
         setError("Sign in incomplete. Please try again.");
       }
@@ -74,7 +91,82 @@ export default function SignInScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoaded, emailAddress, password]);
+  }, [isLoaded, emailAddress, password, signIn]);
+
+  const onVerifyPress = useCallback(async () => {
+    if (!isLoaded) return;
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const signInAttempt = await signIn.attemptFirstFactor({
+        strategy: "email_code",
+        code,
+      });
+
+      if (signInAttempt.status === "complete") {
+        await setActive({ session: signInAttempt.createdSessionId });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.replace("/(app)/(tabs)");
+      } else {
+        setError("Verification incomplete. Please try again.");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } catch (err: any) {
+      const message = err?.errors?.[0]?.message || "Verification failed";
+      setError(message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoaded, code, signIn, setActive, router]);
+
+  if (pendingVerification) {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.container}
+      >
+        <View style={styles.content}>
+          <Text style={styles.title}>Verify your email</Text>
+          <Text style={styles.subtitle}>
+            We sent a verification code to {emailAddress}
+          </Text>
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
+          <TextInput
+            style={styles.input}
+            placeholder="Verification code"
+            placeholderTextColor="#9CA3AF"
+            value={code}
+            onChangeText={setCode}
+            keyboardType="number-pad"
+          />
+
+          <TouchableOpacity
+            style={[styles.button, isLoading && styles.buttonDisabled]}
+            onPress={onVerifyPress}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Verify</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => setPendingVerification(false)}
+          >
+            <Text style={styles.link}>Back to sign in</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -223,6 +315,10 @@ const styles = StyleSheet.create({
     color: "#FF6B35",
     fontSize: 14,
     fontWeight: "600",
+  },
+  backButton: {
+    alignItems: "center",
+    marginTop: 16,
   },
   divider: {
     flexDirection: "row",
