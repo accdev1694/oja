@@ -33,6 +33,7 @@ const CUISINES = [
 
 export default function CuisineSelectionScreen() {
   const router = useRouter();
+  const getOrCreateUser = useMutation(api.users.getOrCreate);
   const setOnboardingData = useMutation(api.users.setOnboardingData);
 
   const [isDetecting, setIsDetecting] = useState(true);
@@ -43,11 +44,20 @@ export default function CuisineSelectionScreen() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    detectUserLocation();
+    initializeUser();
   }, []);
 
-  async function detectUserLocation() {
+  async function initializeUser() {
     setIsDetecting(true);
+
+    // Create user record in Convex if it doesn't exist
+    try {
+      await getOrCreateUser({});
+    } catch (error) {
+      console.error("Failed to create user:", error);
+    }
+
+    // Detect user location
     const location = await detectLocation();
     setCountry(location.country);
     setCountryCode(location.countryCode);
