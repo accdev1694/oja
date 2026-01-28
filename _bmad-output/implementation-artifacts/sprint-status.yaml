@@ -55,8 +55,8 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Pantry Stock Tracker (6 stories)
-  epic-2: backlog
-  2-1-pantry-schema-basic-crud-operations: ready-for-dev
+  epic-2: in-progress
+  2-1-pantry-schema-basic-crud-operations: done  # ✅ Pantry CRUD implemented with grid view
   2-2-pantry-grid-view-with-categories: ready-for-dev
   2-3-stock-level-management-tap-and-hold-picker: ready-for-dev
   2-4-quick-swipe-to-decrease-stock: ready-for-dev
@@ -65,11 +65,11 @@ development_status:
   epic-2-retrospective: optional
 
   # Epic 3: Shopping Lists with Budget Control (10 stories)
-  epic-3: backlog
-  3-1-shopping-list-schema-basic-crud: ready-for-dev
-  3-2-add-items-to-list-search-from-pantry: ready-for-dev
-  3-3-running-total-budget-display: ready-for-dev
-  3-4-safe-zone-indicator-color-glow: ready-for-dev
+  epic-3: in-progress
+  3-1-shopping-list-schema-basic-crud: done  # ✅ List CRUD with Convex mutations
+  3-2-add-items-to-list-search-from-pantry: done  # ✅ Add items from pantry with search
+  3-3-running-total-budget-display: done  # ✅ Running total with budget tracking
+  3-4-safe-zone-indicator-color-glow: done  # ✅ Budget status with color indicators
   3-5-budget-lock-mode: ready-for-dev
   3-6-impulse-fund-10-buffer: ready-for-dev
   3-7-mid-shop-add-flow-3-options: ready-for-dev
@@ -88,8 +88,8 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5: Receipt Intelligence & Price History (6 stories)
-  epic-5: backlog
-  5-1-camera-receipt-capture: ready-for-dev
+  epic-5: in-progress
+  5-1-camera-receipt-capture: done  # ✅ Camera/gallery capture + Convex upload
   5-2-gemini-ai-receipt-parsing: ready-for-dev
   5-3-item-confirmation-correction-ui: ready-for-dev
   5-4-price-history-tracking: ready-for-dev
