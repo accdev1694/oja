@@ -2,16 +2,34 @@ import { useState, useEffect } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  Pressable,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { detectLocation, SUPPORTED_COUNTRIES } from "@/lib/location/detectLocation";
+import { detectLocation } from "@/lib/location/detectLocation";
 import { safeHaptics } from "@/lib/utils/safeHaptics";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
+
+import {
+  GlassScreen,
+  GlassCard,
+  GlassButton,
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+  animations,
+} from "@/components/ui/glass";
 
 // Cuisine options with emojis
 const CUISINES = [
@@ -33,6 +51,7 @@ const CUISINES = [
 
 export default function CuisineSelectionScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const getOrCreateUser = useMutation(api.users.getOrCreate);
   const setOnboardingData = useMutation(api.users.setOnboardingData);
 
@@ -50,14 +69,12 @@ export default function CuisineSelectionScreen() {
   async function initializeUser() {
     setIsDetecting(true);
 
-    // Create user record in Convex if it doesn't exist
     try {
       await getOrCreateUser({});
     } catch (error) {
       console.error("Failed to create user:", error);
     }
 
-    // Detect user location
     const location = await detectLocation();
     setCountry(location.country);
     setCountryCode(location.countryCode);
@@ -86,7 +103,7 @@ export default function CuisineSelectionScreen() {
 
     try {
       await setOnboardingData({
-        name: "User", // Will be updated in next onboarding step
+        name: "User",
         country,
         cuisinePreferences: selectedCuisines,
       });
@@ -107,210 +124,277 @@ export default function CuisineSelectionScreen() {
     }
   }
 
+  // Loading state
   if (isDetecting) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-        <Text style={styles.loadingText}>Detecting your location...</Text>
-      </View>
+      <GlassScreen>
+        <View style={styles.loadingContainer}>
+          <View style={styles.loadingIconContainer}>
+            <MaterialCommunityIcons
+              name="map-marker"
+              size={48}
+              color={colors.accent.primary}
+            />
+          </View>
+          <ActivityIndicator size="large" color={colors.accent.primary} style={styles.spinner} />
+          <Text style={styles.loadingText}>Detecting your location...</Text>
+        </View>
+      </GlassScreen>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Where are you cooking?</Text>
-      
-      <View style={styles.locationCard}>
-        <Text style={styles.locationEmoji}>📍</Text>
-        <Text style={styles.locationText}>
-          You're in {country}
-        </Text>
-        <Text style={styles.currencyText}>
-          Prices shown in {currency}
-        </Text>
-      </View>
-
-      <Text style={styles.subtitle}>
-        What cuisines do you cook?
-      </Text>
-      <Text style={styles.description}>
-        Select all that apply - we'll seed your pantry with ingredients you'll actually use
-      </Text>
-
-      <View style={styles.cuisineGrid}>
-        {CUISINES.map((cuisine) => {
-          const isSelected = selectedCuisines.includes(cuisine.id);
-          
-          return (
-            <TouchableOpacity
-              key={cuisine.id}
-              style={[
-                styles.cuisineButton,
-                isSelected && styles.cuisineButtonSelected,
-              ]}
-              onPress={() => toggleCuisine(cuisine.id)}
-            >
-              <Text style={styles.cuisineEmoji}>{cuisine.emoji}</Text>
-              <Text
-                style={[
-                  styles.cuisineName,
-                  isSelected && styles.cuisineNameSelected,
-                ]}
-              >
-                {cuisine.name}
-              </Text>
-              {isSelected && (
-                <View style={styles.checkmark}>
-                  <Text style={styles.checkmarkText}>✓</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <TouchableOpacity
-        style={[
-          styles.continueButton,
-          (selectedCuisines.length === 0 || isSaving) && styles.continueButtonDisabled,
+    <GlassScreen>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.lg },
         ]}
-        onPress={handleContinue}
-        disabled={selectedCuisines.length === 0 || isSaving}
+        showsVerticalScrollIndicator={false}
       >
-        {isSaving ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.continueButtonText}>
-            Continue ({selectedCuisines.length} selected)
+        {/* Header */}
+        <Text style={styles.title}>Where are you cooking?</Text>
+
+        {/* Location Card */}
+        <GlassCard variant="bordered" accentColor={colors.accent.primary} style={styles.locationCard}>
+          <View style={styles.locationRow}>
+            <View style={styles.locationIconContainer}>
+              <MaterialCommunityIcons
+                name="map-marker"
+                size={32}
+                color={colors.accent.primary}
+              />
+            </View>
+            <View style={styles.locationInfo}>
+              <Text style={styles.locationText}>You're in {country}</Text>
+              <Text style={styles.currencyText}>Prices shown in {currency}</Text>
+            </View>
+          </View>
+        </GlassCard>
+
+        {/* Section Header */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.subtitle}>What cuisines do you cook?</Text>
+          <Text style={styles.description}>
+            Select all that apply - we'll seed your pantry with ingredients you'll actually use
           </Text>
-        )}
-      </TouchableOpacity>
-    </ScrollView>
+        </View>
+
+        {/* Cuisine Grid */}
+        <View style={styles.cuisineGrid}>
+          {CUISINES.map((cuisine) => (
+            <CuisineButton
+              key={cuisine.id}
+              cuisine={cuisine}
+              isSelected={selectedCuisines.includes(cuisine.id)}
+              onToggle={() => toggleCuisine(cuisine.id)}
+            />
+          ))}
+        </View>
+
+        {/* Continue Button */}
+        <View style={styles.buttonContainer}>
+          <GlassButton
+            variant="primary"
+            size="lg"
+            icon="arrow-right"
+            onPress={handleContinue}
+            loading={isSaving}
+            disabled={selectedCuisines.length === 0 || isSaving}
+          >
+            {`Continue (${selectedCuisines.length} selected)`}
+          </GlassButton>
+        </View>
+      </ScrollView>
+    </GlassScreen>
   );
 }
 
+// =============================================================================
+// CUISINE BUTTON COMPONENT
+// =============================================================================
+
+interface CuisineButtonProps {
+  cuisine: { id: string; name: string; emoji: string };
+  isSelected: boolean;
+  onToggle: () => void;
+}
+
+function CuisineButton({ cuisine, isSelected, onToggle }: CuisineButtonProps) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.95, animations.spring.stiff);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, animations.spring.gentle);
+  };
+
+  return (
+    <Animated.View style={[styles.cuisineButtonWrapper, animatedStyle]}>
+      <Pressable
+        onPress={onToggle}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+      >
+        <GlassCard
+          variant={isSelected ? "bordered" : "standard"}
+          accentColor={isSelected ? colors.accent.primary : undefined}
+          style={[styles.cuisineButton, isSelected && styles.cuisineButtonSelected]}
+        >
+          <Text style={styles.cuisineEmoji}>{cuisine.emoji}</Text>
+          <Text
+            style={[
+              styles.cuisineName,
+              isSelected && styles.cuisineNameSelected,
+            ]}
+          >
+            {cuisine.name}
+          </Text>
+          {isSelected && (
+            <View style={styles.checkmark}>
+              <MaterialCommunityIcons
+                name="check"
+                size={14}
+                color={colors.text.primary}
+              />
+            </View>
+          )}
+        </GlassCard>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// =============================================================================
+// STYLES
+// =============================================================================
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFAF8",
-  },
-  content: {
-    padding: 24,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FFFAF8",
+    padding: spacing.xl,
+  },
+  loadingIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: `${colors.accent.primary}20`,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.lg,
+  },
+  spinner: {
+    marginTop: spacing.md,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#636E72",
+    ...typography.bodyLarge,
+    color: colors.text.secondary,
+    marginTop: spacing.md,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: spacing.lg,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#2D3436",
-    marginBottom: 16,
+    ...typography.displaySmall,
+    color: colors.text.primary,
+    marginBottom: spacing.lg,
   },
   locationCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 32,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    marginBottom: spacing.xl,
   },
-  locationEmoji: {
-    fontSize: 48,
-    marginBottom: 12,
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  locationIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: `${colors.accent.primary}20`,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  locationInfo: {
+    flex: 1,
   },
   locationText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#2D3436",
-    marginBottom: 4,
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: 2,
   },
   currencyText: {
-    fontSize: 14,
-    color: "#636E72",
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+  },
+  sectionHeader: {
+    marginBottom: spacing.lg,
   },
   subtitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#2D3436",
-    marginBottom: 8,
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
   },
   description: {
-    fontSize: 14,
-    color: "#636E72",
-    marginBottom: 24,
-    lineHeight: 20,
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    lineHeight: 22,
   },
   cuisineGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 32,
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+  cuisineButtonWrapper: {
+    width: "48%",
+    flexGrow: 1,
   },
   cuisineButton: {
-    width: "47%",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#E5E7EB",
+    paddingVertical: spacing.md,
     position: "relative",
   },
   cuisineButtonSelected: {
-    borderColor: "#FF6B35",
-    backgroundColor: "#FFF5F2",
+    backgroundColor: `${colors.accent.primary}10`,
   },
   cuisineEmoji: {
     fontSize: 32,
-    marginBottom: 8,
+    marginBottom: spacing.xs,
   },
   cuisineName: {
-    fontSize: 14,
+    ...typography.bodyMedium,
+    color: colors.text.primary,
     fontWeight: "600",
-    color: "#2D3436",
     textAlign: "center",
   },
   cuisineNameSelected: {
-    color: "#FF6B35",
+    color: colors.accent.primary,
   },
   checkmark: {
     position: "absolute",
-    top: 8,
-    right: 8,
+    top: spacing.sm,
+    right: spacing.sm,
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "#FF6B35",
+    backgroundColor: colors.accent.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-  checkmarkText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  continueButton: {
-    backgroundColor: "#FF6B35",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    marginBottom: 32,
-  },
-  continueButtonDisabled: {
-    opacity: 0.5,
-  },
-  continueButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
+  buttonContainer: {
+    marginBottom: spacing.lg,
   },
 });

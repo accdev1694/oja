@@ -1,33 +1,75 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Dimensions, Modal, Pressable, TextInput } from "react-native";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
+  Modal,
+  Pressable,
+} from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import {
   LiquidFillIndicator,
   StockLevelPicker,
   FlyToListAnimation,
   type StockLevel,
 } from "@/components/pantry";
+import { getSafeIcon } from "@/lib/icons/iconMatcher";
+
+// Glass UI Components
+import {
+  GlassScreen,
+  GlassCard,
+  GlassSearchInput,
+  GlassButton,
+  SimpleHeader,
+  SkeletonPantryItem,
+  EmptyPantry,
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+} from "@/components/ui/glass";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
-const STOCK_LEVELS: { level: StockLevel; label: string; color: string; emoji: string }[] = [
-  { level: "stocked", label: "Fully Stocked", color: "#10B981", emoji: "🟢" },
-  { level: "good", label: "Good", color: "#34D399", emoji: "🟡" },
-  { level: "low", label: "Running Low", color: "#F59E0B", emoji: "🟠" },
-  { level: "out", label: "Out of Stock", color: "#EF4444", emoji: "🔴" },
+const STOCK_LEVELS: { level: StockLevel; label: string; color: string }[] = [
+  { level: "stocked", label: "Fully Stocked", color: colors.budget.healthy },
+  { level: "good", label: "Good", color: colors.accent.success },
+  { level: "low", label: "Running Low", color: colors.budget.caution },
+  { level: "out", label: "Out of Stock", color: colors.budget.exceeded },
 ];
 
 export default function PantryScreen() {
+  const insets = useSafeAreaInsets();
   const items = useQuery(api.pantryItems.getByUser);
   const activeLists = useQuery(api.shoppingLists.getActive);
   const updateStockLevel = useMutation(api.pantryItems.updateStockLevel);
   const createList = useMutation(api.shoppingLists.create);
   const addListItem = useMutation(api.listItems.create);
+  const migrateIcons = useMutation(api.pantryItems.migrateIcons);
+
+  // Migrate icons for items that don't have them yet
+  useEffect(() => {
+    if (items && items.length > 0) {
+      const needsMigration = items.some((item) => !item.icon);
+      if (needsMigration) {
+        migrateIcons({}).catch((err) => {
+          console.error("Migration failed:", err);
+        });
+      }
+    }
+  }, [items?.length]);
 
   // UI State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -106,7 +148,6 @@ export default function PantryScreen() {
     startPos?: { x: number; y: number }
   ) => {
     try {
-      // Trigger fly animation
       if (startPos) {
         setFlyItemName(item.name);
         setFlyStartPosition(startPos);
@@ -152,7 +193,6 @@ export default function PantryScreen() {
     try {
       await updateStockLevel({ id: selectedItem.id, stockLevel: level });
 
-      // Auto-add to shopping list when item goes "out"
       if (level === "out" && selectedItem.stockLevel !== "out") {
         const pos = itemPositions[selectedItem.id as string];
         await autoAddToShoppingList(
@@ -213,22 +253,43 @@ export default function PantryScreen() {
     }
   };
 
+  // Loading state with skeletons
   if (items === undefined) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-        <Text style={styles.loadingText}>Loading pantry...</Text>
-      </View>
+      <GlassScreen edges={["top"]}>
+        <SimpleHeader title="My Pantry" subtitle="Loading..." />
+        <View style={styles.skeletonContainer}>
+          <View style={styles.skeletonSection}>
+            <View style={styles.skeletonSectionHeader}>
+              <View style={styles.skeletonTitle} />
+              <View style={styles.skeletonBadge} />
+            </View>
+            <SkeletonPantryItem />
+            <SkeletonPantryItem />
+            <SkeletonPantryItem />
+          </View>
+          <View style={styles.skeletonSection}>
+            <View style={styles.skeletonSectionHeader}>
+              <View style={styles.skeletonTitle} />
+              <View style={styles.skeletonBadge} />
+            </View>
+            <SkeletonPantryItem />
+            <SkeletonPantryItem />
+          </View>
+        </View>
+      </GlassScreen>
     );
   }
 
+  // Empty state
   if (items.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyEmoji}>🏠</Text>
-        <Text style={styles.emptyTitle}>Your Pantry is Empty</Text>
-        <Text style={styles.emptySubtitle}>Add items to track what you have at home</Text>
-      </View>
+      <GlassScreen edges={["top"]}>
+        <SimpleHeader title="My Pantry" subtitle="0 items" />
+        <View style={styles.emptyContainer}>
+          <EmptyPantry />
+        </View>
+      </GlassScreen>
     );
   }
 
@@ -244,181 +305,201 @@ export default function PantryScreen() {
   const activeFilterCount = 4 - stockFilters.size;
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <Text style={styles.title}>My Pantry</Text>
-      <Text style={styles.subtitle}>
-        {filteredItems.length} of {items.length} items
-        {searchQuery ? ` matching "${searchQuery}"` : ""}
-      </Text>
-
-      {/* Search and Filter Bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search pantry..."
-            placeholderTextColor="#9CA3AF"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearButton}>
-              <Text style={styles.clearButtonText}>✕</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        <TouchableOpacity
-          style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
-          onPress={() => setFilterVisible(true)}
-        >
-          <Text style={styles.filterButtonText}>⚙️</Text>
-          {activeFilterCount > 0 && (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {Object.entries(groupedItems).map(([category, categoryItems]) => {
-          const isCollapsed = collapsedCategories.has(category);
-
-          const toggleCategory = () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setCollapsedCategories((prev) => {
-              const newSet = new Set(prev);
-              if (newSet.has(category)) {
-                newSet.delete(category);
-              } else {
-                newSet.add(category);
-              }
-              return newSet;
-            });
-          };
-
-          return (
-            <View key={category} style={styles.categorySection}>
-              <TouchableOpacity
-                style={styles.categoryHeader}
-                onPress={toggleCategory}
-                activeOpacity={0.7}
-              >
-                <View style={styles.categoryTitleRow}>
-                  <Text style={styles.categoryTitle}>{category}</Text>
-                  <Text style={styles.categoryCount}>({categoryItems.length})</Text>
-                </View>
-                <Text style={styles.collapseIcon}>{isCollapsed ? "▶" : "▼"}</Text>
-              </TouchableOpacity>
-
-              {!isCollapsed && (
-                <View style={styles.itemList}>
-                  {categoryItems.map((item) => (
-                    <PantryItemRow
-                      key={item._id}
-                      item={item}
-                      onLongPress={() => handleLongPress(item)}
-                      onSwipeDecrease={() => handleSwipeDecrease(item)}
-                      onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
-                    />
-                  ))}
+    <GlassScreen edges={["top"]}>
+      <GestureHandlerRootView style={styles.container}>
+        {/* Header */}
+        <SimpleHeader
+          title="My Pantry"
+          subtitle={`${filteredItems.length} of ${items.length} items${searchQuery ? ` matching "${searchQuery}"` : ""}`}
+          rightElement={
+            <Pressable
+              style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
+              onPress={() => setFilterVisible(true)}
+            >
+              <MaterialCommunityIcons
+                name="tune-variant"
+                size={22}
+                color={activeFilterCount > 0 ? colors.accent.primary : colors.text.secondary}
+              />
+              {activeFilterCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
                 </View>
               )}
-            </View>
-          );
-        })}
-      </ScrollView>
+            </Pressable>
+          }
+        />
 
-      {/* Liquid Stock Level Picker */}
-      <StockLevelPicker
-        visible={pickerVisible}
-        currentLevel={selectedItem?.stockLevel || "stocked"}
-        itemName={selectedItem?.name || ""}
-        onSelect={handleSelectStockLevel}
-        onClose={handleClosePicker}
-      />
+        {/* Search */}
+        <View style={styles.searchContainer}>
+          <GlassSearchInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onClear={() => setSearchQuery("")}
+            placeholder="Search pantry..."
+          />
+        </View>
 
-      {/* Fly to List Animation */}
-      <FlyToListAnimation
-        visible={flyAnimationVisible}
-        itemName={flyItemName}
-        startPosition={flyStartPosition}
-        onAnimationComplete={handleFlyAnimationComplete}
-      />
+        {/* Content */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {Object.entries(groupedItems).map(([category, categoryItems]) => {
+            const isCollapsed = collapsedCategories.has(category);
 
-      {/* Stock Level Filter Modal */}
-      <Modal
-        visible={filterVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setFilterVisible(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setFilterVisible(false)}>
-          <View style={styles.filterModal}>
-            <Text style={styles.filterTitle}>Filter by Stock Level</Text>
-            <Text style={styles.filterSubtitle}>Select which levels to show</Text>
+            const toggleCategory = () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setCollapsedCategories((prev) => {
+                const newSet = new Set(prev);
+                if (newSet.has(category)) {
+                  newSet.delete(category);
+                } else {
+                  newSet.add(category);
+                }
+                return newSet;
+              });
+            };
 
-            <View style={styles.filterOptions}>
-              {STOCK_LEVELS.map((option) => (
+            return (
+              <View key={category} style={styles.categorySection}>
                 <TouchableOpacity
-                  key={option.level}
-                  style={[
-                    styles.filterOption,
-                    stockFilters.has(option.level) && styles.filterOptionSelected,
-                  ]}
-                  onPress={() => toggleStockFilter(option.level)}
+                  style={styles.categoryHeader}
+                  onPress={toggleCategory}
+                  activeOpacity={0.7}
                 >
-                  <LiquidFillIndicator level={option.level} size="small" />
-                  <Text style={styles.filterOptionLabel}>{option.label}</Text>
-                  {stockFilters.has(option.level) && (
-                    <Text style={styles.filterCheck}>✓</Text>
-                  )}
+                  <View style={styles.categoryTitleRow}>
+                    <Text style={styles.categoryTitle}>{category}</Text>
+                    <View style={styles.categoryCountBadge}>
+                      <Text style={styles.categoryCount}>{categoryItems.length}</Text>
+                    </View>
+                  </View>
+                  <MaterialCommunityIcons
+                    name={isCollapsed ? "chevron-right" : "chevron-down"}
+                    size={24}
+                    color={colors.text.tertiary}
+                  />
                 </TouchableOpacity>
-              ))}
-            </View>
 
-            <TouchableOpacity
-              style={styles.resetButton}
-              onPress={() => {
-                setStockFilters(new Set(["stocked", "good", "low", "out"]));
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-            >
-              <Text style={styles.resetButtonText}>Show All</Text>
-            </TouchableOpacity>
+                {!isCollapsed && (
+                  <View style={styles.itemList}>
+                    {categoryItems.map((item, index) => (
+                      <PantryItemRow
+                        key={item._id}
+                        item={item}
+                        onLongPress={() => handleLongPress(item)}
+                        onSwipeDecrease={() => handleSwipeDecrease(item)}
+                        onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
+                        animationDelay={index * 50}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
 
-            <TouchableOpacity
-              style={styles.doneButton}
-              onPress={() => setFilterVisible(false)}
-            >
-              <Text style={styles.doneButtonText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
-    </GestureHandlerRootView>
+        {/* Stock Level Picker */}
+        <StockLevelPicker
+          visible={pickerVisible}
+          currentLevel={selectedItem?.stockLevel || "stocked"}
+          itemName={selectedItem?.name || ""}
+          onSelect={handleSelectStockLevel}
+          onClose={handleClosePicker}
+        />
+
+        {/* Fly Animation */}
+        <FlyToListAnimation
+          visible={flyAnimationVisible}
+          itemName={flyItemName}
+          startPosition={flyStartPosition}
+          onAnimationComplete={handleFlyAnimationComplete}
+        />
+
+        {/* Filter Modal */}
+        <Modal
+          visible={filterVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setFilterVisible(false)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setFilterVisible(false)}>
+            <GlassCard variant="elevated" style={styles.filterModal}>
+              <Text style={styles.filterTitle}>Filter by Stock Level</Text>
+              <Text style={styles.filterSubtitle}>Select which levels to show</Text>
+
+              <View style={styles.filterOptions}>
+                {STOCK_LEVELS.map((option) => (
+                  <TouchableOpacity
+                    key={option.level}
+                    style={[
+                      styles.filterOption,
+                      stockFilters.has(option.level) && styles.filterOptionSelected,
+                    ]}
+                    onPress={() => toggleStockFilter(option.level)}
+                    activeOpacity={0.7}
+                  >
+                    <LiquidFillIndicator level={option.level} size="small" />
+                    <Text style={styles.filterOptionLabel}>{option.label}</Text>
+                    {stockFilters.has(option.level) && (
+                      <MaterialCommunityIcons
+                        name="check-circle"
+                        size={22}
+                        color={colors.accent.primary}
+                      />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.filterActions}>
+                <GlassButton
+                  variant="ghost"
+                  size="md"
+                  onPress={() => {
+                    setStockFilters(new Set(["stocked", "good", "low", "out"]));
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  Show All
+                </GlassButton>
+                <GlassButton
+                  variant="primary"
+                  size="md"
+                  onPress={() => setFilterVisible(false)}
+                >
+                  Done
+                </GlassButton>
+              </View>
+            </GlassCard>
+          </Pressable>
+        </Modal>
+      </GestureHandlerRootView>
+    </GlassScreen>
   );
 }
 
-// Individual pantry item row with liquid indicator
+// Pantry Item Row Component
 function PantryItemRow({
   item,
   onLongPress,
   onSwipeDecrease,
   onMeasure,
+  animationDelay = 0,
 }: {
   item: {
     _id: Id<"pantryItems">;
     name: string;
     category: string;
     stockLevel: string;
+    icon?: string;
   };
   onLongPress: () => void;
   onSwipeDecrease: () => void;
   onMeasure: (x: number, y: number) => void;
+  animationDelay?: number;
 }) {
   const swipeableRef = useRef<Swipeable>(null);
   const cardRef = useRef<View>(null);
@@ -456,32 +537,18 @@ function PantryItemRow({
     return (
       <View style={styles.swipeAction}>
         <LiquidFillIndicator level={nextLevel} size="medium" showWave />
-        <Text style={styles.swipeActionLabel}>
-          {nextLevel === "out" ? "Out!" : "Lower"}
-        </Text>
+        <Text style={styles.swipeActionLabel}>{nextLevel === "out" ? "Out!" : "Lower"}</Text>
       </View>
     );
   };
 
-  const getCategoryEmoji = (cat: string): string => {
-    const emojiMap: Record<string, string> = {
-      proteins: "🥩",
-      dairy: "🥛",
-      grains: "🌾",
-      vegetables: "🥬",
-      fruits: "🍎",
-      beverages: "🥤",
-      snacks: "🍪",
-      condiments: "🧂",
-      frozen: "🧊",
-      household: "🧹",
-      other: "📦",
-    };
-    return emojiMap[cat.toLowerCase()] || "📦";
-  };
+  const iconName = getSafeIcon(item.icon, item.category) as keyof typeof MaterialCommunityIcons.glyphMap;
 
   return (
-    <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)}>
+    <Animated.View
+      entering={FadeIn.delay(animationDelay).duration(200)}
+      exiting={FadeOut.duration(150)}
+    >
       <Swipeable
         ref={swipeableRef}
         renderRightActions={renderRightActions}
@@ -491,35 +558,37 @@ function PantryItemRow({
       >
         <TouchableOpacity
           ref={cardRef}
-          style={styles.itemCard}
           onLongPress={handleLongPress}
           delayLongPress={400}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          {/* Liquid fill indicator */}
-          <LiquidFillIndicator
-            level={item.stockLevel as StockLevel}
-            size="small"
-            showWave={false}
-          />
+          <GlassCard style={styles.itemCard}>
+            {/* Liquid fill indicator */}
+            <LiquidFillIndicator level={item.stockLevel as StockLevel} size="small" showWave={false} />
 
-          {/* Item info */}
-          <View style={styles.itemInfo}>
-            <Text style={styles.itemName} numberOfLines={1}>
-              {getCategoryEmoji(item.category)} {item.name}
-            </Text>
-            <Text style={styles.stockLevelText}>
-              {item.stockLevel === "stocked" && "Fully stocked"}
-              {item.stockLevel === "good" && "Good supply"}
-              {item.stockLevel === "low" && "Running low"}
-              {item.stockLevel === "out" && "Out of stock"}
-            </Text>
-          </View>
+            {/* Item info */}
+            <View style={styles.itemInfo}>
+              <View style={styles.itemNameRow}>
+                <View style={styles.itemIconContainer}>
+                  <MaterialCommunityIcons name={iconName} size={18} color={colors.text.secondary} />
+                </View>
+                <Text style={styles.itemName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+              </View>
+              <Text style={styles.stockLevelText}>
+                {item.stockLevel === "stocked" && "Fully stocked"}
+                {item.stockLevel === "good" && "Good supply"}
+                {item.stockLevel === "low" && "Running low"}
+                {item.stockLevel === "out" && "Out of stock"}
+              </Text>
+            </View>
 
-          {/* Hold hint */}
-          <View style={styles.holdHint}>
-            <Text style={styles.holdHintText}>Hold</Text>
-          </View>
+            {/* Hold hint */}
+            <View style={styles.holdHint}>
+              <Text style={styles.holdHintText}>Hold</Text>
+            </View>
+          </GlassCard>
         </TouchableOpacity>
       </Swipeable>
     </Animated.View>
@@ -529,286 +598,222 @@ function PantryItemRow({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFAF8",
   },
-  loadingContainer: {
+  // Skeleton loading styles
+  skeletonContainer: {
     flex: 1,
-    justifyContent: "center",
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+  },
+  skeletonSection: {
+    marginBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  skeletonSectionHeader: {
+    flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFAF8",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#636E72",
+  skeletonTitle: {
+    width: 100,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: colors.glass.backgroundStrong,
   },
+  skeletonBadge: {
+    width: 30,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.glass.backgroundStrong,
+  },
+  // Empty state
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FFFAF8",
-    padding: 24,
-  },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#2D3436",
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: "#636E72",
-    textAlign: "center",
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#2D3436",
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#636E72",
-    paddingHorizontal: 24,
-    marginBottom: 12,
+    padding: spacing["2xl"],
   },
   searchContainer: {
-    flexDirection: "row",
-    paddingHorizontal: 24,
-    marginBottom: 12,
-    gap: 12,
-  },
-  searchInputContainer: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    paddingHorizontal: 12,
-  },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 44,
-    fontSize: 16,
-    color: "#2D3436",
-  },
-  clearButton: {
-    padding: 4,
-  },
-  clearButtonText: {
-    fontSize: 16,
-    color: "#9CA3AF",
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
   },
   filterButton: {
     width: 44,
     height: 44,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    justifyContent: "center",
+    borderRadius: 22,
+    backgroundColor: colors.glass.background,
     alignItems: "center",
+    justifyContent: "center",
   },
   filterButtonActive: {
-    backgroundColor: "#FFF7ED",
-    borderColor: "#FF6B35",
-  },
-  filterButtonText: {
-    fontSize: 18,
+    backgroundColor: colors.semantic.pantryGlow,
   },
   filterBadge: {
     position: "absolute",
-    top: -4,
-    right: -4,
-    backgroundColor: "#FF6B35",
+    top: -2,
+    right: -2,
+    backgroundColor: colors.accent.primary,
     borderRadius: 10,
-    width: 18,
+    minWidth: 18,
     height: 18,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
   },
   filterBadgeText: {
-    color: "#fff",
+    ...typography.labelSmall,
+    color: colors.text.inverse,
     fontSize: 10,
-    fontWeight: "700",
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 24,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
   },
   categorySection: {
-    marginBottom: 24,
+    marginBottom: spacing.xl,
   },
   categoryHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 8,
-    marginBottom: 12,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
   },
   categoryTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: spacing.sm,
   },
   categoryTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#2D3436",
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+  },
+  categoryCountBadge: {
+    backgroundColor: colors.glass.backgroundHover,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
   },
   categoryCount: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#636E72",
-  },
-  collapseIcon: {
-    fontSize: 14,
-    color: "#636E72",
+    ...typography.labelSmall,
+    color: colors.text.secondary,
   },
   itemList: {
-    gap: 8,
+    gap: spacing.md,
   },
   itemCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 12,
+    padding: spacing.md,
+    gap: spacing.md,
   },
   itemInfo: {
     flex: 1,
   },
-  itemName: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#2D3436",
+  itemNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
     marginBottom: 2,
   },
+  itemIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.glass.backgroundHover,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemName: {
+    ...typography.bodyLarge,
+    fontWeight: "600",
+    color: colors.text.primary,
+    flex: 1,
+  },
   stockLevelText: {
-    fontSize: 12,
-    color: "#636E72",
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginLeft: 36,
   },
   holdHint: {
-    backgroundColor: "rgba(0, 0, 0, 0.05)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    backgroundColor: colors.glass.backgroundHover,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
   },
   holdHintText: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
     fontSize: 10,
-    color: "#9CA3AF",
-    fontWeight: "500",
   },
   swipeAction: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: colors.budget.cautionGlow,
     justifyContent: "center",
     alignItems: "center",
     width: 80,
-    borderRadius: 12,
-    marginLeft: 8,
-    paddingVertical: 8,
+    borderRadius: borderRadius.lg,
+    marginLeft: spacing.sm,
+    paddingVertical: spacing.sm,
   },
   swipeActionLabel: {
-    color: "#92400E",
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 4,
+    ...typography.labelSmall,
+    color: colors.budget.caution,
+    marginTop: spacing.xs,
   },
-  // Filter Modal
+  // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
+    padding: spacing.xl,
   },
   filterModal: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 24,
     width: "100%",
     maxWidth: 340,
+    padding: spacing.xl,
   },
   filterTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#2D3436",
+    ...typography.headlineMedium,
+    color: colors.text.primary,
     textAlign: "center",
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   filterSubtitle: {
-    fontSize: 14,
-    color: "#636E72",
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   filterOptions: {
-    gap: 10,
+    gap: spacing.md,
   },
   filterOption: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
+    padding: spacing.md,
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.md,
     borderWidth: 2,
     borderColor: "transparent",
-    gap: 12,
+    gap: spacing.md,
   },
   filterOptionSelected: {
-    backgroundColor: "#FFF7ED",
-    borderColor: "#FF6B35",
+    backgroundColor: colors.semantic.pantryGlow,
+    borderColor: colors.accent.primary,
   },
   filterOptionLabel: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#2D3436",
+    ...typography.bodyLarge,
+    color: colors.text.primary,
     flex: 1,
   },
-  filterCheck: {
-    fontSize: 18,
-    color: "#FF6B35",
-    fontWeight: "700",
-  },
-  resetButton: {
-    marginTop: 16,
-    padding: 12,
-    alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 10,
-  },
-  resetButtonText: {
-    fontSize: 14,
-    color: "#636E72",
-    fontWeight: "500",
-  },
-  doneButton: {
-    marginTop: 12,
-    padding: 14,
-    alignItems: "center",
-    backgroundColor: "#FF6B35",
-    borderRadius: 12,
-  },
-  doneButtonText: {
-    fontSize: 16,
-    color: "#fff",
-    fontWeight: "600",
+  filterActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.xl,
   },
 });

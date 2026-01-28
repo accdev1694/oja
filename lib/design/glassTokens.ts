@@ -86,6 +86,10 @@ export const colors = {
     scanGlow: "rgba(245, 158, 11, 0.15)",
     profile: "#EC4899", // Pink
     profileGlow: "rgba(236, 72, 153, 0.15)",
+    // Status colors (aliased from accent)
+    success: "#10B981",
+    warning: "#F59E0B",
+    danger: "#EF4444",
   },
 } as const;
 

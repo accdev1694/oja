@@ -162,7 +162,7 @@ export function GlassProgressBar({
           ]}
         >
           <LinearGradient
-            colors={fillGradient as unknown as string[]}
+            colors={[...fillGradient]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[
@@ -240,6 +240,8 @@ export interface BudgetProgressBarProps {
   currency?: string;
   /** Show amounts label */
   showAmounts?: boolean;
+  /** Progress bar size */
+  size?: ProgressBarSize;
   /** Container styles */
   style?: StyleProp<ViewStyle>;
 }
@@ -249,6 +251,7 @@ export function BudgetProgressBar({
   budget,
   currency = "$",
   showAmounts = true,
+  size = "md",
   style,
 }: BudgetProgressBarProps) {
   const percentage = budget > 0 ? (spent / budget) * 100 : 0;
@@ -269,7 +272,7 @@ export function BudgetProgressBar({
         progress={spent}
         max={budget}
         status={status}
-        size="md"
+        size={size}
         showGlow
       />
 

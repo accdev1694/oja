@@ -1,10 +1,36 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  Pressable,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
+
+import {
+  GlassScreen,
+  GlassCard,
+  GlassButton,
+  SimpleHeader,
+  SkeletonCard,
+  EmptyLists,
+  colors,
+  typography,
+  spacing,
+  animations,
+} from "@/components/ui/glass";
 
 export default function ListsScreen() {
   const router = useRouter();
@@ -15,35 +41,35 @@ export default function ListsScreen() {
 
   function formatDateTime(timestamp: number) {
     const date = new Date(timestamp);
-    return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
   }
 
   function handleDeleteList(listId: Id<"shoppingLists">, listName: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      "Delete List",
-      `Are you sure you want to delete "${listName}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteList({ id: listId });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            } catch (error) {
-              console.error("Failed to delete list:", error);
-              Alert.alert("Error", "Failed to delete shopping list");
-            }
-          },
+    Alert.alert("Delete List", `Are you sure you want to delete "${listName}"?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteList({ id: listId });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (error) {
+            console.error("Failed to delete list:", error);
+            Alert.alert("Error", "Failed to delete shopping list");
+          }
         },
-      ]
-    );
+      },
+    ]);
   }
 
   async function handleCreateList() {
     setIsCreating(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       const listName = `Shopping List ${new Date().toLocaleDateString()}`;
       const listId = await createList({
@@ -61,215 +87,363 @@ export default function ListsScreen() {
     }
   }
 
+  // Loading state with skeletons
   if (lists === undefined) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-        <Text style={styles.loadingText}>Loading lists...</Text>
-      </View>
+      <GlassScreen>
+        <SimpleHeader title="Shopping Lists" subtitle="Loading..." />
+        <View style={styles.skeletonContainer}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      </GlassScreen>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Shopping Lists</Text>
-        <TouchableOpacity
-          style={[styles.createButton, isCreating && styles.createButtonDisabled]}
-          onPress={handleCreateList}
-          disabled={isCreating}
-        >
-          {isCreating ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.createButtonText}>+ New List</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+    <GlassScreen>
+      {/* Header with New List button */}
+      <SimpleHeader
+        title="Shopping Lists"
+        subtitle={lists.length > 0 ? `${lists.length} active list${lists.length !== 1 ? "s" : ""}` : undefined}
+        rightElement={
+          <GlassButton
+            variant="primary"
+            size="sm"
+            icon="plus"
+            onPress={handleCreateList}
+            loading={isCreating}
+            disabled={isCreating}
+          >
+            New List
+          </GlassButton>
+        }
+      />
 
+      {/* Empty state */}
       {lists.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>📝</Text>
-          <Text style={styles.emptyTitle}>No Shopping Lists</Text>
-          <Text style={styles.emptySubtitle}>
-            Create your first list to get started
-          </Text>
+          <EmptyLists
+            onAction={handleCreateList}
+            actionText="Create Your First List"
+          />
         </View>
       ) : (
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           {lists.map((list) => (
-            <TouchableOpacity
+            <ListCard
               key={list._id}
-              style={styles.listCard}
+              list={list}
               onPress={() => router.push(`/list/${list._id}`)}
-            >
-              <View style={styles.listHeader}>
-                <Text style={styles.listName}>{list.name}</Text>
-                <View style={styles.headerActions}>
-                  <View style={[
-                    styles.statusBadge,
-                    list.status === "shopping" && styles.statusBadgeShopping,
-                    list.status === "completed" && styles.statusBadgeCompleted,
-                  ]}>
-                    <Text style={styles.statusText}>
-                      {list.status === "shopping" ? "Shopping" : "Active"}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleDeleteList(list._id, list.name);
-                    }}
-                  >
-                    <Text style={styles.deleteButtonText}>🗑️</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {list.budget && (
-                <Text style={styles.budgetText}>
-                  Budget: £{list.budget.toFixed(2)}
-                </Text>
-              )}
-
-              <Text style={styles.dateText}>
-                Created {formatDateTime(list.createdAt)}
-              </Text>
-            </TouchableOpacity>
+              onDelete={() => handleDeleteList(list._id, list.name)}
+              formatDateTime={formatDateTime}
+            />
           ))}
+
+          {/* Bottom spacing for tab bar */}
+          <View style={styles.bottomSpacer} />
         </ScrollView>
       )}
-    </View>
+    </GlassScreen>
   );
 }
 
+// =============================================================================
+// LIST CARD COMPONENT
+// =============================================================================
+
+interface ListCardProps {
+  list: {
+    _id: Id<"shoppingLists">;
+    name: string;
+    status: string;
+    budget?: number;
+    createdAt: number;
+    itemCount?: number;
+    totalEstimatedCost?: number;
+  };
+  onPress: () => void;
+  onDelete: () => void;
+  formatDateTime: (timestamp: number) => string;
+}
+
+// Generate friendly relative time name for list display
+function getRelativeListName(createdAt: number, customName?: string): string {
+  // If user has set a custom name (not the default pattern), use it
+  const defaultPattern = /^Shopping List\s+\d{1,2}\/\d{1,2}\/\d{2,4}$/;
+  if (customName && !defaultPattern.test(customName)) {
+    return customName;
+  }
+
+  const now = new Date();
+  const created = new Date(createdAt);
+
+  // Reset times to midnight for date comparison
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const createdDay = new Date(created.getFullYear(), created.getMonth(), created.getDate());
+
+  const diffTime = today.getTime() - createdDay.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) {
+    return "Today's Shop";
+  }
+
+  if (diffDays === 1) {
+    return "Yesterday's Shop";
+  }
+
+  // Within this week (2-6 days ago)
+  if (diffDays < 7) {
+    const dayName = created.toLocaleDateString("en-GB", { weekday: "long" });
+    return `${dayName}'s Shop`;
+  }
+
+  // Last week (7-13 days ago)
+  if (diffDays < 14) {
+    return "Last Week";
+  }
+
+  // Older - show short date like "Jan 15"
+  return created.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+}
+
+function ListCard({ list, onPress, onDelete, formatDateTime }: ListCardProps) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.98, animations.spring.stiff);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, animations.spring.gentle);
+  };
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress();
+  };
+
+  const handleDelete = () => {
+    onDelete();
+  };
+
+  // Get friendly relative time name (e.g., "Today's Shop", "Yesterday's Shop")
+  const displayName = getRelativeListName(list.createdAt, list.name);
+
+  // Calculate budget status
+  const budgetStatus =
+    list.budget && list.totalEstimatedCost
+      ? list.totalEstimatedCost > list.budget
+        ? "exceeded"
+        : list.totalEstimatedCost > list.budget * 0.8
+          ? "caution"
+          : "healthy"
+      : "healthy";
+
+  const statusConfig = {
+    planning: { color: colors.accent.primary, label: "Planning" },
+    shopping: { color: colors.semantic.warning, label: "Shopping" },
+    completed: { color: colors.text.tertiary, label: "Completed" },
+  };
+
+  const status = statusConfig[list.status as keyof typeof statusConfig] || statusConfig.planning;
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Pressable onPress={handlePress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+        <GlassCard variant="standard" style={styles.listCard}>
+          {/* Header row */}
+          <View style={styles.listHeader}>
+            <View style={styles.listTitleContainer}>
+              <MaterialCommunityIcons
+                name="clipboard-list"
+                size={24}
+                color={colors.semantic.lists}
+              />
+              <Text style={styles.listName} numberOfLines={1}>
+                {displayName}
+              </Text>
+            </View>
+
+            <View style={styles.headerActions}>
+              {/* Status badge */}
+              <View style={[styles.statusBadge, { backgroundColor: `${status.color}20` }]}>
+                <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+              </View>
+
+              {/* Delete button */}
+              <Pressable
+                style={styles.deleteButton}
+                onPress={handleDelete}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialCommunityIcons
+                  name="trash-can-outline"
+                  size={20}
+                  color={colors.semantic.danger}
+                />
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Budget info */}
+          {list.budget && (
+            <View style={styles.budgetRow}>
+              <MaterialCommunityIcons
+                name="wallet-outline"
+                size={16}
+                color={
+                  budgetStatus === "exceeded"
+                    ? colors.semantic.danger
+                    : budgetStatus === "caution"
+                      ? colors.semantic.warning
+                      : colors.accent.primary
+                }
+              />
+              <Text
+                style={[
+                  styles.budgetText,
+                  {
+                    color:
+                      budgetStatus === "exceeded"
+                        ? colors.semantic.danger
+                        : budgetStatus === "caution"
+                          ? colors.semantic.warning
+                          : colors.accent.primary,
+                  },
+                ]}
+              >
+                £{list.budget.toFixed(2)} budget
+                {list.totalEstimatedCost
+                  ? ` • £${list.totalEstimatedCost.toFixed(2)} estimated`
+                  : ""}
+              </Text>
+            </View>
+          )}
+
+          {/* Item count and date */}
+          <View style={styles.metaRow}>
+            {list.itemCount !== undefined && (
+              <View style={styles.metaItem}>
+                <MaterialCommunityIcons
+                  name="format-list-checks"
+                  size={14}
+                  color={colors.text.tertiary}
+                />
+                <Text style={styles.metaText}>
+                  {list.itemCount} item{list.itemCount !== 1 ? "s" : ""}
+                </Text>
+              </View>
+            )}
+            <View style={styles.metaItem}>
+              <MaterialCommunityIcons name="clock-outline" size={14} color={colors.text.tertiary} />
+              <Text style={styles.metaText}>{formatDateTime(list.createdAt)}</Text>
+            </View>
+          </View>
+        </GlassCard>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// =============================================================================
+// STYLES
+// =============================================================================
+
 const styles = StyleSheet.create({
-  container: {
+  skeletonContainer: {
     flex: 1,
-    backgroundColor: "#FFFAF8",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#FFFAF8",
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#636E72",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 16,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#2D3436",
-  },
-  createButton: {
-    backgroundColor: "#FF6B35",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  createButtonDisabled: {
-    opacity: 0.6,
-  },
-  createButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    gap: spacing.md,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
-  },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#2D3436",
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: "#636E72",
-    textAlign: "center",
+    paddingHorizontal: spacing.xl,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 24,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  bottomSpacer: {
+    height: 100, // Space for tab bar
   },
   listCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    marginBottom: spacing.md,
   },
   listHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: spacing.sm,
+  },
+  listTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: spacing.sm,
   },
   listName: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#2D3436",
+    ...typography.headlineSmall,
+    color: colors.text.primary,
     flex: 1,
   },
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  deleteButton: {
-    padding: 4,
-  },
-  deleteButtonText: {
-    fontSize: 18,
+    gap: spacing.sm,
   },
   statusBadge: {
-    backgroundColor: "#10B981",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: 12,
   },
-  statusBadgeShopping: {
-    backgroundColor: "#F59E0B",
-  },
-  statusBadgeCompleted: {
-    backgroundColor: "#6B7280",
-  },
   statusText: {
-    color: "#fff",
-    fontSize: 12,
+    ...typography.labelSmall,
     fontWeight: "600",
+  },
+  deleteButton: {
+    padding: spacing.xs,
+    borderRadius: 8,
+    backgroundColor: `${colors.semantic.danger}15`,
+  },
+  budgetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
   budgetText: {
-    fontSize: 16,
-    color: "#FF6B35",
+    ...typography.bodyMedium,
     fontWeight: "600",
-    marginBottom: 4,
   },
-  dateText: {
-    fontSize: 14,
-    color: "#636E72",
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  metaText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
   },
 });

@@ -350,6 +350,28 @@ const styles = StyleSheet.create({
   actionButtonDisabled: {
     opacity: 0.5,
   },
+  // Simple Header styles
+  simpleHeader: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
+  },
+  simpleHeaderContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  simpleHeaderText: {
+    flex: 1,
+  },
+  simpleTitle: {
+    ...typography.displaySmall,
+    color: colors.text.primary,
+  },
+  simpleSubtitle: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+  },
 });
 
 // =============================================================================
@@ -360,6 +382,8 @@ export interface SimpleHeaderProps {
   title: string;
   subtitle?: string;
   rightElement?: React.ReactNode;
+  /** Include safe area top padding (set false when used inside GlassScreen) */
+  includeSafeArea?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -367,12 +391,19 @@ export function SimpleHeader({
   title,
   subtitle,
   rightElement,
+  includeSafeArea = false, // Default false - assumes used inside GlassScreen which handles safe area
   style,
 }: SimpleHeaderProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.simpleHeader, { paddingTop: insets.top }, style]}>
+    <View
+      style={[
+        styles.simpleHeader,
+        includeSafeArea && { paddingTop: insets.top },
+        style,
+      ]}
+    >
       <View style={styles.simpleHeaderContent}>
         <View style={styles.simpleHeaderText}>
           <Text style={styles.simpleTitle}>{title}</Text>
@@ -392,7 +423,8 @@ const simpleStyles = StyleSheet.create({});
 Object.assign(styles, {
   simpleHeader: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.lg,
+    paddingTop: spacing.md, // Visual spacing after safe area
+    paddingBottom: spacing.md,
   },
   simpleHeaderContent: {
     flexDirection: "row",

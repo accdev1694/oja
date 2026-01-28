@@ -43,14 +43,14 @@ const gradientConfigs: Record<
     colors: readonly [string, string, ...string[]];
     start: { x: number; y: number };
     end: { x: number; y: number };
-    locations?: number[];
+    locations?: readonly [number, number, ...number[]];
   }
 > = {
   main: {
     colors: gradients.backgroundMain,
     start: { x: 0, y: 0 },
     end: { x: 0.5, y: 1 },
-    locations: [0, 0.5, 1],
+    locations: [0, 0.5, 1] as const,
   },
   subtle: {
     colors: gradients.backgroundSubtle,
@@ -81,7 +81,7 @@ export function GradientBackground({
 
   const content = (
     <LinearGradient
-      colors={gradientColors as unknown as string[]}
+      colors={[...gradientColors]}
       start={config.start}
       end={config.end}
       locations={config.locations}
@@ -95,7 +95,7 @@ export function GradientBackground({
     return (
       <View style={styles.container}>
         <LinearGradient
-          colors={gradientColors as unknown as string[]}
+          colors={[...gradientColors]}
           start={config.start}
           end={config.end}
           locations={config.locations}

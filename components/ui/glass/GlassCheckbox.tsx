@@ -32,7 +32,9 @@ export interface GlassCheckboxProps {
   /** Checked state */
   checked: boolean;
   /** Change handler */
-  onCheckedChange: (checked: boolean) => void;
+  onCheckedChange?: (checked: boolean) => void;
+  /** Toggle handler (alias for onCheckedChange, called with no args) */
+  onToggle?: () => void;
   /** Checkbox size */
   size?: GlassCheckboxSize;
   /** Disabled state */
@@ -91,6 +93,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 export function GlassCheckbox({
   checked,
   onCheckedChange,
+  onToggle,
   size = "md",
   disabled = false,
   indeterminate = false,
@@ -147,7 +150,12 @@ export function GlassCheckbox({
       withSpring(1, animations.spring.bouncy)
     );
 
-    onCheckedChange(!checked);
+    // Support both callback styles
+    if (onToggle) {
+      onToggle();
+    } else if (onCheckedChange) {
+      onCheckedChange(!checked);
+    }
   };
 
   const iconName = indeterminate ? "minus" : "check";

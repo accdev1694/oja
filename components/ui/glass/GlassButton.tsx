@@ -44,8 +44,10 @@ export interface GlassButtonProps {
   variant?: GlassButtonVariant;
   /** Button size */
   size?: GlassButtonSize;
-  /** Button label */
-  children: string;
+  /** Button label (optional for icon-only buttons) */
+  children?: string;
+  /** Leading icon name (MaterialCommunityIcons) - alias for iconLeft */
+  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
   /** Leading icon name (MaterialCommunityIcons) */
   iconLeft?: keyof typeof MaterialCommunityIcons.glyphMap;
   /** Trailing icon name */
@@ -148,6 +150,7 @@ export function GlassButton({
   variant = "primary",
   size = "md",
   children,
+  icon,
   iconLeft,
   iconRight,
   loading = false,
@@ -158,6 +161,8 @@ export function GlassButton({
   style,
   textStyle,
 }: GlassButtonProps) {
+  // Support `icon` as an alias for `iconLeft`
+  const leadingIcon = iconLeft || icon;
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -220,32 +225,34 @@ export function GlassButton({
         />
       ) : (
         <View style={styles.content}>
-          {iconLeft && (
+          {leadingIcon && (
             <MaterialCommunityIcons
-              name={iconLeft}
+              name={leadingIcon}
               size={sStyles.iconSize}
               color={vStyles.textColor}
-              style={styles.iconLeft}
+              style={children ? styles.iconLeft : undefined}
             />
           )}
-          <Text
-            style={[
-              styles.text,
-              {
-                color: vStyles.textColor,
-                fontSize: sStyles.fontSize,
-              },
-              textStyle,
-            ]}
-          >
-            {children}
-          </Text>
+          {children && (
+            <Text
+              style={[
+                styles.text,
+                {
+                  color: vStyles.textColor,
+                  fontSize: sStyles.fontSize,
+                },
+                textStyle,
+              ]}
+            >
+              {children}
+            </Text>
+          )}
           {iconRight && (
             <MaterialCommunityIcons
               name={iconRight}
               size={sStyles.iconSize}
               color={vStyles.textColor}
-              style={styles.iconRight}
+              style={children ? styles.iconRight : undefined}
             />
           )}
         </View>

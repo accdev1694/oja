@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { getIconForItem } from "./iconMapping";
 
 /**
  * Bulk create pantry items for a user
@@ -38,14 +39,15 @@ export const bulkCreate = mutation({
 
     const now = Date.now();
 
-    // Insert all items
+    // Insert all items with icons
     const promises = args.items.map((item) =>
       ctx.db.insert("pantryItems", {
         userId: user._id,
         name: item.name,
         category: item.category,
+        icon: getIconForItem(item.name, item.category),
         stockLevel: item.stockLevel,
-        autoAddToList: false, // Default to not auto-adding
+        autoAddToList: false,
         createdAt: now,
         updatedAt: now,
       })
@@ -150,6 +152,7 @@ export const create = mutation({
       userId: user._id,
       name: args.name,
       category: args.category,
+      icon: getIconForItem(args.name, args.category),
       stockLevel: args.stockLevel,
       autoAddToList: args.autoAddToList ?? false,
       createdAt: now,
@@ -284,5 +287,62 @@ export const updateStockLevel = mutation({
     });
 
     return await ctx.db.get(args.id);
+  },
+});
+
+/**
+ * Migrate existing items to have icons
+ * Re-assigns icons to ALL items using the mapping
+ */
+export const migrateIcons = mutation({
+  args: {
+    forceAll: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Get all items for this user
+    const items = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    let updated = 0;
+    const debugInfo: Array<{ name: string; category: string; oldIcon: string | undefined; newIcon: string }> = [];
+
+    for (const item of items) {
+      // Update if no icon OR if forceAll is true
+      if (!item.icon || args.forceAll) {
+        const icon = getIconForItem(item.name, item.category);
+        debugInfo.push({
+          name: item.name,
+          category: item.category,
+          oldIcon: item.icon,
+          newIcon: icon,
+        });
+        await ctx.db.patch(item._id, {
+          icon,
+          updatedAt: Date.now(),
+        });
+        updated++;
+      }
+    }
+
+    // Log first 5 items for debugging
+    console.log("Migration debug - first 5 items:", JSON.stringify(debugInfo.slice(0, 5)));
+
+    return { updated, total: items.length };
   },
 });

@@ -29,6 +29,7 @@ import {
   shadows,
   animations,
   blur as blurConfig,
+  spacing,
 } from "@/lib/design/glassTokens";
 
 // =============================================================================
@@ -39,6 +40,8 @@ export type GlassCardVariant = "standard" | "elevated" | "sunken" | "bordered";
 export type GlassIntensity = "subtle" | "medium" | "strong";
 export type GlassBorderRadius = "sm" | "md" | "lg" | "xl" | "full";
 
+export type GlassPadding = "none" | "sm" | "md" | "lg";
+
 export interface GlassCardProps {
   /** Card style variant */
   variant?: GlassCardVariant;
@@ -46,6 +49,8 @@ export interface GlassCardProps {
   intensity?: GlassIntensity;
   /** Border radius size */
   borderRadius?: GlassBorderRadius;
+  /** Internal padding (default: md) */
+  padding?: GlassPadding;
   /** Optional accent border color */
   accentColor?: string;
   /** Make the card pressable */
@@ -125,10 +130,19 @@ const getBorderColor = (
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
+// Padding values
+const paddingValues: Record<GlassPadding, number> = {
+  none: 0,
+  sm: spacing.sm,
+  md: spacing.md,
+  lg: spacing.lg,
+};
+
 export function GlassCard({
   variant = "standard",
   intensity = "medium",
   borderRadius = "lg",
+  padding = "md", // Default padding
   accentColor,
   pressable = false,
   onPress,
@@ -177,22 +191,17 @@ export function GlassCard({
   const borderWidth = getBorderWidth(variant);
   const borderColor = getBorderColor(variant, accentColor);
   const radius = radii[borderRadius];
+  const paddingValue = paddingValues[padding];
 
   const cardStyle: ViewStyle = {
     backgroundColor,
     borderWidth,
     borderColor,
     borderRadius: radius,
+    padding: paddingValue,
     overflow: "hidden",
     ...(variant === "elevated" ? shadows.lg : {}),
   };
-
-  // Content wrapper
-  const content = (
-    <View style={styles.contentWrapper}>
-      {children}
-    </View>
-  );
 
   // Blur-enabled card (iOS only)
   if (enableBlur && blurConfig.isSupported && Platform.OS === "ios") {
@@ -212,23 +221,25 @@ export function GlassCard({
           onPressOut={handlePressOut}
           style={[cardStyle, animatedStyle, style]}
         >
-          <BlurView intensity={blurIntensity} tint="dark" style={styles.blur}>
-            {content}
+          <BlurView intensity={blurIntensity} tint="dark" style={StyleSheet.absoluteFill}>
+            {/* Blur fills the card */}
           </BlurView>
+          <View style={styles.blurContent}>{children}</View>
         </AnimatedPressable>
       );
     }
 
     return (
       <View style={[cardStyle, style]}>
-        <BlurView intensity={blurIntensity} tint="dark" style={styles.blur}>
-          {content}
+        <BlurView intensity={blurIntensity} tint="dark" style={StyleSheet.absoluteFill}>
+          {/* Blur fills the card */}
         </BlurView>
+        <View style={styles.blurContent}>{children}</View>
       </View>
     );
   }
 
-  // Non-blur card
+  // Non-blur card - children inherit flex styles from parent via style prop
   if (pressable) {
     return (
       <AnimatedPressable
@@ -238,12 +249,12 @@ export function GlassCard({
         onPressOut={handlePressOut}
         style={[cardStyle, animatedStyle, style]}
       >
-        {content}
+        {children}
       </AnimatedPressable>
     );
   }
 
-  return <View style={[cardStyle, style]}>{content}</View>;
+  return <View style={[cardStyle, style]}>{children}</View>;
 }
 
 // =============================================================================
@@ -251,11 +262,9 @@ export function GlassCard({
 // =============================================================================
 
 const styles = StyleSheet.create({
-  blur: {
-    flex: 1,
-  },
-  contentWrapper: {
-    flex: 1,
+  blurContent: {
+    // Content sits on top of blur, positioned relatively
+    // Flex styles from parent card's style prop will apply to children
   },
 });
 

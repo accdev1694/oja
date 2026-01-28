@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
@@ -11,6 +10,23 @@ import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { SeedItem } from "@/convex/ai";
 import { safeHaptics } from "@/lib/utils/safeHaptics";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
+
+import {
+  GlassScreen,
+  GlassCard,
+  GlassButton,
+  colors,
+  typography,
+  spacing,
+} from "@/components/ui/glass";
 
 export default function PantrySeedingScreen() {
   const router = useRouter();
@@ -22,6 +38,21 @@ export default function PantrySeedingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [seedItems, setSeedItems] = useState<SeedItem[]>([]);
 
+  // Spinning animation for loading
+  const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 2000, easing: Easing.linear }),
+      -1,
+      false
+    );
+  }, []);
+
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
   useEffect(() => {
     generateSeedItems();
   }, []);
@@ -31,7 +62,6 @@ export default function PantrySeedingScreen() {
     setError(null);
 
     try {
-      // Parse cuisines from URL params
       const country = params.country || "United Kingdom";
       const cuisines = params.cuisines ? params.cuisines.split(",") : ["british"];
 
@@ -40,8 +70,6 @@ export default function PantrySeedingScreen() {
       setSeedItems(items);
       safeHaptics.success();
 
-      // Navigate to review screen with generated items
-      // For now, we'll navigate to a placeholder
       setTimeout(() => {
         router.push({
           pathname: "/onboarding/review-items",
@@ -59,150 +87,309 @@ export default function PantrySeedingScreen() {
 
   async function handleSkip() {
     safeHaptics.light();
-    // Navigate to main app with empty pantry
     router.replace("/(app)/(tabs)");
   }
 
+  // Loading state
   if (isGenerating) {
     return (
-      <View style={styles.container}>
-        <View style={styles.loadingAnimation}>
-          <Text style={styles.emoji}>🛒</Text>
-          <ActivityIndicator size="large" color="#FF6B35" style={styles.spinner} />
+      <GlassScreen>
+        <View style={styles.container}>
+          <View style={styles.loadingSection}>
+            {/* Animated Icon */}
+            <View style={styles.iconWrapper}>
+              <Animated.View style={[styles.spinnerIcon, spinStyle]}>
+                <MaterialCommunityIcons
+                  name="refresh"
+                  size={32}
+                  color={colors.accent.primary}
+                />
+              </Animated.View>
+              <View style={styles.cartIcon}>
+                <MaterialCommunityIcons
+                  name="cart"
+                  size={48}
+                  color={colors.accent.primary}
+                />
+              </View>
+            </View>
+
+            <Text style={styles.loadingTitle}>Creating your pantry...</Text>
+            <Text style={styles.loadingSubtitle}>
+              Generating 200 personalized items based on your location and cuisine preferences
+            </Text>
+
+            {/* Progress indicators */}
+            <GlassCard variant="standard" style={styles.progressCard}>
+              <ProgressItem
+                icon="map-marker"
+                label="Location detected"
+                status="complete"
+              />
+              <ProgressItem
+                icon="silverware-fork-knife"
+                label="Cuisines analyzed"
+                status="complete"
+              />
+              <ProgressItem
+                icon="basket"
+                label="Generating items"
+                status="loading"
+              />
+            </GlassCard>
+          </View>
         </View>
-        <Text style={styles.loadingTitle}>Generating your personalized pantry...</Text>
-        <Text style={styles.loadingSubtitle}>
-          Creating 200 items based on your location and cuisine preferences
-        </Text>
-      </View>
+      </GlassScreen>
     );
   }
 
+  // Error state
   if (error) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorEmoji}>😕</Text>
-        <Text style={styles.errorTitle}>Oops!</Text>
-        <Text style={styles.errorMessage}>{error}</Text>
+      <GlassScreen>
+        <View style={styles.container}>
+          <View style={styles.errorSection}>
+            <View style={styles.errorIconContainer}>
+              <MaterialCommunityIcons
+                name="alert-circle-outline"
+                size={64}
+                color={colors.semantic.danger}
+              />
+            </View>
 
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={generateSeedItems}
-        >
-          <Text style={styles.retryButtonText}>Try Again</Text>
-        </TouchableOpacity>
+            <Text style={styles.errorTitle}>Oops!</Text>
+            <Text style={styles.errorMessage}>{error}</Text>
 
-        <TouchableOpacity
-          style={styles.skipButton}
-          onPress={handleSkip}
-        >
-          <Text style={styles.skipButtonText}>Skip & Start Empty</Text>
-        </TouchableOpacity>
-      </View>
+            <View style={styles.errorActions}>
+              <GlassButton
+                variant="primary"
+                size="lg"
+                icon="refresh"
+                onPress={generateSeedItems}
+              >
+                Try Again
+              </GlassButton>
+
+              <GlassButton
+                variant="ghost"
+                size="lg"
+                onPress={handleSkip}
+              >
+                Skip & Start Empty
+              </GlassButton>
+            </View>
+          </View>
+        </View>
+      </GlassScreen>
     );
   }
 
   // Success state (shown briefly before navigation)
   return (
-    <View style={styles.container}>
-      <Text style={styles.successEmoji}>✨</Text>
-      <Text style={styles.successTitle}>Pantry Generated!</Text>
-      <Text style={styles.successSubtitle}>
-        {seedItems.length} items ready for review
+    <GlassScreen>
+      <View style={styles.container}>
+        <View style={styles.successSection}>
+          <View style={styles.successIconContainer}>
+            <MaterialCommunityIcons
+              name="check-circle"
+              size={80}
+              color={colors.accent.primary}
+            />
+          </View>
+
+          <Text style={styles.successTitle}>Pantry Ready!</Text>
+          <Text style={styles.successSubtitle}>
+            {seedItems.length} items generated and ready for review
+          </Text>
+        </View>
+      </View>
+    </GlassScreen>
+  );
+}
+
+// =============================================================================
+// PROGRESS ITEM COMPONENT
+// =============================================================================
+
+interface ProgressItemProps {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  status: "pending" | "loading" | "complete";
+}
+
+function ProgressItem({ icon, label, status }: ProgressItemProps) {
+  return (
+    <View style={styles.progressItem}>
+      <View
+        style={[
+          styles.progressIcon,
+          status === "complete" && styles.progressIconComplete,
+          status === "loading" && styles.progressIconLoading,
+        ]}
+      >
+        {status === "complete" ? (
+          <MaterialCommunityIcons
+            name="check"
+            size={16}
+            color={colors.text.primary}
+          />
+        ) : status === "loading" ? (
+          <ActivityIndicator size="small" color={colors.accent.primary} />
+        ) : (
+          <MaterialCommunityIcons
+            name={icon}
+            size={16}
+            color={colors.text.tertiary}
+          />
+        )}
+      </View>
+      <Text
+        style={[
+          styles.progressLabel,
+          status === "complete" && styles.progressLabelComplete,
+        ]}
+      >
+        {label}
       </Text>
     </View>
   );
 }
 
+// =============================================================================
+// STYLES
+// =============================================================================
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFAF8",
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
+    paddingHorizontal: spacing.lg,
   },
-  loadingAnimation: {
+
+  // Loading State
+  loadingSection: {
+    alignItems: "center",
+    width: "100%",
+  },
+  iconWrapper: {
     position: "relative",
-    marginBottom: 32,
-    alignItems: "center",
+    width: 100,
+    height: 100,
     justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.xl,
   },
-  emoji: {
-    fontSize: 80,
+  cartIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: `${colors.accent.primary}20`,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  spinner: {
+  spinnerIcon: {
     position: "absolute",
-    top: "50%",
-    left: "50%",
-    marginTop: -20,
-    marginLeft: -20,
+    top: -5,
+    right: -5,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.glass.background,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.glass.border,
   },
   loadingTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#2D3436",
-    marginBottom: 12,
+    ...typography.headlineMedium,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
     textAlign: "center",
   },
   loadingSubtitle: {
-    fontSize: 16,
-    color: "#636E72",
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
     textAlign: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
   },
-  errorEmoji: {
-    fontSize: 80,
-    marginBottom: 24,
+  progressCard: {
+    width: "100%",
+    gap: spacing.md,
+  },
+  progressItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  progressIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.glass.backgroundStrong,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  progressIconComplete: {
+    backgroundColor: colors.accent.primary,
+  },
+  progressIconLoading: {
+    backgroundColor: `${colors.accent.primary}30`,
+  },
+  progressLabel: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+  },
+  progressLabelComplete: {
+    color: colors.text.primary,
+  },
+
+  // Error State
+  errorSection: {
+    alignItems: "center",
+    width: "100%",
+  },
+  errorIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: `${colors.semantic.danger}20`,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.lg,
   },
   errorTitle: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#2D3436",
-    marginBottom: 12,
+    ...typography.displaySmall,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
   },
   errorMessage: {
-    fontSize: 16,
-    color: "#636E72",
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
     textAlign: "center",
-    marginBottom: 32,
-    paddingHorizontal: 32,
+    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
-  retryButton: {
-    backgroundColor: "#FF6B35",
-    borderRadius: 12,
-    padding: 16,
+  errorActions: {
     width: "100%",
-    alignItems: "center",
-    marginBottom: 12,
+    gap: spacing.sm,
   },
-  retryButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  skipButton: {
-    padding: 16,
-    width: "100%",
+
+  // Success State
+  successSection: {
     alignItems: "center",
   },
-  skipButtonText: {
-    color: "#636E72",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  successEmoji: {
-    fontSize: 80,
-    marginBottom: 24,
+  successIconContainer: {
+    marginBottom: spacing.lg,
   },
   successTitle: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#2D3436",
-    marginBottom: 12,
+    ...typography.displaySmall,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
   },
   successSubtitle: {
-    fontSize: 16,
-    color: "#636E72",
+    ...typography.bodyLarge,
+    color: colors.text.secondary,
   },
 });

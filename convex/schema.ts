@@ -39,6 +39,9 @@ export default defineSchema({
     name: v.string(),
     category: v.string(),
 
+    // Icon (MaterialCommunityIcons name)
+    icon: v.optional(v.string()),
+
     // Stock levels
     stockLevel: v.union(
       v.literal("stocked"),

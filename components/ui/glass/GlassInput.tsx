@@ -58,8 +58,10 @@ export interface GlassInputProps extends Omit<TextInputProps, "style"> {
   clearable?: boolean;
   /** Callback when clear button pressed */
   onClear?: () => void;
-  /** Container styles */
+  /** Container styles (alias for style) */
   containerStyle?: StyleProp<ViewStyle>;
+  /** Shorthand for containerStyle */
+  style?: StyleProp<ViewStyle>;
   /** Input container styles */
   inputContainerStyle?: StyleProp<ViewStyle>;
 }
@@ -113,12 +115,15 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
       onBlur,
       value,
       containerStyle,
+      style,
       inputContainerStyle,
       multiline,
       ...textInputProps
     },
     ref
   ) => {
+    // Support `style` as an alias for `containerStyle`
+    const finalContainerStyle = containerStyle || style;
     const [isFocused, setIsFocused] = useState(false);
     const borderColorAnim = useSharedValue(0);
 
@@ -168,7 +173,7 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
         : colors.glass.background;
 
     return (
-      <View style={[styles.container, containerStyle]}>
+      <View style={[styles.container, finalContainerStyle]}>
         {/* Label */}
         {label && (
           <Text

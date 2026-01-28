@@ -9,6 +9,7 @@
  */
 
 import type * as ai from "../ai.js";
+import type * as iconMapping from "../iconMapping.js";
 import type * as listItems from "../listItems.js";
 import type * as pantryItems from "../pantryItems.js";
 import type * as receipts from "../receipts.js";
@@ -23,6 +24,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   ai: typeof ai;
+  iconMapping: typeof iconMapping;
   listItems: typeof listItems;
   pantryItems: typeof pantryItems;
   receipts: typeof receipts;
