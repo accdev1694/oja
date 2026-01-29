@@ -346,3 +346,224 @@ export const migrateIcons = mutation({
     return { updated, total: items.length };
   },
 });
+
+/**
+ * Calculate Levenshtein distance between two strings (for fuzzy matching)
+ */
+function levenshteinDistance(str1: string, str2: string): number {
+  const m = str1.length;
+  const n = str2.length;
+  const dp: number[][] = Array(m + 1)
+    .fill(null)
+    .map(() => Array(n + 1).fill(0));
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (str1[i - 1] === str2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+  }
+
+  return dp[m][n];
+}
+
+/**
+ * Calculate similarity percentage between two strings
+ */
+function calculateSimilarity(str1: string, str2: string): number {
+  const normalized1 = str1.toLowerCase().trim();
+  const normalized2 = str2.toLowerCase().trim();
+
+  if (normalized1 === normalized2) return 100;
+
+  const maxLen = Math.max(normalized1.length, normalized2.length);
+  if (maxLen === 0) return 100;
+
+  const distance = levenshteinDistance(normalized1, normalized2);
+  return ((maxLen - distance) / maxLen) * 100;
+}
+
+/**
+ * Auto-restock pantry items from receipt
+ * Returns items that were restocked, fuzzy matches, and items to add
+ */
+export const autoRestockFromReceipt = mutation({
+  args: {
+    receiptId: v.id("receipts"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const receipt = await ctx.db.get(args.receiptId);
+    if (!receipt || receipt.userId !== user._id) {
+      throw new Error("Receipt not found or unauthorized");
+    }
+
+    // Get all pantry items
+    const pantryItems = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    const restockedItems: Array<{ pantryItemId: string; name: string }> = [];
+    const fuzzyMatches: Array<{
+      receiptItemName: string;
+      pantryItemName: string;
+      pantryItemId: string;
+      similarity: number;
+    }> = [];
+    const itemsToAdd: Array<{ name: string; category?: string }> = [];
+
+    const now = Date.now();
+
+    for (const receiptItem of receipt.items) {
+      const receiptItemName = receiptItem.name.toLowerCase().trim();
+
+      // Try exact match first
+      const exactMatch = pantryItems.find(
+        (p) => p.name.toLowerCase().trim() === receiptItemName
+      );
+
+      if (exactMatch) {
+        // Exact match - auto-restock
+        await ctx.db.patch(exactMatch._id, {
+          stockLevel: "stocked",
+          updatedAt: now,
+        });
+        restockedItems.push({
+          pantryItemId: exactMatch._id,
+          name: exactMatch.name,
+        });
+        continue;
+      }
+
+      // Try fuzzy match (>80% similarity)
+      let bestMatch: { item: (typeof pantryItems)[0]; similarity: number } | null =
+        null;
+
+      for (const pantryItem of pantryItems) {
+        const similarity = calculateSimilarity(receiptItem.name, pantryItem.name);
+        if (similarity > 80 && (!bestMatch || similarity > bestMatch.similarity)) {
+          bestMatch = { item: pantryItem, similarity };
+        }
+      }
+
+      if (bestMatch) {
+        // Fuzzy match - requires confirmation
+        fuzzyMatches.push({
+          receiptItemName: receiptItem.name,
+          pantryItemName: bestMatch.item.name,
+          pantryItemId: bestMatch.item._id,
+          similarity: bestMatch.similarity,
+        });
+      } else {
+        // No match - suggest adding to pantry
+        itemsToAdd.push({
+          name: receiptItem.name,
+          category: receiptItem.category,
+        });
+      }
+    }
+
+    return {
+      restockedItems,
+      fuzzyMatches,
+      itemsToAdd,
+    };
+  },
+});
+
+/**
+ * Confirm fuzzy match and restock pantry item
+ */
+export const confirmFuzzyRestock = mutation({
+  args: {
+    pantryItemId: v.id("pantryItems"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const pantryItem = await ctx.db.get(args.pantryItemId);
+    if (!pantryItem) {
+      throw new Error("Pantry item not found");
+    }
+
+    // Verify ownership
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user || pantryItem.userId !== user._id) {
+      throw new Error("Unauthorized");
+    }
+
+    await ctx.db.patch(args.pantryItemId, {
+      stockLevel: "stocked",
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Add new item to pantry from receipt
+ */
+export const addFromReceipt = mutation({
+  args: {
+    name: v.string(),
+    category: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const now = Date.now();
+
+    const pantryItemId = await ctx.db.insert("pantryItems", {
+      userId: user._id,
+      name: args.name,
+      category: args.category || "other",
+      icon: getIconForItem(args.name, args.category || "other"),
+      stockLevel: "stocked",
+      autoAddToList: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return pantryItemId;
+  },
+});

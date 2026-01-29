@@ -35,8 +35,21 @@ export default function ReconciliationScreen() {
   const listItems = listId ? useQuery(api.listItems.getByList, { listId }) : null;
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
   const linkReceiptToList = useMutation(api.receipts.linkToList);
+  const autoRestock = useMutation(api.pantryItems.autoRestockFromReceipt);
+  const confirmFuzzyRestock = useMutation(api.pantryItems.confirmFuzzyRestock);
+  const addFromReceipt = useMutation(api.pantryItems.addFromReceipt);
 
   const [isCompleting, setIsCompleting] = useState(false);
+  const [restockResult, setRestockResult] = useState<{
+    restockedCount: number;
+    fuzzyMatches: Array<{
+      receiptItemName: string;
+      pantryItemName: string;
+      pantryItemId: string;
+      similarity: number;
+    }>;
+    itemsToAdd: Array<{ name: string; category?: string }>;
+  } | null>(null);
 
   if (receipt === undefined || (listId && (list === undefined || listItems === undefined))) {
     return (
@@ -145,35 +158,130 @@ export default function ReconciliationScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      // Link receipt to list
+      // Step 1: Link receipt to list
       await linkReceiptToList({
         receiptId,
         listId,
       });
 
-      // Complete the shopping trip
+      // Step 2: Complete the shopping trip
       await completeShopping({ id: listId });
+
+      // Step 3: Auto-restock pantry from receipt
+      const result = await autoRestock({ receiptId });
+
+      setRestockResult({
+        restockedCount: result.restockedItems.length,
+        fuzzyMatches: result.fuzzyMatches,
+        itemsToAdd: result.itemsToAdd,
+      });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      Alert.alert(
-        "Trip Completed!",
-        savedMoney
-          ? `Great job! You saved £${Math.abs(difference).toFixed(2)}!`
-          : "Shopping trip completed successfully",
-        [
+      // Show success message with restock count
+      const restockMessage =
+        result.restockedItems.length > 0
+          ? `Pantry updated: ${result.restockedItems.length} item${result.restockedItems.length !== 1 ? "s" : ""} restocked`
+          : "";
+
+      const savingsMessage = savedMoney
+        ? `Great job! You saved £${Math.abs(difference).toFixed(2)}!`
+        : "Shopping trip completed successfully";
+
+      const fullMessage = restockMessage
+        ? `${savingsMessage}\n\n${restockMessage}`
+        : savingsMessage;
+
+      // Handle fuzzy matches and items to add
+      if (result.fuzzyMatches.length > 0 || result.itemsToAdd.length > 0) {
+        Alert.alert("Trip Completed!", fullMessage, [
+          {
+            text: "Review Pantry Updates",
+            onPress: () => handleFuzzyMatchesAndNewItems(),
+          },
           {
             text: "Done",
             onPress: () => router.push("/(app)/(tabs)/" as any),
           },
-        ]
-      );
+        ]);
+      } else {
+        Alert.alert("Trip Completed!", fullMessage, [
+          {
+            text: "Done",
+            onPress: () => router.push("/(app)/(tabs)/" as any),
+          },
+        ]);
+      }
     } catch (error) {
       console.error("Failed to complete trip:", error);
       Alert.alert("Error", "Failed to complete shopping trip");
     } finally {
       setIsCompleting(false);
     }
+  }
+
+  // Handle fuzzy matches and items to add
+  async function handleFuzzyMatchesAndNewItems() {
+    if (!restockResult) return;
+
+    const { fuzzyMatches, itemsToAdd } = restockResult;
+
+    // Handle fuzzy matches first
+    for (const match of fuzzyMatches) {
+      await new Promise<void>((resolve) => {
+        Alert.alert(
+          "Restock Item?",
+          `Receipt has "${match.receiptItemName}"\nRestock "${match.pantryItemName}" (${match.similarity.toFixed(0)}% match)?`,
+          [
+            {
+              text: "Skip",
+              style: "cancel",
+              onPress: () => resolve(),
+            },
+            {
+              text: "Restock",
+              onPress: async () => {
+                try {
+                  await confirmFuzzyRestock({ pantryItemId: match.pantryItemId as any });
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                } catch (error) {
+                  console.error("Failed to restock:", error);
+                }
+                resolve();
+              },
+            },
+          ]
+        );
+      });
+    }
+
+    // Handle items to add
+    for (const item of itemsToAdd) {
+      await new Promise<void>((resolve) => {
+        Alert.alert("Add to Pantry?", `Add "${item.name}" to your pantry?`, [
+          {
+            text: "Skip",
+            style: "cancel",
+            onPress: () => resolve(),
+          },
+          {
+            text: "Add",
+            onPress: async () => {
+              try {
+                await addFromReceipt({ name: item.name, category: item.category });
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (error) {
+                console.error("Failed to add item:", error);
+              }
+              resolve();
+            },
+          },
+        ]);
+      });
+    }
+
+    // All done - navigate to home
+    router.push("/(app)/(tabs)/" as any);
   }
 
   return (
