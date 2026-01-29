@@ -12,9 +12,9 @@ import {
   Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { getIconForItem } from "@/lib/icons/iconMatcher";
@@ -24,7 +24,10 @@ import Animated, {
   useSharedValue,
   withSpring,
   withTiming,
+  runOnJS,
+  interpolateColor,
 } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import {
   GlassScreen,
@@ -98,6 +101,7 @@ type ListItem = {
   actualPrice?: number;
   isChecked: boolean;
   autoAdded?: boolean;
+  priority?: "must-have" | "should-have" | "nice-to-have";
 };
 
 export default function ListDetailScreen() {
@@ -117,6 +121,7 @@ export default function ListDetailScreen() {
   const updateList = useMutation(api.shoppingLists.update);
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
   const impulseUsage = useQuery(api.listItems.getImpulseUsage, { listId: id });
+  const generateSuggestions = useAction(api.ai.generateListSuggestions);
 
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState("");
@@ -143,6 +148,50 @@ export default function ListDetailScreen() {
   const [checkingItemQuantity, setCheckingItemQuantity] = useState(1);
   const [actualPriceValue, setActualPriceValue] = useState("");
   const [isSavingActualPrice, setIsSavingActualPrice] = useState(false);
+
+  // Smart suggestions state (Story 3.10)
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+
+  // Load suggestions when items change (Story 3.10)
+  const loadSuggestions = useCallback(async () => {
+    if (!items || items.length === 0 || !showSuggestions) {
+      setSuggestions([]);
+      return;
+    }
+
+    setIsLoadingSuggestions(true);
+    try {
+      const currentItemNames = items.map((item) => item.name);
+      const excludeItems = [...currentItemNames, ...dismissedSuggestions];
+
+      const newSuggestions = await generateSuggestions({
+        currentItems: currentItemNames,
+        excludeItems,
+      });
+
+      setSuggestions(newSuggestions);
+    } catch (error) {
+      console.error("Failed to load suggestions:", error);
+      setSuggestions([]);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, [items, dismissedSuggestions, showSuggestions, generateSuggestions]);
+
+  // Fetch suggestions when items change
+  useEffect(() => {
+    // Debounce suggestions loading
+    const timeoutId = setTimeout(() => {
+      if (items && items.length > 0 && showSuggestions) {
+        loadSuggestions();
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [items?.length, showSuggestions]);
 
   // Loading state
   if (list === undefined || items === undefined) {
@@ -252,7 +301,7 @@ export default function ListDetailScreen() {
   // Edit budget handlers
   function handleOpenEditBudget() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setEditBudgetValue(budget > 0 ? budget.toString() : "50");
+    setEditBudgetValue(budget > 0 ? budget.toString() : "");
     setShowEditBudgetModal(true);
   }
 
@@ -262,8 +311,8 @@ export default function ListDetailScreen() {
   }
 
   async function handleSaveBudget() {
-    const newBudget = parseFloat(editBudgetValue) || 0;
-    if (newBudget < 0) {
+    const budgetNum = parseFloat(editBudgetValue) || 0;
+    if (budgetNum < 0) {
       Alert.alert("Error", "Budget cannot be negative");
       return;
     }
@@ -273,7 +322,7 @@ export default function ListDetailScreen() {
     try {
       await updateList({
         id,
-        budget: newBudget > 0 ? newBudget : undefined,
+        budget: budgetNum > 0 ? budgetNum : undefined,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       handleCloseEditBudget();
@@ -580,6 +629,18 @@ export default function ListDetailScreen() {
     ]);
   }
 
+  async function handlePriorityChange(
+    itemId: Id<"listItems">,
+    newPriority: "must-have" | "should-have" | "nice-to-have"
+  ) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await updateItem({ id: itemId, priority: newPriority });
+    } catch (error) {
+      console.error("Failed to update priority:", error);
+    }
+  }
+
   async function handleStartShopping() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
@@ -648,6 +709,48 @@ export default function ListDetailScreen() {
     } catch (error) {
       console.error("Failed to add from pantry:", error);
       Alert.alert("Error", "Failed to add items from pantry");
+    }
+  }
+
+  // Smart suggestions handlers (Story 3.10)
+  async function handleAddSuggestion(suggestionName: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Remove from suggestions
+    setSuggestions((prev) => prev.filter((s) => s !== suggestionName));
+
+    try {
+      await addItem({
+        listId: id,
+        name: suggestionName,
+        quantity: 1,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("Failed to add suggestion:", error);
+      // Add back to suggestions if failed
+      setSuggestions((prev) => [...prev, suggestionName]);
+      Alert.alert("Error", "Failed to add item");
+    }
+  }
+
+  function handleDismissSuggestion(suggestionName: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSuggestions((prev) => prev.filter((s) => s !== suggestionName));
+    setDismissedSuggestions((prev) => [...prev, suggestionName]);
+  }
+
+  function handleRefreshSuggestions() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    loadSuggestions();
+  }
+
+  function handleToggleSuggestions() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowSuggestions((prev) => !prev);
+    if (!showSuggestions) {
+      // Clear dismissed when toggling back on
+      setDismissedSuggestions([]);
     }
   }
 
@@ -923,6 +1026,96 @@ export default function ListDetailScreen() {
             </View>
           </GlassCard>
 
+          {/* Smart Suggestions (Story 3.10) */}
+          {items.length > 0 && (
+            <GlassCard variant="standard" style={styles.suggestionsCard}>
+              <View style={styles.suggestionsHeader}>
+                <View style={styles.suggestionsHeaderLeft}>
+                  <MaterialCommunityIcons
+                    name="lightbulb-on-outline"
+                    size={20}
+                    color={colors.accent.secondary}
+                  />
+                  <Text style={styles.suggestionsTitle}>Suggestions</Text>
+                </View>
+                <View style={styles.suggestionsHeaderRight}>
+                  {showSuggestions && suggestions.length > 0 && (
+                    <Pressable
+                      style={styles.refreshButton}
+                      onPress={handleRefreshSuggestions}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      disabled={isLoadingSuggestions}
+                    >
+                      <MaterialCommunityIcons
+                        name="refresh"
+                        size={18}
+                        color={isLoadingSuggestions ? colors.text.tertiary : colors.text.secondary}
+                      />
+                    </Pressable>
+                  )}
+                  <Pressable
+                    style={styles.toggleSuggestionsButton}
+                    onPress={handleToggleSuggestions}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialCommunityIcons
+                      name={showSuggestions ? "chevron-up" : "chevron-down"}
+                      size={20}
+                      color={colors.text.secondary}
+                    />
+                  </Pressable>
+                </View>
+              </View>
+
+              {showSuggestions && (
+                <View style={styles.suggestionsContent}>
+                  {isLoadingSuggestions ? (
+                    <View style={styles.suggestionsLoading}>
+                      <ActivityIndicator size="small" color={colors.accent.secondary} />
+                      <Text style={styles.suggestionsLoadingText}>Finding suggestions...</Text>
+                    </View>
+                  ) : suggestions.length > 0 ? (
+                    <View style={styles.suggestionsList}>
+                      {suggestions.map((suggestion, index) => (
+                        <View key={`${suggestion}-${index}`} style={styles.suggestionChip}>
+                          <Text style={styles.suggestionText}>{suggestion}</Text>
+                          <View style={styles.suggestionActions}>
+                            <Pressable
+                              style={styles.suggestionAddButton}
+                              onPress={() => handleAddSuggestion(suggestion)}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <MaterialCommunityIcons
+                                name="plus"
+                                size={16}
+                                color={colors.semantic.success}
+                              />
+                            </Pressable>
+                            <Pressable
+                              style={styles.suggestionDismissButton}
+                              onPress={() => handleDismissSuggestion(suggestion)}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <MaterialCommunityIcons
+                                name="close"
+                                size={14}
+                                color={colors.text.tertiary}
+                              />
+                            </Pressable>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.noSuggestionsText}>
+                      No suggestions available
+                    </Text>
+                  )}
+                </View>
+              )}
+            </GlassCard>
+          )}
+
           {/* Items List */}
           {items.length === 0 ? (
             <View style={styles.emptyContainer}>
@@ -945,6 +1138,7 @@ export default function ListDetailScreen() {
                   item={item}
                   onToggle={() => handleToggleItem(item._id)}
                   onRemove={() => handleRemoveItem(item._id, item.name)}
+                  onPriorityChange={(priority) => handlePriorityChange(item._id, priority)}
                   isShopping={list.status === "shopping"}
                 />
               ))}
@@ -1323,20 +1517,95 @@ export default function ListDetailScreen() {
 // SHOPPING LIST ITEM COMPONENT
 // =============================================================================
 
+// Priority configuration
+const PRIORITY_CONFIG = {
+  "must-have": {
+    label: "Must",
+    color: colors.semantic.danger,
+    icon: "exclamation-thick" as const,
+  },
+  "should-have": {
+    label: "Should",
+    color: colors.accent.primary,
+    icon: "check" as const,
+  },
+  "nice-to-have": {
+    label: "Nice",
+    color: colors.text.tertiary,
+    icon: "heart-outline" as const,
+  },
+};
+
+const PRIORITY_ORDER: Array<"must-have" | "should-have" | "nice-to-have"> = [
+  "must-have",
+  "should-have",
+  "nice-to-have",
+];
+
 interface ShoppingListItemProps {
   item: ListItem;
   onToggle: () => void;
   onRemove: () => void;
+  onPriorityChange: (priority: "must-have" | "should-have" | "nice-to-have") => void;
   isShopping: boolean;
 }
 
-function ShoppingListItem({ item, onToggle, onRemove, isShopping }: ShoppingListItemProps) {
+function ShoppingListItem({ item, onToggle, onRemove, onPriorityChange, isShopping }: ShoppingListItemProps) {
+  const translateX = useSharedValue(0);
   const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
+
+  const currentPriority = item.priority || "should-have";
+  const priorityConfig = PRIORITY_CONFIG[currentPriority];
+
+  const triggerPriorityChange = (direction: "left" | "right") => {
+    const currentIndex = PRIORITY_ORDER.indexOf(currentPriority);
+    let newIndex: number;
+
+    if (direction === "left") {
+      // Swipe left = decrease priority (towards nice-to-have)
+      newIndex = Math.min(currentIndex + 1, PRIORITY_ORDER.length - 1);
+    } else {
+      // Swipe right = increase priority (towards must-have)
+      newIndex = Math.max(currentIndex - 1, 0);
+    }
+
+    if (newIndex !== currentIndex) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      onPriorityChange(PRIORITY_ORDER[newIndex]);
+    }
+  };
+
+  const panGesture = Gesture.Pan()
+    .activeOffsetX([-20, 20])
+    .onUpdate((event) => {
+      // Clamp the translation
+      translateX.value = Math.max(-80, Math.min(80, event.translationX));
+    })
+    .onEnd((event) => {
+      const threshold = 50;
+
+      if (event.translationX > threshold) {
+        runOnJS(triggerPriorityChange)("right");
+      } else if (event.translationX < -threshold) {
+        runOnJS(triggerPriorityChange)("left");
+      }
+
+      translateX.value = withSpring(0, { damping: 15 });
+    });
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
+    transform: [
+      { translateX: translateX.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  const leftActionStyle = useAnimatedStyle(() => ({
+    opacity: translateX.value > 20 ? Math.min((translateX.value - 20) / 30, 1) : 0,
+  }));
+
+  const rightActionStyle = useAnimatedStyle(() => ({
+    opacity: translateX.value < -20 ? Math.min((-translateX.value - 20) / 30, 1) : 0,
   }));
 
   const handlePressIn = () => {
@@ -1350,84 +1619,112 @@ function ShoppingListItem({ item, onToggle, onRemove, isShopping }: ShoppingList
   const iconResult = getIconForItem(item.name, item.category || "other");
 
   return (
-    <Animated.View style={animatedStyle}>
-      <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut}>
-        <GlassCard
-          variant="standard"
-          style={[styles.itemCard, item.isChecked && styles.itemCardChecked]}
-        >
-          <View style={styles.itemRow}>
-            {/* Checkbox */}
-            <GlassCircularCheckbox
-              checked={item.isChecked}
-              onToggle={onToggle}
-              size="md"
-            />
+    <View style={styles.swipeContainer}>
+      {/* Left action (increase priority) */}
+      <Animated.View style={[styles.swipeAction, styles.swipeActionLeft, leftActionStyle]}>
+        <MaterialCommunityIcons name="arrow-up-bold" size={20} color="#fff" />
+        <Text style={styles.swipeActionText}>Priority ↑</Text>
+      </Animated.View>
 
-            {/* Item content */}
-            <View style={styles.itemContent}>
-              <View style={styles.itemNameRow}>
-                <MaterialCommunityIcons
-                  name={iconResult.icon as keyof typeof MaterialCommunityIcons.glyphMap}
-                  size={18}
-                  color={item.isChecked ? colors.text.tertiary : colors.text.secondary}
+      {/* Right action (decrease priority) */}
+      <Animated.View style={[styles.swipeAction, styles.swipeActionRight, rightActionStyle]}>
+        <Text style={styles.swipeActionText}>Priority ↓</Text>
+        <MaterialCommunityIcons name="arrow-down-bold" size={20} color="#fff" />
+      </Animated.View>
+
+      <GestureDetector gesture={panGesture}>
+        <Animated.View style={animatedStyle}>
+          <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut}>
+            <GlassCard
+              variant="standard"
+              style={[styles.itemCard, item.isChecked && styles.itemCardChecked]}
+            >
+              <View style={styles.itemRow}>
+                {/* Checkbox */}
+                <GlassCircularCheckbox
+                  checked={item.isChecked}
+                  onToggle={onToggle}
+                  size="md"
                 />
-                <Text
-                  style={[styles.itemName, item.isChecked && styles.itemNameChecked]}
-                  numberOfLines={1}
-                >
-                  {item.name}
-                </Text>
-              </View>
 
-              <View style={styles.itemDetails}>
-                <View style={styles.quantityBadge}>
-                  <Text style={styles.quantityText}>×{item.quantity}</Text>
-                </View>
-
-                {item.estimatedPrice && (
-                  <Text style={styles.itemPrice}>
-                    £{(item.estimatedPrice * item.quantity).toFixed(2)}
-                  </Text>
-                )}
-
-                {item.actualPrice && isShopping && (
-                  <View style={styles.actualPriceBadge}>
-                    <Text style={styles.actualPriceText}>
-                      £{(item.actualPrice * item.quantity).toFixed(2)}
+                {/* Item content */}
+                <View style={styles.itemContent}>
+                  <View style={styles.itemNameRow}>
+                    <MaterialCommunityIcons
+                      name={iconResult.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                      size={18}
+                      color={item.isChecked ? colors.text.tertiary : colors.text.secondary}
+                    />
+                    <Text
+                      style={[styles.itemName, item.isChecked && styles.itemNameChecked]}
+                      numberOfLines={1}
+                    >
+                      {item.name}
                     </Text>
                   </View>
-                )}
 
-                {item.autoAdded && (
-                  <View style={styles.autoAddedBadge}>
-                    <MaterialCommunityIcons
-                      name="lightning-bolt"
-                      size={12}
-                      color={colors.accent.secondary}
-                    />
-                    <Text style={styles.autoAddedText}>Auto</Text>
+                  <View style={styles.itemDetails}>
+                    {/* Priority Badge */}
+                    <View style={[styles.priorityBadge, { backgroundColor: `${priorityConfig.color}20` }]}>
+                      <MaterialCommunityIcons
+                        name={priorityConfig.icon}
+                        size={10}
+                        color={priorityConfig.color}
+                      />
+                      <Text style={[styles.priorityText, { color: priorityConfig.color }]}>
+                        {priorityConfig.label}
+                      </Text>
+                    </View>
+
+                    <View style={styles.quantityBadge}>
+                      <Text style={styles.quantityText}>×{item.quantity}</Text>
+                    </View>
+
+                    {item.estimatedPrice && (
+                      <Text style={styles.itemPrice}>
+                        £{(item.estimatedPrice * item.quantity).toFixed(2)}
+                      </Text>
+                    )}
+
+                    {item.actualPrice && isShopping && (
+                      <View style={styles.actualPriceBadge}>
+                        <Text style={styles.actualPriceText}>
+                          £{(item.actualPrice * item.quantity).toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+
+                    {item.autoAdded && (
+                      <View style={styles.autoAddedBadge}>
+                        <MaterialCommunityIcons
+                          name="lightning-bolt"
+                          size={12}
+                          color={colors.accent.secondary}
+                        />
+                        <Text style={styles.autoAddedText}>Auto</Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-            </View>
+                </View>
 
-            {/* Remove button */}
-            <Pressable
-              style={styles.removeButton}
-              onPress={onRemove}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <MaterialCommunityIcons
-                name="close"
-                size={18}
-                color={colors.semantic.danger}
-              />
-            </Pressable>
-          </View>
-        </GlassCard>
-      </Pressable>
-    </Animated.View>
+                {/* Remove button */}
+                <Pressable
+                  style={styles.removeButton}
+                  onPress={onRemove}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={18}
+                    color={colors.semantic.danger}
+                  />
+                </Pressable>
+              </View>
+            </GlassCard>
+          </Pressable>
+        </Animated.View>
+      </GestureDetector>
+    </View>
   );
 }
 
@@ -1657,9 +1954,40 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
 
+  // Swipe Container
+  swipeContainer: {
+    position: "relative",
+    marginBottom: spacing.xs,
+  },
+  swipeAction: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  swipeActionLeft: {
+    left: 0,
+    backgroundColor: colors.semantic.success,
+    borderRadius: borderRadius.lg,
+  },
+  swipeActionRight: {
+    right: 0,
+    backgroundColor: colors.text.tertiary,
+    borderRadius: borderRadius.lg,
+  },
+  swipeActionText: {
+    ...typography.labelSmall,
+    color: "#fff",
+    fontWeight: "600",
+  },
+
   // Item Card
   itemCard: {
-    marginBottom: spacing.xs,
+    // No marginBottom here, handled by swipeContainer
   },
   itemCardChecked: {
     opacity: 0.7,
@@ -1692,6 +2020,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     flexWrap: "wrap",
+  },
+  priorityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  priorityText: {
+    ...typography.labelSmall,
+    fontSize: 10,
+    fontWeight: "600",
   },
   quantityBadge: {
     backgroundColor: colors.glass.backgroundStrong,
@@ -1796,7 +2137,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
   },
   modalContent: {
     width: "85%",
@@ -1804,11 +2145,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
     borderRadius: borderRadius.xl,
     padding: spacing.xl,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    borderWidth: 1,
+    borderColor: colors.glass.borderFocus,
+    shadowColor: colors.accent.primary,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 15,
   },
   modalHeader: {
     flexDirection: "row",
@@ -2115,5 +2458,103 @@ const styles = StyleSheet.create({
   },
   actualPriceButton: {
     flex: 1,
+  },
+
+  // Smart Suggestions Styles (Story 3.10)
+  suggestionsCard: {
+    marginBottom: spacing.lg,
+  },
+  suggestionsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  suggestionsHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  suggestionsTitle: {
+    ...typography.labelLarge,
+    color: colors.text.primary,
+  },
+  suggestionsHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  refreshButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.glass.background,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  toggleSuggestionsButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  suggestionsContent: {
+    marginTop: spacing.md,
+  },
+  suggestionsLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  suggestionsLoadingText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  suggestionsList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  suggestionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: `${colors.accent.secondary}15`,
+    borderRadius: borderRadius.full,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+    paddingVertical: spacing.xs,
+    gap: spacing.xs,
+  },
+  suggestionText: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+  },
+  suggestionActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  suggestionAddButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: `${colors.semantic.success}20`,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  suggestionDismissButton: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  noSuggestionsText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    paddingVertical: spacing.sm,
   },
 });

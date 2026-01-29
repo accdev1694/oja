@@ -197,11 +197,11 @@ export default function ScanScreen() {
       />
 
       <View style={styles.content}>
-        {/* Receipt Icon */}
+        {/* Camera Icon */}
         <View style={styles.iconSection}>
           <View style={styles.iconContainer}>
             <MaterialCommunityIcons
-              name="receipt"
+              name="camera"
               size={64}
               color={colors.semantic.scan}
             />
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   previewActions: {
     flexDirection: "row",
     gap: spacing.md,
-    marginBottom: spacing.xl,
+    marginBottom: 140,
   },
   actionButton: {
     flex: 1,

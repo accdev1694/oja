@@ -65,7 +65,7 @@ development_status:
   epic-2-retrospective: optional
 
   # Epic 3: Shopping Lists with Budget Control (10 stories)
-  epic-3: in-progress
+  epic-3: done
   3-1-shopping-list-schema-basic-crud: done  # ✅ List CRUD with Convex mutations
   3-2-add-items-to-list-search-from-pantry: done  # ✅ Add items from pantry with search
   3-3-running-total-budget-display: done  # ✅ Running total with budget tracking
@@ -74,8 +74,8 @@ development_status:
   3-6-impulse-fund-10-buffer: done  # ✅ 10% buffer + color coding + budget lock respects impulse fund
   3-7-mid-shop-add-flow-3-options: done  # ✅ Mid-shop modal with 3 options (budget/impulse/next trip)
   3-8-check-off-items-while-shopping: done  # ✅ Actual price entry modal when checking items in shopping mode
-  3-9-item-priority-with-swipe-gestures: ready-for-dev
-  3-10-smart-suggestions-with-jina-ai: ready-for-dev
+  3-9-item-priority-with-swipe-gestures: done  # ✅ Swipe left/right to change priority + priority badges + haptics
+  3-10-smart-suggestions-with-jina-ai: done  # ✅ AI-powered suggestions using Gemini + fallback pattern matching + chip UI
   epic-3-retrospective: optional
 
   # Epic 4: Partner Mode & Collaboration (5 stories)

@@ -196,83 +196,85 @@ export default function ListsScreen() {
         >
           <Pressable style={styles.modalBackdrop} onPress={handleCloseCreateModal} />
           <View style={styles.modalContent}>
-            <GlassCard variant="elevated" style={styles.modalCard}>
-              {/* Modal Header */}
-              <View style={styles.modalHeader}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <MaterialCommunityIcons
+                  name="clipboard-plus-outline"
+                  size={24}
+                  color={colors.accent.primary}
+                />
                 <Text style={styles.modalTitle}>Create New List</Text>
-                <Pressable onPress={handleCloseCreateModal} hitSlop={8}>
-                  <MaterialCommunityIcons name="close" size={24} color={colors.text.secondary} />
-                </Pressable>
               </View>
+            </View>
 
-              {/* List Name Input */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>List Name</Text>
-                <View style={styles.inputContainer}>
-                  <MaterialCommunityIcons name="clipboard-list" size={20} color={colors.text.tertiary} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={newListName}
-                    onChangeText={setNewListName}
-                    placeholder="e.g., Weekly Shop"
-                    placeholderTextColor={colors.text.tertiary}
-                    autoFocus
-                  />
-                </View>
+            {/* List Name Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>List Name</Text>
+              <View style={styles.inputContainer}>
+                <MaterialCommunityIcons name="clipboard-list" size={20} color={colors.text.tertiary} />
+                <TextInput
+                  style={styles.textInput}
+                  value={newListName}
+                  onChangeText={setNewListName}
+                  placeholder="e.g., Weekly Shop"
+                  placeholderTextColor={colors.text.tertiary}
+                  autoFocus
+                />
               </View>
+            </View>
 
-              {/* Budget Input */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Budget (£)</Text>
-                <View style={styles.inputContainer}>
-                  <MaterialCommunityIcons name="wallet-outline" size={20} color={colors.text.tertiary} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={newListBudget}
-                    onChangeText={setNewListBudget}
-                    placeholder="50"
-                    placeholderTextColor={colors.text.tertiary}
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-                <Text style={styles.inputHint}>
-                  Set to 0 for no budget tracking
+            {/* Budget Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Budget (£)</Text>
+              <View style={styles.inputContainer}>
+                <MaterialCommunityIcons name="wallet-outline" size={20} color={colors.text.tertiary} />
+                <TextInput
+                  style={styles.textInput}
+                  value={newListBudget}
+                  onChangeText={setNewListBudget}
+                  placeholder="50"
+                  placeholderTextColor={colors.text.tertiary}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              <Text style={styles.inputHint}>
+                Set to 0 for no budget tracking
+              </Text>
+            </View>
+
+            {/* Impulse Fund Preview */}
+            {parseFloat(newListBudget) > 0 && (
+              <View style={styles.impulseFundPreview}>
+                <MaterialCommunityIcons name="lightning-bolt" size={16} color={colors.accent.secondary} />
+                <Text style={styles.impulseFundPreviewText}>
+                  +£{(parseFloat(newListBudget) * 0.1).toFixed(2)} impulse fund (10%)
                 </Text>
               </View>
+            )}
 
-              {/* Impulse Fund Preview */}
-              {parseFloat(newListBudget) > 0 && (
-                <View style={styles.impulseFundPreview}>
-                  <MaterialCommunityIcons name="lightning-bolt" size={16} color={colors.accent.secondary} />
-                  <Text style={styles.impulseFundPreviewText}>
-                    +£{(parseFloat(newListBudget) * 0.1).toFixed(2)} impulse fund (10%)
-                  </Text>
-                </View>
-              )}
-
-              {/* Action Buttons */}
-              <View style={styles.modalActions}>
-                <GlassButton
-                  variant="secondary"
-                  size="md"
-                  onPress={handleCloseCreateModal}
-                  style={styles.modalButton}
-                >
-                  Cancel
-                </GlassButton>
-                <GlassButton
-                  variant="primary"
-                  size="md"
-                  icon="plus"
-                  onPress={handleCreateList}
-                  loading={isCreating}
-                  disabled={isCreating}
-                  style={styles.modalButton}
-                >
-                  Create List
-                </GlassButton>
-              </View>
-            </GlassCard>
+            {/* Action Buttons */}
+            <View style={styles.modalActions}>
+              <GlassButton
+                variant="secondary"
+                size="md"
+                onPress={handleCloseCreateModal}
+                style={styles.modalButton}
+              >
+                Cancel
+              </GlassButton>
+              <GlassButton
+                variant="primary"
+                size="md"
+                icon="plus"
+                onPress={handleCreateList}
+                loading={isCreating}
+                disabled={isCreating}
+                style={styles.modalButton}
+              >
+                Create List
+              </GlassButton>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -582,20 +584,31 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
   },
   modalContent: {
-    width: "90%",
-    maxWidth: 400,
-  },
-  modalCard: {
-    padding: spacing.lg,
+    width: "85%",
+    maxWidth: 360,
+    backgroundColor: colors.background.primary,
+    borderRadius: 20,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.glass.borderFocus,
+    shadowColor: colors.accent.primary,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 15,
   },
   modalHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  modalHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   modalTitle: {
     ...typography.headlineMedium,

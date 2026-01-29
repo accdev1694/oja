@@ -1,6 +1,6 @@
 # Oja v2 Build Progress
 
-> **Last Updated:** 2026-01-27
+> **Last Updated:** 2026-01-29
 > **Stack:** Expo + Clerk + Convex + Jina AI + Gemini
 
 ---
@@ -11,14 +11,15 @@
 |-------|--------|----------|
 | 0. Project Setup | ✅ Complete | 4/4 |
 | 0.5. Epic & Story Design | ✅ Complete | 3/3 |
-| 1. Foundation & Authentication (Epic 1) | ⏳ Pending | 0/? |
-| 2. Pantry Stock Tracker (Epic 2) | ⏳ Pending | 0/? |
-| 3. Shopping Lists with Budget Control (Epic 3) | ⏳ Pending | 0/? |
-| 4. Partner Mode & Collaboration (Epic 4) | ⏳ Pending | 0/? |
-| 5. Receipt Intelligence & Price History (Epic 5) | ⏳ Pending | 0/? |
-| 6. Insights, Gamification & Progress (Epic 6) | ⏳ Pending | 0/? |
-| 7. Subscription, Payments & Loyalty (Epic 7) | ⏳ Pending | 0/? |
-| 8. Admin Dashboard & Operations (Epic 8) | ⏳ Pending | 0/? |
+| 1. Foundation & Authentication (Epic 1) | ✅ Complete | 9/9 |
+| 2. Pantry Stock Tracker (Epic 2) | ✅ Complete | 6/6 |
+| 3. Shopping Lists with Budget Control (Epic 3) | ✅ Complete | 10/10 |
+| 4. Partner Mode & Collaboration (Epic 4) | ⏳ Backlog | 0/5 |
+| 5. Receipt Intelligence & Price History (Epic 5) | 🔄 In Progress | 1/6 |
+| 6. Insights, Gamification & Progress (Epic 6) | ⏳ Backlog | 0/3 |
+| 7. Subscription, Payments & Loyalty (Epic 7) | ⏳ Backlog | 0/3 |
+| 8. Admin Dashboard & Operations (Epic 8) | ⏳ Backlog | 0/5 |
+| UI. Glass UI Redesign (Epic UI) | ✅ Complete | 17/17 |
 
 ---
 
@@ -295,6 +296,13 @@
 
 | Date | Change |
 |------|--------|
+| 2026-01-29 | **Epic 3 COMPLETE** - Shopping Lists with Budget Control (10/10 stories) |
+| 2026-01-29 | Story 3-10: Smart Suggestions with AI (Gemini + fallback pattern matching) |
+| 2026-01-29 | Story 3-9: Item Priority with Swipe Gestures (swipe left/right + priority badges) |
+| 2026-01-28 | Stories 3-5 to 3-8: Budget Lock, Impulse Fund, Mid-Shop Flow, Check-Off with Actual Price |
+| 2026-01-28 | **Epic UI Glass COMPLETE** - Glass UI Redesign (17/17 stories) |
+| 2026-01-28 | **Epic 2 COMPLETE** - Pantry Stock Tracker (6/6 stories) |
+| 2026-01-28 | **Epic 1 COMPLETE** - Foundation & Authentication (9/9 stories) |
 | 2026-01-27 | **Phase 0.5 File Organization COMPLETE** - Reorganized epics and stories into individual files for better maintainability |
 | 2026-01-27 | Created `epics/` folder with 8 individual epic files + index.md with coverage map |
 | 2026-01-27 | Created `stories/` folder with 47 individual story files organized by epic (epic-01/ through epic-08/) |
