@@ -12,6 +12,7 @@ import type * as ai from "../ai.js";
 import type * as iconMapping from "../iconMapping.js";
 import type * as listItems from "../listItems.js";
 import type * as pantryItems from "../pantryItems.js";
+import type * as priceHistory from "../priceHistory.js";
 import type * as receipts from "../receipts.js";
 import type * as shoppingLists from "../shoppingLists.js";
 import type * as users from "../users.js";
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   iconMapping: typeof iconMapping;
   listItems: typeof listItems;
   pantryItems: typeof pantryItems;
+  priceHistory: typeof priceHistory;
   receipts: typeof receipts;
   shoppingLists: typeof shoppingLists;
   users: typeof users;

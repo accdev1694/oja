@@ -181,4 +181,32 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_date", ["userId", "purchaseDate"])
     .index("by_list", ["listId"]),
+
+  // Price history tracking
+  priceHistory: defineTable({
+    userId: v.id("users"),
+    receiptId: v.id("receipts"),
+
+    // Item info
+    itemName: v.string(),
+    normalizedName: v.string(), // Lowercase for fuzzy matching
+
+    // Price info
+    price: v.number(),
+    quantity: v.number(),
+    unitPrice: v.number(),
+
+    // Store info
+    storeName: v.string(),
+    storeAddress: v.optional(v.string()),
+
+    // Purchase date
+    purchaseDate: v.number(),
+
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_item", ["userId", "normalizedName"])
+    .index("by_user_item_date", ["userId", "normalizedName", "purchaseDate"])
+    .index("by_receipt", ["receiptId"]),
 });

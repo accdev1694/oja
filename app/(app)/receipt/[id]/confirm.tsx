@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   Animated,
 } from "react-native";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -48,6 +48,8 @@ export default function ConfirmReceiptScreen() {
   const receipt = useQuery(api.receipts.getById, { id: receiptId });
   const pantryItems = useQuery(api.pantryItems.getByUser, {});
   const updateReceipt = useMutation(api.receipts.update);
+  const savePriceHistory = useMutation(api.priceHistory.savePriceHistoryFromReceipt);
+  const checkPriceAlerts = useMutation(api.priceHistory.checkPriceAlerts);
 
   // Local state for edited items
   const [editedItems, setEditedItems] = useState<ReceiptItem[]>([]);
@@ -189,6 +191,7 @@ export default function ConfirmReceiptScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
+      // Step 1: Update receipt with edited items
       await updateReceipt({
         id: receiptId,
         items: editedItems,
@@ -197,14 +200,42 @@ export default function ConfirmReceiptScreen() {
         processingStatus: "completed",
       });
 
+      // Step 2: Save price history
+      await savePriceHistory({ receiptId });
+
+      // Step 3: Check for price alerts
+      const alerts = await checkPriceAlerts({ receiptId });
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      Alert.alert("Receipt Saved", "Your receipt has been saved successfully", [
-        {
-          text: "OK",
-          onPress: () => router.push("/(app)/(tabs)/scan"),
-        },
-      ]);
+      // Show price alerts if any
+      if (alerts && alerts.length > 0) {
+        const alertMessages = alerts.map((alert: any) => {
+          if (alert.type === "decrease") {
+            return `🎉 Great deal! ${alert.itemName} is ${alert.percentChange.toFixed(0)}% cheaper than usual`;
+          } else {
+            return `📈 ${alert.itemName} price went up ${alert.percentChange.toFixed(0)}% since last purchase`;
+          }
+        });
+
+        Alert.alert(
+          "Price Alerts",
+          alertMessages.join("\n\n"),
+          [
+            {
+              text: "OK",
+              onPress: () => router.push("/(app)/(tabs)/scan"),
+            },
+          ]
+        );
+      } else {
+        Alert.alert("Receipt Saved", "Your receipt has been saved successfully", [
+          {
+            text: "OK",
+            onPress: () => router.push("/(app)/(tabs)/scan"),
+          },
+        ]);
+      }
     } catch (error) {
       console.error("Save error:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
