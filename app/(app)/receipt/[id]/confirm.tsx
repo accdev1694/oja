@@ -208,7 +208,7 @@ export default function ConfirmReceiptScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // Show price alerts if any
+      // If there are price alerts, show them
       if (alerts && alerts.length > 0) {
         const alertMessages = alerts.map((alert: any) => {
           if (alert.type === "decrease") {
@@ -224,17 +224,29 @@ export default function ConfirmReceiptScreen() {
           [
             {
               text: "OK",
-              onPress: () => router.push("/(app)/(tabs)/scan"),
+              onPress: () => {
+                // Navigate to reconciliation if linked to a list, otherwise go to scan
+                if (receipt?.listId) {
+                  router.push(`/receipt/${receiptId}/reconciliation?listId=${receipt.listId}` as any);
+                } else {
+                  router.push("/(app)/(tabs)/scan" as any);
+                }
+              },
             },
           ]
         );
       } else {
-        Alert.alert("Receipt Saved", "Your receipt has been saved successfully", [
-          {
-            text: "OK",
-            onPress: () => router.push("/(app)/(tabs)/scan"),
-          },
-        ]);
+        // No alerts - navigate to reconciliation if linked to a list
+        if (receipt?.listId) {
+          router.push(`/receipt/${receiptId}/reconciliation?listId=${receipt.listId}` as any);
+        } else {
+          Alert.alert("Receipt Saved", "Your receipt has been saved successfully", [
+            {
+              text: "OK",
+              onPress: () => router.push("/(app)/(tabs)/scan" as any),
+            },
+          ]);
+        }
       }
     } catch (error) {
       console.error("Save error:", error);

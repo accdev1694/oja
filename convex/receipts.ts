@@ -202,6 +202,46 @@ export const remove = mutation({
 });
 
 /**
+ * Link receipt to a shopping list (for reconciliation)
+ */
+export const linkToList = mutation({
+  args: {
+    receiptId: v.id("receipts"),
+    listId: v.id("shoppingLists"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const receipt = await ctx.db.get(args.receiptId);
+    if (!receipt) {
+      throw new Error("Receipt not found");
+    }
+
+    const list = await ctx.db.get(args.listId);
+    if (!list) {
+      throw new Error("Shopping list not found");
+    }
+
+    // Verify ownership
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user || receipt.userId !== user._id || list.userId !== user._id) {
+      throw new Error("Unauthorized");
+    }
+
+    // Link receipt to list
+    await ctx.db.patch(args.receiptId, { listId: args.listId });
+    return { success: true };
+  },
+});
+
+/**
  * Generate upload URL for receipt image
  */
 export const generateUploadUrl = mutation(async (ctx) => {
