@@ -105,7 +105,8 @@ type ListItem = {
 };
 
 export default function ListDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: Id<"shoppingLists"> }>();
+  const params = useLocalSearchParams();
+  const id = params.id as string as Id<"shoppingLists">;
   const router = useRouter();
 
   const list = useQuery(api.shoppingLists.getById, { id });
