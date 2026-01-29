@@ -9,7 +9,7 @@ import {
 import { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
-import { useMutation } from "convex/react";
+import { useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -29,9 +29,12 @@ export default function ScanScreen() {
   const router = useRouter();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
 
   const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);
   const createReceipt = useMutation(api.receipts.create);
+  const parseReceipt = useAction(api.ai.parseReceipt);
+  const updateReceipt = useMutation(api.receipts.update);
 
   async function handleTakePhoto() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -97,6 +100,7 @@ export default function ScanScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
+      // Step 1: Upload image to Convex storage
       const uploadUrl = await generateUploadUrl();
 
       const response = await fetch(selectedImage);
@@ -116,32 +120,104 @@ export default function ScanScreen() {
 
       const { storageId } = await uploadResponse.json();
 
+      // Step 2: Create receipt record
       const receiptId = await createReceipt({
         imageStorageId: storageId,
       });
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setIsUploading(false);
+      setIsParsing(true);
 
-      Alert.alert("Receipt Uploaded", "Your receipt is being processed", [
-        {
-          text: "OK",
-          onPress: () => {
-            setSelectedImage(null);
-          },
-        },
-      ]);
+      // Step 3: Parse receipt with AI
+      try {
+        const parsedData = await parseReceipt({ storageId });
+
+        // Step 4: Update receipt with parsed data
+        await updateReceipt({
+          id: receiptId,
+          storeName: parsedData.storeName,
+          storeAddress: parsedData.storeAddress,
+          purchaseDate: new Date(parsedData.purchaseDate).getTime(),
+          subtotal: parsedData.subtotal,
+          tax: parsedData.tax,
+          total: parsedData.total,
+          processingStatus: "completed",
+          items: parsedData.items.map((item: any) => ({
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
+            category: item.category,
+          })),
+        });
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+        // Navigate to confirmation screen
+        router.push(`/receipt/${receiptId}/confirm` as any);
+      } catch (parseError) {
+        console.error("Parse error:", parseError);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+
+        // Update receipt status to failed
+        await updateReceipt({
+          id: receiptId,
+          processingStatus: "failed",
+        });
+
+        Alert.alert(
+          "Couldn't Read Receipt",
+          "Couldn't read this receipt. Please try again with better lighting.",
+          [
+            {
+              text: "Retake",
+              onPress: () => {
+                setSelectedImage(null);
+                setIsParsing(false);
+              },
+            },
+          ]
+        );
+      }
     } catch (error) {
       console.error("Upload error:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Error", "Failed to upload receipt");
-    } finally {
       setIsUploading(false);
+      setIsParsing(false);
     }
   }
 
   function handleRetake() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedImage(null);
+  }
+
+  // Parsing mode - AI processing receipt
+  if (isParsing) {
+    return (
+      <GlassScreen>
+        <SimpleHeader title="Processing Receipt" subtitle="Please wait" />
+
+        <View style={styles.parsingContainer}>
+          <View style={styles.parsingIcon}>
+            <ActivityIndicator size="large" color={colors.accent.primary} />
+          </View>
+
+          <Text style={styles.parsingTitle}>Reading your receipt...</Text>
+          <Text style={styles.parsingSubtitle}>
+            This may take 10-15 seconds
+          </Text>
+
+          <GlassCard variant="standard" style={styles.parsingInfo}>
+            <Text style={styles.parsingInfoText}>
+              Our AI is extracting items, prices, and totals from your receipt.
+              You'll be able to review and correct any mistakes in the next step.
+            </Text>
+          </GlassCard>
+        </View>
+      </GlassScreen>
+    );
   }
 
   // Preview mode - showing selected image
@@ -372,5 +448,43 @@ const styles = StyleSheet.create({
   // Bottom spacing
   bottomSpacer: {
     height: 120,
+  },
+
+  // Parsing Mode
+  parsingContainer: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  parsingIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: `${colors.accent.primary}20`,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.xl,
+  },
+  parsingTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+    textAlign: "center",
+  },
+  parsingSubtitle: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.xl,
+    textAlign: "center",
+  },
+  parsingInfo: {
+    marginTop: spacing.lg,
+  },
+  parsingInfoText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
   },
 });

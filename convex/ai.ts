@@ -232,6 +232,130 @@ function getFallbackSuggestions(currentItems: string[]): string[] {
   return filtered.slice(0, 5);
 }
 
+/**
+ * Parse receipt using Gemini Vision API
+ * Extracts store name, date, items, prices, totals
+ */
+export const parseReceipt = action({
+  args: {
+    storageId: v.string(), // Convex file storage ID
+  },
+  handler: async (ctx, args) => {
+    try {
+      // Get the image URL from Convex storage
+      const imageUrl = await ctx.storage.getUrl(args.storageId);
+
+      if (!imageUrl) {
+        throw new Error("Failed to get image URL");
+      }
+
+      // Fetch the image as base64
+      const response = await fetch(imageUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      const base64Image = Buffer.from(arrayBuffer).toString("base64");
+
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+      });
+
+      const prompt = `You are a receipt parser. Extract structured data from this receipt image.
+
+Extract the following information:
+1. Store name
+2. Store address (if visible)
+3. Purchase date (in ISO format YYYY-MM-DD)
+4. All items with:
+   - Item name
+   - Quantity (default to 1 if not shown)
+   - Unit price
+   - Total price for that item
+5. Subtotal
+6. Tax amount
+7. Grand total
+
+Also provide a confidence score (0-100) for each field.
+
+Return ONLY valid JSON in this exact format:
+{
+  "storeName": "Store Name",
+  "storeAddress": "123 Main St",
+  "purchaseDate": "2026-01-29",
+  "items": [
+    {
+      "name": "Milk",
+      "quantity": 1,
+      "unitPrice": 2.50,
+      "totalPrice": 2.50,
+      "confidence": 95
+    }
+  ],
+  "subtotal": 10.00,
+  "tax": 1.00,
+  "total": 11.00,
+  "confidence": {
+    "storeName": 90,
+    "purchaseDate": 85,
+    "items": 80,
+    "totals": 95
+  }
+}
+
+IMPORTANT:
+- If you can't read something clearly, use your best guess but set lower confidence
+- If text is completely unreadable, return confidence of 0
+- All prices should be numbers (not strings)
+- Quantities should be integers
+- Date must be in YYYY-MM-DD format`;
+
+      const result = await model.generateContent([
+        { text: prompt },
+        {
+          inlineData: {
+            mimeType: "image/jpeg",
+            data: base64Image,
+          },
+        },
+      ]);
+
+      const responseText = result.response.text().trim();
+
+      // Remove markdown code blocks if present
+      let jsonText = responseText;
+      if (jsonText.startsWith("```json")) {
+        jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "");
+      } else if (jsonText.startsWith("```")) {
+        jsonText = jsonText.replace(/```\n?/g, "");
+      }
+
+      const parsed = JSON.parse(jsonText);
+
+      // Validate required fields
+      if (!parsed.storeName || !parsed.total || !Array.isArray(parsed.items)) {
+        throw new Error("Invalid receipt data structure");
+      }
+
+      // Calculate average confidence
+      const avgConfidence =
+        Object.values(parsed.confidence || {}).reduce(
+          (sum: number, val: any) => sum + (typeof val === "number" ? val : 0),
+          0
+        ) / Object.keys(parsed.confidence || {}).length;
+
+      return {
+        ...parsed,
+        overallConfidence: avgConfidence || 0,
+      };
+    } catch (error) {
+      console.error("Receipt parsing failed:", error);
+      throw new Error(
+        error instanceof Error
+          ? error.message
+          : "Failed to parse receipt. Please try again with better lighting."
+      );
+    }
+  },
+});
+
 function getFallbackItems(country: string, cuisines: string[]): SeedItem[] {
   const basicItems: SeedItem[] = [
     // Dairy (10)
