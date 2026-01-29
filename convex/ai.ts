@@ -258,22 +258,20 @@ export const parseReceipt = action({
         model: "gemini-1.5-flash",
       });
 
-      const prompt = `You are a receipt parser. Extract structured data from this receipt image.
+      const prompt = `You are a receipt parser. Extract as much data as possible from this receipt image, even if some parts are unclear.
 
-Extract the following information:
-1. Store name
-2. Store address (if visible)
-3. Purchase date (in ISO format YYYY-MM-DD)
+Extract the following information (use your best judgment if unclear):
+1. Store name (if unclear, use "Unknown Store")
+2. Store address (if visible, otherwise omit)
+3. Purchase date (in ISO format YYYY-MM-DD, or use today's date if unclear)
 4. All items with:
-   - Item name
+   - Item name (be lenient with partial/blurry text)
    - Quantity (default to 1 if not shown)
-   - Unit price
+   - Unit price (best estimate)
    - Total price for that item
-5. Subtotal
-6. Tax amount
-7. Grand total
-
-Also provide a confidence score (0-100) for each field.
+5. Subtotal (if visible)
+6. Tax amount (if visible)
+7. Grand total (REQUIRED - extract this even if other fields are unclear)
 
 Return ONLY valid JSON in this exact format:
 {
@@ -285,27 +283,24 @@ Return ONLY valid JSON in this exact format:
       "name": "Milk",
       "quantity": 1,
       "unitPrice": 2.50,
-      "totalPrice": 2.50,
-      "confidence": 95
+      "totalPrice": 2.50
     }
   ],
   "subtotal": 10.00,
   "tax": 1.00,
-  "total": 11.00,
-  "confidence": {
-    "storeName": 90,
-    "purchaseDate": 85,
-    "items": 80,
-    "totals": 95
-  }
+  "total": 11.00
 }
 
-IMPORTANT:
-- If you can't read something clearly, use your best guess but set lower confidence
-- If text is completely unreadable, return confidence of 0
+IMPORTANT RULES:
+- DO extract data even if the receipt is blurry, wrinkled, or partially obscured
+- DO make reasonable guesses for unclear text (e.g., "Mlk" → "Milk")
+- DO extract at least the total amount - this is the most important field
+- DO extract as many items as you can see, even if some text is unclear
+- If an item name is completely illegible, use generic names like "Item 1", "Item 2"
 - All prices should be numbers (not strings)
 - Quantities should be integers
-- Date must be in YYYY-MM-DD format`;
+- Date must be in YYYY-MM-DD format
+- Be lenient and helpful - users need their receipts parsed even if quality isn't perfect`;
 
       const result = await model.generateContent([
         { text: prompt },
@@ -329,9 +324,20 @@ IMPORTANT:
 
       const parsed = JSON.parse(jsonText);
 
-      // Validate required fields
-      if (!parsed.storeName || !parsed.total || !Array.isArray(parsed.items)) {
-        throw new Error("Invalid receipt data structure");
+      // Provide fallback values for missing fields
+      const storeName = parsed.storeName || "Unknown Store";
+      const items = Array.isArray(parsed.items) ? parsed.items : [];
+      const total = typeof parsed.total === "number" ? parsed.total : 0;
+
+      // If no items were parsed, try to create at least one generic item from the total
+      if (items.length === 0 && total > 0) {
+        items.push({
+          name: "Receipt Items",
+          quantity: 1,
+          unitPrice: total,
+          totalPrice: total,
+          confidence: 50,
+        });
       }
 
       // Calculate average confidence
@@ -339,18 +345,31 @@ IMPORTANT:
         Object.values(parsed.confidence || {}).reduce(
           (sum: number, val: any) => sum + (typeof val === "number" ? val : 0),
           0
-        ) / Object.keys(parsed.confidence || {}).length;
+        ) / Math.max(Object.keys(parsed.confidence || {}).length, 1);
 
       return {
-        ...parsed,
-        overallConfidence: avgConfidence || 0,
+        storeName,
+        storeAddress: parsed.storeAddress || "",
+        purchaseDate: parsed.purchaseDate || new Date().toISOString().split("T")[0],
+        items,
+        subtotal: typeof parsed.subtotal === "number" ? parsed.subtotal : total,
+        tax: typeof parsed.tax === "number" ? parsed.tax : 0,
+        total,
+        confidence: parsed.confidence || {},
+        overallConfidence: avgConfidence || 50,
       };
     } catch (error) {
       console.error("Receipt parsing failed:", error);
+
+      // Provide more specific error messages
+      if (error instanceof SyntaxError) {
+        throw new Error("Failed to read receipt format. Please try again with a clearer image.");
+      }
+
       throw new Error(
         error instanceof Error
           ? error.message
-          : "Failed to parse receipt. Please try again with better lighting."
+          : "Failed to parse receipt. Please try taking the photo again."
       );
     }
   },
