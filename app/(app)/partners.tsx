@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState } from "react";
 import { Id } from "@/convex/_generated/dataModel";
+import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
@@ -63,6 +64,16 @@ export default function PartnersScreen() {
     }
   }
 
+  async function handleCopyCode() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await Clipboard.setStringAsync(inviteCode);
+    if (Platform.OS === "web") {
+      window.alert("Code copied!");
+    } else {
+      Alert.alert("Copied!", "Invite code copied to clipboard");
+    }
+  }
+
   async function handleRemovePartner(partnerId: Id<"listPartners">, name: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (Platform.OS === "web") {
@@ -93,7 +104,7 @@ export default function PartnersScreen() {
     if (!changingPartnerId) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await updateRole({ partnerId: changingPartnerId, newRole });
+      await updateRole({ partnerId: changingPartnerId, role: newRole });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowRoleModal(false);
     } catch (error) {
@@ -258,9 +269,14 @@ export default function PartnersScreen() {
             <Text style={styles.codeText}>{inviteCode}</Text>
             <Text style={styles.modalSubtitle}>Share this code with your partner</Text>
             <View style={styles.modalActions}>
-              <GlassButton variant="primary" size="md" icon="share-variant" onPress={handleShareCode}>
-                Share Code
-              </GlassButton>
+              <View style={styles.modalActionRow}>
+                <GlassButton variant="primary" size="md" icon="content-copy" onPress={handleCopyCode} style={styles.modalActionButton}>
+                  Copy Code
+                </GlassButton>
+                <GlassButton variant="primary" size="md" icon="share-variant" onPress={handleShareCode} style={styles.modalActionButton}>
+                  Share Code
+                </GlassButton>
+              </View>
               <GlassButton variant="secondary" size="md" onPress={() => setShowInviteModal(false)}>
                 Done
               </GlassButton>
@@ -390,6 +406,8 @@ const styles = StyleSheet.create({
   },
   modalSubtitle: { ...typography.bodyMedium, color: colors.text.tertiary, textAlign: "center" },
   modalActions: { width: "100%", gap: spacing.sm, marginTop: spacing.md },
+  modalActionRow: { flexDirection: "row", gap: spacing.sm },
+  modalActionButton: { flex: 1 },
   leaveButton: {
     marginTop: spacing.lg,
     marginHorizontal: spacing.lg,

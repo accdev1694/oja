@@ -51,10 +51,20 @@ export default function ConfirmReceiptScreen() {
   const updateReceipt = useMutation(api.receipts.update);
   const savePriceHistory = useMutation(api.priceHistory.savePriceHistoryFromReceipt);
   const checkPriceAlerts = useMutation(api.priceHistory.checkPriceAlerts);
+  const checkDuplicate = useMutation(api.receipts.checkDuplicate);
+  const upsertCurrentPrices = useMutation(api.currentPrices.upsertFromReceipt);
 
   // Local state for edited items
   const [editedItems, setEditedItems] = useState<ReceiptItem[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // Duplicate detection
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState<{
+    storeName: string;
+    total: number;
+    date: number;
+  } | null>(null);
 
   // Edit modals
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
@@ -190,6 +200,26 @@ export default function ConfirmReceiptScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
+      // Step 0: Check for duplicate receipt
+      if (receipt) {
+        const dupResult = await checkDuplicate({
+          receiptId,
+          storeName: receipt.storeName,
+          total,
+          purchaseDate: receipt.purchaseDate,
+        });
+
+        if (dupResult.isDuplicate && dupResult.existingReceipt) {
+          setDuplicateInfo({
+            storeName: dupResult.existingReceipt.storeName,
+            total: dupResult.existingReceipt.total,
+            date: dupResult.existingReceipt.date,
+          });
+          setShowDuplicateModal(true);
+          return;
+        }
+      }
+
       // Step 1: Update receipt with edited items
       await updateReceipt({
         id: receiptId,
@@ -202,7 +232,10 @@ export default function ConfirmReceiptScreen() {
       // Step 2: Save price history
       await savePriceHistory({ receiptId });
 
-      // Step 3: Check for price alerts
+      // Step 3: Upsert current prices (freshest price database)
+      await upsertCurrentPrices({ receiptId });
+
+      // Step 4: Check for price alerts
       const alerts = await checkPriceAlerts({ receiptId });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -455,6 +488,61 @@ export default function ConfirmReceiptScreen() {
                 style={styles.modalButton}
               >
                 Save
+              </GlassButton>
+            </View>
+          </GlassCard>
+        </View>
+      </Modal>
+
+      {/* Duplicate Receipt Modal */}
+      <Modal
+        visible={showDuplicateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDuplicateModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <GlassCard variant="bordered" accentColor={colors.semantic.warning} style={styles.modal}>
+            <View style={styles.duplicateHeader}>
+              <MaterialCommunityIcons
+                name="receipt"
+                size={32}
+                color={colors.semantic.warning}
+              />
+              <Text style={styles.duplicateTitle}>Duplicate Receipt</Text>
+            </View>
+            <Text style={styles.duplicateText}>
+              This receipt appears to have already been scanned.
+            </Text>
+            {duplicateInfo && (
+              <View style={styles.duplicateDetails}>
+                <Text style={styles.duplicateDetailText}>
+                  {duplicateInfo.storeName} — £{duplicateInfo.total.toFixed(2)}
+                </Text>
+                <Text style={styles.duplicateDetailDate}>
+                  {new Date(duplicateInfo.date).toLocaleDateString()}
+                </Text>
+              </View>
+            )}
+            <View style={styles.modalActions}>
+              <GlassButton
+                variant="secondary"
+                size="md"
+                onPress={() => {
+                  setShowDuplicateModal(false);
+                  router.back();
+                }}
+                style={styles.modalButton}
+              >
+                Discard
+              </GlassButton>
+              <GlassButton
+                variant="primary"
+                size="md"
+                onPress={() => setShowDuplicateModal(false)}
+                style={styles.modalButton}
+              >
+                Review
               </GlassButton>
             </View>
           </GlassCard>
@@ -789,6 +877,40 @@ const styles = StyleSheet.create({
   suggestionText: {
     ...typography.bodySmall,
     color: colors.text.primary,
+  },
+
+  // Duplicate Modal
+  duplicateHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  duplicateTitle: {
+    ...typography.headlineSmall,
+    color: colors.semantic.warning,
+    fontWeight: "700",
+  },
+  duplicateText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+  duplicateDetails: {
+    backgroundColor: colors.glass.backgroundStrong,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  duplicateDetailText: {
+    ...typography.labelMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  duplicateDetailDate: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
   },
 
   // Row

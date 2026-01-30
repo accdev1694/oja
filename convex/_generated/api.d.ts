@@ -10,6 +10,7 @@
 
 import type * as admin from "../admin.js";
 import type * as ai from "../ai.js";
+import type * as currentPrices from "../currentPrices.js";
 import type * as iconMapping from "../iconMapping.js";
 import type * as insights from "../insights.js";
 import type * as listItems from "../listItems.js";
@@ -31,6 +32,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   ai: typeof ai;
+  currentPrices: typeof currentPrices;
   iconMapping: typeof iconMapping;
   insights: typeof insights;
   listItems: typeof listItems;

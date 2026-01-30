@@ -8,6 +8,9 @@ import {
   Dimensions,
   Modal,
   Pressable,
+  TextInput,
+  Alert,
+  Platform,
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -56,8 +59,15 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 import { CategoryFilter } from "@/components/ui/CategoryFilter";
+import { RemoveButton } from "@/components/ui/RemoveButton";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
+
+const STOCK_CATEGORIES = [
+  "Dairy", "Bakery", "Produce", "Meat", "Pantry Staples", "Spices & Seasonings",
+  "Condiments", "Beverages", "Snacks", "Frozen", "Canned Goods", "Grains & Pasta",
+  "Oils & Vinegars", "Baking", "Household", "Personal Care", "Health & Wellness",
+];
 
 const STOCK_LEVELS: { level: StockLevel; label: string; color: string }[] = [
   { level: "stocked", label: "Fully Stocked", color: colors.budget.healthy },
@@ -75,6 +85,8 @@ export default function PantryScreen() {
   const createList = useMutation(api.shoppingLists.create);
   const addListItem = useMutation(api.listItems.create);
   const migrateIcons = useMutation(api.pantryItems.migrateIcons);
+  const createPantryItem = useMutation(api.pantryItems.create);
+  const removePantryItem = useMutation(api.pantryItems.remove);
 
   // Migrate icons for items that don't have them yet
   useEffect(() => {
@@ -103,6 +115,12 @@ export default function PantryScreen() {
   const [stockFilters, setStockFilters] = useState<Set<StockLevel>>(
     new Set(["stocked", "good", "half", "low", "out"])
   );
+
+  // Add item modal
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [newItemName, setNewItemName] = useState("");
+  const [newItemCategory, setNewItemCategory] = useState("Pantry Staples");
+  const [newItemStock, setNewItemStock] = useState<StockLevel>("stocked");
 
   // Toast position (card Y coordinate)
   const [flyStartPosition, setFlyStartPosition] = useState({ x: 0, y: 0 });
@@ -253,6 +271,49 @@ export default function PantryScreen() {
     setSelectedItem(null);
   };
 
+  const handleAddItem = async () => {
+    const name = newItemName.trim();
+    if (!name) return;
+    impactAsync(ImpactFeedbackStyle.Medium);
+    try {
+      await createPantryItem({
+        name,
+        category: newItemCategory,
+        stockLevel: newItemStock,
+      });
+      notificationAsync(NotificationFeedbackType.Success);
+      setAddModalVisible(false);
+      setNewItemName("");
+      setNewItemCategory("Pantry Staples");
+      setNewItemStock("stocked");
+    } catch (error) {
+      console.error("Failed to add item:", error);
+    }
+  };
+
+  const handleRemoveItem = (item: { _id: Id<"pantryItems">; name: string }) => {
+    impactAsync(ImpactFeedbackStyle.Medium);
+    const doRemove = async () => {
+      try {
+        await removePantryItem({ id: item._id });
+        notificationAsync(NotificationFeedbackType.Success);
+      } catch (error) {
+        console.error("Failed to remove item:", error);
+      }
+    };
+
+    if (Platform.OS === "web") {
+      if (window.confirm(`Remove "${item.name}" from your stock?`)) {
+        doRemove();
+      }
+    } else {
+      Alert.alert("Remove Item", `Remove "${item.name}" from your stock?`, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Remove", style: "destructive", onPress: doRemove },
+      ]);
+    }
+  };
+
   // Get next lower stock level
   const getNextLowerLevel = (current: StockLevel): StockLevel | null => {
     const currentIndex = STOCK_LEVEL_ORDER.indexOf(current);
@@ -328,7 +389,7 @@ export default function PantryScreen() {
   if (items === undefined) {
     return (
       <GlassScreen edges={["top"]}>
-        <SimpleHeader title="My Stock" subtitle="Loading..." />
+        <SimpleHeader title="My Stock" subtitle="What you have at home · Loading..." />
         <View style={styles.skeletonContainer}>
           <View style={styles.skeletonSection}>
             <View style={styles.skeletonSectionHeader}>
@@ -356,7 +417,7 @@ export default function PantryScreen() {
   if (items.length === 0) {
     return (
       <GlassScreen edges={["top"]}>
-        <SimpleHeader title="My Stock" subtitle="0 items" />
+        <SimpleHeader title="My Stock" subtitle="What you have at home · 0 items" />
         <View style={styles.emptyContainer}>
           <EmptyPantry />
         </View>
@@ -381,23 +442,35 @@ export default function PantryScreen() {
         {/* Header */}
         <SimpleHeader
           title="My Stock"
-          subtitle={`${filteredItems.length} of ${items.length} items${searchQuery ? ` matching "${searchQuery}"` : ""}`}
+          subtitle={`What you have at home · ${filteredItems.length} of ${items.length} items${searchQuery ? ` matching "${searchQuery}"` : ""}`}
           rightElement={
-            <Pressable
-              style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
-              onPress={() => setFilterVisible(true)}
-            >
-              <MaterialCommunityIcons
-                name="tune-variant"
-                size={22}
-                color={activeFilterCount > 0 ? colors.accent.primary : colors.text.secondary}
-              />
-              {activeFilterCount > 0 && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-                </View>
-              )}
-            </Pressable>
+            <View style={styles.headerButtons}>
+              <Pressable
+                style={styles.addButton}
+                onPress={() => {
+                  impactAsync(ImpactFeedbackStyle.Light);
+                  setAddModalVisible(true);
+                }}
+              >
+                <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
+                <Text style={styles.addButtonText}>Add</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
+                onPress={() => setFilterVisible(true)}
+              >
+                <MaterialCommunityIcons
+                  name="tune-variant"
+                  size={22}
+                  color={activeFilterCount > 0 ? colors.accent.primary : colors.text.secondary}
+                />
+                {activeFilterCount > 0 && (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
           }
         />
 
@@ -421,7 +494,7 @@ export default function PantryScreen() {
 
         {/* Gesture hints */}
         <View style={styles.hintRow}>
-          <TypewriterHint text="Swipe left/right to adjust stock  ·  Hold to set level" />
+          <TypewriterHint text="Swipe left/right to adjust  ·  Hold to set level or remove" />
         </View>
 
         {/* Content */}
@@ -476,6 +549,7 @@ export default function PantryScreen() {
                         onSwipeDecrease={() => handleSwipeDecrease(item)}
                         onSwipeIncrease={() => handleSwipeIncrease(item)}
                         onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
+                        onRemove={() => handleRemoveItem(item)}
                         animationDelay={index * 50}
                       />
                     ))}
@@ -493,6 +567,11 @@ export default function PantryScreen() {
           itemName={selectedItem?.name || ""}
           onSelect={handleSelectStockLevel}
           onClose={handleClosePicker}
+          onRemove={selectedItem ? () => {
+            setPickerVisible(false);
+            handleRemoveItem({ _id: selectedItem.id, name: selectedItem.name });
+            setSelectedItem(null);
+          } : undefined}
         />
 
         {/* Added-to-list Toast */}
@@ -558,6 +637,89 @@ export default function PantryScreen() {
             </GlassCard>
           </Pressable>
         </Modal>
+
+        {/* Add Item Modal */}
+        <Modal
+          visible={addModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setAddModalVisible(false)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setAddModalVisible(false)}>
+            <Pressable style={styles.addModal} onPress={(e) => e.stopPropagation()}>
+              <MaterialCommunityIcons name="fridge-outline" size={36} color={colors.accent.primary} />
+              <Text style={styles.addModalTitle}>Add to Stock</Text>
+
+              {/* Name input */}
+              <TextInput
+                style={styles.addInput}
+                placeholder="Item name (e.g. Olive Oil)"
+                placeholderTextColor={colors.text.tertiary}
+                value={newItemName}
+                onChangeText={setNewItemName}
+                autoFocus
+                maxLength={80}
+              />
+
+              {/* Category picker */}
+              <Text style={styles.addLabel}>Category</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.addChipsScroll}
+                contentContainerStyle={styles.addChipsContent}
+              >
+                {STOCK_CATEGORIES.map((cat) => (
+                  <Pressable
+                    key={cat}
+                    style={[styles.addChip, newItemCategory === cat && styles.addChipActive]}
+                    onPress={() => setNewItemCategory(cat)}
+                  >
+                    <Text style={[styles.addChipText, newItemCategory === cat && styles.addChipTextActive]}>
+                      {cat}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              {/* Stock level picker */}
+              <Text style={styles.addLabel}>Stock Level</Text>
+              <View style={styles.addStockRow}>
+                {STOCK_LEVELS.map((option) => (
+                  <Pressable
+                    key={option.level}
+                    style={[styles.addStockChip, newItemStock === option.level && styles.addStockChipActive]}
+                    onPress={() => setNewItemStock(option.level)}
+                  >
+                    <GaugeIndicator level={option.level} size="small" />
+                    <Text style={[
+                      styles.addStockChipText,
+                      newItemStock === option.level && styles.addStockChipTextActive,
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* Actions */}
+              <View style={styles.addActions}>
+                <GlassButton variant="ghost" size="md" onPress={() => setAddModalVisible(false)}>
+                  Cancel
+                </GlassButton>
+                <GlassButton
+                  variant="primary"
+                  size="md"
+                  icon="plus"
+                  onPress={handleAddItem}
+                  disabled={!newItemName.trim()}
+                >
+                  Add Item
+                </GlassButton>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </GestureHandlerRootView>
     </GlassScreen>
   );
@@ -570,6 +732,7 @@ function PantryItemRow({
   onSwipeDecrease,
   onSwipeIncrease,
   onMeasure,
+  onRemove,
   animationDelay = 0,
 }: {
   item: {
@@ -583,6 +746,7 @@ function PantryItemRow({
   onSwipeDecrease: () => void;
   onSwipeIncrease: () => void;
   onMeasure: (x: number, y: number) => void;
+  onRemove: () => void;
   animationDelay?: number;
 }) {
   const cardRef = useRef<View>(null);
@@ -652,10 +816,8 @@ function PantryItemRow({
                 <Text style={styles.stockLevelText}>{stockLabel}</Text>
               </View>
 
-              {/* Swipe hint */}
-              <View style={styles.swipeHint}>
-                <MaterialCommunityIcons name="gesture-swipe-horizontal" size={16} color={colors.text.tertiary} />
-              </View>
+              {/* Remove button */}
+              <RemoveButton onPress={onRemove} size="sm" />
             </GlassCard>
           </View>
         </Animated.View>
@@ -938,11 +1100,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: colors.text.tertiary,
   },
-  swipeHint: {
-    backgroundColor: colors.glass.backgroundHover,
-    padding: spacing.xs,
-    borderRadius: borderRadius.sm,
-  },
   // Modal styles
   modalOverlay: {
     flex: 1,
@@ -994,5 +1151,119 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     marginTop: spacing.xl,
+  },
+  // Header buttons
+  headerButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  addButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    height: 38,
+    paddingHorizontal: spacing.md,
+    borderRadius: 19,
+    backgroundColor: `${colors.accent.primary}20`,
+    borderWidth: 1,
+    borderColor: `${colors.accent.primary}40`,
+  },
+  addButtonText: {
+    ...typography.labelMedium,
+    color: colors.accent.primary,
+    fontWeight: "700",
+  },
+  // Add item modal
+  addModal: {
+    width: "92%",
+    maxWidth: 400,
+    backgroundColor: colors.background.primary,
+    borderRadius: 20,
+    padding: spacing.xl,
+    alignItems: "center",
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.glass.borderFocus,
+  },
+  addModalTitle: {
+    ...typography.headlineMedium,
+    color: colors.text.primary,
+  },
+  addInput: {
+    width: "100%",
+    backgroundColor: colors.glass.background,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    color: colors.text.primary,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  addLabel: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    alignSelf: "flex-start",
+  },
+  addChipsScroll: {
+    width: "100%",
+    maxHeight: 40,
+  },
+  addChipsContent: {
+    gap: spacing.xs,
+    paddingRight: spacing.md,
+  },
+  addChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  addChipActive: {
+    backgroundColor: `${colors.accent.primary}20`,
+    borderColor: colors.accent.primary,
+  },
+  addChipText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  addChipTextActive: {
+    color: colors.accent.primary,
+    fontWeight: "600",
+  },
+  addStockRow: {
+    width: "100%",
+    gap: spacing.xs,
+  },
+  addStockChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 10,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  addStockChipActive: {
+    backgroundColor: `${colors.accent.primary}15`,
+    borderColor: colors.accent.primary,
+  },
+  addStockChipText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  addStockChipTextActive: {
+    color: colors.accent.primary,
+    fontWeight: "600",
+  },
+  addActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.sm,
   },
 });

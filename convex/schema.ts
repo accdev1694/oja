@@ -202,10 +202,29 @@ export default defineSchema({
 
     purchaseDate: v.number(),
     createdAt: v.number(),
+
+    // Duplicate detection fingerprint: storeName|total|purchaseDate
+    fingerprint: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_user_date", ["userId", "purchaseDate"])
-    .index("by_list", ["listId"]),
+    .index("by_list", ["listId"])
+    .index("by_user_fingerprint", ["userId", "fingerprint"]),
+
+  // Current best-known prices (freshest price per item per store)
+  currentPrices: defineTable({
+    normalizedName: v.string(),
+    itemName: v.string(),         // Display name (original casing)
+    storeName: v.string(),
+    unitPrice: v.number(),
+    lastSeenDate: v.number(),     // purchaseDate from receipt
+    reportCount: v.number(),      // How many receipts contributed
+    lastReportedBy: v.id("users"),
+    updatedAt: v.number(),
+  })
+    .index("by_item", ["normalizedName"])
+    .index("by_item_store", ["normalizedName", "storeName"])
+    .index("by_store", ["storeName"]),
 
   // Price history tracking
   priceHistory: defineTable({

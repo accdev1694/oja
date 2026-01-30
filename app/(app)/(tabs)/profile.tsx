@@ -3,6 +3,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  Pressable,
 } from "react-native";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
@@ -31,6 +32,9 @@ export default function ProfileScreen() {
 
   const allLists = useQuery(api.shoppingLists.getByUser);
   const pantryItems = useQuery(api.pantryItems.getByUser);
+  const loyalty = useQuery(api.subscriptions.getLoyaltyPoints);
+  const subscription = useQuery(api.subscriptions.getCurrentSubscription);
+  const receipts = useQuery(api.receipts.getByUser);
 
   const handleSignOut = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -270,6 +274,152 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* Loyalty & Subscription Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Loyalty & Rewards</Text>
+
+          {/* Loyalty Points Card */}
+          <GlassCard variant="bordered" accentColor={tierColor(loyalty?.tier)}>
+            <View style={styles.loyaltyRow}>
+              <View style={[styles.tierBadge, { backgroundColor: `${tierColor(loyalty?.tier)}20` }]}>
+                <MaterialCommunityIcons
+                  name={tierIcon(loyalty?.tier)}
+                  size={28}
+                  color={tierColor(loyalty?.tier)}
+                />
+              </View>
+              <View style={styles.loyaltyInfo}>
+                <Text style={styles.loyaltyTierLabel}>
+                  {(loyalty?.tier || "bronze").charAt(0).toUpperCase() + (loyalty?.tier || "bronze").slice(1)} Tier
+                </Text>
+                <Text style={[styles.loyaltyPoints, { color: tierColor(loyalty?.tier) }]}>
+                  {loyalty?.points ?? 0} pts
+                </Text>
+              </View>
+              {(loyalty?.discount ?? 0) > 0 && (
+                <View style={[styles.discountBadge, { backgroundColor: `${tierColor(loyalty?.tier)}20` }]}>
+                  <Text style={[styles.discountText, { color: tierColor(loyalty?.tier) }]}>
+                    {loyalty?.discount}% off
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Progress to next tier */}
+            {loyalty?.nextTier && (loyalty?.pointsToNextTier ?? 0) > 0 && (
+              <View style={styles.tierProgress}>
+                <View style={styles.tierProgressBar}>
+                  <View
+                    style={[
+                      styles.tierProgressFill,
+                      {
+                        backgroundColor: tierColor(loyalty?.tier),
+                        width: `${Math.min(100, ((loyalty?.lifetimePoints ?? 0) / ((loyalty?.lifetimePoints ?? 0) + (loyalty?.pointsToNextTier ?? 1))) * 100)}%`,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.tierProgressText}>
+                  {loyalty?.pointsToNextTier} pts to {loyalty?.nextTier}
+                </Text>
+              </View>
+            )}
+          </GlassCard>
+
+          {/* Subscription Card */}
+          <GlassCard variant="standard" style={styles.subscriptionCard}>
+            <View style={styles.subscriptionRow}>
+              <MaterialCommunityIcons
+                name={subscription?.plan === "free" ? "crown-outline" : "crown"}
+                size={24}
+                color={subscription?.plan === "free" ? colors.text.tertiary : colors.accent.secondary}
+              />
+              <View style={styles.subscriptionInfo}>
+                <Text style={styles.subscriptionPlan}>
+                  {subscription?.plan === "free" ? "Free Plan" : "Premium"}
+                </Text>
+                <Text style={styles.subscriptionStatus}>
+                  {subscription?.plan === "free"
+                    ? "Upgrade for price history, insights & more"
+                    : `Status: ${subscription?.status}`}
+                </Text>
+              </View>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={24}
+                color={colors.text.tertiary}
+              />
+            </View>
+          </GlassCard>
+        </View>
+
+        {/* Receipt History Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent Receipts</Text>
+
+          {receipts && receipts.length > 0 ? (
+            <>
+              {receipts.slice(0, 5).map((receipt) => (
+                <Pressable
+                  key={receipt._id}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push(`/receipt/${receipt._id}/confirm` as any);
+                  }}
+                >
+                  <GlassCard variant="standard" style={styles.receiptCard}>
+                    <View style={styles.receiptRow}>
+                      <View style={styles.receiptIconContainer}>
+                        <MaterialCommunityIcons
+                          name="receipt"
+                          size={20}
+                          color={
+                            receipt.processingStatus === "completed"
+                              ? colors.accent.primary
+                              : receipt.processingStatus === "failed"
+                              ? colors.semantic.danger
+                              : colors.semantic.warning
+                          }
+                        />
+                      </View>
+                      <View style={styles.receiptInfo}>
+                        <Text style={styles.receiptStore} numberOfLines={1}>
+                          {receipt.storeName}
+                        </Text>
+                        <Text style={styles.receiptDate}>
+                          {new Date(receipt.purchaseDate).toLocaleDateString()} · {receipt.items.length} items
+                        </Text>
+                      </View>
+                      <Text style={styles.receiptTotal}>
+                        £{receipt.total.toFixed(2)}
+                      </Text>
+                    </View>
+                  </GlassCard>
+                </Pressable>
+              ))}
+
+              {receipts.length > 5 && (
+                <Text style={styles.moreReceiptsText}>
+                  + {receipts.length - 5} more receipts
+                </Text>
+              )}
+            </>
+          ) : (
+            <GlassCard variant="standard">
+              <View style={styles.emptyReceipts}>
+                <MaterialCommunityIcons
+                  name="receipt"
+                  size={32}
+                  color={colors.text.tertiary}
+                />
+                <Text style={styles.emptyReceiptsText}>
+                  No receipts scanned yet
+                </Text>
+              </View>
+            </GlassCard>
+          )}
+        </View>
+
         {/* Sign Out */}
         <View style={styles.signOutSection}>
           <GlassButton
@@ -287,6 +437,32 @@ export default function ProfileScreen() {
       </ScrollView>
     </GlassScreen>
   );
+}
+
+// =============================================================================
+// TIER HELPERS
+// =============================================================================
+
+const TIER_COLORS: Record<string, string> = {
+  bronze: "#CD7F32",
+  silver: "#C0C0C0",
+  gold: "#FFD700",
+  platinum: "#E5E4E2",
+};
+
+const TIER_ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  bronze: "shield-outline",
+  silver: "shield-half-full",
+  gold: "shield-star",
+  platinum: "shield-crown",
+};
+
+function tierColor(tier?: string): string {
+  return TIER_COLORS[tier || "bronze"] || TIER_COLORS.bronze;
+}
+
+function tierIcon(tier?: string): keyof typeof MaterialCommunityIcons.glyphMap {
+  return TIER_ICONS[tier || "bronze"] || TIER_ICONS.bronze;
 }
 
 // =============================================================================
@@ -525,6 +701,135 @@ const styles = StyleSheet.create({
   },
   alertValueWarning: {
     color: colors.semantic.warning,
+  },
+
+  // Loyalty
+  loyaltyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  tierBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loyaltyInfo: {
+    flex: 1,
+  },
+  loyaltyTierLabel: {
+    ...typography.labelSmall,
+    color: colors.text.secondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  loyaltyPoints: {
+    ...typography.displaySmall,
+    fontWeight: "700",
+  },
+  discountBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 12,
+  },
+  discountText: {
+    ...typography.labelMedium,
+    fontWeight: "700",
+  },
+  tierProgress: {
+    marginTop: spacing.md,
+  },
+  tierProgressBar: {
+    height: 6,
+    backgroundColor: colors.glass.backgroundStrong,
+    borderRadius: 3,
+    overflow: "hidden",
+    marginBottom: 6,
+  },
+  tierProgressFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  tierProgressText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+
+  // Subscription
+  subscriptionCard: {
+    marginTop: spacing.sm,
+  },
+  subscriptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  subscriptionInfo: {
+    flex: 1,
+  },
+  subscriptionPlan: {
+    ...typography.labelMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  subscriptionStatus: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+
+  // Receipts
+  receiptCard: {
+    marginBottom: spacing.xs,
+  },
+  receiptRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  receiptIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: `${colors.accent.primary}15`,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  receiptInfo: {
+    flex: 1,
+  },
+  receiptStore: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  receiptDate: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  receiptTotal: {
+    ...typography.labelMedium,
+    color: colors.text.primary,
+    fontWeight: "700",
+  },
+  moreReceiptsText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    marginTop: spacing.sm,
+  },
+  emptyReceipts: {
+    alignItems: "center",
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+  },
+  emptyReceiptsText: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
   },
 
   // Sign Out

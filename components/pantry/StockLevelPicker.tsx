@@ -21,6 +21,7 @@ interface StockLevelPickerProps {
   itemName: string;
   onSelect: (level: StockLevel) => void;
   onClose: () => void;
+  onRemove?: () => void;
 }
 
 const LEVELS: { key: StockLevel; label: string; color: string }[] = [
@@ -37,6 +38,7 @@ export function StockLevelPicker({
   itemName,
   onSelect,
   onClose,
+  onRemove,
 }: StockLevelPickerProps) {
   const [previewLevel, setPreviewLevel] = useState<StockLevel>(currentLevel);
 
@@ -108,6 +110,13 @@ export function StockLevelPicker({
           <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
+
+          {/* Remove button */}
+          {onRemove && (
+            <TouchableOpacity style={styles.removeButton} onPress={onRemove}>
+              <Text style={styles.removeButtonText}>Remove from Stock</Text>
+            </TouchableOpacity>
+          )}
         </Pressable>
       </Pressable>
     </Modal>
@@ -202,5 +211,14 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: "rgba(255, 255, 255, 0.5)",
     fontSize: 14,
+  },
+  removeButton: {
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  removeButtonText: {
+    color: "#EF4444",
+    fontSize: 14,
+    fontWeight: "500",
   },
 });

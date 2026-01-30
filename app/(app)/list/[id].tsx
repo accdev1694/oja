@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/glass";
 import { CategoryFilter } from "@/components/ui/CategoryFilter";
 import { usePartnerRole } from "@/hooks/usePartnerRole";
+import { RemoveButton } from "@/components/ui/RemoveButton";
 import {
   ApprovalBadge,
   ApprovalActions,
@@ -162,6 +163,12 @@ export default function ListDetailScreen() {
   const [newItemQuantity, setNewItemQuantity] = useState("1");
   const [newItemPrice, setNewItemPrice] = useState("");
 
+  // Price estimate from current prices database
+  const priceEstimate = useQuery(
+    api.currentPrices.getEstimate,
+    newItemName.trim().length >= 2 ? { itemName: newItemName.trim() } : "skip"
+  );
+
   // Edit budget modal state
   const [showEditBudgetModal, setShowEditBudgetModal] = useState(false);
   const [editBudgetValue, setEditBudgetValue] = useState("");
@@ -191,6 +198,13 @@ export default function ListDetailScreen() {
   const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+
+  // Auto-fill price estimate when available and user hasn't typed one
+  useEffect(() => {
+    if (priceEstimate && priceEstimate.cheapest && !newItemPrice) {
+      setNewItemPrice(priceEstimate.cheapest.price.toFixed(2));
+    }
+  }, [priceEstimate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load suggestions when items change (Story 3.10)
   const loadSuggestions = useCallback(async () => {
@@ -253,8 +267,8 @@ export default function ListDetailScreen() {
             color={colors.semantic.danger}
           />
           <Text style={styles.errorText}>List not found</Text>
-          <GlassButton variant="primary" onPress={() => router.back()}>
-            Go Back
+          <GlassButton variant="primary" icon="home" onPress={() => router.replace("/(app)/(tabs)")}>
+            Go Home
           </GlassButton>
         </View>
       </GlassScreen>
@@ -1110,6 +1124,13 @@ export default function ListDetailScreen() {
                   style={styles.addButton}
                 />
               </View>
+
+              {/* Price estimate hint */}
+              {priceEstimate && priceEstimate.cheapest && (
+                <Text style={styles.priceHint}>
+                  Based on £{priceEstimate.cheapest.price.toFixed(2)} at {priceEstimate.cheapest.storeName}
+                </Text>
+              )}
             </View>
           </GlassCard>
           )}
@@ -1934,17 +1955,7 @@ function ShoppingListItem({
                 )}
 
                 {/* Remove button */}
-                <Pressable
-                  style={styles.removeButton}
-                  onPress={onRemove}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <MaterialCommunityIcons
-                    name="close"
-                    size={18}
-                    color={colors.semantic.danger}
-                  />
-                </Pressable>
+                <RemoveButton onPress={onRemove} size="md" />
               </View>
             </GlassCard>
           </Pressable>
@@ -2145,6 +2156,12 @@ const styles = StyleSheet.create({
     width: 48,
     paddingHorizontal: 0,
   },
+  priceHint: {
+    ...typography.bodySmall,
+    color: colors.accent.primary,
+    marginTop: 4,
+    opacity: 0.8,
+  },
 
   // Empty State
   emptyContainer: {
@@ -2307,14 +2324,6 @@ const styles = StyleSheet.create({
     ...typography.labelSmall,
     color: colors.accent.secondary,
     fontSize: 10,
-  },
-  removeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: `${colors.semantic.danger}15`,
-    justifyContent: "center",
-    alignItems: "center",
   },
 
   // Set Budget Card (when no budget)
