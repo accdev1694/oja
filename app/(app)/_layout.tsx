@@ -45,6 +45,7 @@ export default function AppLayout() {
           headerShown: false,
         }}
       />
+      <Stack.Screen name="trip-summary" options={{ headerShown: false }} />
       <Stack.Screen name="partners" options={{ headerShown: false }} />
       <Stack.Screen name="join-list" options={{ headerShown: false }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />

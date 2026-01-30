@@ -36,9 +36,13 @@ import {
   animations,
 } from "@/components/ui/glass";
 
+type TabMode = "active" | "history";
+
 export default function ListsScreen() {
   const router = useRouter();
+  const [tabMode, setTabMode] = useState<TabMode>("active");
   const lists = useQuery(api.shoppingLists.getActive);
+  const history = useQuery(api.shoppingLists.getHistory);
   const createList = useMutation(api.shoppingLists.create);
   const deleteList = useMutation(api.shoppingLists.remove);
   const [isCreating, setIsCreating] = useState(false);
@@ -122,53 +126,114 @@ export default function ListsScreen() {
     }
   }
 
-  // Loading state with skeletons
-  if (lists === undefined) {
-    return (
-      <GlassScreen>
-        <SimpleHeader title="Shopping Lists" subtitle="Loading..." />
-        <View style={styles.skeletonContainer}>
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </View>
-      </GlassScreen>
-    );
-  }
+  const currentData = tabMode === "active" ? lists : history;
+  const isLoaded = currentData !== undefined;
+  const displayList = currentData ?? [];
 
   return (
     <GlassScreen>
       {/* Header with New List button */}
       <SimpleHeader
         title="Shopping Lists"
-        subtitle={lists.length > 0 ? `${lists.length} active list${lists.length !== 1 ? "s" : ""}` : undefined}
+        subtitle={
+          tabMode === "active"
+            ? lists && lists.length > 0
+              ? `${lists.length} active list${lists.length !== 1 ? "s" : ""}`
+              : undefined
+            : history && history.length > 0
+              ? `${history.length} past trip${history.length !== 1 ? "s" : ""}`
+              : undefined
+        }
         rightElement={
-          <GlassButton
-            variant="primary"
-            size="sm"
-            icon="plus"
-            onPress={handleOpenCreateModal}
-          >
-            New List
-          </GlassButton>
+          tabMode === "active" ? (
+            <GlassButton
+              variant="primary"
+              size="sm"
+              icon="plus"
+              onPress={handleOpenCreateModal}
+            >
+              New List
+            </GlassButton>
+          ) : undefined
         }
       />
 
-      {/* Empty state */}
-      {lists.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <EmptyLists
-            onAction={handleOpenCreateModal}
-            actionText="Create Your First List"
+      {/* Tab Toggle */}
+      <View style={styles.tabContainer}>
+        <Pressable
+          style={[styles.tab, tabMode === "active" && styles.tabActive]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setTabMode("active");
+          }}
+        >
+          <MaterialCommunityIcons
+            name="clipboard-list"
+            size={16}
+            color={tabMode === "active" ? colors.accent.primary : colors.text.tertiary}
           />
+          <Text style={[styles.tabText, tabMode === "active" && styles.tabTextActive]}>
+            Active
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tab, tabMode === "history" && styles.tabActive]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setTabMode("history");
+          }}
+        >
+          <MaterialCommunityIcons
+            name="history"
+            size={16}
+            color={tabMode === "history" ? colors.accent.primary : colors.text.tertiary}
+          />
+          <Text style={[styles.tabText, tabMode === "history" && styles.tabTextActive]}>
+            History
+          </Text>
+          {history && history.length > 0 && (
+            <View style={styles.tabBadge}>
+              <Text style={styles.tabBadgeText}>{history.length}</Text>
+            </View>
+          )}
+        </Pressable>
+      </View>
+
+      {/* Content */}
+      {!isLoaded ? (
+        <View style={styles.skeletonContainer}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
-      ) : (
+      ) : displayList.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          {tabMode === "active" ? (
+            <EmptyLists
+              onAction={handleOpenCreateModal}
+              actionText="Create Your First List"
+            />
+          ) : (
+            <View style={styles.emptyHistoryContainer}>
+              <MaterialCommunityIcons
+                name="clipboard-check-outline"
+                size={64}
+                color={colors.text.tertiary}
+              />
+              <Text style={styles.emptyHistoryTitle}>No Completed Trips</Text>
+              <Text style={styles.emptyHistorySubtitle}>
+                Your shopping trip history will appear here after you complete and archive a trip.
+              </Text>
+            </View>
+          )}
+        </View>
+      ) : tabMode === "active" ? (
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {lists.map((list) => (
+          {displayList.map((list) => (
             <ListCard
               key={list._id}
               list={list}
@@ -177,8 +242,22 @@ export default function ListsScreen() {
               formatDateTime={formatDateTime}
             />
           ))}
-
-          {/* Bottom spacing for tab bar */}
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {displayList.map((list) => (
+            <HistoryCard
+              key={list._id}
+              list={list}
+              onPress={() => router.push(`/trip-summary?id=${list._id}`)}
+              formatDateTime={formatDateTime}
+            />
+          ))}
           <View style={styles.bottomSpacer} />
         </ScrollView>
       )}
@@ -486,6 +565,134 @@ function ListCard({ list, onPress, onDelete, formatDateTime }: ListCardProps) {
 }
 
 // =============================================================================
+// HISTORY CARD COMPONENT
+// =============================================================================
+
+interface HistoryCardProps {
+  list: {
+    _id: Id<"shoppingLists">;
+    name: string;
+    status: string;
+    budget?: number;
+    actualTotal?: number;
+    pointsEarned?: number;
+    completedAt?: number;
+    createdAt: number;
+    storeName?: string;
+  };
+  onPress: () => void;
+  formatDateTime: (timestamp: number) => string;
+}
+
+function HistoryCard({ list, onPress, formatDateTime }: HistoryCardProps) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.98, animations.spring.stiff);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, animations.spring.gentle);
+  };
+
+  const budget = list.budget ?? 0;
+  const actual = list.actualTotal ?? 0;
+  const diff = budget - actual;
+  const savedMoney = diff > 0 && budget > 0;
+  const completedDate = list.completedAt
+    ? new Date(list.completedAt).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : formatDateTime(list.createdAt);
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Pressable
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onPress();
+        }}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+      >
+        <GlassCard variant="standard" style={styles.listCard}>
+          {/* Header row */}
+          <View style={styles.listHeader}>
+            <View style={styles.listTitleContainer}>
+              <MaterialCommunityIcons
+                name="clipboard-check"
+                size={24}
+                color={colors.text.tertiary}
+              />
+              <Text style={styles.listName} numberOfLines={1}>
+                {list.name}
+              </Text>
+            </View>
+            <View style={styles.headerActions}>
+              <View style={[styles.statusBadge, { backgroundColor: `${colors.text.tertiary}20` }]}>
+                <Text style={[styles.statusText, { color: colors.text.tertiary }]}>
+                  {list.status === "archived" ? "Archived" : "Completed"}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Savings or overspend */}
+          {budget > 0 && actual > 0 && (
+            <View style={styles.budgetRow}>
+              <MaterialCommunityIcons
+                name={savedMoney ? "trending-down" : "trending-up"}
+                size={16}
+                color={savedMoney ? colors.semantic.success : colors.semantic.danger}
+              />
+              <Text
+                style={[
+                  styles.budgetText,
+                  { color: savedMoney ? colors.semantic.success : colors.semantic.danger },
+                ]}
+              >
+                {savedMoney
+                  ? `Saved £${Math.abs(diff).toFixed(2)}`
+                  : `Over by £${Math.abs(diff).toFixed(2)}`}
+                {` • £${actual.toFixed(2)} spent`}
+              </Text>
+            </View>
+          )}
+
+          {/* Meta row */}
+          <View style={styles.metaRow}>
+            <View style={styles.metaItem}>
+              <MaterialCommunityIcons name="calendar" size={14} color={colors.text.tertiary} />
+              <Text style={styles.metaText}>{completedDate}</Text>
+            </View>
+            {list.storeName && (
+              <View style={styles.metaItem}>
+                <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
+                <Text style={styles.metaText}>{list.storeName}</Text>
+              </View>
+            )}
+            {(list.pointsEarned ?? 0) > 0 && (
+              <View style={styles.metaItem}>
+                <MaterialCommunityIcons name="star" size={14} color={colors.accent.secondary} />
+                <Text style={[styles.metaText, { color: colors.accent.secondary }]}>
+                  +{list.pointsEarned} pts
+                </Text>
+              </View>
+            )}
+          </View>
+        </GlassCard>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// =============================================================================
 // STYLES
 // =============================================================================
 
@@ -574,6 +781,69 @@ const styles = StyleSheet.create({
   metaText: {
     ...typography.bodySmall,
     color: colors.text.tertiary,
+  },
+
+  // Tab toggle
+  tabContainer: {
+    flexDirection: "row",
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.glass.background,
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: 10,
+  },
+  tabActive: {
+    backgroundColor: `${colors.accent.primary}20`,
+  },
+  tabText: {
+    ...typography.labelMedium,
+    color: colors.text.tertiary,
+  },
+  tabTextActive: {
+    color: colors.accent.primary,
+    fontWeight: "600",
+  },
+  tabBadge: {
+    backgroundColor: colors.accent.primary,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 6,
+  },
+  tabBadgeText: {
+    ...typography.labelSmall,
+    color: colors.text.primary,
+    fontWeight: "700",
+    fontSize: 11,
+  },
+
+  // Empty history
+  emptyHistoryContainer: {
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  emptyHistoryTitle: {
+    ...typography.headlineMedium,
+    color: colors.text.secondary,
+  },
+  emptyHistorySubtitle: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    lineHeight: 22,
   },
 
   // Modal styles

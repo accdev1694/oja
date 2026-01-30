@@ -333,12 +333,165 @@ export const completeShopping = mutation({
       throw new Error("Unauthorized");
     }
 
+    const now = Date.now();
     await ctx.db.patch(args.id, {
       status: "completed",
-      completedAt: Date.now(),
-      updatedAt: Date.now(),
+      completedAt: now,
+      updatedAt: now,
     });
 
     return await ctx.db.get(args.id);
+  },
+});
+
+/**
+ * Archive a completed list (and record trip summary data)
+ */
+export const archiveList = mutation({
+  args: {
+    id: v.id("shoppingLists"),
+    receiptId: v.optional(v.id("receipts")),
+    actualTotal: v.optional(v.number()),
+    pointsEarned: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const list = await ctx.db.get(args.id);
+    if (!list) {
+      throw new Error("List not found");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user || list.userId !== user._id) {
+      throw new Error("Unauthorized");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.id, {
+      status: "archived",
+      archivedAt: now,
+      completedAt: list.completedAt ?? now,
+      receiptId: args.receiptId,
+      actualTotal: args.actualTotal,
+      pointsEarned: args.pointsEarned,
+      updatedAt: now,
+    });
+
+    return await ctx.db.get(args.id);
+  },
+});
+
+/**
+ * Get archived/completed lists (history)
+ */
+export const getHistory = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      return [];
+    }
+
+    // Get both completed and archived lists
+    const archived = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", user._id).eq("status", "archived")
+      )
+      .order("desc")
+      .collect();
+
+    const completed = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", user._id).eq("status", "completed")
+      )
+      .order("desc")
+      .collect();
+
+    // Merge and sort by completedAt descending
+    return [...archived, ...completed].sort(
+      (a, b) => (b.completedAt ?? b.updatedAt) - (a.completedAt ?? a.updatedAt)
+    );
+  },
+});
+
+/**
+ * Get trip summary for an archived/completed list
+ */
+export const getTripSummary = query({
+  args: { id: v.id("shoppingLists") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+
+    const list = await ctx.db.get(args.id);
+    if (!list) {
+      return null;
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user || list.userId !== user._id) {
+      return null;
+    }
+
+    // Get list items
+    const items = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.id))
+      .collect();
+
+    // Get linked receipt if any
+    let receipt = null;
+    if (list.receiptId) {
+      receipt = await ctx.db.get(list.receiptId);
+    } else {
+      // Try to find a receipt linked to this list
+      receipt = await ctx.db
+        .query("receipts")
+        .withIndex("by_list", (q) => q.eq("listId", args.id))
+        .first();
+    }
+
+    const budget = list.budget ?? 0;
+    const actualTotal = list.actualTotal ?? receipt?.total ?? 0;
+    const difference = budget - actualTotal;
+
+    return {
+      list,
+      items,
+      receipt,
+      budget,
+      actualTotal,
+      difference,
+      savedMoney: difference > 0,
+      percentSaved: budget > 0 ? (difference / budget) * 100 : 0,
+      pointsEarned: list.pointsEarned ?? 0,
+      itemCount: items.length,
+      checkedCount: items.filter((i) => i.isChecked).length,
+    };
   },
 });

@@ -35,10 +35,12 @@ export default function ReconciliationScreen() {
   const list = listId ? useQuery(api.shoppingLists.getById, { id: listId }) : null;
   const listItems = listId ? useQuery(api.listItems.getByList, { listId }) : null;
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
+  const archiveList = useMutation(api.shoppingLists.archiveList);
   const linkReceiptToList = useMutation(api.receipts.linkToList);
   const autoRestock = useMutation(api.pantryItems.autoRestockFromReceipt);
   const confirmFuzzyRestock = useMutation(api.pantryItems.confirmFuzzyRestock);
   const addFromReceipt = useMutation(api.pantryItems.addFromReceipt);
+  const earnPoints = useMutation(api.subscriptions.earnPoints);
 
   const [isCompleting, setIsCompleting] = useState(false);
   const [restockResult, setRestockResult] = useState<{
@@ -120,7 +122,23 @@ export default function ReconciliationScreen() {
             variant="primary"
             size="lg"
             icon="check"
-            onPress={() => router.push("/(app)/(tabs)/" as any)}
+            onPress={async () => {
+              // Earn points for standalone receipt too
+              const pts = Math.floor(receipt.total);
+              if (pts > 0) {
+                try {
+                  await earnPoints({
+                    amount: pts,
+                    source: "receipt_scan",
+                    description: `Receipt from ${receipt.storeName} — £${receipt.total.toFixed(2)}`,
+                  });
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                } catch (e) {
+                  console.warn("Failed to earn points:", e);
+                }
+              }
+              router.push("/(app)/(tabs)/" as any);
+            }}
           >
             Done
           </GlassButton>
@@ -177,46 +195,75 @@ export default function ReconciliationScreen() {
         itemsToAdd: result.itemsToAdd,
       });
 
+      // Step 4: Earn loyalty points (1 point per £1 spent)
+      const pointsToEarn = Math.floor(actualTotal);
+      if (pointsToEarn > 0) {
+        try {
+          await earnPoints({
+            amount: pointsToEarn,
+            source: "shopping_trip",
+            description: `Shopping trip at ${receipt?.storeName ?? "store"} — £${actualTotal.toFixed(2)}`,
+          });
+        } catch (e) {
+          // Points are non-critical, don't block the flow
+          console.warn("Failed to earn points:", e);
+        }
+      }
+
+      // Step 5: Archive the list with trip summary data
+      await archiveList({
+        id: listId,
+        receiptId,
+        actualTotal,
+        pointsEarned: pointsToEarn,
+      });
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // Show success message with restock count
+      // Show success message with restock count + points
       const restockMessage =
         result.restockedItems.length > 0
           ? `Pantry updated: ${result.restockedItems.length} item${result.restockedItems.length !== 1 ? "s" : ""} restocked`
           : "";
 
+      const pointsMessage = pointsToEarn > 0
+        ? `+${pointsToEarn} loyalty points earned!`
+        : "";
+
       const savingsMessage = savedMoney
         ? `Great job! You saved £${Math.abs(difference).toFixed(2)}!`
         : "Shopping trip completed successfully";
 
-      const fullMessage = restockMessage
-        ? `${savingsMessage}\n\n${restockMessage}`
-        : savingsMessage;
+      const messageParts = [savingsMessage, restockMessage, pointsMessage].filter(Boolean);
+      const fullMessage = messageParts.join("\n\n");
+
+      // Navigate to history tab after completion
+      const navigateToHistory = () => router.push("/(app)/(tabs)/lists" as any);
 
       // Handle fuzzy matches and items to add
       if (Platform.OS === "web") {
-        window.alert("Trip Completed!\n\n" + fullMessage);
+        window.alert("Trip Archived!\n\n" + fullMessage);
         if (result.fuzzyMatches.length > 0 || result.itemsToAdd.length > 0) {
           handleFuzzyMatchesAndNewItems();
         } else {
-          router.push("/(app)/(tabs)/" as any);
+          navigateToHistory();
         }
       } else if (result.fuzzyMatches.length > 0 || result.itemsToAdd.length > 0) {
-        Alert.alert("Trip Completed!", fullMessage, [
+        Alert.alert("Trip Archived!", fullMessage, [
           {
             text: "Review Pantry Updates",
             onPress: () => handleFuzzyMatchesAndNewItems(),
           },
           {
-            text: "Done",
-            onPress: () => router.push("/(app)/(tabs)/" as any),
+            text: "View History",
+            onPress: navigateToHistory,
           },
         ]);
       } else {
-        Alert.alert("Trip Completed!", fullMessage, [
+        Alert.alert("Trip Archived!", fullMessage, [
           {
-            text: "Done",
-            onPress: () => router.push("/(app)/(tabs)/" as any),
+            text: "View History",
+            onPress: navigateToHistory,
           },
         ]);
       }

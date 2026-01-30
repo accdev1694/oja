@@ -92,6 +92,12 @@ export default defineSchema({
     plannedDate: v.optional(v.number()),
     shoppingStartedAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
+    archivedAt: v.optional(v.number()),
+
+    // Post-trip summary
+    receiptId: v.optional(v.id("receipts")),
+    actualTotal: v.optional(v.number()),
+    pointsEarned: v.optional(v.number()),
 
     createdAt: v.number(),
     updatedAt: v.number(),
