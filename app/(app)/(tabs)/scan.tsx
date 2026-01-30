@@ -401,9 +401,9 @@ export default function ScanScreen() {
                     >
                       {list.name}
                     </Text>
-                    {list.budget > 0 && (
+                    {(list.budget ?? 0) > 0 && (
                       <Text style={styles.listOptionBudget}>
-                        £{list.budget.toFixed(2)} budget
+                        £{(list.budget ?? 0).toFixed(2)} budget
                       </Text>
                     )}
                   </View>

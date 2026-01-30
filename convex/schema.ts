@@ -27,6 +27,9 @@ export default defineSchema({
     // Onboarding
     onboardingComplete: v.boolean(),
 
+    // Admin
+    isAdmin: v.optional(v.boolean()),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -129,6 +132,10 @@ export default defineSchema({
     isImpulse: v.optional(v.boolean()), // Added from impulse fund
     addedMidShop: v.optional(v.boolean()), // Added during shopping
 
+    // Approval workflow (Epic 4 - Partner Mode)
+    approvalStatus: v.optional(v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"))),
+    approvalNote: v.optional(v.string()),
+
     // Notes
     notes: v.optional(v.string()),
 
@@ -210,4 +217,139 @@ export default defineSchema({
     .index("by_user_item", ["userId", "normalizedName"])
     .index("by_user_item_date", ["userId", "normalizedName", "purchaseDate"])
     .index("by_receipt", ["receiptId"]),
+
+  // === Epic 4: Partner Mode & Collaboration ===
+
+  // List partners (shared list membership)
+  listPartners: defineTable({
+    listId: v.id("shoppingLists"),
+    userId: v.id("users"),
+    role: v.union(v.literal("viewer"), v.literal("editor"), v.literal("approver")),
+    invitedBy: v.id("users"),
+    invitedAt: v.number(),
+    acceptedAt: v.optional(v.number()),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("declined")),
+  })
+    .index("by_list", ["listId"])
+    .index("by_user", ["userId"])
+    .index("by_list_user", ["listId", "userId"]),
+
+  // Invite codes for sharing lists
+  inviteCodes: defineTable({
+    code: v.string(),
+    listId: v.id("shoppingLists"),
+    createdBy: v.id("users"),
+    role: v.union(v.literal("viewer"), v.literal("editor"), v.literal("approver")),
+    expiresAt: v.number(),
+    usedBy: v.optional(v.id("users")),
+    usedAt: v.optional(v.number()),
+    isActive: v.boolean(),
+  })
+    .index("by_code", ["code"])
+    .index("by_list", ["listId"]),
+
+  // Comments on list items
+  itemComments: defineTable({
+    listItemId: v.id("listItems"),
+    userId: v.id("users"),
+    text: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_item", ["listItemId"])
+    .index("by_user", ["userId"]),
+
+  // User notifications
+  notifications: defineTable({
+    userId: v.id("users"),
+    type: v.string(),
+    title: v.string(),
+    body: v.string(),
+    data: v.optional(v.any()),
+    read: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_read", ["userId", "read"]),
+
+  // === Epic 6: Insights & Gamification ===
+
+  // User achievements
+  achievements: defineTable({
+    userId: v.id("users"),
+    type: v.string(),
+    title: v.string(),
+    description: v.string(),
+    icon: v.string(),
+    unlockedAt: v.number(),
+    data: v.optional(v.any()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_type", ["userId", "type"]),
+
+  // User streaks
+  streaks: defineTable({
+    userId: v.id("users"),
+    type: v.string(),
+    currentCount: v.number(),
+    longestCount: v.number(),
+    lastActivityDate: v.string(),
+    startedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_type", ["userId", "type"]),
+
+  // === Epic 7: Subscriptions & Loyalty ===
+
+  // User subscriptions
+  subscriptions: defineTable({
+    userId: v.id("users"),
+    plan: v.union(v.literal("free"), v.literal("premium_monthly"), v.literal("premium_annual")),
+    status: v.union(v.literal("active"), v.literal("cancelled"), v.literal("expired"), v.literal("trial")),
+    stripeCustomerId: v.optional(v.string()),
+    stripeSubscriptionId: v.optional(v.string()),
+    currentPeriodStart: v.optional(v.number()),
+    currentPeriodEnd: v.optional(v.number()),
+    trialEndsAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_stripe_customer", ["stripeCustomerId"]),
+
+  // Loyalty points balance
+  loyaltyPoints: defineTable({
+    userId: v.id("users"),
+    points: v.number(),
+    lifetimePoints: v.number(),
+    tier: v.union(v.literal("bronze"), v.literal("silver"), v.literal("gold"), v.literal("platinum")),
+    lastEarnedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  // Loyalty point transactions
+  pointTransactions: defineTable({
+    userId: v.id("users"),
+    amount: v.number(),
+    type: v.union(v.literal("earned"), v.literal("redeemed"), v.literal("expired")),
+    source: v.string(),
+    description: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  // === Epic 8: Admin ===
+
+  // Admin audit logs
+  adminLogs: defineTable({
+    adminUserId: v.id("users"),
+    action: v.string(),
+    targetType: v.string(),
+    targetId: v.optional(v.string()),
+    details: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_admin", ["adminUserId"])
+    .index("by_action", ["action"]),
 });

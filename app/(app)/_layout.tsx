@@ -45,6 +45,12 @@ export default function AppLayout() {
           headerShown: false,
         }}
       />
+      <Stack.Screen name="partners" options={{ headerShown: false }} />
+      <Stack.Screen name="join-list" options={{ headerShown: false }} />
+      <Stack.Screen name="notifications" options={{ headerShown: false }} />
+      <Stack.Screen name="insights" options={{ headerShown: false }} />
+      <Stack.Screen name="subscription" options={{ headerShown: false }} />
+      <Stack.Screen name="admin" options={{ headerShown: false }} />
     </Stack>
   );
 }
