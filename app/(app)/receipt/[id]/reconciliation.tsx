@@ -4,6 +4,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -193,7 +194,14 @@ export default function ReconciliationScreen() {
         : savingsMessage;
 
       // Handle fuzzy matches and items to add
-      if (result.fuzzyMatches.length > 0 || result.itemsToAdd.length > 0) {
+      if (Platform.OS === "web") {
+        window.alert("Trip Completed!\n\n" + fullMessage);
+        if (result.fuzzyMatches.length > 0 || result.itemsToAdd.length > 0) {
+          handleFuzzyMatchesAndNewItems();
+        } else {
+          router.push("/(app)/(tabs)/" as any);
+        }
+      } else if (result.fuzzyMatches.length > 0 || result.itemsToAdd.length > 0) {
         Alert.alert("Trip Completed!", fullMessage, [
           {
             text: "Review Pantry Updates",

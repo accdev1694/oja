@@ -5,12 +5,15 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  TouchableOpacity,
+  ScrollView,
 } from "react-native";
 import { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
-import { useMutation, useAction } from "convex/react";
+import { useMutation, useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -30,11 +33,16 @@ export default function ScanScreen() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+  const [selectedListId, setSelectedListId] = useState<Id<"shoppingLists"> | null>(null);
+  const [showListPicker, setShowListPicker] = useState(false);
 
+  const shoppingLists = useQuery(api.shoppingLists.getByUser, {});
   const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);
   const createReceipt = useMutation(api.receipts.create);
   const parseReceipt = useAction(api.ai.parseReceipt);
   const updateReceipt = useMutation(api.receipts.update);
+
+  const selectedList = shoppingLists?.find((l) => l._id === selectedListId);
 
   async function handleTakePhoto() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -120,9 +128,10 @@ export default function ScanScreen() {
 
       const { storageId } = await uploadResponse.json();
 
-      // Step 2: Create receipt record
+      // Step 2: Create receipt record (with optional list link)
       const receiptId = await createReceipt({
         imageStorageId: storageId,
+        listId: selectedListId ?? undefined,
       });
 
       setIsUploading(false);
@@ -303,6 +312,114 @@ export default function ScanScreen() {
           </View>
         </GlassCard>
 
+        {/* Link to List (optional) */}
+        {shoppingLists && shoppingLists.length > 0 && (
+          <TouchableOpacity
+            style={styles.listSelector}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowListPicker(!showListPicker);
+            }}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons
+              name={selectedList ? "clipboard-check" : "clipboard-text-outline"}
+              size={20}
+              color={selectedList ? colors.accent.primary : colors.text.secondary}
+            />
+            <Text
+              style={[
+                styles.listSelectorText,
+                selectedList && styles.listSelectorTextActive,
+              ]}
+              numberOfLines={1}
+            >
+              {selectedList
+                ? `Linked to: ${selectedList.name}`
+                : "Link to shopping list (optional)"}
+            </Text>
+            <MaterialCommunityIcons
+              name={showListPicker ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={colors.text.secondary}
+            />
+          </TouchableOpacity>
+        )}
+
+        {showListPicker && shoppingLists && (
+          <GlassCard variant="standard" style={styles.listPickerCard}>
+            <ScrollView style={styles.listPickerScroll} nestedScrollEnabled>
+              {/* None option */}
+              <TouchableOpacity
+                style={[
+                  styles.listOption,
+                  !selectedListId && styles.listOptionActive,
+                ]}
+                onPress={() => {
+                  setSelectedListId(null);
+                  setShowListPicker(false);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="close-circle-outline"
+                  size={18}
+                  color={colors.text.secondary}
+                />
+                <Text style={styles.listOptionText}>No list (standalone receipt)</Text>
+              </TouchableOpacity>
+
+              {shoppingLists.map((list) => (
+                <TouchableOpacity
+                  key={list._id}
+                  style={[
+                    styles.listOption,
+                    selectedListId === list._id && styles.listOptionActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedListId(list._id);
+                    setShowListPicker(false);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name="clipboard-text"
+                    size={18}
+                    color={
+                      selectedListId === list._id
+                        ? colors.accent.primary
+                        : colors.text.secondary
+                    }
+                  />
+                  <View style={styles.listOptionInfo}>
+                    <Text
+                      style={[
+                        styles.listOptionText,
+                        selectedListId === list._id && styles.listOptionTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {list.name}
+                    </Text>
+                    {list.budget > 0 && (
+                      <Text style={styles.listOptionBudget}>
+                        £{list.budget.toFixed(2)} budget
+                      </Text>
+                    )}
+                  </View>
+                  {selectedListId === list._id && (
+                    <MaterialCommunityIcons
+                      name="check"
+                      size={18}
+                      color={colors.accent.primary}
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </GlassCard>
+        )}
+
         {/* Action Buttons */}
         <View style={styles.buttons}>
           <GlassButton
@@ -414,6 +531,63 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.text.secondary,
     flex: 1,
+  },
+
+  // List Selector
+  listSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  listSelectorText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    flex: 1,
+  },
+  listSelectorTextActive: {
+    color: colors.accent.primary,
+    fontWeight: "600",
+  },
+  listPickerCard: {
+    marginBottom: spacing.md,
+    padding: 0,
+  },
+  listPickerScroll: {
+    maxHeight: 200,
+  },
+  listOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+  },
+  listOptionActive: {
+    backgroundColor: `${colors.accent.primary}10`,
+  },
+  listOptionInfo: {
+    flex: 1,
+  },
+  listOptionText: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+  },
+  listOptionTextActive: {
+    color: colors.accent.primary,
+    fontWeight: "600",
+  },
+  listOptionBudget: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
   },
 
   // Buttons
