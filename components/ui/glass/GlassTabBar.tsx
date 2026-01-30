@@ -49,7 +49,7 @@ export interface TabConfig {
 export const TAB_CONFIG: Record<string, TabConfig> = {
   index: {
     name: "index",
-    title: "Pantry",
+    title: "Stock",
     icon: "home-outline",
     iconFocused: "home",
     color: colors.semantic.pantry,

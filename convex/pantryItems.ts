@@ -15,6 +15,7 @@ export const bulkCreate = mutation({
         stockLevel: v.union(
           v.literal("stocked"),
           v.literal("good"),
+          v.literal("half"),
           v.literal("low"),
           v.literal("out")
         ),
@@ -126,6 +127,7 @@ export const create = mutation({
     stockLevel: v.union(
       v.literal("stocked"),
       v.literal("good"),
+      v.literal("half"),
       v.literal("low"),
       v.literal("out")
     ),
@@ -175,6 +177,7 @@ export const update = mutation({
       v.union(
         v.literal("stocked"),
         v.literal("good"),
+        v.literal("half"),
         v.literal("low"),
         v.literal("out")
       )
@@ -256,6 +259,7 @@ export const updateStockLevel = mutation({
     stockLevel: v.union(
       v.literal("stocked"),
       v.literal("good"),
+      v.literal("half"),
       v.literal("low"),
       v.literal("out")
     ),

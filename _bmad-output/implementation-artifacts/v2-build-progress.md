@@ -1,6 +1,6 @@
 # Oja v2 Build Progress
 
-> **Last Updated:** 2026-01-29
+> **Last Updated:** 2026-01-30
 > **Stack:** Expo + Clerk + Convex + Jina AI + Gemini
 
 ---
@@ -12,10 +12,10 @@
 | 0. Project Setup | ✅ Complete | 4/4 |
 | 0.5. Epic & Story Design | ✅ Complete | 3/3 |
 | 1. Foundation & Authentication (Epic 1) | ✅ Complete | 9/9 |
-| 2. Pantry Stock Tracker (Epic 2) | ✅ Complete | 6/6 |
+| 2. Stock Tracker (Epic 2) | ✅ Complete | 6/6 |
 | 3. Shopping Lists with Budget Control (Epic 3) | ✅ Complete | 10/10 |
 | 4. Partner Mode & Collaboration (Epic 4) | ⏳ Backlog | 0/5 |
-| 5. Receipt Intelligence & Price History (Epic 5) | 🔄 In Progress | 1/6 |
+| 5. Receipt Intelligence & Price History (Epic 5) | ✅ Complete | 6/6 |
 | 6. Insights, Gamification & Progress (Epic 6) | ⏳ Backlog | 0/3 |
 | 7. Subscription, Payments & Loyalty (Epic 7) | ⏳ Backlog | 0/3 |
 | 8. Admin Dashboard & Operations (Epic 8) | ⏳ Backlog | 0/5 |
@@ -248,18 +248,18 @@
 
 ---
 
-## Phase 5: Receipt Intelligence (Epic 5)
+## Phase 5: Receipt Intelligence (Epic 5) ✅ Complete
 
-### Stories (TBD)
+### Stories
 
 | ID | Story | Status | Notes |
 |----|-------|--------|-------|
-| 5-1 | Camera capture | ⏳ | |
-| 5-2 | Receipt parsing (Gemini) | ⏳ | |
-| 5-3 | Item confirmation UI | ⏳ | |
-| 5-4 | Price history save | ⏳ | |
-| 5-5 | Reconciliation view | ⏳ | Planned vs actual |
-| 5-6 | Auto-restock pantry | ⏳ | |
+| 5-1 | Camera capture | ✅ | expo-image-picker, Convex upload |
+| 5-2 | Receipt parsing (Gemini) | ✅ | Gemini 1.5 Flash Vision, lenient parsing |
+| 5-3 | Item confirmation UI | ✅ | Editable items, confidence badges, autocomplete |
+| 5-4 | Price history save | ✅ | Price tracking, trend analysis, alerts (>15% change) |
+| 5-5 | Reconciliation view | ✅ | Planned vs actual, savings/overspend, unplanned items |
+| 5-6 | Auto-restock pantry | ✅ | Exact + fuzzy matching (Levenshtein >80%), batch restock |
 
 ---
 
@@ -296,6 +296,13 @@
 
 | Date | Change |
 |------|--------|
+| 2026-01-30 | **All-Category Expansion** - AI prompt expanded from grocery-only to 24 categories (Household, Personal Care, Electronics, etc.) |
+| 2026-01-30 | Expanded icon system: ~60 new keyword mappings + 12 non-food category mappings (client + server) |
+| 2026-01-30 | Renamed "Pantry" → "Stock" throughout UI (tabs, headers, buttons, empty states) |
+| 2026-01-30 | Added CategoryFilter chip component to Stock, Pantry Pick, and List Detail screens |
+| 2026-01-30 | Tracker files updated to reflect Epic 5 completion (was showing 1/6, actually 6/6) |
+| 2026-01-29 | **Epic 5 COMPLETE** - Receipt Intelligence & Price History (6/6 stories) |
+| 2026-01-29 | Stories 5-2 to 5-6: Gemini receipt parsing, confirmation UI, price history, reconciliation, auto-restock |
 | 2026-01-29 | **Epic 3 COMPLETE** - Shopping Lists with Budget Control (10/10 stories) |
 | 2026-01-29 | Story 3-10: Smart Suggestions with AI (Gemini + fallback pattern matching) |
 | 2026-01-29 | Story 3-9: Item Priority with Swipe Gestures (swipe left/right + priority badges) |

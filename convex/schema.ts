@@ -46,6 +46,7 @@ export default defineSchema({
     stockLevel: v.union(
       v.literal("stocked"),
       v.literal("good"),
+      v.literal("half"),
       v.literal("low"),
       v.literal("out")
     ),

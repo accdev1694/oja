@@ -43,6 +43,7 @@ import {
   animations,
   borderRadius,
 } from "@/components/ui/glass";
+import { CategoryFilter } from "@/components/ui/CategoryFilter";
 
 /**
  * Normalize a string for comparison
@@ -117,7 +118,7 @@ export default function ListDetailScreen() {
   const removeItem = useMutation(api.listItems.remove);
   const startShopping = useMutation(api.shoppingLists.startShopping);
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
-  const addFromPantryOut = useMutation(api.listItems.addFromPantryOut);
+
   const toggleBudgetLock = useMutation(api.shoppingLists.toggleBudgetLock);
   const updateList = useMutation(api.shoppingLists.update);
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
@@ -149,6 +150,9 @@ export default function ListDetailScreen() {
   const [checkingItemQuantity, setCheckingItemQuantity] = useState(1);
   const [actualPriceValue, setActualPriceValue] = useState("");
   const [isSavingActualPrice, setIsSavingActualPrice] = useState(false);
+
+  // Category filter for items list
+  const [listCategoryFilter, setListCategoryFilter] = useState<string | null>(null);
 
   // Smart suggestions state (Story 3.10)
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -578,7 +582,7 @@ export default function ListDetailScreen() {
       } else if (source === "impulse") {
         Alert.alert("Added from Impulse Fund", `"${midShopItemName}" added using impulse fund`);
       } else if (source === "next_trip") {
-        Alert.alert("Saved for Later", `"${midShopItemName}" added to pantry for next trip`);
+        Alert.alert("Saved for Later", `"${midShopItemName}" added to stock for next trip`);
       }
 
       // Clear the form
@@ -674,43 +678,9 @@ export default function ListDetailScreen() {
     ]);
   }
 
-  async function handleAddFromPantry() {
-    // Warn if budget is locked (can't block since we don't know prices)
-    if (budgetLocked && budget > 0) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      Alert.alert(
-        "Budget Locked",
-        "Your budget is locked. Items from pantry will be added without prices. You may need to update prices manually.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Continue",
-            onPress: async () => {
-              await addFromPantryItems();
-            },
-          },
-        ]
-      );
-      return;
-    }
-
-    await addFromPantryItems();
-  }
-
-  async function addFromPantryItems() {
+  function handleAddFromPantry() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      const result = await addFromPantryOut({ listId: id });
-      if (result.count > 0) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert("Items Added", `Added ${result.count} items from pantry`);
-      } else {
-        Alert.alert("No Items", "No 'out of stock' items found in pantry");
-      }
-    } catch (error) {
-      console.error("Failed to add from pantry:", error);
-      Alert.alert("Error", "Failed to add items from pantry");
-    }
+    router.push(`/pantry-pick?listId=${id}`);
   }
 
   // Smart suggestions handlers (Story 3.10)
@@ -956,11 +926,11 @@ export default function ListDetailScreen() {
                 <GlassButton
                   variant="secondary"
                   size="md"
-                  icon="fridge-outline"
+                  icon="package-variant"
                   onPress={handleAddFromPantry}
                   style={styles.actionButton}
                 >
-                  From Pantry
+                  From Stock
                 </GlassButton>
                 <GlassButton
                   variant="primary"
@@ -1133,16 +1103,34 @@ export default function ListDetailScreen() {
           ) : (
             <View style={styles.itemsContainer}>
               <Text style={styles.sectionTitle}>Items ({items.length})</Text>
-              {items.map((item) => (
-                <ShoppingListItem
-                  key={item._id}
-                  item={item}
-                  onToggle={() => handleToggleItem(item._id)}
-                  onRemove={() => handleRemoveItem(item._id, item.name)}
-                  onPriorityChange={(priority) => handlePriorityChange(item._id, priority)}
-                  isShopping={list.status === "shopping"}
-                />
-              ))}
+              {(() => {
+                const listCategories = [...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort();
+                const listCategoryCounts: Record<string, number> = {};
+                items.forEach((i) => { if (i.category) listCategoryCounts[i.category] = (listCategoryCounts[i.category] || 0) + 1; });
+                const displayItems = listCategoryFilter
+                  ? items.filter((i) => i.category === listCategoryFilter)
+                  : items;
+                return (
+                  <>
+                    <CategoryFilter
+                      categories={listCategories}
+                      selected={listCategoryFilter}
+                      onSelect={setListCategoryFilter}
+                      counts={listCategoryCounts}
+                    />
+                    {displayItems.map((item) => (
+                      <ShoppingListItem
+                        key={item._id}
+                        item={item}
+                        onToggle={() => handleToggleItem(item._id)}
+                        onRemove={() => handleRemoveItem(item._id, item.name)}
+                        onPriorityChange={(priority) => handlePriorityChange(item._id, priority)}
+                        isShopping={list.status === "shopping"}
+                      />
+                    ))}
+                  </>
+                );
+              })()}
             </View>
           )}
 
@@ -1362,7 +1350,7 @@ export default function ListDetailScreen() {
                 <View style={styles.midShopOptionText}>
                   <Text style={styles.midShopOptionTitle}>Add to Next Trip</Text>
                   <Text style={styles.midShopOptionDesc}>
-                    Save to pantry for later
+                    Save to stock for later
                   </Text>
                 </View>
                 <MaterialCommunityIcons

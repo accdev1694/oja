@@ -423,7 +423,7 @@ const simpleStyles = StyleSheet.create({});
 Object.assign(styles, {
   simpleHeader: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md, // Visual spacing after safe area
+    paddingTop: spacing.md,
     paddingBottom: spacing.md,
   },
   simpleHeaderContent: {
@@ -435,7 +435,7 @@ Object.assign(styles, {
     flex: 1,
   },
   simpleTitle: {
-    ...typography.displaySmall,
+    ...typography.headlineLarge,
     color: colors.text.primary,
   },
   simpleSubtitle: {

@@ -10,7 +10,12 @@ import Animated, {
   runOnJS,
   Easing,
 } from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
+import {
+  notificationAsync,
+  impactAsync,
+  NotificationFeedbackType,
+  ImpactFeedbackStyle,
+} from "expo-haptics";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -55,6 +60,10 @@ export function FlyToListAnimation({
     onAnimationComplete();
   }, [onAnimationComplete]);
 
+  const triggerLandingHaptic = useCallback(() => {
+    notificationAsync(NotificationFeedbackType.Success).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (visible) {
       // Reset values
@@ -68,7 +77,7 @@ export function FlyToListAnimation({
       burstOpacity.value = 0;
 
       // Haptic pulse at start
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      impactAsync(ImpactFeedbackStyle.Medium);
 
       // Animation sequence
       // 1. Fade in with pulse
@@ -134,8 +143,7 @@ export function FlyToListAnimation({
         750,
         withTiming(0, { duration: 200 }, (finished) => {
           if (finished) {
-            // Haptic at landing
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            runOnJS(triggerLandingHaptic)();
             runOnJS(triggerCompletion)();
           }
         })

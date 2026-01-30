@@ -195,21 +195,21 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Pantry Overview Section */}
+        {/* Stock Overview Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pantry Overview</Text>
+          <Text style={styles.sectionTitle}>Stock Overview</Text>
 
           {/* Total Items */}
           <GlassCard variant="bordered" accentColor={colors.semantic.pantry}>
             <View style={styles.pantryTotalRow}>
               <MaterialCommunityIcons
-                name="fridge"
+                name="package-variant"
                 size={32}
                 color={colors.semantic.pantry}
               />
               <View style={styles.pantryTotalInfo}>
                 <Text style={styles.pantryTotalValue}>{pantryItems.length}</Text>
-                <Text style={styles.pantryTotalLabel}>Total Items in Pantry</Text>
+                <Text style={styles.pantryTotalLabel}>Total Items in Stock</Text>
               </View>
             </View>
           </GlassCard>

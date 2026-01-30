@@ -286,6 +286,62 @@ export const addFromPantryOut = mutation({
 });
 
 /**
+ * Add selected pantry items to a shopping list
+ */
+export const addFromPantrySelected = mutation({
+  args: {
+    listId: v.id("shoppingLists"),
+    pantryItemIds: v.array(v.id("pantryItems")),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const list = await ctx.db.get(args.listId);
+    if (!list) {
+      throw new Error("List not found");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user || list.userId !== user._id) {
+      throw new Error("Unauthorized");
+    }
+
+    const now = Date.now();
+    let count = 0;
+
+    for (const pantryItemId of args.pantryItemIds) {
+      const pantryItem = await ctx.db.get(pantryItemId);
+      if (!pantryItem || pantryItem.userId !== user._id) continue;
+
+      await ctx.db.insert("listItems", {
+        listId: args.listId,
+        userId: user._id,
+        pantryItemId: pantryItem._id,
+        name: pantryItem.name,
+        category: pantryItem.category,
+        quantity: 1,
+        priority: "must-have",
+        isChecked: false,
+        autoAdded: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      count++;
+    }
+
+    return { count };
+  },
+});
+
+/**
  * Add an item during mid-shop with 3 options:
  * - budget: Add to main budget
  * - impulse: Add to impulse fund

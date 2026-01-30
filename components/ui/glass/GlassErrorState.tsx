@@ -277,8 +277,8 @@ export function EmptyPantry({ title, message, onAction, actionText, style }: Emp
   return (
     <GlassErrorState
       type="empty"
-      icon="fridge-outline"
-      title={title ?? "Your pantry is empty"}
+      icon="package-variant"
+      title={title ?? "Your stock is empty"}
       message={message ?? "Add items to keep track of what you have at home"}
       onRetry={onAction}
       retryText={actionText ?? "Add First Item"}
@@ -307,7 +307,7 @@ export function EmptyListItems({ title, message, onAction, actionText, style }: 
       type="empty"
       icon="cart-outline"
       title={title ?? "List is empty"}
-      message={message ?? "Add items from your pantry or create new ones"}
+      message={message ?? "Add items from your stock or create new ones"}
       onRetry={onAction}
       retryText={actionText ?? "Add Items"}
       size="compact"

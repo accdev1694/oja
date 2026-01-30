@@ -68,7 +68,17 @@
       "mcp__playwright__browser_type",
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_run_code",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "mcp__playwright__browser_resize",
+      "Bash(adb devices:*)",
+      "Bash($ANDROID_HOME/platform-tools/adb devices:*)",
+      "Bash($LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe devices)",
+      "Bash(cmd.exe /c \"where adb\")",
+      "Bash(cmd.exe /c \"dir /s /b C:\\\\Users\\\\%USERNAME%\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\")",
+      "Bash(npx expo export:*)",
+      "mcp__playwright__browser_handle_dialog",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_file_upload"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -61,7 +61,7 @@ export const VALIDATED_ICONS = [
   "pizza",
   // Frozen
   "snowflake",
-  // Household
+  // Household & Cleaning
   "paper-roll",
   "trash-can",
   "washing-machine",
@@ -69,18 +69,57 @@ export const VALIDATED_ICONS = [
   "hand-wash",
   "shower-head",
   "toothbrush",
+  "lightbulb-outline",
+  "flash",
+  "broom",
+  "dishwasher",
+  // Personal Care & Health
+  "face-woman",
+  "lotion-outline",
+  "pill",
+  "medical-bag",
+  "bandage",
+  // Baby & Kids
+  "baby-bottle-outline",
+  "teddy-bear",
+  "human-child",
+  // Pets
+  "paw",
+  "dog",
+  "cat",
+  // Electronics & Tech
+  "cellphone",
+  "laptop",
+  "headphones",
+  "battery",
+  "usb",
+  "power-plug",
+  // Clothing & Accessories
+  "tshirt-crew",
+  "shoe-formal",
+  "hanger",
+  // Office & Stationery
+  "pencil",
+  "notebook",
+  "printer",
+  // Garden & Outdoor
+  "flower",
+  "tree",
+  "shovel",
   // Generic
   "cart",
   "home",
   "circle-outline",
   "shaker-outline",
+  "tag",
+  "dots-horizontal",
 ] as const;
 
 export type ValidIcon = typeof VALIDATED_ICONS[number];
 
 // Category to icon mapping - guaranteed fallback
 export const CATEGORY_ICONS: Record<string, ValidIcon> = {
-  // Standard categories
+  // Food categories
   "proteins": "food-drumstick",
   "meat": "food-drumstick",
   "dairy": "cheese",
@@ -93,8 +132,6 @@ export const CATEGORY_ICONS: Record<string, ValidIcon> = {
   "snacks": "cookie",
   "frozen": "snowflake",
   "canned": "package-variant",
-  "household": "home",
-  // AI-generated categories from Gemini
   "bakery": "bread-slice",
   "pantry staples": "package-variant",
   "spices & seasonings": "shaker-outline",
@@ -103,6 +140,36 @@ export const CATEGORY_ICONS: Record<string, ValidIcon> = {
   "oils & vinegars": "bottle-tonic",
   "baking": "cookie",
   "ethnic ingredients": "food-variant",
+  // Household & Cleaning
+  "household": "spray",
+  "household & cleaning": "spray",
+  "cleaning": "spray",
+  "laundry": "washing-machine",
+  // Personal Care & Health
+  "personal care": "lotion-outline",
+  "toiletries": "shower-head",
+  "health": "pill",
+  "health & wellness": "pill",
+  // Baby & Kids
+  "baby & kids": "baby-bottle-outline",
+  "baby": "baby-bottle-outline",
+  // Pets
+  "pets": "paw",
+  "pet care": "paw",
+  // Electronics & Tech
+  "electronics": "cellphone",
+  "electronics & tech": "cellphone",
+  "tech": "cellphone",
+  // Clothing & Accessories
+  "clothing": "tshirt-crew",
+  "clothing & accessories": "tshirt-crew",
+  // Garden & Outdoor
+  "garden & outdoor": "flower",
+  "gardening": "flower",
+  // Office & Stationery
+  "office": "pencil",
+  "office & stationery": "pencil",
+  "stationery": "pencil",
   // Fallback
   "other": "cart",
 };
@@ -273,22 +340,79 @@ const KEYWORD_ICONS: Record<string, ValidIcon> = {
   "lentil": "package-variant",
   "chickpea": "package-variant",
 
-  // Household
+  // Household & Cleaning
   "toilet": "paper-roll",
-  "paper": "paper-roll",
+  "paper towel": "paper-roll",
+  "kitchen roll": "paper-roll",
   "tissue": "paper-roll",
   "detergent": "washing-machine",
   "laundry": "washing-machine",
+  "washing": "washing-machine",
   "soap": "hand-wash",
-  "dish": "hand-wash",
+  "dish": "dishwasher",
+  "sponge": "dishwasher",
   "shampoo": "shower-head",
   "conditioner": "shower-head",
+  "body wash": "shower-head",
   "toothpaste": "toothbrush",
+  "toothbrush": "toothbrush",
   "cleaning": "spray",
+  "cleaner": "spray",
+  "disinfect": "spray",
   "bleach": "spray",
   "bin": "trash-can",
   "trash": "trash-can",
   "rubbish": "trash-can",
+  "broom": "broom",
+  "mop": "broom",
+  "bulb": "lightbulb-outline",
+  "foil": "package-variant",
+  "cling": "package-variant",
+
+  // Personal Care & Health
+  "deodorant": "lotion-outline",
+  "lotion": "lotion-outline",
+  "sunscreen": "lotion-outline",
+  "moisturiser": "lotion-outline",
+  "razor": "face-woman",
+  "vitamin": "pill",
+  "medicine": "pill",
+  "paracetamol": "pill",
+  "ibuprofen": "pill",
+  "plaster": "bandage",
+  "bandage": "bandage",
+  "first aid": "medical-bag",
+
+  // Baby & Kids
+  "nappy": "baby-bottle-outline",
+  "diaper": "baby-bottle-outline",
+  "baby": "baby-bottle-outline",
+  "formula": "baby-bottle-outline",
+
+  // Pets
+  "pet food": "paw",
+  "dog food": "dog",
+  "cat food": "cat",
+  "cat litter": "cat",
+  "pet": "paw",
+
+  // Electronics & Tech
+  "charger": "power-plug",
+  "cable": "usb",
+  "phone": "cellphone",
+  "headphone": "headphones",
+  "battery": "battery",
+
+  // Clothing
+  "shirt": "tshirt-crew",
+  "sock": "tshirt-crew",
+  "shoe": "shoe-formal",
+
+  // Garden & Outdoor
+  "plant": "flower",
+  "seed": "flower",
+  "compost": "shovel",
+  "garden": "flower",
 };
 
 /**

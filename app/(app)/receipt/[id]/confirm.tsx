@@ -8,6 +8,7 @@ import {
   Modal,
   TouchableOpacity,
   Animated,
+  Platform,
 } from "react-native";
 import { useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -152,8 +153,6 @@ export default function ConfirmReceiptScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     const updated = editedItems.filter((_, i) => i !== index);
     setEditedItems(updated);
-
-    Alert.alert("Item removed", "", [{ text: "OK" }]);
   }
 
   function handleAddMissingItem() {
@@ -208,43 +207,40 @@ export default function ConfirmReceiptScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // If there are price alerts, show them
-      if (alerts && alerts.length > 0) {
-        const alertMessages = alerts.map((alert: any) => {
-          if (alert.type === "decrease") {
-            return `🎉 Great deal! ${alert.itemName} is ${alert.percentChange.toFixed(0)}% cheaper than usual`;
-          } else {
-            return `📈 ${alert.itemName} price went up ${alert.percentChange.toFixed(0)}% since last purchase`;
-          }
-        });
-
-        Alert.alert(
-          "Price Alerts",
-          alertMessages.join("\n\n"),
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                // Navigate to reconciliation if linked to a list, otherwise go to scan
-                if (receipt?.listId) {
-                  router.push(`/receipt/${receiptId}/reconciliation?listId=${receipt.listId}` as any);
-                } else {
-                  router.push("/(app)/(tabs)/scan" as any);
-                }
-              },
-            },
-          ]
-        );
-      } else {
-        // No alerts - navigate to reconciliation if linked to a list
+      // Determine navigation destination
+      const navigateAfterSave = () => {
         if (receipt?.listId) {
           router.push(`/receipt/${receiptId}/reconciliation?listId=${receipt.listId}` as any);
         } else {
+          router.push("/(app)/(tabs)/scan" as any);
+        }
+      };
+
+      // Show alerts if any, then navigate
+      if (alerts && alerts.length > 0) {
+        const alertMessages = alerts.map((alert: any) => {
+          if (alert.type === "decrease") {
+            return `Great deal! ${alert.itemName} is ${alert.percentChange.toFixed(0)}% cheaper than usual`;
+          } else {
+            return `${alert.itemName} price went up ${alert.percentChange.toFixed(0)}% since last purchase`;
+          }
+        });
+
+        if (Platform.OS === "web") {
+          // On web, window.alert is synchronous and doesn't support callbacks
+          window.alert("Price Alerts\n\n" + alertMessages.join("\n\n"));
+          navigateAfterSave();
+        } else {
+          Alert.alert("Price Alerts", alertMessages.join("\n\n"), [
+            { text: "OK", onPress: navigateAfterSave },
+          ]);
+        }
+      } else {
+        if (Platform.OS === "web") {
+          navigateAfterSave();
+        } else {
           Alert.alert("Receipt Saved", "Your receipt has been saved successfully", [
-            {
-              text: "OK",
-              onPress: () => router.push("/(app)/(tabs)/scan" as any),
-            },
+            { text: "OK", onPress: navigateAfterSave },
           ]);
         }
       }

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,19 +7,13 @@ import {
   Modal,
   Pressable,
 } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withRepeat,
-  withSequence,
-  withTiming,
-  interpolateColor,
-  runOnJS,
-} from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-
-export type StockLevel = "stocked" | "good" | "low" | "out";
+import {
+  GaugeIndicator,
+  STOCK_LEVEL_ORDER,
+  STOCK_LEVEL_PERCENTAGES,
+  type StockLevel,
+} from "./GaugeIndicator";
 
 interface StockLevelPickerProps {
   visible: boolean;
@@ -29,30 +23,14 @@ interface StockLevelPickerProps {
   onClose: () => void;
 }
 
-const LEVELS: { key: StockLevel; label: string; emoji: string; fill: number }[] = [
-  { key: "stocked", label: "Stocked", emoji: "🟢", fill: 100 },
-  { key: "good", label: "Good", emoji: "🟡", fill: 75 },
-  { key: "low", label: "Low", emoji: "🟠", fill: 25 },
-  { key: "out", label: "Out", emoji: "🔴", fill: 0 },
+const LEVELS: { key: StockLevel; label: string; color: string }[] = [
+  { key: "stocked", label: "Full", color: "#10B981" },
+  { key: "good", label: "Good", color: "#34D399" },
+  { key: "half", label: "Half", color: "#EAB308" },
+  { key: "low", label: "Low", color: "#F59E0B" },
+  { key: "out", label: "Out", color: "#EF4444" },
 ];
 
-const LEVEL_COLORS: Record<StockLevel, string> = {
-  stocked: "#10B981",
-  good: "#34D399",
-  low: "#F59E0B",
-  out: "#EF4444",
-};
-
-/**
- * StockLevelPicker - Modal with large animated liquid container
- *
- * Features:
- * - Large visual liquid indicator
- * - Tap level buttons to see liquid drain/fill animation
- * - Spring physics for natural liquid movement
- * - Wave animation at liquid surface
- * - Haptic feedback on selection
- */
 export function StockLevelPicker({
   visible,
   currentLevel,
@@ -60,102 +38,24 @@ export function StockLevelPicker({
   onSelect,
   onClose,
 }: StockLevelPickerProps) {
-  const fillPercentage = useSharedValue(
-    LEVELS.find((l) => l.key === currentLevel)?.fill ?? 100
-  );
-  const selectedLevel = useSharedValue<StockLevel>(currentLevel);
-  const waveOffset = useSharedValue(0);
-  const colorIndex = useSharedValue(LEVELS.findIndex((l) => l.key === currentLevel));
+  const [previewLevel, setPreviewLevel] = useState<StockLevel>(currentLevel);
 
-  // Reset when modal opens
-  useEffect(() => {
+  // Reset preview when modal opens
+  React.useEffect(() => {
     if (visible) {
-      const levelData = LEVELS.find((l) => l.key === currentLevel);
-      fillPercentage.value = levelData?.fill ?? 100;
-      colorIndex.value = LEVELS.findIndex((l) => l.key === currentLevel);
-      selectedLevel.value = currentLevel;
-
-      // Start wave animation
-      waveOffset.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 2000 }),
-          withTiming(0, { duration: 2000 })
-        ),
-        -1,
-        true
-      );
+      setPreviewLevel(currentLevel);
     }
   }, [visible, currentLevel]);
 
   const handleLevelPress = (level: StockLevel) => {
-    const levelData = LEVELS.find((l) => l.key === level);
-    if (!levelData) return;
-
-    // Haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    // Animate liquid to new level with spring physics
-    fillPercentage.value = withSpring(levelData.fill, {
-      damping: 8,
-      stiffness: 80,
-      mass: 0.8,
-    });
-
-    // Animate color
-    colorIndex.value = withTiming(LEVELS.findIndex((l) => l.key === level), {
-      duration: 400,
-    });
-
-    selectedLevel.value = level;
+    setPreviewLevel(level);
   };
 
   const handleConfirm = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSelect(selectedLevel.value);
+    onSelect(previewLevel);
   };
-
-  const liquidStyle = useAnimatedStyle(() => {
-    const containerHeight = 180;
-    const fillHeight = (fillPercentage.value / 100) * containerHeight;
-
-    const backgroundColor = interpolateColor(
-      colorIndex.value,
-      [0, 1, 2, 3],
-      [LEVEL_COLORS.stocked, LEVEL_COLORS.good, LEVEL_COLORS.low, LEVEL_COLORS.out]
-    );
-
-    return {
-      height: Math.max(fillHeight, 0),
-      backgroundColor,
-    };
-  });
-
-  const waveStyle = useAnimatedStyle(() => {
-    // Hide wave when empty
-    if (fillPercentage.value < 5) {
-      return { opacity: 0 };
-    }
-
-    return {
-      opacity: 0.4,
-      transform: [
-        { translateX: waveOffset.value * 10 - 5 },
-        { scaleY: 0.6 + waveOffset.value * 0.4 },
-      ],
-    };
-  });
-
-  const containerBorderStyle = useAnimatedStyle(() => {
-    const borderColor = interpolateColor(
-      colorIndex.value,
-      [0, 1, 2, 3],
-      [LEVEL_COLORS.stocked, LEVEL_COLORS.good, LEVEL_COLORS.low, LEVEL_COLORS.out]
-    );
-
-    return {
-      borderColor,
-    };
-  });
 
   return (
     <Modal
@@ -169,24 +69,10 @@ export function StockLevelPicker({
           <Text style={styles.title}>Update Stock Level</Text>
           <Text style={styles.itemName}>{itemName}</Text>
 
-          {/* Large liquid container */}
-          <Animated.View style={[styles.liquidContainer, containerBorderStyle]}>
-            <Animated.View style={[styles.liquid, liquidStyle]}>
-              {/* Wave effect */}
-              <Animated.View style={[styles.wave, waveStyle]} />
-              <Animated.View style={[styles.wave2, waveStyle]} />
-            </Animated.View>
-
-            {/* Glass reflection */}
-            <View style={styles.reflection} />
-
-            {/* Level markers */}
-            <View style={styles.markers}>
-              <View style={styles.marker} />
-              <View style={styles.marker} />
-              <View style={styles.marker} />
-            </View>
-          </Animated.View>
+          {/* Large gauge */}
+          <View style={styles.gaugeContainer}>
+            <GaugeIndicator level={previewLevel} size="large" />
+          </View>
 
           {/* Level buttons */}
           <View style={styles.buttonsRow}>
@@ -195,16 +81,16 @@ export function StockLevelPicker({
                 key={level.key}
                 style={[
                   styles.levelButton,
-                  selectedLevel.value === level.key && styles.levelButtonActive,
-                  { borderColor: LEVEL_COLORS[level.key] },
+                  previewLevel === level.key && styles.levelButtonActive,
+                  { borderColor: level.color },
                 ]}
                 onPress={() => handleLevelPress(level.key)}
               >
-                <Text style={styles.levelEmoji}>{level.emoji}</Text>
+                <View style={[styles.levelDot, { backgroundColor: level.color }]} />
                 <Text
                   style={[
                     styles.levelLabel,
-                    selectedLevel.value === level.key && styles.levelLabelActive,
+                    previewLevel === level.key && styles.levelLabelActive,
                   ]}
                 >
                   {level.label}
@@ -231,127 +117,82 @@ export function StockLevelPicker({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "center",
     alignItems: "center",
   },
   modal: {
-    backgroundColor: "#fff",
+    backgroundColor: "#0F1A2E",
     borderRadius: 24,
-    padding: 24,
+    padding: 20,
     width: "85%",
     maxWidth: 360,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
-    color: "#2D3436",
-    marginBottom: 4,
+    color: "#FFFFFF",
+    marginBottom: 2,
   },
   itemName: {
-    fontSize: 16,
-    color: "#636E72",
-    marginBottom: 24,
+    fontSize: 15,
+    color: "rgba(255, 255, 255, 0.6)",
+    marginBottom: 12,
   },
-  liquidContainer: {
-    width: 120,
-    height: 180,
-    borderRadius: 16,
-    borderWidth: 3,
-    backgroundColor: "rgba(245, 245, 245, 0.9)",
-    overflow: "hidden",
-    justifyContent: "flex-end",
-    marginBottom: 24,
-  },
-  liquid: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-  },
-  wave: {
-    position: "absolute",
-    top: -6,
-    left: 4,
-    right: 4,
-    height: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.5)",
-    borderRadius: 6,
-  },
-  wave2: {
-    position: "absolute",
-    top: -3,
-    left: 10,
-    right: 10,
-    height: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-    borderRadius: 4,
-  },
-  reflection: {
-    position: "absolute",
-    top: 8,
-    left: 8,
-    width: 12,
-    height: "70%",
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-    borderRadius: 6,
-  },
-  markers: {
-    position: "absolute",
-    right: 8,
-    top: 20,
-    bottom: 20,
-    justifyContent: "space-between",
-  },
-  marker: {
-    width: 8,
-    height: 2,
-    backgroundColor: "rgba(0, 0, 0, 0.1)",
+  gaugeContainer: {
+    marginBottom: 16,
+    alignItems: "center",
   },
   buttonsRow: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 20,
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 16,
+    width: "100%",
+    justifyContent: "center",
   },
   levelButton: {
+    width: "30%",
     alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: 10,
     borderWidth: 2,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#fff",
-    minWidth: 70,
+    borderColor: "rgba(255, 255, 255, 0.15)",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
   levelButtonActive: {
-    backgroundColor: "rgba(255, 107, 53, 0.1)",
+    backgroundColor: "rgba(0, 212, 170, 0.15)",
   },
-  levelEmoji: {
-    fontSize: 20,
+  levelDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     marginBottom: 4,
   },
   levelLabel: {
-    fontSize: 12,
-    color: "#636E72",
+    fontSize: 11,
+    color: "rgba(255, 255, 255, 0.5)",
     fontWeight: "500",
   },
   levelLabelActive: {
-    color: "#2D3436",
+    color: "#FFFFFF",
     fontWeight: "700",
   },
   confirmButton: {
-    backgroundColor: "#FF6B35",
-    paddingVertical: 14,
+    backgroundColor: "#00D4AA",
+    paddingVertical: 12,
     paddingHorizontal: 48,
     borderRadius: 12,
     width: "100%",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   confirmButtonText: {
-    color: "#fff",
+    color: "#0B1426",
     fontSize: 16,
     fontWeight: "600",
   },
@@ -359,7 +200,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   cancelButtonText: {
-    color: "#636E72",
+    color: "rgba(255, 255, 255, 0.5)",
     fontSize: 14,
   },
 });

@@ -1,5 +1,11 @@
-export { LiquidFillIndicator, FILL_PERCENTAGES, LEVEL_COLORS } from "./LiquidFillIndicator";
-export type { StockLevel } from "./LiquidFillIndicator";
+export {
+  GaugeIndicator,
+  STOCK_LEVEL_ORDER,
+  STOCK_LEVEL_PERCENTAGES,
+  STOCK_LEVEL_LABELS,
+  STOCK_LEVEL_SHORT,
+} from "./GaugeIndicator";
+export type { StockLevel } from "./GaugeIndicator";
 
 export { StockLevelPicker } from "./StockLevelPicker";
 

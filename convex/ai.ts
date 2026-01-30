@@ -34,49 +34,51 @@ export const generateHybridSeedItems = action({
     const cuisineList = cuisines.join(", ");
     const cuisineBreakdown = cuisines.map((c, i) => `   - ${itemsPerCuisine} items for ${c} cuisine`).join("\n");
 
-    const prompt = `You are a grocery inventory expert. Generate a realistic pantry starter list for a home cook.
+    const prompt = `You are a household inventory expert. Generate a realistic stock starter list for a household.
 
 USER PROFILE:
 - Location: ${country}
 - Cuisines they cook: ${cuisineList}
 
-TASK: Generate exactly ${totalItems} pantry items in JSON format with this distribution:
-1. ${localItems} local/universal staples common in ${country} (milk, bread, eggs, butter, tea, flour, sugar, etc.)
-2. ${culturalItems} cultural items split across these cuisines:
+TASK: Generate exactly ${totalItems} household stock items in JSON format with this distribution:
+1. ${localItems} local/universal staples common in ${country} — mostly groceries (milk, bread, eggs, butter, tea, flour, sugar, etc.) but also include common household supplies (toilet paper, bin bags, dish soap, laundry detergent, hand soap, toothpaste, batteries, light bulbs, etc.)
+2. ${culturalItems} cultural food items split across these cuisines:
 ${cuisineBreakdown}
 
 CATEGORIES (assign each item to one):
-Dairy, Bakery, Produce, Meat, Pantry Staples, Spices & Seasonings, Condiments, Beverages, Snacks, Frozen, Canned Goods, Grains & Pasta, Oils & Vinegars, Baking, Ethnic Ingredients
+Dairy, Bakery, Produce, Meat, Pantry Staples, Spices & Seasonings, Condiments, Beverages, Snacks, Frozen, Canned Goods, Grains & Pasta, Oils & Vinegars, Baking, Ethnic Ingredients, Household, Personal Care, Health & Wellness, Baby & Kids, Pets, Electronics, Clothing, Garden & Outdoor, Office & Stationery
 
 STOCK LEVELS (assign realistically):
-- stocked: Items that last long and you'd have plenty (flour, rice, pasta)
-- good: Items you likely have (milk, eggs, common spices)
-- low: Items that run out frequently (fresh produce, bread)
-- out: Items you might not have yet (specialty ingredients)
+- stocked: Items that last long and you'd have plenty (flour, rice, pasta, batteries)
+- good: Items you likely have (milk, eggs, common spices, soap)
+- low: Items that run out frequently (fresh produce, bread, toilet paper)
+- out: Items you might not have yet (specialty ingredients, replacement bulbs)
 
 Return ONLY valid JSON array:
 [
   {"name": "Whole Milk", "category": "Dairy", "stockLevel": "good"},
   {"name": "White Bread", "category": "Bakery", "stockLevel": "low"},
+  {"name": "Toilet Paper", "category": "Household", "stockLevel": "low"},
   ...
 ]
 
 IMPORTANT:
 - Use local product names (e.g., UK: "Heinz Baked Beans", US: "Kraft Mac & Cheese")
 - Be culturally accurate (e.g., Nigerian: egusi, palm oil, fufu; Indian: ghee, turmeric, basmati)
+- Include 10-15 non-food household essentials (cleaning supplies, toiletries, paper goods, etc.)
 - No explanations, ONLY the JSON array
 - Exactly ${totalItems} items`;
 
     try {
       const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.0-flash",
         generationConfig: {
           temperature: 0.8, // Some creativity for variety
           maxOutputTokens: 4000,
         },
       });
 
-      const fullPrompt = `You are a grocery inventory expert who generates realistic pantry lists. Always respond with valid JSON only.
+      const fullPrompt = `You are a household inventory expert who generates realistic stock lists covering groceries and household essentials. Always respond with valid JSON only.
 
 ${prompt}`;
 
@@ -161,7 +163,7 @@ Return ONLY a JSON array of item names, nothing else:
 
     try {
       const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.0-flash",
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 200,
@@ -249,13 +251,18 @@ export const parseReceipt = action({
         throw new Error("Failed to get image URL");
       }
 
-      // Fetch the image as base64
+      // Fetch the image as base64 (web-standard, no Node Buffer)
       const response = await fetch(imageUrl);
       const arrayBuffer = await response.arrayBuffer();
-      const base64Image = Buffer.from(arrayBuffer).toString("base64");
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64Image = btoa(binary);
 
       const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.0-flash",
       });
 
       const prompt = `You are a receipt parser. Extract as much data as possible from this receipt image, even if some parts are unclear.
@@ -436,6 +443,23 @@ function getFallbackItems(country: string, cuisines: string[]): SeedItem[] {
     { name: "Coconut Milk", category: "Canned Goods", stockLevel: "out" },
     { name: "Peanut Butter", category: "Pantry Staples", stockLevel: "good" },
     { name: "Jam", category: "Condiments", stockLevel: "good" },
+
+    // Household (8)
+    { name: "Toilet Paper", category: "Household", stockLevel: "low" },
+    { name: "Kitchen Roll", category: "Household", stockLevel: "low" },
+    { name: "Bin Bags", category: "Household", stockLevel: "good" },
+    { name: "Dish Soap", category: "Household", stockLevel: "good" },
+    { name: "Laundry Detergent", category: "Household", stockLevel: "good" },
+    { name: "All-Purpose Cleaner", category: "Household", stockLevel: "good" },
+    { name: "Sponges", category: "Household", stockLevel: "low" },
+    { name: "Aluminium Foil", category: "Household", stockLevel: "good" },
+
+    // Personal Care (5)
+    { name: "Hand Soap", category: "Personal Care", stockLevel: "good" },
+    { name: "Toothpaste", category: "Personal Care", stockLevel: "good" },
+    { name: "Shampoo", category: "Personal Care", stockLevel: "good" },
+    { name: "Deodorant", category: "Personal Care", stockLevel: "low" },
+    { name: "Body Wash", category: "Personal Care", stockLevel: "good" },
   ];
 
   return basicItems;

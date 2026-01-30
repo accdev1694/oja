@@ -88,13 +88,13 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5: Receipt Intelligence & Price History (6 stories)
-  epic-5: in-progress
+  epic-5: done
   5-1-camera-receipt-capture: done  # ✅ Camera/gallery capture + Convex upload
-  5-2-gemini-ai-receipt-parsing: ready-for-dev
-  5-3-item-confirmation-correction-ui: ready-for-dev
-  5-4-price-history-tracking: ready-for-dev
-  5-5-reconciliation-view-planned-vs-actual: ready-for-dev
-  5-6-auto-restock-pantry-from-receipt: ready-for-dev
+  5-2-gemini-ai-receipt-parsing: done  # ✅ Gemini 1.5 Flash receipt parsing + lenient mode
+  5-3-item-confirmation-correction-ui: done  # ✅ Receipt review screen with edit/delete/confirm
+  5-4-price-history-tracking: done  # ✅ Price history stored per item + receipt linkage
+  5-5-reconciliation-view-planned-vs-actual: done  # ✅ Planned vs actual comparison view
+  5-6-auto-restock-pantry-from-receipt: done  # ✅ Levenshtein fuzzy matching + auto-restock from receipt
   epic-5-retrospective: optional
 
   # Epic 6: Insights, Gamification & Progress (3 stories)

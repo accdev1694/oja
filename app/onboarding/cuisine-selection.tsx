@@ -177,7 +177,7 @@ export default function CuisineSelectionScreen() {
         <View style={styles.sectionHeader}>
           <Text style={styles.subtitle}>What cuisines do you cook?</Text>
           <Text style={styles.description}>
-            Select all that apply - we'll seed your pantry with ingredients you'll actually use
+            Select all that apply - we'll seed your stock with items you'll actually use
           </Text>
         </View>
 

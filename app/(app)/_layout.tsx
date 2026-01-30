@@ -23,7 +23,26 @@ export default function AppLayout() {
       <Stack.Screen
         name="list/[id]"
         options={{
-          headerShown: false, // Using custom GlassHeader
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="pantry-pick"
+        options={{
+          headerShown: false,
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
+        name="receipt/[id]/confirm"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="receipt/[id]/reconciliation"
+        options={{
+          headerShown: false,
         }}
       />
     </Stack>
