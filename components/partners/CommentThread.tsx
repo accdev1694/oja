@@ -1,0 +1,320 @@
+import React, { useState, useRef, useEffect } from "react";
+import {
+  View,
+  Text,
+  Modal,
+  Pressable,
+  TextInput,
+  FlatList,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useQuery, useMutation } from "convex/react";
+import * as Haptics from "expo-haptics";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import { colors, spacing, typography } from "@/lib/design/glassTokens";
+
+interface CommentThreadProps {
+  visible: boolean;
+  itemId: Id<"listItems"> | null;
+  itemName: string;
+  onClose: () => void;
+}
+
+function timeAgo(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+export function CommentThread({
+  visible,
+  itemId,
+  itemName,
+  onClose,
+}: CommentThreadProps) {
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
+
+  const comments = useQuery(
+    api.partners.getComments,
+    itemId ? { listItemId: itemId } : "skip"
+  );
+
+  const addComment = useMutation(api.partners.addComment);
+  const markItemRead = useMutation(api.notifications.markItemNotificationsRead);
+
+  // Mark comment notifications as read when thread opens
+  useEffect(() => {
+    if (visible && itemId) {
+      markItemRead({ listItemId: itemId });
+    }
+  }, [visible, itemId]);
+
+  // Auto-scroll on new comments
+  const prevCount = useRef(0);
+  useEffect(() => {
+    if (comments && comments.length > prevCount.current) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+    prevCount.current = comments?.length ?? 0;
+  }, [comments?.length]);
+
+  const handleSend = async () => {
+    if (!text.trim() || !itemId) return;
+    setSending(true);
+    try {
+      await addComment({ listItemId: itemId, text: text.trim() });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setText("");
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Comments come desc from backend, reverse for display
+  const sortedComments = comments ? [...comments].reverse() : [];
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.keyboardView}
+        >
+          <Pressable style={styles.modal} onPress={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerLeft}>
+                <MaterialCommunityIcons
+                  name="comment-text-outline"
+                  size={20}
+                  color={colors.accent.primary}
+                />
+                <Text style={styles.title} numberOfLines={1}>
+                  {itemName}
+                </Text>
+              </View>
+              <Pressable onPress={onClose} hitSlop={12}>
+                <MaterialCommunityIcons
+                  name="close"
+                  size={22}
+                  color={colors.text.secondary}
+                />
+              </Pressable>
+            </View>
+
+            {/* Comments */}
+            <FlatList
+              ref={flatListRef}
+              data={sortedComments}
+              keyExtractor={(item) => item._id}
+              style={styles.list}
+              contentContainerStyle={styles.listContent}
+              ListEmptyComponent={
+                <View style={styles.empty}>
+                  <MaterialCommunityIcons
+                    name="comment-outline"
+                    size={32}
+                    color={colors.text.tertiary}
+                  />
+                  <Text style={styles.emptyText}>No comments yet</Text>
+                </View>
+              }
+              renderItem={({ item }) => (
+                <View style={styles.comment}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {(item.userName || "?")[0].toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.commentBody}>
+                    <View style={styles.commentHeader}>
+                      <Text style={styles.userName}>{item.userName}</Text>
+                      <Text style={styles.time}>
+                        {timeAgo(item.createdAt)}
+                      </Text>
+                    </View>
+                    <Text style={styles.commentText}>{item.text}</Text>
+                  </View>
+                </View>
+              )}
+            />
+
+            {/* Input */}
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.input}
+                placeholder="Add a comment..."
+                placeholderTextColor={colors.text.tertiary}
+                value={text}
+                onChangeText={setText}
+                maxLength={500}
+                returnKeyType="send"
+                onSubmitEditing={handleSend}
+              />
+              <Pressable
+                style={[
+                  styles.sendButton,
+                  (!text.trim() || sending) && styles.sendDisabled,
+                ]}
+                onPress={handleSend}
+                disabled={!text.trim() || sending}
+              >
+                <MaterialCommunityIcons
+                  name="send"
+                  size={20}
+                  color={
+                    text.trim() ? colors.accent.primary : colors.text.disabled
+                  }
+                />
+              </Pressable>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "flex-end",
+  },
+  keyboardView: {
+    justifyContent: "flex-end",
+  },
+  modal: {
+    backgroundColor: colors.background.secondary,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "70%",
+    minHeight: 300,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: colors.glass.border,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  title: {
+    fontSize: typography.bodyLarge.fontSize,
+    fontWeight: "700",
+    color: colors.text.primary,
+    flex: 1,
+  },
+  list: {
+    flex: 1,
+  },
+  listContent: {
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  empty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.xl,
+    gap: spacing.sm,
+  },
+  emptyText: {
+    color: colors.text.tertiary,
+    fontSize: typography.bodyMedium.fontSize,
+  },
+  comment: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.accent.secondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    color: colors.text.primary,
+    fontSize: typography.bodyMedium.fontSize,
+    fontWeight: "700",
+  },
+  commentBody: {
+    flex: 1,
+    backgroundColor: colors.glass.background,
+    borderRadius: 12,
+    padding: spacing.sm,
+  },
+  commentHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 2,
+  },
+  userName: {
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: "700",
+    color: colors.text.secondary,
+  },
+  time: {
+    fontSize: typography.bodySmall.fontSize,
+    color: colors.text.tertiary,
+  },
+  commentText: {
+    fontSize: typography.bodyMedium.fontSize,
+    color: colors.text.primary,
+    lineHeight: 20,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.glass.border,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: colors.glass.background,
+    borderRadius: 20,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    color: colors.text.primary,
+    fontSize: typography.bodyMedium.fontSize,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  sendButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendDisabled: {
+    opacity: 0.4,
+  },
+});

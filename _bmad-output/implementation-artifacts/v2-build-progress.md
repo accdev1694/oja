@@ -14,11 +14,11 @@
 | 1. Foundation & Authentication (Epic 1) | ✅ Complete | 9/9 |
 | 2. Stock Tracker (Epic 2) | ✅ Complete | 6/6 |
 | 3. Shopping Lists with Budget Control (Epic 3) | ✅ Complete | 10/10 |
-| 4. Partner Mode & Collaboration (Epic 4) | ✅ Complete | 5/5 |
+| 4. Partner Mode & Collaboration (Epic 4) | 🔄 In Progress | 2/5 (backend + invite/join UI done; approval, contest, comments, notification UI missing) |
 | 5. Receipt Intelligence & Price History (Epic 5) | ✅ Complete | 6/6 |
-| 6. Insights, Gamification & Progress (Epic 6) | ✅ Complete | 3/3 |
-| 7. Subscription, Payments & Loyalty (Epic 7) | ✅ Complete | 3/3 |
-| 8. Admin Dashboard & Operations (Epic 8) | ✅ Complete | 5/5 |
+| 6. Insights, Gamification & Progress (Epic 6) | ⏳ Placeholder | 0/3 (UI screen + backend queries exist but not validated/tested; no challenges, no weekly push digests) |
+| 7. Subscription, Payments & Loyalty (Epic 7) | ⏳ Placeholder | 0/3 (UI screen + backend queries exist but Stripe not integrated; no real payment flow) |
+| 8. Admin Dashboard & Operations (Epic 8) | ⏳ Placeholder | 0/5 (UI screen + backend queries exist but not validated/tested; no moderation tools, no catalog management) |
 | 9. Testing & Quality Assurance | ✅ Complete | 83 tests passing |
 | UI. Glass UI Redesign (Epic UI) | ✅ Complete | 17/17 |
 
@@ -297,6 +297,7 @@
 
 | Date | Change |
 |------|--------|
+| 2026-01-30 | **Status Audit** - Corrected overstated completion: Epic 4 downgraded to In Progress (2/5), Epics 6/7/8 downgraded to Placeholder (UI+backend scaffolding exists but not validated/tested, missing key features) |
 | 2026-01-30 | **All-Category Expansion** - AI prompt expanded from grocery-only to 24 categories (Household, Personal Care, Electronics, etc.) |
 | 2026-01-30 | Expanded icon system: ~60 new keyword mappings + 12 non-food category mappings (client + server) |
 | 2026-01-30 | Renamed "Pantry" → "Stock" throughout UI (tabs, headers, buttons, empty states) |

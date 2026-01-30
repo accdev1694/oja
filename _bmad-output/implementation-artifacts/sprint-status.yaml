@@ -79,12 +79,15 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Partner Mode & Collaboration (5 stories)
-  epic-4: backlog
-  4-1-partner-invite-system-email-share-code: ready-for-dev
-  4-2-role-management-viewer-approver-editor: ready-for-dev
-  4-3-bidirectional-approval-workflow: ready-for-dev
-  4-4-contest-workflow-with-comments: ready-for-dev
-  4-5-real-time-sync-notifications: ready-for-dev
+  # Backend mutations exist (convex/partners.ts): invite codes, accept invite, role management, approval, comments
+  # Frontend: partners.tsx (invite/manage UI) + join-list.tsx (accept code UI) + notifications.tsx (notification list)
+  # Missing: approval UI in list detail, contest modal UI, comment thread UI, push notifications integration
+  epic-4: in-progress
+  4-1-partner-invite-system-email-share-code: done  # ✅ Backend (createInviteCode, acceptInvite) + partners.tsx invite modal + join-list.tsx
+  4-2-role-management-viewer-approver-editor: done  # ✅ Backend (updateRole, removePartner) + partners.tsx role chips + role display
+  4-3-bidirectional-approval-workflow: in-progress  # Backend (requestApproval, handleApproval) exists but NO approval UI in list detail screen
+  4-4-contest-workflow-with-comments: in-progress  # Backend (addComment, getComments) exists but NO contest modal or comment thread UI
+  4-5-real-time-sync-notifications: in-progress  # notifications.tsx list view exists but NO push notification integration (Expo Notifications)
   epic-4-retrospective: optional
 
   # Epic 5: Receipt Intelligence & Price History (6 stories)
@@ -98,26 +101,32 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Insights, Gamification & Progress (3 stories)
+  # Placeholder: UI screen (insights.tsx) + backend (convex/insights.ts) exist but not validated/tested
+  # Missing: weekly push digest notifications, challenge system, surprise delight mechanics
   epic-6: backlog
-  6-1-weekly-digest-monthly-trends: ready-for-dev
-  6-2-gamification-streaks-savings-jar-challenges: ready-for-dev
-  6-3-personal-best-surprise-delight: ready-for-dev
+  6-1-weekly-digest-monthly-trends: ready-for-dev  # Placeholder UI + backend queries exist, needs validation
+  6-2-gamification-streaks-savings-jar-challenges: ready-for-dev  # Placeholder UI + backend queries exist, needs validation
+  6-3-personal-best-surprise-delight: ready-for-dev  # Placeholder UI exists, needs real implementation
   epic-6-retrospective: optional
 
   # Epic 7: Subscription, Payments & Loyalty (3 stories)
+  # Placeholder: UI screen (subscription.tsx) + backend (convex/subscriptions.ts) exist but Stripe NOT integrated
+  # Missing: actual Stripe checkout, webhook handling, real payment flow, subscription lifecycle
   epic-7: backlog
-  7-1-stripe-subscription-integration: ready-for-dev
-  7-2-loyalty-points-system: ready-for-dev
-  7-3-subscription-management: ready-for-dev
+  7-1-stripe-subscription-integration: ready-for-dev  # No Stripe integration - backend has mock plan data only
+  7-2-loyalty-points-system: ready-for-dev  # Placeholder UI + backend queries exist, needs validation
+  7-3-subscription-management: ready-for-dev  # Placeholder UI exists, no real subscription management
   epic-7-retrospective: optional
 
   # Epic 8: Admin Dashboard & Operations (5 stories)
+  # Placeholder: UI screen (admin.tsx) + backend (convex/admin.ts) exist but not validated/tested
+  # Missing: content moderation tools, product catalog, system health monitoring, audit trail
   epic-8: backlog
-  8-1-admin-authentication-dashboard-overview: ready-for-dev
-  8-2-user-management: ready-for-dev
-  8-3-analytics-revenue-reporting: ready-for-dev
-  8-4-receipt-price-moderation: ready-for-dev
-  8-5-product-catalog-system-health: ready-for-dev
+  8-1-admin-authentication-dashboard-overview: ready-for-dev  # Placeholder UI + backend exist, needs validation
+  8-2-user-management: ready-for-dev  # Basic user list exists, no ban/role management
+  8-3-analytics-revenue-reporting: ready-for-dev  # Placeholder UI exists, needs real analytics
+  8-4-receipt-price-moderation: ready-for-dev  # Not implemented
+  8-5-product-catalog-system-health: ready-for-dev  # Placeholder health check exists, no catalog management
   epic-8-retrospective: optional
 
   # Epic UI: Glass UI Redesign (17 stories) - COMPLETE

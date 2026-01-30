@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { getUserListPermissions } from "./partners";
 
 /**
- * Get all items for a shopping list
+ * Get all items for a shopping list (owners + partners)
  */
 export const getByList = query({
   args: { listId: v.id("shoppingLists") },
@@ -12,20 +13,14 @@ export const getByList = query({
       return [];
     }
 
-    // Verify list ownership
-    const list = await ctx.db.get(args.listId);
-    if (!list) {
-      return [];
-    }
-
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
+    if (!user) return [];
 
-    if (!user || list.userId !== user._id) {
-      return [];
-    }
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canView) return [];
 
     return await ctx.db
       .query("listItems")
@@ -62,7 +57,6 @@ export const create = mutation({
       throw new Error("Not authenticated");
     }
 
-    // Verify list ownership
     const list = await ctx.db.get(args.listId);
     if (!list) {
       throw new Error("List not found");
@@ -72,12 +66,32 @@ export const create = mutation({
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
+    if (!user) throw new Error("User not found");
 
-    if (!user || list.userId !== user._id) {
-      throw new Error("Unauthorized");
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canEdit) {
+      throw new Error("You don't have permission to add items to this list");
     }
 
     const now = Date.now();
+
+    // Determine approval status:
+    // - Owner adds → check if any approver partner exists → set pending for approver to review
+    // - Partner adds → set pending for owner to review
+    let approvalStatus: "pending" | "approved" | undefined;
+
+    if (perms.isPartner) {
+      // Partner adding item → always needs owner approval
+      approvalStatus = "pending";
+    } else if (perms.isOwner) {
+      // Owner adding → check if there's an approver partner on this list
+      const partners = await ctx.db
+        .query("listPartners")
+        .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+        .collect();
+      const hasApprover = partners.some((p) => p.role === "approver" && p.status === "accepted");
+      approvalStatus = hasApprover ? "pending" : undefined;
+    }
 
     const itemId = await ctx.db.insert("listItems", {
       listId: args.listId,
@@ -92,9 +106,45 @@ export const create = mutation({
       isChecked: false,
       autoAdded: args.autoAdded ?? false,
       notes: args.notes,
+      ...(approvalStatus ? { approvalStatus } : {}),
       createdAt: now,
       updatedAt: now,
     });
+
+    // Notify the other party about pending approval
+    if (approvalStatus === "pending") {
+      if (perms.isPartner) {
+        // Notify list owner
+        await ctx.db.insert("notifications", {
+          userId: list.userId,
+          type: "approval_requested",
+          title: "Approval Needed",
+          body: `${user.name} wants to add "${args.name}" to the list`,
+          data: { listItemId: itemId, listId: args.listId },
+          read: false,
+          createdAt: now,
+        });
+      } else {
+        // Notify approver partners
+        const partners = await ctx.db
+          .query("listPartners")
+          .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+          .collect();
+        for (const p of partners) {
+          if (p.role === "approver" && p.status === "accepted") {
+            await ctx.db.insert("notifications", {
+              userId: p.userId,
+              type: "approval_requested",
+              title: "Approval Needed",
+              body: `${user.name} wants to add "${args.name}" to the list`,
+              data: { listItemId: itemId, listId: args.listId },
+              read: false,
+              createdAt: now,
+            });
+          }
+        }
+      }
+    }
 
     return itemId;
   },
@@ -130,14 +180,15 @@ export const update = mutation({
       throw new Error("Item not found");
     }
 
-    // Verify ownership
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
+    if (!user) throw new Error("User not found");
 
-    if (!user || item.userId !== user._id) {
-      throw new Error("Unauthorized");
+    const perms = await getUserListPermissions(ctx, item.listId, user._id);
+    if (!perms.canEdit) {
+      throw new Error("You don't have permission to edit items on this list");
     }
 
     const updates: Record<string, unknown> = {
@@ -172,14 +223,20 @@ export const toggleChecked = mutation({
       throw new Error("Item not found");
     }
 
-    // Verify ownership
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
+    if (!user) throw new Error("User not found");
 
-    if (!user || item.userId !== user._id) {
-      throw new Error("Unauthorized");
+    const perms = await getUserListPermissions(ctx, item.listId, user._id);
+    if (!perms.canEdit) {
+      throw new Error("You don't have permission to check items on this list");
+    }
+
+    // Block checking pending items
+    if (item.approvalStatus === "pending") {
+      throw new Error("This item is pending approval and cannot be checked off yet");
     }
 
     const newCheckedStatus = !item.isChecked;
@@ -210,14 +267,16 @@ export const remove = mutation({
       throw new Error("Item not found");
     }
 
-    // Verify ownership
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
+    if (!user) throw new Error("User not found");
 
-    if (!user || item.userId !== user._id) {
-      throw new Error("Unauthorized");
+    const perms = await getUserListPermissions(ctx, item.listId, user._id);
+    // Owner can always remove. Editors/approvers can remove their own items.
+    if (!perms.isOwner && !(perms.canEdit && item.userId === user._id)) {
+      throw new Error("You don't have permission to remove this item");
     }
 
     await ctx.db.delete(args.id);

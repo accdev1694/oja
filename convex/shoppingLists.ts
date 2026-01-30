@@ -81,8 +81,21 @@ export const getById = query({
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
-    if (!user || list.userId !== user._id) {
+    if (!user) {
       return null;
+    }
+
+    // Allow access if owner OR partner
+    if (list.userId !== user._id) {
+      const partner = await ctx.db
+        .query("listPartners")
+        .withIndex("by_list_user", (q: any) =>
+          q.eq("listId", args.id).eq("userId", user._id)
+        )
+        .unique();
+      if (!partner || partner.status !== "accepted") {
+        return null;
+      }
     }
 
     return list;

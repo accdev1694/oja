@@ -139,8 +139,19 @@ export default defineSchema({
     addedMidShop: v.optional(v.boolean()), // Added during shopping
 
     // Approval workflow (Epic 4 - Partner Mode)
-    approvalStatus: v.optional(v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"))),
+    approvalStatus: v.optional(v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("contested")
+    )),
     approvalNote: v.optional(v.string()),
+
+    // Contest workflow (Epic 4)
+    contestedBy: v.optional(v.id("users")),
+    contestedAt: v.optional(v.number()),
+    contestReason: v.optional(v.string()),
+    contestNote: v.optional(v.string()),
 
     // Notes
     notes: v.optional(v.string()),

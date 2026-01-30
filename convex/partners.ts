@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-// Helper to get authenticated user
+// Helper to get authenticated user (auto-creates if missing, e.g. partner who skipped onboarding)
 async function requireUser(ctx: any) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
@@ -9,9 +9,91 @@ async function requireUser(ctx: any) {
     .query("users")
     .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
     .unique();
-  if (!user) throw new Error("User not found");
-  return user;
+  if (user) return user;
+
+  // Auto-create user record for partners who haven't completed onboarding
+  const now = Date.now();
+  const userId = await ctx.db.insert("users", {
+    clerkId: identity.subject,
+    name: identity.name ?? "User",
+    email: identity.email,
+    avatarUrl: identity.pictureUrl,
+    currency: "GBP",
+    onboardingComplete: false,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return await ctx.db.get(userId);
 }
+
+/**
+ * Get user's permissions for a specific list.
+ * Returns role info and computed permissions.
+ * Exported for use in other Convex modules (listItems, etc.)
+ */
+export async function getUserListPermissions(
+  ctx: any,
+  listId: any,
+  userId: any
+): Promise<{
+  isOwner: boolean;
+  isPartner: boolean;
+  role: "viewer" | "editor" | "approver" | null;
+  canView: boolean;
+  canEdit: boolean;
+  canApprove: boolean;
+}> {
+  const list = await ctx.db.get(listId);
+  if (!list) {
+    return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false, canApprove: false };
+  }
+
+  const isOwner = list.userId === userId;
+  if (isOwner) {
+    return { isOwner: true, isPartner: false, role: null, canView: true, canEdit: true, canApprove: true };
+  }
+
+  // Check partner record
+  const partner = await ctx.db
+    .query("listPartners")
+    .withIndex("by_list_user", (q: any) => q.eq("listId", listId).eq("userId", userId))
+    .unique();
+
+  if (!partner || partner.status !== "accepted") {
+    return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false, canApprove: false };
+  }
+
+  const role = partner.role;
+  return {
+    isOwner: false,
+    isPartner: true,
+    role,
+    canView: true,
+    canEdit: role === "editor" || role === "approver",
+    canApprove: role === "approver",
+  };
+}
+
+/**
+ * Query: get current user's permissions for a list (for frontend use)
+ */
+export const getMyPermissions = query({
+  args: { listId: v.id("shoppingLists") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false, canApprove: false };
+    }
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) {
+      return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false, canApprove: false };
+    }
+    return getUserListPermissions(ctx, args.listId, user._id);
+  },
+});
 
 /**
  * Generate a unique invite code for a shopping list
@@ -170,6 +252,59 @@ export const removePartner = mutation({
 });
 
 /**
+ * Leave a shared list (partner voluntarily leaves)
+ */
+export const leaveList = mutation({
+  args: { listId: v.id("shoppingLists") },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+
+    const partner = await ctx.db
+      .query("listPartners")
+      .withIndex("by_list_user", (q: any) => q.eq("listId", args.listId).eq("userId", user._id))
+      .unique();
+
+    if (!partner) throw new Error("You are not a partner on this list");
+
+    await ctx.db.delete(partner._id);
+
+    // Notify list owner
+    const list = await ctx.db.get(args.listId);
+    if (list) {
+      await ctx.db.insert("notifications", {
+        userId: list.userId,
+        type: "partner_left",
+        title: "Partner Left",
+        body: `${user.name} left your list "${list.name}"`,
+        data: { listId: args.listId },
+        read: false,
+        createdAt: Date.now(),
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+/**
+ * Get comment counts for multiple items (batch query to avoid N+1)
+ */
+export const getCommentCounts = query({
+  args: { listItemIds: v.array(v.id("listItems")) },
+  handler: async (ctx, args) => {
+    const counts: Record<string, number> = {};
+    for (const itemId of args.listItemIds) {
+      const comments = await ctx.db
+        .query("itemComments")
+        .withIndex("by_item", (q: any) => q.eq("listItemId", itemId))
+        .collect();
+      counts[itemId] = comments.length;
+    }
+    return counts;
+  },
+});
+
+/**
  * Get lists shared with the current user
  */
 export const getSharedLists = query({
@@ -241,7 +376,9 @@ export const requestApproval = mutation({
 });
 
 /**
- * Approve or reject a list item
+ * Approve or reject a list item.
+ * Owner can approve/reject partner items.
+ * Approver partners can approve/reject owner items.
  */
 export const handleApproval = mutation({
   args: {
@@ -254,13 +391,18 @@ export const handleApproval = mutation({
     const item = await ctx.db.get(args.listItemId);
     if (!item) throw new Error("Item not found");
 
-    const list = await ctx.db.get(item.listId);
-    if (!list || list.userId !== user._id) throw new Error("Only list owner can approve");
+    const perms = await getUserListPermissions(ctx, item.listId, user._id);
 
+    // Owner can approve partner items. Approver partners can approve owner items.
+    if (!perms.isOwner && !perms.canApprove) {
+      throw new Error("You don't have permission to approve items");
+    }
+
+    const now = Date.now();
     await ctx.db.patch(args.listItemId, {
       approvalStatus: args.decision,
       approvalNote: args.note,
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
 
     // Notify the item creator
@@ -272,11 +414,108 @@ export const handleApproval = mutation({
         body: `"${item.name}" was ${args.decision}`,
         data: { listItemId: args.listItemId, listId: item.listId },
         read: false,
-        createdAt: Date.now(),
+        createdAt: now,
       });
     }
 
     return { success: true };
+  },
+});
+
+/**
+ * Contest a list item (partner disagrees with the item)
+ */
+export const contestItem = mutation({
+  args: {
+    listItemId: v.id("listItems"),
+    reason: v.string(),
+    customText: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const item = await ctx.db.get(args.listItemId);
+    if (!item) throw new Error("Item not found");
+
+    const perms = await getUserListPermissions(ctx, item.listId, user._id);
+    if (!perms.canView) throw new Error("Unauthorized");
+
+    const now = Date.now();
+    await ctx.db.patch(args.listItemId, {
+      approvalStatus: "contested",
+      contestedBy: user._id,
+      contestedAt: now,
+      contestReason: args.reason,
+      contestNote: args.customText,
+      updatedAt: now,
+    });
+
+    // Notify item creator (list owner or partner who added it)
+    const list = await ctx.db.get(item.listId);
+    const notifyUserId = perms.isOwner ? item.userId : list!.userId;
+    if (notifyUserId !== user._id) {
+      await ctx.db.insert("notifications", {
+        userId: notifyUserId,
+        type: "item_contested",
+        title: "Item Contested",
+        body: `${user.name} contested "${item.name}": ${args.reason}`,
+        data: { listItemId: args.listItemId, listId: item.listId },
+        read: false,
+        createdAt: now,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+/**
+ * Resolve a contested item (owner keeps or removes)
+ */
+export const resolveContest = mutation({
+  args: {
+    listItemId: v.id("listItems"),
+    decision: v.union(v.literal("keep"), v.literal("remove")),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const item = await ctx.db.get(args.listItemId);
+    if (!item) throw new Error("Item not found");
+
+    const list = await ctx.db.get(item.listId);
+    if (!list || list.userId !== user._id) throw new Error("Only list owner can resolve contests");
+
+    const now = Date.now();
+
+    if (args.decision === "remove") {
+      await ctx.db.delete(args.listItemId);
+    } else {
+      // Keep: mark as approved, clear contest fields
+      await ctx.db.patch(args.listItemId, {
+        approvalStatus: "approved",
+        approvalNote: args.note ?? "Kept after contest",
+        contestedBy: undefined,
+        contestedAt: undefined,
+        contestReason: undefined,
+        contestNote: undefined,
+        updatedAt: now,
+      });
+    }
+
+    // Notify the partner who contested
+    if (item.contestedBy && item.contestedBy !== user._id) {
+      await ctx.db.insert("notifications", {
+        userId: item.contestedBy,
+        type: "contest_resolved",
+        title: args.decision === "keep" ? "Item Kept" : "Item Removed",
+        body: `"${item.name}" was ${args.decision === "keep" ? "kept on" : "removed from"} the list`,
+        data: { listItemId: args.listItemId, listId: item.listId },
+        read: false,
+        createdAt: now,
+      });
+    }
+
+    return { success: true, decision: args.decision };
   },
 });
 
@@ -290,13 +529,53 @@ export const addComment = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    const now = Date.now();
 
     const commentId = await ctx.db.insert("itemComments", {
       listItemId: args.listItemId,
       userId: user._id,
       text: args.text,
-      createdAt: Date.now(),
+      createdAt: now,
     });
+
+    // Notify other participants (owner + partners) about the new comment
+    const item = await ctx.db.get(args.listItemId);
+    if (item) {
+      const list = await ctx.db.get(item.listId);
+      if (list) {
+        const itemName = item.name;
+        const notifyUserIds: Set<string> = new Set();
+
+        // Add owner
+        if (list.userId.toString() !== user._id.toString()) {
+          notifyUserIds.add(list.userId.toString());
+        }
+
+        // Add all accepted partners
+        const partners = await ctx.db
+          .query("listPartners")
+          .withIndex("by_list", (q: any) => q.eq("listId", item.listId))
+          .collect();
+        for (const p of partners) {
+          if (p.status === "accepted" && p.userId.toString() !== user._id.toString()) {
+            notifyUserIds.add(p.userId.toString());
+          }
+        }
+
+        // Create notifications
+        for (const uid of notifyUserIds) {
+          await ctx.db.insert("notifications", {
+            userId: uid as any,
+            type: "comment_added",
+            title: "New Comment",
+            body: `${user.name} commented on "${itemName}"`,
+            data: { listId: item.listId, listItemId: args.listItemId },
+            read: false,
+            createdAt: now,
+          });
+        }
+      }
+    }
 
     return commentId;
   },

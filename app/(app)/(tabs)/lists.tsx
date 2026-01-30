@@ -35,6 +35,7 @@ import {
   spacing,
   animations,
 } from "@/components/ui/glass";
+import { NotificationBell, NotificationDropdown } from "@/components/partners";
 
 type TabMode = "active" | "history";
 
@@ -43,9 +44,11 @@ export default function ListsScreen() {
   const [tabMode, setTabMode] = useState<TabMode>("active");
   const lists = useQuery(api.shoppingLists.getActive);
   const history = useQuery(api.shoppingLists.getHistory);
+  const sharedLists = useQuery(api.partners.getSharedLists);
   const createList = useMutation(api.shoppingLists.create);
   const deleteList = useMutation(api.shoppingLists.remove);
   const [isCreating, setIsCreating] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   // Create list modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -129,6 +132,8 @@ export default function ListsScreen() {
   const currentData = tabMode === "active" ? lists : history;
   const isLoaded = currentData !== undefined;
   const displayList = currentData ?? [];
+  const activeShared = sharedLists?.filter((l) => l && l.status !== "archived" && l.status !== "completed") ?? [];
+  const hasAnyActiveLists = displayList.length > 0 || activeShared.length > 0;
 
   return (
     <GlassScreen>
@@ -145,16 +150,29 @@ export default function ListsScreen() {
               : undefined
         }
         rightElement={
-          tabMode === "active" ? (
-            <GlassButton
-              variant="primary"
-              size="sm"
-              icon="plus"
-              onPress={handleOpenCreateModal}
-            >
-              New List
-            </GlassButton>
-          ) : undefined
+          <View style={styles.headerRight}>
+            <NotificationBell onPress={() => setShowNotifications(true)} />
+            {tabMode === "active" && (
+              <>
+                <GlassButton
+                  variant="secondary"
+                  size="sm"
+                  icon="account-plus"
+                  onPress={() => router.push("/join-list")}
+                >
+                  Join
+                </GlassButton>
+                <GlassButton
+                  variant="primary"
+                  size="sm"
+                  icon="plus"
+                  onPress={handleOpenCreateModal}
+                >
+                  New List
+                </GlassButton>
+              </>
+            )}
+          </View>
         }
       />
 
@@ -206,26 +224,26 @@ export default function ListsScreen() {
           <SkeletonCard />
           <SkeletonCard />
         </View>
-      ) : displayList.length === 0 ? (
+      ) : tabMode === "active" && !hasAnyActiveLists ? (
         <View style={styles.emptyContainer}>
-          {tabMode === "active" ? (
-            <EmptyLists
-              onAction={handleOpenCreateModal}
-              actionText="Create Your First List"
+          <EmptyLists
+            onAction={handleOpenCreateModal}
+            actionText="Create Your First List"
+          />
+        </View>
+      ) : tabMode === "history" && displayList.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <View style={styles.emptyHistoryContainer}>
+            <MaterialCommunityIcons
+              name="clipboard-check-outline"
+              size={64}
+              color={colors.text.tertiary}
             />
-          ) : (
-            <View style={styles.emptyHistoryContainer}>
-              <MaterialCommunityIcons
-                name="clipboard-check-outline"
-                size={64}
-                color={colors.text.tertiary}
-              />
-              <Text style={styles.emptyHistoryTitle}>No Completed Trips</Text>
-              <Text style={styles.emptyHistorySubtitle}>
-                Your shopping trip history will appear here after you complete and archive a trip.
-              </Text>
-            </View>
-          )}
+            <Text style={styles.emptyHistoryTitle}>No Completed Trips</Text>
+            <Text style={styles.emptyHistorySubtitle}>
+              Your shopping trip history will appear here after you complete and archive a trip.
+            </Text>
+          </View>
         </View>
       ) : tabMode === "active" ? (
         <ScrollView
@@ -242,6 +260,31 @@ export default function ListsScreen() {
               formatDateTime={formatDateTime}
             />
           ))}
+
+          {/* Shared With Me section */}
+          {activeShared.length > 0 && (
+            <>
+              <View style={styles.sharedSectionHeader}>
+                <MaterialCommunityIcons
+                  name="account-group"
+                  size={18}
+                  color={colors.text.secondary}
+                />
+                <Text style={styles.sharedSectionTitle}>Shared With Me</Text>
+              </View>
+              {activeShared.map((list) =>
+                list ? (
+                  <SharedListCard
+                    key={list._id}
+                    list={list}
+                    onPress={() => router.push(`/list/${list._id}`)}
+                    formatDateTime={formatDateTime}
+                  />
+                ) : null
+              )}
+            </>
+          )}
+
           <View style={styles.bottomSpacer} />
         </ScrollView>
       ) : (
@@ -261,6 +304,12 @@ export default function ListsScreen() {
           <View style={styles.bottomSpacer} />
         </ScrollView>
       )}
+
+      {/* Notifications Dropdown */}
+      <NotificationDropdown
+        visible={showNotifications}
+        onClose={() => setShowNotifications(false)}
+      />
 
       {/* Create List Modal */}
       <Modal
@@ -693,6 +742,110 @@ function HistoryCard({ list, onPress, formatDateTime }: HistoryCardProps) {
 }
 
 // =============================================================================
+// SHARED LIST CARD COMPONENT
+// =============================================================================
+
+interface SharedListCardProps {
+  list: {
+    _id: Id<"shoppingLists">;
+    name: string;
+    status: string;
+    budget?: number;
+    createdAt: number;
+    role: string;
+    ownerName: string;
+    itemCount?: number;
+    totalEstimatedCost?: number;
+  };
+  onPress: () => void;
+  formatDateTime: (timestamp: number) => string;
+}
+
+function SharedListCard({ list, onPress, formatDateTime }: SharedListCardProps) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.98, animations.spring.stiff);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, animations.spring.gentle);
+  };
+
+  const roleConfig: Record<string, { label: string; color: string }> = {
+    viewer: { label: "Viewer", color: colors.text.tertiary },
+    editor: { label: "Editor", color: colors.accent.primary },
+    approver: { label: "Approver", color: colors.accent.secondary },
+  };
+
+  const role = roleConfig[list.role] ?? roleConfig.viewer;
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Pressable
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onPress();
+        }}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+      >
+        <GlassCard variant="standard" style={styles.listCard}>
+          {/* Header row */}
+          <View style={styles.listHeader}>
+            <View style={styles.listTitleContainer}>
+              <MaterialCommunityIcons
+                name="clipboard-account-outline"
+                size={24}
+                color={colors.accent.info}
+              />
+              <Text style={styles.listName} numberOfLines={1}>
+                {list.name}
+              </Text>
+            </View>
+            <View style={styles.headerActions}>
+              <View style={[styles.statusBadge, { backgroundColor: `${role.color}20` }]}>
+                <Text style={[styles.statusText, { color: role.color }]}>{role.label}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Owner info */}
+          <View style={styles.sharedOwnerRow}>
+            <MaterialCommunityIcons
+              name="account"
+              size={14}
+              color={colors.text.tertiary}
+            />
+            <Text style={styles.sharedOwnerText}>
+              by {list.ownerName}
+            </Text>
+          </View>
+
+          {/* Meta row */}
+          <View style={styles.metaRow}>
+            {list.budget && (
+              <View style={styles.metaItem}>
+                <MaterialCommunityIcons name="wallet-outline" size={14} color={colors.text.tertiary} />
+                <Text style={styles.metaText}>£{list.budget.toFixed(2)}</Text>
+              </View>
+            )}
+            <View style={styles.metaItem}>
+              <MaterialCommunityIcons name="clock-outline" size={14} color={colors.text.tertiary} />
+              <Text style={styles.metaText}>{formatDateTime(list.createdAt)}</Text>
+            </View>
+          </View>
+        </GlassCard>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// =============================================================================
 // STYLES
 // =============================================================================
 
@@ -844,6 +997,40 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     textAlign: "center",
     lineHeight: 22,
+  },
+
+  // Header right
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+
+  // Shared lists section
+  sharedSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.glass.border,
+  },
+  sharedSectionTitle: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    fontWeight: "600",
+  },
+  sharedOwnerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  sharedOwnerText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
   },
 
   // Modal styles

@@ -50,6 +50,35 @@ export const markAsRead = mutation({
   },
 });
 
+export const markItemNotificationsRead = mutation({
+  args: { listItemId: v.id("listItems") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const unread = await ctx.db
+      .query("notifications")
+      .withIndex("by_user_read", (q: any) => q.eq("userId", user._id).eq("read", false))
+      .collect();
+
+    let count = 0;
+    for (const n of unread) {
+      if (n.type === "comment_added" && n.data?.listItemId === args.listItemId) {
+        await ctx.db.patch(n._id, { read: true });
+        count++;
+      }
+    }
+
+    return { count };
+  },
+});
+
 export const markAllAsRead = mutation({
   args: {},
   handler: async (ctx) => {

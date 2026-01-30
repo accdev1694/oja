@@ -15,6 +15,7 @@ import {
   typography,
   spacing,
 } from "@/components/ui/glass";
+import { usePartnerRole } from "@/hooks/usePartnerRole";
 
 export default function PartnersScreen() {
   const { listId } = useLocalSearchParams<{ listId: string }>();
@@ -23,10 +24,19 @@ export default function PartnersScreen() {
   const createInvite = useMutation(api.partners.createInviteCode);
   const updateRole = useMutation(api.partners.updateRole);
   const removePartner = useMutation(api.partners.removePartner);
+  const leaveList = useMutation(api.partners.leaveList);
+
+  const { isOwner, isPartner } = usePartnerRole(listId ? listId as Id<"shoppingLists"> : undefined);
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [selectedRole, setSelectedRole] = useState<"viewer" | "editor" | "approver">("editor");
+
+  // Role change modal
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [changingPartnerId, setChangingPartnerId] = useState<Id<"listPartners"> | null>(null);
+  const [changingPartnerName, setChangingPartnerName] = useState("");
+  const [changingPartnerRole, setChangingPartnerRole] = useState<"viewer" | "editor" | "approver">("editor");
 
   async function handleCreateInvite() {
     if (!listId) return;
@@ -69,6 +79,53 @@ export default function PartnersScreen() {
         },
       ]);
     }
+  }
+
+  function openRoleChange(partnerId: Id<"listPartners">, name: string, currentRole: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setChangingPartnerId(partnerId);
+    setChangingPartnerName(name);
+    setChangingPartnerRole(currentRole as "viewer" | "editor" | "approver");
+    setShowRoleModal(true);
+  }
+
+  async function handleRoleChange(newRole: "viewer" | "editor" | "approver") {
+    if (!changingPartnerId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await updateRole({ partnerId: changingPartnerId, newRole });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowRoleModal(false);
+    } catch (error) {
+      console.error("Failed to update role:", error);
+      Alert.alert("Error", "Failed to update role");
+    }
+  }
+
+  async function handleLeaveList() {
+    if (!listId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      "Leave List",
+      "Are you sure you want to leave this shared list?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await leaveList({ listId: listId as Id<"shoppingLists"> });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.back();
+            } catch (error) {
+              console.error("Failed to leave list:", error);
+              Alert.alert("Error", "Failed to leave list");
+            }
+          },
+        },
+      ]
+    );
   }
 
   const roleColors = {
@@ -141,7 +198,11 @@ export default function PartnersScreen() {
                 </View>
                 <View>
                   <Text style={styles.partnerName}>{partner.userName}</Text>
-                  <View style={styles.roleBadge}>
+                  <Pressable
+                    style={styles.roleBadge}
+                    onPress={isOwner ? () => openRoleChange(partner._id, partner.userName, partner.role) : undefined}
+                    disabled={!isOwner}
+                  >
                     <MaterialCommunityIcons
                       name={roleIcons[partner.role]}
                       size={12}
@@ -150,18 +211,40 @@ export default function PartnersScreen() {
                     <Text style={[styles.roleText, { color: roleColors[partner.role] }]}>
                       {partner.role}
                     </Text>
-                  </View>
+                    {isOwner && (
+                      <MaterialCommunityIcons
+                        name="chevron-down"
+                        size={12}
+                        color={colors.text.tertiary}
+                      />
+                    )}
+                  </Pressable>
                 </View>
               </View>
-              <Pressable
-                style={styles.removeBtn}
-                onPress={() => handleRemovePartner(partner._id, partner.userName)}
-              >
-                <MaterialCommunityIcons name="close" size={20} color={colors.semantic.danger} />
-              </Pressable>
+              {isOwner && (
+                <Pressable
+                  style={styles.removeBtn}
+                  onPress={() => handleRemovePartner(partner._id, partner.userName)}
+                >
+                  <MaterialCommunityIcons name="close" size={20} color={colors.semantic.danger} />
+                </Pressable>
+              )}
             </View>
           </GlassCard>
         ))}
+
+        {/* Leave List button for partners */}
+        {isPartner && !isOwner && (
+          <GlassButton
+            variant="secondary"
+            size="md"
+            icon="logout"
+            onPress={handleLeaveList}
+            style={styles.leaveButton}
+          >
+            Leave List
+          </GlassButton>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -182,6 +265,55 @@ export default function PartnersScreen() {
                 Done
               </GlassButton>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+      {/* Role Change Modal */}
+      <Modal visible={showRoleModal} transparent animationType="fade" onRequestClose={() => setShowRoleModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowRoleModal(false)}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <MaterialCommunityIcons name="account-edit-outline" size={32} color={colors.accent.primary} />
+            <Text style={styles.modalTitle}>Change Role</Text>
+            <Text style={styles.modalSubtitle}>
+              Update {changingPartnerName}'s role
+            </Text>
+            <View style={styles.roleChangeOptions}>
+              {(["viewer", "editor", "approver"] as const).map((role) => (
+                <Pressable
+                  key={role}
+                  style={[
+                    styles.roleChangeOption,
+                    changingPartnerRole === role && styles.roleChangeOptionActive,
+                  ]}
+                  onPress={() => handleRoleChange(role)}
+                >
+                  <MaterialCommunityIcons
+                    name={roleIcons[role]}
+                    size={20}
+                    color={changingPartnerRole === role ? colors.accent.primary : colors.text.secondary}
+                  />
+                  <View style={styles.roleChangeOptionText}>
+                    <Text style={[
+                      styles.roleChangeOptionTitle,
+                      changingPartnerRole === role && styles.roleChangeOptionTitleActive,
+                    ]}>
+                      {role.charAt(0).toUpperCase() + role.slice(1)}
+                    </Text>
+                    <Text style={styles.roleChangeOptionDesc}>
+                      {role === "viewer" ? "Can view items only" :
+                       role === "editor" ? "Can add and edit items" :
+                       "Can add items and approve/reject"}
+                    </Text>
+                  </View>
+                  {changingPartnerRole === role && (
+                    <MaterialCommunityIcons name="check" size={20} color={colors.accent.primary} />
+                  )}
+                </Pressable>
+              ))}
+            </View>
+            <GlassButton variant="secondary" size="md" onPress={() => setShowRoleModal(false)}>
+              Cancel
+            </GlassButton>
           </Pressable>
         </Pressable>
       </Modal>
@@ -258,4 +390,43 @@ const styles = StyleSheet.create({
   },
   modalSubtitle: { ...typography.bodyMedium, color: colors.text.tertiary, textAlign: "center" },
   modalActions: { width: "100%", gap: spacing.sm, marginTop: spacing.md },
+  leaveButton: {
+    marginTop: spacing.lg,
+    marginHorizontal: spacing.lg,
+  },
+  roleChangeOptions: {
+    width: "100%",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  roleChangeOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: 12,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  roleChangeOptionActive: {
+    backgroundColor: `${colors.accent.primary}15`,
+    borderColor: colors.accent.primary,
+  },
+  roleChangeOptionText: {
+    flex: 1,
+  },
+  roleChangeOptionTitle: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    fontWeight: "600",
+  },
+  roleChangeOptionTitleActive: {
+    color: colors.accent.primary,
+  },
+  roleChangeOptionDesc: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
 });

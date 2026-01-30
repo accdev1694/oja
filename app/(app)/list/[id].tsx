@@ -44,6 +44,15 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 import { CategoryFilter } from "@/components/ui/CategoryFilter";
+import { usePartnerRole } from "@/hooks/usePartnerRole";
+import {
+  ApprovalBadge,
+  ApprovalActions,
+  ContestModal,
+  CommentThread,
+  NotificationBell,
+  NotificationDropdown,
+} from "@/components/partners";
 
 /**
  * Normalize a string for comparison
@@ -103,6 +112,9 @@ type ListItem = {
   isChecked: boolean;
   autoAdded?: boolean;
   priority?: "must-have" | "should-have" | "nice-to-have";
+  approvalStatus?: "pending" | "approved" | "rejected" | "contested";
+  contestReason?: string;
+  contestNote?: string;
 };
 
 export default function ListDetailScreen() {
@@ -124,6 +136,26 @@ export default function ListDetailScreen() {
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
   const impulseUsage = useQuery(api.listItems.getImpulseUsage, { listId: id });
   const generateSuggestions = useAction(api.ai.generateListSuggestions);
+
+  // Partner mode
+  const { isOwner, isPartner, canEdit, canApprove, loading: roleLoading } = usePartnerRole(id);
+  const handleApproval = useMutation(api.partners.handleApproval);
+  const contestItem = useMutation(api.partners.contestItem);
+  const resolveContest = useMutation(api.partners.resolveContest);
+  const commentCounts = useQuery(api.partners.getCommentCounts, items ? { listItemIds: items.map((i) => i._id) } : "skip");
+
+  // Contest modal state
+  const [showContestModal, setShowContestModal] = useState(false);
+  const [contestingItemId, setContestingItemId] = useState<Id<"listItems"> | null>(null);
+  const [contestingItemName, setContestingItemName] = useState("");
+
+  // Notification state
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Comment thread state
+  const [showCommentThread, setShowCommentThread] = useState(false);
+  const [commentItemId, setCommentItemId] = useState<Id<"listItems"> | null>(null);
+  const [commentItemName, setCommentItemName] = useState("");
 
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState("");
@@ -616,22 +648,30 @@ export default function ListDetailScreen() {
 
   async function handleRemoveItem(itemId: Id<"listItems">, itemName: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert("Remove Item", `Remove "${itemName}" from list?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await removeItem({ id: itemId });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch (error) {
-            console.error("Failed to remove item:", error);
-            Alert.alert("Error", "Failed to remove item");
-          }
-        },
-      },
-    ]);
+    const doRemove = async () => {
+      try {
+        await removeItem({ id: itemId });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (error) {
+        console.error("Failed to remove item:", error);
+        if (Platform.OS === "web") {
+          window.alert("Failed to remove item");
+        } else {
+          Alert.alert("Error", "Failed to remove item");
+        }
+      }
+    };
+
+    if (Platform.OS === "web") {
+      if (window.confirm(`Remove "${itemName}" from list?`)) {
+        await doRemove();
+      }
+    } else {
+      Alert.alert("Remove Item", `Remove "${itemName}" from list?`, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Remove", style: "destructive", onPress: doRemove },
+      ]);
+    }
   }
 
   async function handlePriorityChange(
@@ -725,6 +765,62 @@ export default function ListDetailScreen() {
     }
   }
 
+  // Partner mode handlers
+  async function handleApproveItem(itemId: Id<"listItems">) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await handleApproval({ listItemId: itemId, decision: "approved" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("Failed to approve item:", error);
+      Alert.alert("Error", "Failed to approve item");
+    }
+  }
+
+  async function handleRejectItem(itemId: Id<"listItems">) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await handleApproval({ listItemId: itemId, decision: "rejected" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("Failed to reject item:", error);
+      Alert.alert("Error", "Failed to reject item");
+    }
+  }
+
+  function openContestModal(itemId: Id<"listItems">, itemName: string) {
+    setContestingItemId(itemId);
+    setContestingItemName(itemName);
+    setShowContestModal(true);
+  }
+
+  async function handleContestSubmit(reason: string, customText?: string) {
+    if (!contestingItemId) return;
+    await contestItem({
+      listItemId: contestingItemId,
+      reason,
+      customText,
+    });
+  }
+
+  async function handleResolveContest(itemId: Id<"listItems">, decision: "keep" | "remove") {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await resolveContest({ listItemId: itemId, decision });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("Failed to resolve contest:", error);
+      Alert.alert("Error", "Failed to resolve contest");
+    }
+  }
+
+  function openCommentThread(itemId: Id<"listItems">, itemName: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCommentItemId(itemId);
+    setCommentItemName(itemName);
+    setShowCommentThread(true);
+  }
+
   // Status badge config
   const statusConfig = {
     active: { color: colors.accent.primary, label: "Planning", icon: "clipboard-edit-outline" },
@@ -744,13 +840,32 @@ export default function ListDetailScreen() {
           title={list.name}
           subtitle={`${checkedCount}/${totalCount} items`}
           showBack
-          actions={[
-            {
-              icon: status.icon as keyof typeof MaterialCommunityIcons.glyphMap,
-              onPress: () => {},
-              color: status.color,
-            },
-          ]}
+          rightElement={
+            <View style={styles.headerRightRow}>
+              <NotificationBell onPress={() => setShowNotifications(true)} />
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push(`/partners?listId=${id}`);
+                }}
+                hitSlop={8}
+                style={styles.headerIconButton}
+              >
+                <MaterialCommunityIcons
+                  name="account-group"
+                  size={22}
+                  color={colors.text.secondary}
+                />
+              </Pressable>
+              <View style={[styles.headerStatusBadge, { backgroundColor: `${status.color}20` }]}>
+                <MaterialCommunityIcons
+                  name={status.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                  size={16}
+                  color={status.color}
+                />
+              </View>
+            </View>
+          }
         />
 
         <ScrollView
@@ -956,7 +1071,8 @@ export default function ListDetailScreen() {
             )}
           </View>
 
-          {/* Add Item Form */}
+          {/* Add Item Form — hidden for viewers */}
+          {canEdit !== false && (
           <GlassCard variant="standard" style={styles.addItemCard}>
             <Text style={styles.addItemTitle}>Add Item</Text>
             <View style={styles.addItemForm}>
@@ -996,6 +1112,7 @@ export default function ListDetailScreen() {
               </View>
             </View>
           </GlassCard>
+          )}
 
           {/* Smart Suggestions (Story 3.10) */}
           {items.length > 0 && (
@@ -1126,6 +1243,14 @@ export default function ListDetailScreen() {
                         onRemove={() => handleRemoveItem(item._id, item.name)}
                         onPriorityChange={(priority) => handlePriorityChange(item._id, priority)}
                         isShopping={list.status === "shopping"}
+                        isOwner={isOwner}
+                        canApprove={canApprove}
+                        commentCount={commentCounts?.[item._id as string] ?? 0}
+                        onApprove={() => handleApproveItem(item._id)}
+                        onReject={() => handleRejectItem(item._id)}
+                        onContest={() => openContestModal(item._id, item.name)}
+                        onResolveContest={(decision) => handleResolveContest(item._id, decision)}
+                        onOpenComments={isPartner || isOwner ? () => openCommentThread(item._id, item.name) : undefined}
                       />
                     ))}
                   </>
@@ -1379,6 +1504,36 @@ export default function ListDetailScreen() {
         </View>
       </Modal>
 
+      {/* Notifications Dropdown */}
+      <NotificationDropdown
+        visible={showNotifications}
+        onClose={() => setShowNotifications(false)}
+      />
+
+      {/* Contest Modal (Partner Mode) */}
+      <ContestModal
+        visible={showContestModal}
+        itemName={contestingItemName}
+        onContest={handleContestSubmit}
+        onClose={() => {
+          setShowContestModal(false);
+          setContestingItemId(null);
+          setContestingItemName("");
+        }}
+      />
+
+      {/* Comment Thread (Partner Mode) */}
+      <CommentThread
+        visible={showCommentThread}
+        itemId={commentItemId}
+        itemName={commentItemName}
+        onClose={() => {
+          setShowCommentThread(false);
+          setCommentItemId(null);
+          setCommentItemName("");
+        }}
+      />
+
       {/* Actual Price Modal (Story 3.8) */}
       <Modal
         visible={showActualPriceModal}
@@ -1537,9 +1692,32 @@ interface ShoppingListItemProps {
   onRemove: () => void;
   onPriorityChange: (priority: "must-have" | "should-have" | "nice-to-have") => void;
   isShopping: boolean;
+  // Partner mode props
+  isOwner?: boolean;
+  canApprove?: boolean;
+  commentCount?: number;
+  onApprove?: () => void;
+  onReject?: () => void;
+  onContest?: () => void;
+  onResolveContest?: (decision: "keep" | "remove") => void;
+  onOpenComments?: () => void;
 }
 
-function ShoppingListItem({ item, onToggle, onRemove, onPriorityChange, isShopping }: ShoppingListItemProps) {
+function ShoppingListItem({
+  item,
+  onToggle,
+  onRemove,
+  onPriorityChange,
+  isShopping,
+  isOwner,
+  canApprove,
+  commentCount,
+  onApprove,
+  onReject,
+  onContest,
+  onResolveContest,
+  onOpenComments,
+}: ShoppingListItemProps) {
   const translateX = useSharedValue(0);
   const scale = useSharedValue(1);
 
@@ -1626,7 +1804,7 @@ function ShoppingListItem({ item, onToggle, onRemove, onPriorityChange, isShoppi
           <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut}>
             <GlassCard
               variant="standard"
-              style={[styles.itemCard, item.isChecked && styles.itemCardChecked]}
+              style={[styles.itemCard, item.isChecked && styles.itemCardChecked, item.approvalStatus === "contested" && styles.itemCardContested]}
             >
               <View style={styles.itemRow}>
                 {/* Checkbox */}
@@ -1693,8 +1871,67 @@ function ShoppingListItem({ item, onToggle, onRemove, onPriorityChange, isShoppi
                         <Text style={styles.autoAddedText}>Auto</Text>
                       </View>
                     )}
+
+                    {/* Approval Badge */}
+                    {item.approvalStatus && (
+                      <ApprovalBadge status={item.approvalStatus} compact />
+                    )}
                   </View>
+
+                  {/* Approval Actions for pending/contested items */}
+                  {item.approvalStatus === "pending" && canApprove && (
+                    <ApprovalActions
+                      isOwner={!!isOwner}
+                      onApprove={onApprove ?? (() => {})}
+                      onReject={onReject ?? (() => {})}
+                      onContest={onContest ?? (() => {})}
+                    />
+                  )}
+
+                  {/* Contest resolution for owner */}
+                  {item.approvalStatus === "contested" && isOwner && onResolveContest && (
+                    <View style={styles.contestResolution}>
+                      <Text style={styles.contestReasonText}>
+                        Contested: {item.contestReason}
+                        {item.contestNote ? ` — ${item.contestNote}` : ""}
+                      </Text>
+                      <View style={styles.contestActions}>
+                        <Pressable
+                          style={styles.contestKeepButton}
+                          onPress={() => onResolveContest("keep")}
+                        >
+                          <Text style={styles.contestKeepText}>Keep</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.contestRemoveButton}
+                          onPress={() => onResolveContest("remove")}
+                        >
+                          <Text style={styles.contestRemoveText}>Remove</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
                 </View>
+
+                {/* Comment button */}
+                {onOpenComments && (
+                  <Pressable
+                    style={styles.commentButton}
+                    onPress={onOpenComments}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialCommunityIcons
+                      name="comment-text-outline"
+                      size={16}
+                      color={colors.text.secondary}
+                    />
+                    {(commentCount ?? 0) > 0 && (
+                      <View style={styles.commentCountBadge}>
+                        <Text style={styles.commentCountText}>{commentCount}</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                )}
 
                 {/* Remove button */}
                 <Pressable
@@ -1980,6 +2217,15 @@ const styles = StyleSheet.create({
   },
   itemCardChecked: {
     opacity: 0.7,
+  },
+  itemCardContested: {
+    borderColor: "#FF8C00",
+    borderWidth: 1.5,
+    shadowColor: "#FF8C00",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   itemRow: {
     flexDirection: "row",
@@ -2545,5 +2791,96 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     textAlign: "center",
     paddingVertical: spacing.sm,
+  },
+
+  // Header styles
+  headerRightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  headerIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerStatusBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Partner mode styles
+  contestResolution: {
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    backgroundColor: "rgba(255, 140, 0, 0.1)",
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: "rgba(255, 140, 0, 0.3)",
+  },
+  contestReasonText: {
+    ...typography.bodySmall,
+    color: "#FF8C00",
+    marginBottom: spacing.sm,
+  },
+  contestActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  contestKeepButton: {
+    flex: 1,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    backgroundColor: `${colors.accent.success}20`,
+    alignItems: "center",
+  },
+  contestKeepText: {
+    ...typography.labelSmall,
+    color: colors.accent.success,
+    fontWeight: "700",
+  },
+  contestRemoveButton: {
+    flex: 1,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    backgroundColor: `${colors.semantic.danger}20`,
+    alignItems: "center",
+  },
+  contestRemoveText: {
+    ...typography.labelSmall,
+    color: colors.semantic.danger,
+    fontWeight: "700",
+  },
+  commentButton: {
+    position: "relative",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.glass.background,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  commentCountBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.accent.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  commentCountText: {
+    ...typography.labelSmall,
+    fontSize: 9,
+    color: colors.text.primary,
+    fontWeight: "800",
   },
 });
