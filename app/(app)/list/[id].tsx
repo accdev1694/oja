@@ -53,6 +53,8 @@ import {
   NotificationBell,
   NotificationDropdown,
 } from "@/components/partners";
+import { GlassToast } from "@/components/ui/glass/GlassToast";
+import { useDelightToast } from "@/hooks/useDelightToast";
 
 /**
  * Normalize a string for comparison
@@ -119,6 +121,7 @@ export default function ListDetailScreen() {
   const params = useLocalSearchParams();
   const id = params.id as string as Id<"shoppingLists">;
   const router = useRouter();
+  const { toast, dismiss, onMundaneAction } = useDelightToast();
 
   const list = useQuery(api.shoppingLists.getById, { id });
   const items = useQuery(api.listItems.getByList, { listId: id });
@@ -397,6 +400,7 @@ export default function ListDetailScreen() {
     // Otherwise, just toggle (for unchecking or non-shopping mode)
     try {
       await toggleChecked({ id: itemId });
+      onMundaneAction(); // Surprise delight on check-off
     } catch (error) {
       console.error("Failed to toggle item:", error);
       Alert.alert("Error", "Failed to update item");
@@ -432,6 +436,7 @@ export default function ListDetailScreen() {
       await toggleChecked({ id: checkingItemId });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onMundaneAction(); // Surprise delight on check-off
       closeActualPriceModal();
     } catch (error) {
       console.error("Failed to check off item:", error);
@@ -1644,6 +1649,15 @@ export default function ListDetailScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Surprise delight toast */}
+      <GlassToast
+        message={toast.message}
+        icon={toast.icon}
+        iconColor={toast.iconColor}
+        visible={toast.visible}
+        onDismiss={dismiss}
+      />
     </GlassScreen>
   );
 }

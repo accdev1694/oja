@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -16,17 +17,37 @@ import {
   GlassButton,
   GlassHeader,
   GlassSkeleton,
+  GlassToast,
   colors,
   typography,
   spacing,
 } from "@/components/ui/glass";
+import { useDelightToast } from "@/hooks/useDelightToast";
 
 export default function TripSummaryScreen() {
   const params = useLocalSearchParams();
   const listId = params.id as string as Id<"shoppingLists">;
   const router = useRouter();
+  const { toast, dismiss, onNewRecord } = useDelightToast();
+  const recordChecked = useRef(false);
 
   const summary = useQuery(api.shoppingLists.getTripSummary, { id: listId });
+  const personalBests = useQuery(api.insights.getPersonalBests);
+
+  // Check for new personal records once both data are loaded
+  useEffect(() => {
+    if (!summary || !personalBests || recordChecked.current) return;
+    recordChecked.current = true;
+
+    const saving = summary.savedMoney ? Math.abs(summary.difference) : 0;
+    if (saving > 0 && saving >= personalBests.biggestSaving) {
+      onNewRecord("biggestSaving", `£${saving.toFixed(2)}`);
+    } else if (summary.actualTotal > 0 && summary.actualTotal <= personalBests.cheapestTrip && personalBests.cheapestTrip < 999999) {
+      onNewRecord("cheapestTrip", `£${summary.actualTotal.toFixed(2)}`);
+    } else if (summary.checkedCount > personalBests.mostItemsInTrip) {
+      onNewRecord("mostItemsInTrip", `${summary.checkedCount} items`);
+    }
+  }, [summary, personalBests]);
 
   if (summary === undefined) {
     return (
@@ -284,6 +305,15 @@ export default function TripSummaryScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      <GlassToast
+        message={toast.message}
+        icon={toast.icon}
+        iconColor={toast.iconColor}
+        visible={toast.visible}
+        onDismiss={dismiss}
+        duration={4000}
+      />
     </GlassScreen>
   );
 }

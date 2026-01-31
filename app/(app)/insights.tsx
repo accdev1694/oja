@@ -28,12 +28,14 @@ import {
   GlassCard,
   GlassHeader,
   GlassProgressBar,
+  GlassToast,
   SkeletonCard,
   colors,
   typography,
   spacing,
   borderRadius,
 } from "@/components/ui/glass";
+import { useDelightToast } from "@/hooks/useDelightToast";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CHART_WIDTH = SCREEN_WIDTH - spacing.lg * 2 - spacing.md * 2;
@@ -50,6 +52,8 @@ const CATEGORY_COLORS = [
 export default function InsightsScreen() {
   const router = useRouter();
   const confettiRef = useRef<any>(null);
+  const prevAchievementCount = useRef<number | null>(null);
+  const { toast, dismiss, onAchievementUnlock } = useDelightToast();
 
   const digest = useQuery(api.insights.getWeeklyDigest);
   const savingsJar = useQuery(api.insights.getSavingsJar);
@@ -62,6 +66,19 @@ export default function InsightsScreen() {
   const generateChallenge = useMutation(api.insights.generateChallenge);
 
   const [challengeGenerating, setChallengeGenerating] = useState(false);
+
+  // Achievement unlock detection: fire toast + confetti when new badge appears
+  useEffect(() => {
+    if (!achievements) return;
+    const count = achievements.length;
+    if (prevAchievementCount.current !== null && count > prevAchievementCount.current) {
+      const newest = achievements[achievements.length - 1];
+      onAchievementUnlock(newest?.type || "unknown");
+      confettiRef.current?.start();
+      impactAsync(ImpactFeedbackStyle.Heavy);
+    }
+    prevAchievementCount.current = count;
+  }, [achievements]);
 
   const loading = digest === undefined;
 
@@ -660,6 +677,15 @@ export default function InsightsScreen() {
 
         <View style={{ height: 140 }} />
       </ScrollView>
+
+      {/* Achievement / delight toast */}
+      <GlassToast
+        message={toast.message}
+        icon={toast.icon}
+        iconColor={toast.iconColor}
+        visible={toast.visible}
+        onDismiss={dismiss}
+      />
 
       {/* Confetti (hidden, triggered on milestone) */}
       <ConfettiCannon
