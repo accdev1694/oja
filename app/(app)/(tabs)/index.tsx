@@ -32,7 +32,6 @@ import Animated, {
   withTiming,
   withDelay,
   withSequence,
-  interpolateColor,
 } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -105,41 +104,6 @@ export default function PantryScreen() {
 
   // View mode: "attention" shows only Low+Out items, "all" shows everything
   const [viewMode, setViewMode] = useState<PantryViewMode>("attention");
-
-  // Animated tab transition: 0 = attention (red), 1 = all (green)
-  const tabProgress = useSharedValue(0);
-
-  const tabContainerAnimStyle = useAnimatedStyle(() => {
-    const bgColor = interpolateColor(
-      tabProgress.value,
-      [0, 1],
-      [`${colors.semantic.danger}15`, `${colors.accent.primary}15`]
-    );
-    const borderColor = interpolateColor(
-      tabProgress.value,
-      [0, 1],
-      [`${colors.semantic.danger}40`, `${colors.glass.border}`]
-    );
-    return { backgroundColor: bgColor, borderColor };
-  });
-
-  const attentionTabAnimStyle = useAnimatedStyle(() => {
-    const bgColor = interpolateColor(
-      tabProgress.value,
-      [0, 1],
-      [`${colors.semantic.danger}25`, "transparent"]
-    );
-    return { backgroundColor: bgColor };
-  });
-
-  const allTabAnimStyle = useAnimatedStyle(() => {
-    const bgColor = interpolateColor(
-      tabProgress.value,
-      [0, 1],
-      ["transparent", `${colors.accent.primary}25`]
-    );
-    return { backgroundColor: bgColor };
-  });
 
   // UI State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -495,8 +459,6 @@ export default function PantryScreen() {
     if (mode === viewMode) return;
     impactAsync(ImpactFeedbackStyle.Light);
     setViewMode(mode);
-    // Animate tab colors: 0 = attention (red), 1 = all (green)
-    tabProgress.value = withTiming(mode === "all" ? 1 : 0, { duration: 350 });
     // Reset filters when switching modes
     setCategoryFilter(null);
     setSearchQuery("");
@@ -546,63 +508,47 @@ export default function PantryScreen() {
           }
         />
 
-        {/* View Mode Tabs — animated red↔green transition */}
-        <Animated.View style={[styles.viewModeTabs, tabContainerAnimStyle]}>
-          <Pressable onPress={() => handleViewModeSwitch("attention")}>
-            <Animated.View style={[styles.viewModeTab, attentionTabAnimStyle]}>
-              <MaterialCommunityIcons
-                name="alert-circle-outline"
-                size={16}
-                color={viewMode === "attention" ? colors.semantic.danger : colors.text.tertiary}
-              />
-              <Text style={[
-                styles.viewModeTabText,
-                viewMode === "attention" && styles.viewModeTabTextAttention,
-              ]}>
-                Needs Attention
-              </Text>
-              {attentionCount > 0 && (
-                <View style={[
-                  styles.viewModeBadge,
-                  viewMode === "attention" && styles.viewModeBadgeAttention,
-                ]}>
-                  <Text style={[
-                    styles.viewModeBadgeText,
-                    viewMode === "attention" && styles.viewModeBadgeTextAttention,
-                  ]}>
-                    {attentionCount}
-                  </Text>
-                </View>
-              )}
-            </Animated.View>
-          </Pressable>
-          <Pressable onPress={() => handleViewModeSwitch("all")}>
-            <Animated.View style={[styles.viewModeTab, allTabAnimStyle]}>
-              <MaterialCommunityIcons
-                name="view-list-outline"
-                size={16}
-                color={viewMode === "all" ? colors.accent.primary : colors.text.tertiary}
-              />
-              <Text style={[
-                styles.viewModeTabText,
-                viewMode === "all" && styles.viewModeTabTextActive,
-              ]}>
-                All Items
-              </Text>
-              <View style={[
-                styles.viewModeBadge,
-                viewMode === "all" && styles.viewModeBadgeActive,
-              ]}>
-                <Text style={[
-                  styles.viewModeBadgeText,
-                  viewMode === "all" && styles.viewModeBadgeTextActive,
-                ]}>
-                  {items.length}
+        {/* View Mode Tabs */}
+        <View style={styles.viewModeTabs}>
+          <Pressable
+            style={[styles.viewModeTab, viewMode === "attention" && styles.viewModeTabActive]}
+            onPress={() => handleViewModeSwitch("attention")}
+          >
+            <MaterialCommunityIcons
+              name="alert-circle-outline"
+              size={16}
+              color={viewMode === "attention" ? colors.accent.primary : colors.text.tertiary}
+            />
+            <Text style={[styles.viewModeTabText, viewMode === "attention" && styles.viewModeTabTextActive]}>
+              Needs Attention
+            </Text>
+            {attentionCount > 0 && (
+              <View style={[styles.viewModeBadge, viewMode === "attention" && styles.viewModeBadgeActive]}>
+                <Text style={[styles.viewModeBadgeText, viewMode === "attention" && styles.viewModeBadgeTextActive]}>
+                  {attentionCount}
                 </Text>
               </View>
-            </Animated.View>
+            )}
           </Pressable>
-        </Animated.View>
+          <Pressable
+            style={[styles.viewModeTab, viewMode === "all" && styles.viewModeTabActive]}
+            onPress={() => handleViewModeSwitch("all")}
+          >
+            <MaterialCommunityIcons
+              name="view-list-outline"
+              size={16}
+              color={viewMode === "all" ? colors.accent.primary : colors.text.tertiary}
+            />
+            <Text style={[styles.viewModeTabText, viewMode === "all" && styles.viewModeTabTextActive]}>
+              All Items
+            </Text>
+            <View style={[styles.viewModeBadge, viewMode === "all" && styles.viewModeBadgeActive]}>
+              <Text style={[styles.viewModeBadgeText, viewMode === "all" && styles.viewModeBadgeTextActive]}>
+                {items.length}
+              </Text>
+            </View>
+          </Pressable>
+        </View>
 
         {/* Search & filters — only in "all" mode */}
         {viewMode === "all" && (
@@ -1165,10 +1111,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginHorizontal: spacing.xl,
     marginBottom: spacing.md,
+    backgroundColor: colors.glass.background,
     borderRadius: borderRadius.lg,
     padding: 4,
     borderWidth: 1,
-    // backgroundColor and borderColor driven by animated style
+    borderColor: colors.glass.border,
   },
   viewModeTab: {
     flex: 1,
@@ -1179,19 +1126,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
-    // backgroundColor driven by animated style
+  },
+  viewModeTabActive: {
+    backgroundColor: `${colors.accent.primary}20`,
   },
   viewModeTabText: {
     ...typography.labelMedium,
     color: colors.text.tertiary,
     fontSize: 13,
   },
-  // "Needs Attention" active — red
-  viewModeTabTextAttention: {
-    color: colors.semantic.danger,
-    fontWeight: "600",
-  },
-  // "All Items" active — green/teal
   viewModeTabTextActive: {
     color: colors.accent.primary,
     fontWeight: "600",
@@ -1204,11 +1147,6 @@ const styles = StyleSheet.create({
     minWidth: 22,
     alignItems: "center",
   },
-  // Badge active — red for attention
-  viewModeBadgeAttention: {
-    backgroundColor: `${colors.semantic.danger}30`,
-  },
-  // Badge active — green for all
   viewModeBadgeActive: {
     backgroundColor: `${colors.accent.primary}30`,
   },
@@ -1216,9 +1154,6 @@ const styles = StyleSheet.create({
     ...typography.labelSmall,
     color: colors.text.tertiary,
     fontSize: 11,
-  },
-  viewModeBadgeTextAttention: {
-    color: colors.semantic.danger,
   },
   viewModeBadgeTextActive: {
     color: colors.accent.primary,
