@@ -32,6 +32,7 @@ import Animated, {
   withTiming,
   withDelay,
   withSequence,
+  withClamp,
   interpolateColor,
 } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -116,16 +117,11 @@ export default function PantryScreen() {
   }, []);
 
   const slidingPillStyle = useAnimatedStyle(() => {
-    // Clamp so spring overshoot never exceeds the container bounds
-    const rawX = tabProgress.value * tabPillWidth.value;
-    const clampedX = Math.min(Math.max(rawX, 0), tabPillWidth.value);
-    // Clamp progress for color too so it stays within red↔teal range
-    const clampedProgress = Math.min(Math.max(tabProgress.value, 0), 1);
     return {
       width: tabPillWidth.value,
-      transform: [{ translateX: clampedX }],
+      transform: [{ translateX: tabProgress.value * tabPillWidth.value }],
       backgroundColor: interpolateColor(
-        clampedProgress,
+        tabProgress.value,
         [0, 1],
         [`${colors.semantic.danger}25`, `${colors.accent.primary}25`]
       ),
@@ -486,11 +482,14 @@ export default function PantryScreen() {
     if (mode === viewMode) return;
     impactAsync(ImpactFeedbackStyle.Light);
     setViewMode(mode);
-    // Spring the pill to the new position — slight overshoot for organic feel
-    tabProgress.value = withSpring(mode === "all" ? 1 : 0, {
-      damping: 18,
-      stiffness: 180,
-    });
+    // Spring the pill — withClamp keeps it within bounds while spring flows naturally
+    tabProgress.value = withClamp(
+      { min: 0, max: 1 },
+      withSpring(mode === "all" ? 1 : 0, {
+        damping: 18,
+        stiffness: 180,
+      })
+    );
     // Reset filters when switching modes
     setCategoryFilter(null);
     setSearchQuery("");
