@@ -40,14 +40,7 @@ import { useDelightToast } from "@/hooks/useDelightToast";
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CHART_WIDTH = SCREEN_WIDTH - spacing.lg * 2 - spacing.md * 2;
 
-const CATEGORY_COLORS = [
-  "#00D4AA",
-  "#6366F1",
-  "#F59E0B",
-  "#EF4444",
-  "#3B82F6",
-  "#10B981",
-];
+const CATEGORY_COLORS = colors.chart;
 
 export default function InsightsScreen() {
   const router = useRouter();
@@ -532,7 +525,7 @@ export default function InsightsScreen() {
               <MaterialCommunityIcons
                 name="fire"
                 size={22}
-                color="#FF6B35"
+                color={colors.semantic.fire}
               />
               <Text style={styles.sectionTitle}>Streaks</Text>
             </View>
@@ -545,7 +538,7 @@ export default function InsightsScreen() {
                       <MaterialCommunityIcons
                         name="fire"
                         size={20}
-                        color={streak.currentCount >= 7 ? "#FF6B35" : colors.text.tertiary}
+                        color={streak.currentCount >= 7 ? colors.semantic.fire : colors.text.tertiary}
                       />
                     </View>
                     <View>
@@ -602,7 +595,7 @@ export default function InsightsScreen() {
                   icon="fire"
                   label="Longest Streak"
                   value={`${personalBests.longestStreak} days`}
-                  color="#FF6B35"
+                  color={colors.semantic.fire}
                 />
                 <BestItem
                   icon="cart"
@@ -1066,7 +1059,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(255, 107, 53, 0.15)",
+    backgroundColor: colors.semantic.fireGlow,
     alignItems: "center",
     justifyContent: "center",
   },

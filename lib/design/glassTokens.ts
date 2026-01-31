@@ -90,7 +90,20 @@ export const colors = {
     success: "#10B981",
     warning: "#F59E0B",
     danger: "#EF4444",
+    // Gamification
+    fire: "#FF6B35",
+    fireGlow: "rgba(255, 107, 53, 0.15)",
   },
+
+  // Chart Colors (for category charts, pie charts, etc.)
+  chart: [
+    "#00D4AA", // Teal (primary)
+    "#6366F1", // Indigo (secondary)
+    "#F59E0B", // Amber (warning)
+    "#EF4444", // Red (error)
+    "#3B82F6", // Blue (info)
+    "#10B981", // Green (success)
+  ] as unknown as readonly string[],
 } as const;
 
 // =============================================================================
