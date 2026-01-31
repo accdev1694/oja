@@ -249,7 +249,7 @@ export interface BudgetProgressBarProps {
 export function BudgetProgressBar({
   spent,
   budget,
-  currency = "$",
+  currency = "£",
   showAmounts = true,
   size = "md",
   style,

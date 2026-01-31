@@ -1,6 +1,7 @@
 import { Redirect } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { colors } from "@/lib/design/glassTokens";
 
 export default function Index() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -8,7 +9,7 @@ export default function Index() {
   if (!isLoaded) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#FF6B35" />
+        <ActivityIndicator size="large" color={colors.accent.primary} />
       </View>
     );
   }
@@ -25,6 +26,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FFFAF8",
+    backgroundColor: colors.background.primary,
   },
 });

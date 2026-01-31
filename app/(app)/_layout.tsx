@@ -192,7 +192,7 @@ export default function AppLayout() {
   if (!isLoaded) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#FF6B35" />
+        <ActivityIndicator size="large" color={colors.accent.primary} />
       </View>
     );
   }
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FFFAF8",
+    backgroundColor: colors.background.primary,
   },
 });
 

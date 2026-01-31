@@ -72,7 +72,7 @@ const STOCK_CATEGORIES = [
 const STOCK_LEVELS: { level: StockLevel; label: string; color: string }[] = [
   { level: "stocked", label: "Fully Stocked", color: colors.budget.healthy },
   { level: "good", label: "Good", color: colors.accent.success },
-  { level: "half", label: "Half", color: "#EAB308" },
+  { level: "half", label: "Half", color: colors.accent.warning },
   { level: "low", label: "Running Low", color: colors.budget.caution },
   { level: "out", label: "Out of Stock", color: colors.budget.exceeded },
 ];
@@ -828,8 +828,8 @@ function PantryItemRow({
 
 // ── Typewriter hint with glow on current letter ─────────────────────
 const TYPEWRITER_SPEED = 60; // ms per character
-const GLOW_COLOR = "#00D4AA";
-const DIM_COLOR = "rgba(255, 255, 255, 0.3)";
+const GLOW_COLOR = colors.accent.primary;
+const DIM_COLOR = colors.text.disabled;
 
 function TypewriterHint({ text }: { text: string }) {
   const [charIndex, setCharIndex] = useState(0);
@@ -925,7 +925,7 @@ function AddedToListToast({ itemName, y }: { itemName: string; y: number }) {
             height: 44,
             borderRadius: 22,
             borderWidth: 2,
-            borderColor: "#10B981",
+            borderColor: colors.accent.success,
           },
           ringStyle,
         ]}
@@ -936,9 +936,9 @@ function AddedToListToast({ itemName, y }: { itemName: string; y: number }) {
           {
             flexDirection: "row",
             alignItems: "center",
-            backgroundColor: "#0B1426",
+            backgroundColor: colors.background.primary,
             borderWidth: 1.5,
-            borderColor: "#10B981",
+            borderColor: colors.accent.success,
             borderRadius: 22,
             paddingVertical: 10,
             paddingHorizontal: 18,
@@ -947,8 +947,8 @@ function AddedToListToast({ itemName, y }: { itemName: string; y: number }) {
           pillStyle,
         ]}
       >
-        <MaterialCommunityIcons name="check-circle" size={20} color="#10B981" />
-        <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "700" }} numberOfLines={1}>
+        <MaterialCommunityIcons name="check-circle" size={20} color={colors.accent.success} />
+        <Text style={{ color: colors.text.primary, fontSize: 14, fontWeight: "700" }} numberOfLines={1}>
           {itemName} added to list
         </Text>
       </Animated.View>
