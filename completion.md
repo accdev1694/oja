@@ -76,13 +76,13 @@
 - [x] **Savings Milestones**: Confetti cannon wired up for milestone celebrations
 - [x] **Challenge Card**: Show active weekly challenge with progress bar + generate new challenge button
 - [x] **Achievement Badges**: Grid of unlockable badges with icon circles + count badge
-- [ ] **Achievement Unlock Toast**: Show celebratory toast + confetti when badge unlocked
+- [x] **Achievement Unlock Toast**: Show celebratory toast + confetti when badge unlocked
 
-### 6.3 Personal Bests & Surprise Delight (MOSTLY DONE)
+### 6.3 Personal Bests & Surprise Delight (DONE)
 - [x] **Backend**: Implement `getPersonalBests()` — lowest weekly spend, most items in one trip, longest streak, biggest single-trip saving
 - [x] **Personal Bests Card**: Show top 4 personal bests with colored icon circles
-- [ ] **New Record Detection**: After trip reconciliation, check if any personal best was broken → show toast
-- [ ] **Surprise Delight**: Random positive toast messages on mundane actions (e.g., "You're a budgeting star!" on 5th list check-off)
+- [x] **New Record Detection**: After trip reconciliation, check if any personal best was broken → show toast
+- [x] **Surprise Delight**: Random positive toast messages on mundane actions (e.g., "You're a budgeting star!" on 5th list check-off)
 
 ---
 
@@ -101,12 +101,12 @@
 - [x] **Paywall**: After trial expires, show paywall modal blocking premium features (insights, unlimited receipts)
 - [x] **Feature Gating**: Add `requirePremium()` helper — check subscription status before premium actions
 
-### 7.2 Loyalty Points System (MOSTLY DONE)
+### 7.2 Loyalty Points System (DONE)
 - [x] **Integration**: Call `earnPoints()` in receipt reconciliation flow — award points per receipt scanned
 - [x] **First Receipt Bonus**: Award +20 bonus points on user's very first receipt scan
 - [x] **Weekly Streak Bonus**: Award +10 bonus points for 3+ receipts in one week
 - [x] **Daily Cap**: Enforce max 5 receipt scans per day for point earning (free tier)
-- [ ] **Point Expiry**: Add scheduled Convex cron job to expire points older than 12 months
+- [x] **Point Expiry**: Add scheduled Convex cron job to expire points older than 12 months
 - [x] **Tier Calculation**: Ensure tier (bronze/silver/gold/platinum) recalculates on every point earn/redeem
 - [x] **Discount Application**: On checkout, show available discount based on tier (10%/25%/50%)
 - [x] **Points History UI**: Polish point history list — show earn vs redeem with icons
@@ -121,88 +121,88 @@
 
 ## Epic 8: Admin Dashboard & Operations
 
-### 8.1 Admin Auth & Dashboard
-- [ ] **2FA Gate**: Use `expo-local-authentication` (biometric) before showing admin screen
-- [ ] **Access Denied UI**: Show 403 screen if non-admin tries to access /admin
-- [ ] **Dashboard Metrics**: Implement real DAU/WAU/MAU calculations in `getAnalytics()`
-- [ ] **Dashboard Metrics**: Implement real MRR/ARR from subscriptions table in `getRevenueReport()`
-- [ ] **System Health**: Calculate real receipt processing success rate, average processing time
-- [ ] **Audit Logging**: Log all admin actions (user toggle, receipt delete, etc.) to adminLogs table
+### 8.1 Admin Auth & Dashboard (DONE)
+- [x] **2FA Gate**: Use `expo-local-authentication` (biometric) before showing admin screen
+- [x] **Access Denied UI**: Show 403 screen if non-admin tries to access /admin
+- [x] **Dashboard Metrics**: Implement real DAU/WAU/MAU calculations in `getAnalytics()`
+- [x] **Dashboard Metrics**: Implement real MRR/ARR from subscriptions table in `getRevenueReport()`
+- [x] **System Health**: Calculate real receipt processing success rate, average processing time
+- [x] **Audit Logging**: Log all admin actions (user toggle, receipt delete, etc.) to adminLogs table
 
-### 8.2 User Management
-- [ ] **User Search Filters**: Add filters by plan type, signup date range, active/inactive status
-- [ ] **User Detail View**: Tap user → see full profile (subscription history, receipts, lists, points)
-- [ ] **Trial Extension**: Add mutation to manually extend a user's trial by N days
-- [ ] **Complimentary Access**: Add mutation to grant free premium access to a user
-- [ ] **User Suspension**: Add ability to suspend/unsuspend user accounts
+### 8.2 User Management (DONE)
+- [x] **User Search Filters**: Add filters by plan type, signup date range, active/inactive status
+- [x] **User Detail View**: Tap user → see full profile (subscription history, receipts, lists, points)
+- [x] **Trial Extension**: Add mutation to manually extend a user's trial by N days
+- [x] **Complimentary Access**: Add mutation to grant free premium access to a user
+- [x] **User Suspension**: Add ability to suspend/unsuspend user accounts
 
-### 8.3 Analytics & Reporting
-- [ ] **Analytics Charts**: Add line chart for DAU/WAU/MAU over time (react-native-chart-kit)
-- [ ] **Revenue Chart**: Add bar chart for MRR over last 12 months
-- [ ] **Retention Cohorts**: Calculate week-1/week-4 retention from user activity
-- [ ] **ARPU & LTV**: Calculate average revenue per user and lifetime value
-- [ ] **Churn Rate**: Track monthly subscription cancellation rate
-- [ ] **CSV Export**: Add "Export to CSV" button for analytics data (generate + share via expo-sharing)
+### 8.3 Analytics & Reporting (DONE)
+- [x] **Analytics Charts**: Add line chart for DAU/WAU/MAU over time (react-native-chart-kit)
+- [x] **Revenue Chart**: Add bar chart for MRR over last 12 months
+- [x] **Retention Cohorts**: Calculate week-1/week-4 retention from user activity
+- [x] **ARPU & LTV**: Calculate average revenue per user and lifetime value
+- [x] **Churn Rate**: Track monthly subscription cancellation rate
+- [x] **CSV Export**: Add "Export to CSV" button for analytics data (generate + share via expo-sharing)
 
-### 8.4 Receipt & Price Moderation
-- [ ] **Receipt Queue**: Show flagged/low-confidence receipts for manual review
-- [ ] **Receipt Detail**: View receipt image + parsed data side-by-side, edit parsed values
-- [ ] **Bulk Actions**: Select multiple receipts → approve/reject/delete
-- [ ] **Price Anomaly Detection**: Flag prices that deviate >50% from average in currentPrices
-- [ ] **Price Override**: Manually edit/delete entries in currentPrices table
+### 8.4 Receipt & Price Moderation (DONE)
+- [x] **Receipt Queue**: Show flagged/low-confidence receipts for manual review
+- [x] **Receipt Detail**: View receipt image + parsed data side-by-side, edit parsed values
+- [x] **Bulk Actions**: Select multiple receipts → approve/reject/delete
+- [x] **Price Anomaly Detection**: Flag prices that deviate >50% from average in currentPrices
+- [x] **Price Override**: Manually edit/delete entries in currentPrices table
 
-### 8.5 Product Catalog & System Health
-- [ ] **Category Manager**: CRUD for pantry item categories
-- [ ] **Store Normalization**: UI to merge duplicate store names (e.g., "Tescos" → "Tesco")
-- [ ] **Item Canonicalization**: UI to merge duplicate item names
-- [ ] **System Health Dashboard**: Real-time Convex function latency, error rates, storage usage
-- [ ] **Feature Flags**: Simple key-value feature flag system (stored in Convex) for toggling features
-- [ ] **Announcements**: Create/schedule in-app announcement banners for all users
+### 8.5 Product Catalog & System Health (DONE)
+- [x] **Category Manager**: CRUD for pantry item categories
+- [x] **Store Normalization**: UI to merge duplicate store names (e.g., "Tescos" → "Tesco")
+- [x] **Item Canonicalization**: UI to merge duplicate item names
+- [x] **System Health Dashboard**: Real-time Convex function latency, error rates, storage usage
+- [x] **Feature Flags**: Simple key-value feature flag system (stored in Convex) for toggling features
+- [x] **Announcements**: Create/schedule in-app announcement banners for all users
 
 ---
 
 ## Test Infrastructure
 
-### Setup & Configuration
-- [ ] Create `__tests__/setup.ts` — global test setup with mocks for Convex, Clerk, Expo modules
-- [ ] Create `__tests__/factories/` — test data factories for users, lists, items, receipts, subscriptions
-- [ ] Create `__tests__/mocks/convex.ts` — mock Convex client (useQuery, useMutation stubs)
-- [ ] Add coverage thresholds to jest.config.js (60% minimum for new code)
+### Setup & Configuration (DONE)
+- [x] Create `__tests__/setup.ts` — global test setup with mocks for Convex, Clerk, Expo modules
+- [x] Create `__tests__/factories/` — test data factories for users, lists, items, receipts, subscriptions
+- [x] Create `__tests__/mocks/convex.ts` — mock Convex client (useQuery, useMutation stubs)
+- [x] Add coverage thresholds to jest.config.js (60% minimum for new code)
 
-### Epic 4 Tests
-- [ ] `__tests__/partners/approval-workflow.test.ts` — test approve/reject/pending state transitions
-- [ ] `__tests__/partners/contest-flow.test.ts` — test contest + resolve flow
-- [ ] `__tests__/partners/comments.test.ts` — test comment creation + retrieval
-- [ ] `__tests__/partners/permissions.test.ts` — test role-based access (viewer can't edit, etc.)
-- [ ] `__tests__/partners/notifications.test.ts` — test notification creation on partner actions
+### Epic 4 Tests (DONE)
+- [x] `__tests__/partners/approval-workflow.test.ts` — test approve/reject/pending state transitions
+- [x] `__tests__/partners/contest-flow.test.ts` — test contest + resolve flow
+- [x] `__tests__/partners/comments.test.ts` — test comment creation + retrieval
+- [x] `__tests__/partners/permissions.test.ts` — test role-based access (viewer can't edit, etc.)
+- [x] `__tests__/partners/notifications.test.ts` — test notification creation on partner actions
 
-### Epic 6 Tests
-- [ ] `__tests__/insights/streaks.test.ts` — test streak increment, reset, longest tracking
-- [ ] `__tests__/insights/achievements.test.ts` — test unlock conditions for each badge
-- [ ] `__tests__/insights/trends.test.ts` — test monthly aggregation calculations
-- [ ] `__tests__/insights/challenges.test.ts` — test challenge progress + completion
+### Epic 6 Tests (DONE)
+- [x] `__tests__/insights/streaks.test.ts` — test streak increment, reset, longest tracking
+- [x] `__tests__/insights/achievements.test.ts` — test unlock conditions for each badge
+- [x] `__tests__/insights/trends.test.ts` — test monthly aggregation calculations
+- [x] `__tests__/insights/challenges.test.ts` — test challenge progress + completion
 
-### Epic 7 Tests
-- [ ] `__tests__/subscriptions/stripe-webhook.test.ts` — test webhook event processing
-- [ ] `__tests__/subscriptions/points-earning.test.ts` — test point award rules + daily cap
-- [ ] `__tests__/subscriptions/tier-calculation.test.ts` — test tier thresholds + discount mapping
-- [ ] `__tests__/subscriptions/point-expiry.test.ts` — test 12-month rolling expiry logic
+### Epic 7 Tests (DONE)
+- [x] `__tests__/subscriptions/stripe-webhook.test.ts` — test webhook event processing
+- [x] `__tests__/subscriptions/points-earning.test.ts` — test point award rules + daily cap
+- [x] `__tests__/subscriptions/tier-calculation.test.ts` — test tier thresholds + discount mapping
+- [x] `__tests__/subscriptions/point-expiry.test.ts` — test 12-month rolling expiry logic
 
-### Epic 8 Tests
-- [ ] `__tests__/admin/analytics.test.ts` — test DAU/WAU/MAU calculations
-- [ ] `__tests__/admin/user-management.test.ts` — test search, filter, suspend flows
-- [ ] `__tests__/admin/audit-logging.test.ts` — test log creation on admin actions
+### Epic 8 Tests (DONE)
+- [x] `__tests__/admin/analytics.test.ts` — test DAU/WAU/MAU calculations
+- [x] `__tests__/admin/user-management.test.ts` — test search, filter, suspend flows
+- [x] `__tests__/admin/audit-logging.test.ts` — test log creation on admin actions
 
-### Component Tests
-- [ ] `__tests__/components/ApprovalBadge.test.tsx` — renders correct status
-- [ ] `__tests__/components/ContestModal.test.tsx` — reason selection + submit
-- [ ] `__tests__/components/NotificationBell.test.tsx` — shows unread count
-- [ ] `__tests__/components/GlassCard.test.tsx` — renders children with glass styles
+### Component Tests (DONE)
+- [x] `__tests__/components/ApprovalBadge.test.ts` — renders correct status
+- [x] `__tests__/components/ContestModal.test.ts` — reason selection + submit
+- [x] `__tests__/components/NotificationBell.test.ts` — shows unread count
+- [x] `__tests__/components/GlassCard.test.ts` — renders children with glass styles
 
-### CI/CD
-- [ ] Create `.github/workflows/ci.yml` — run lint + typecheck + tests on push/PR
-- [ ] Add test coverage reporting to CI
-- [ ] Add build verification step (expo export)
+### CI/CD (DONE)
+- [x] Create `.github/workflows/ci.yml` — run lint + typecheck + tests on push/PR
+- [x] Add test coverage reporting to CI
+- [x] Add build verification step (expo export)
 
 ---
 
@@ -212,11 +212,11 @@
 |------|------------|-----------|------------|
 | Phase 0: Setup | 5 | 5 | 100% |
 | Epic 4 | 30 | 30 | 100% |
-| Epic 6 | 22 | 19 | 86% |
-| Epic 7 | 21 | 20 | 95% |
-| Epic 8 | 23 | 0 | 0% |
-| Tests | 23 | 0 | 0% |
-| **TOTAL** | **124** | **74** | **60%** |
+| Epic 6 | 22 | 22 | 100% |
+| Epic 7 | 21 | 21 | 100% |
+| Epic 8 | 23 | 23 | 100% |
+| Tests | 23 | 23 | 100% |
+| **TOTAL** | **124** | **124** | **100%** |
 
 ---
 
