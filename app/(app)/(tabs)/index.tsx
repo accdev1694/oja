@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import {
   View,
@@ -32,7 +33,9 @@ import Animated, {
   withTiming,
   withDelay,
   withSequence,
+  withRepeat,
   interpolateColor,
+  Easing,
 } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -138,6 +141,27 @@ export default function PantryScreen() {
   const [newItemCategory, setNewItemCategory] = useState("Pantry Staples");
   const [newItemStock, setNewItemStock] = useState<StockLevel>("stocked");
 
+  // Gesture onboarding
+  const [showGestureOnboarding, setShowGestureOnboarding] = useState(false);
+  const gestureOnboardingChecked = useRef(false);
+
+  useEffect(() => {
+    if (gestureOnboardingChecked.current) return;
+    if (!items || items.length === 0) return;
+    gestureOnboardingChecked.current = true;
+
+    AsyncStorage.getItem("oja_gesture_onboarding_done").then((val) => {
+      if (val !== "true") {
+        setShowGestureOnboarding(true);
+      }
+    });
+  }, [items]);
+
+  const dismissGestureOnboarding = useCallback(() => {
+    setShowGestureOnboarding(false);
+    AsyncStorage.setItem("oja_gesture_onboarding_done", "true");
+  }, []);
+
   // Toast position (card Y coordinate)
   const [flyStartPosition, setFlyStartPosition] = useState({ x: 0, y: 0 });
 
@@ -172,7 +196,7 @@ export default function PantryScreen() {
       backgroundColor: interpolateColor(
         tabProgress.value,
         [0, 1],
-        [`${colors.semantic.danger}25`, `${colors.accent.primary}25`]
+        [`${colors.accent.warning}25`, `${colors.accent.primary}25`]
       ),
     };
   });
@@ -380,6 +404,7 @@ export default function PantryScreen() {
     category: string;
     stockLevel: string;
   }) => {
+    if (showGestureOnboarding) dismissGestureOnboarding();
     const nextLevel = getNextLowerLevel(item.stockLevel as StockLevel);
     if (!nextLevel) return;
 
@@ -409,6 +434,7 @@ export default function PantryScreen() {
     category: string;
     stockLevel: string;
   }) => {
+    if (showGestureOnboarding) dismissGestureOnboarding();
     const nextLevel = getNextHigherLevel(item.stockLevel as StockLevel);
     if (!nextLevel) return;
 
@@ -881,9 +907,110 @@ export default function PantryScreen() {
           </Pressable>
         </Modal>
       </GestureHandlerRootView>
+
+      {/* Gesture Onboarding Overlay */}
+      {showGestureOnboarding && <SwipeOnboardingOverlay onDismiss={dismissGestureOnboarding} />}
     </GlassScreen>
   );
 }
+
+// =============================================================================
+// SWIPE ONBOARDING OVERLAY
+// =============================================================================
+
+function SwipeOnboardingOverlay({ onDismiss }: { onDismiss: () => void }) {
+  const handX = useSharedValue(0);
+  const overlayOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    // Fade in
+    overlayOpacity.value = withTiming(1, { duration: 300 });
+    // Animate hand sliding left and right repeatedly
+    handX.value = withRepeat(
+      withSequence(
+        withTiming(40, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+        withTiming(-40, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1, // infinite
+      false,
+    );
+  }, []);
+
+  const handStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: handX.value }],
+  }));
+
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+  }));
+
+  return (
+    <Animated.View style={[onboardingStyles.overlay, overlayStyle]}>
+      <Pressable style={onboardingStyles.backdrop} onPress={onDismiss} />
+      <View style={onboardingStyles.content}>
+        <Animated.View style={[onboardingStyles.handContainer, handStyle]}>
+          <MaterialCommunityIcons
+            name="gesture-swipe-horizontal"
+            size={48}
+            color={colors.accent.primary}
+          />
+        </Animated.View>
+        <Text style={onboardingStyles.title}>Swipe to adjust stock</Text>
+        <Text style={onboardingStyles.subtitle}>
+          Swipe any item left or right to change its stock level
+        </Text>
+        <Pressable style={onboardingStyles.gotItButton} onPress={onDismiss}>
+          <Text style={onboardingStyles.gotItText}>Got it</Text>
+        </Pressable>
+      </View>
+    </Animated.View>
+  );
+}
+
+const onboardingStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1000,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+  },
+  content: {
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+  },
+  handContainer: {
+    marginBottom: spacing.lg,
+  },
+  title: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    textAlign: "center",
+    marginBottom: spacing.xs,
+  },
+  subtitle: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    textAlign: "center",
+    marginBottom: spacing.xl,
+  },
+  gotItButton: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    backgroundColor: `${colors.accent.primary}20`,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: `${colors.accent.primary}40`,
+  },
+  gotItText: {
+    ...typography.labelLarge,
+    color: colors.accent.primary,
+  },
+});
 
 // Pantry Item Row Component — uses GestureDetector instead of Swipeable
 function PantryItemRow({
@@ -1191,7 +1318,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   viewModeTabTextAttention: {
-    color: colors.semantic.danger,
+    color: colors.accent.warning,
     fontWeight: "600",
   },
   viewModeTabTextAllGood: {
@@ -1211,7 +1338,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   viewModeBadgeAttention: {
-    backgroundColor: `${colors.semantic.danger}30`,
+    backgroundColor: `${colors.accent.warning}30`,
   },
   viewModeBadgeAllGood: {
     backgroundColor: `${colors.semantic.success}25`,
@@ -1225,7 +1352,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   viewModeBadgeTextAttention: {
-    color: colors.semantic.danger,
+    color: colors.accent.warning,
   },
   viewModeBadgeTextActive: {
     color: colors.accent.primary,

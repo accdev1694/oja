@@ -986,6 +986,7 @@ export default function ListDetailScreen() {
                       size={18}
                       color={colors.text.secondary}
                     />
+                    <Text style={styles.iconLabel}>Edit</Text>
                   </Pressable>
                   {/* Lock Budget Button */}
                   <Pressable
@@ -1001,6 +1002,9 @@ export default function ListDetailScreen() {
                       size={18}
                       color={budgetLocked ? colors.semantic.warning : colors.text.secondary}
                     />
+                    <Text style={[styles.iconLabel, budgetLocked && { color: colors.semantic.warning }]}>
+                      {budgetLocked ? "Unlock" : "Lock"}
+                    </Text>
                   </Pressable>
                   {/* Collapse Button */}
                   <Pressable
@@ -1098,7 +1102,7 @@ export default function ListDetailScreen() {
                   onPress={handleAddFromPantry}
                   style={styles.actionButton}
                 >
-                  From Stock
+                  Add Low Items
                 </GlassButton>
                 <GlassButton
                   variant="primary"
@@ -1107,7 +1111,7 @@ export default function ListDetailScreen() {
                   onPress={handleStartShopping}
                   style={styles.actionButton}
                 >
-                  Start Shopping
+                  Go Shopping
                 </GlassButton>
               </>
             )}
@@ -1213,6 +1217,7 @@ export default function ListDetailScreen() {
                             color={colors.accent.secondary}
                           />
                           <Text style={styles.suggestionsTitle}>Suggestions</Text>
+                          <Text style={styles.suggestionsSubtitle}>Based on your shopping history</Text>
                         </View>
                         <View style={styles.suggestionsHeaderRight}>
                           {showSuggestions && suggestions.length > 0 && (
@@ -2095,7 +2100,7 @@ const styles = StyleSheet.create({
   },
   lockButton: {
     width: 36,
-    height: 36,
+    height: 44,
     borderRadius: 18,
     backgroundColor: colors.glass.background,
     justifyContent: "center",
@@ -2460,13 +2465,19 @@ const styles = StyleSheet.create({
   },
   editBudgetButton: {
     width: 36,
-    height: 36,
+    height: 44,
     borderRadius: 18,
     backgroundColor: colors.glass.background,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
     borderColor: colors.glass.border,
+  },
+  iconLabel: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    marginTop: 2,
+    textAlign: "center",
   },
 
   // Modal Styles
@@ -2823,6 +2834,10 @@ const styles = StyleSheet.create({
   suggestionsTitle: {
     ...typography.labelLarge,
     color: colors.text.primary,
+  },
+  suggestionsSubtitle: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
   },
   suggestionsHeaderRight: {
     flexDirection: "row",
