@@ -116,11 +116,16 @@ export default function PantryScreen() {
   }, []);
 
   const slidingPillStyle = useAnimatedStyle(() => {
+    // Clamp so spring overshoot never exceeds the container bounds
+    const rawX = tabProgress.value * tabPillWidth.value;
+    const clampedX = Math.min(Math.max(rawX, 0), tabPillWidth.value);
+    // Clamp progress for color too so it stays within red↔teal range
+    const clampedProgress = Math.min(Math.max(tabProgress.value, 0), 1);
     return {
       width: tabPillWidth.value,
-      transform: [{ translateX: tabProgress.value * tabPillWidth.value }],
+      transform: [{ translateX: clampedX }],
       backgroundColor: interpolateColor(
-        tabProgress.value,
+        clampedProgress,
         [0, 1],
         [`${colors.semantic.danger}25`, `${colors.accent.primary}25`]
       ),
