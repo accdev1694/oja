@@ -13,7 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -21,6 +21,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  interpolateColor,
 } from "react-native-reanimated";
 
 import {
@@ -33,6 +34,7 @@ import {
   colors,
   typography,
   spacing,
+  borderRadius,
   animations,
 } from "@/components/ui/glass";
 import { NotificationBell, NotificationDropdown } from "@/components/partners";
@@ -54,6 +56,36 @@ export default function ListsScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [newListBudget, setNewListBudget] = useState("50");
+
+  // Sliding pill animation: 0 = active (left), 1 = history (right)
+  const tabProgress = useSharedValue(0);
+  const tabPillWidth = useSharedValue(0);
+
+  const onTabContainerLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
+    tabPillWidth.value = (e.nativeEvent.layout.width - 8) / 2;
+  }, []);
+
+  const slidingPillStyle = useAnimatedStyle(() => {
+    return {
+      width: tabPillWidth.value,
+      transform: [{ translateX: tabProgress.value * tabPillWidth.value }],
+      backgroundColor: interpolateColor(
+        tabProgress.value,
+        [0, 1],
+        [`${colors.accent.primary}25`, `${colors.accent.primary}25`]
+      ),
+    };
+  });
+
+  const handleTabSwitch = (mode: TabMode) => {
+    if (mode === tabMode) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTabMode(mode);
+    tabProgress.value = withSpring(mode === "history" ? 1 : 0, {
+      damping: 18,
+      stiffness: 180,
+    });
+  };
 
   function formatDateTime(timestamp: number) {
     const date = new Date(timestamp);
@@ -167,13 +199,11 @@ export default function ListsScreen() {
       />
 
       {/* Tab Toggle */}
-      <View style={styles.tabContainer}>
+      <View style={styles.tabContainer} onLayout={onTabContainerLayout}>
+        <Animated.View style={[styles.slidingPill, slidingPillStyle]} />
         <Pressable
-          style={[styles.tab, tabMode === "active" && styles.tabActive]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setTabMode("active");
-          }}
+          style={styles.tab}
+          onPress={() => handleTabSwitch("active")}
         >
           <MaterialCommunityIcons
             name="clipboard-list"
@@ -185,11 +215,8 @@ export default function ListsScreen() {
           </Text>
         </Pressable>
         <Pressable
-          style={[styles.tab, tabMode === "history" && styles.tabActive]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setTabMode("history");
-          }}
+          style={styles.tab}
+          onPress={() => handleTabSwitch("history")}
         >
           <MaterialCommunityIcons
             name="history"
@@ -970,10 +997,11 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
     backgroundColor: colors.glass.background,
-    borderRadius: 12,
+    borderRadius: borderRadius.lg,
     padding: 4,
     borderWidth: 1,
     borderColor: colors.glass.border,
+    overflow: "hidden",
   },
   tab: {
     flex: 1,
@@ -982,10 +1010,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.xs,
     paddingVertical: spacing.sm,
-    borderRadius: 10,
+    borderRadius: borderRadius.md,
   },
-  tabActive: {
-    backgroundColor: `${colors.accent.primary}20`,
+  slidingPill: {
+    position: "absolute",
+    top: 4,
+    bottom: 4,
+    left: 4,
+    borderRadius: borderRadius.md,
   },
   tabText: {
     ...typography.labelMedium,

@@ -2,11 +2,17 @@ import { View, Text, StyleSheet, ScrollView, Alert, Platform, Share, TextInput, 
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  interpolateColor,
+} from "react-native-reanimated";
 import {
   GlassScreen,
   GlassCard,
@@ -15,6 +21,7 @@ import {
   colors,
   typography,
   spacing,
+  borderRadius,
 } from "@/components/ui/glass";
 import { usePartnerRole } from "@/hooks/usePartnerRole";
 
@@ -32,6 +39,38 @@ export default function PartnersScreen() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [selectedRole, setSelectedRole] = useState<"viewer" | "editor" | "approver">("editor");
+
+  // Sliding pill animation for role selector: 0=viewer, 1=editor, 2=approver
+  const ROLES = ["viewer", "editor", "approver"] as const;
+  const roleProgress = useSharedValue(1); // default "editor" = index 1
+  const rolePillWidth = useSharedValue(0);
+
+  const onRoleContainerLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
+    rolePillWidth.value = (e.nativeEvent.layout.width - 8) / 3;
+  }, []);
+
+  const rolePillStyle = useAnimatedStyle(() => {
+    return {
+      width: rolePillWidth.value,
+      transform: [{ translateX: roleProgress.value * rolePillWidth.value }],
+      backgroundColor: interpolateColor(
+        roleProgress.value,
+        [0, 1, 2],
+        [`${colors.text.tertiary}25`, `${colors.accent.primary}25`, `${colors.semantic.warning}25`]
+      ),
+    };
+  });
+
+  const handleRoleSelect = (role: "viewer" | "editor" | "approver") => {
+    if (role === selectedRole) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedRole(role);
+    const index = ROLES.indexOf(role);
+    roleProgress.value = withSpring(index, {
+      damping: 18,
+      stiffness: 180,
+    });
+  };
 
   // Role change modal
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -169,23 +208,35 @@ export default function PartnersScreen() {
         {/* Role selector for invites */}
         <GlassCard style={styles.roleSelector}>
           <Text style={styles.sectionTitle}>Invite Role</Text>
-          <View style={styles.roleRow}>
-            {(["viewer", "editor", "approver"] as const).map((role) => (
-              <Pressable
-                key={role}
-                style={[styles.roleChip, selectedRole === role && styles.roleChipActive]}
-                onPress={() => setSelectedRole(role)}
-              >
-                <MaterialCommunityIcons
-                  name={roleIcons[role]}
-                  size={16}
-                  color={selectedRole === role ? colors.accent.primary : colors.text.tertiary}
-                />
-                <Text style={[styles.roleChipText, selectedRole === role && styles.roleChipTextActive]}>
-                  {role.charAt(0).toUpperCase() + role.slice(1)}
-                </Text>
-              </Pressable>
-            ))}
+          <View style={styles.roleRow} onLayout={onRoleContainerLayout}>
+            <Animated.View style={[styles.roleSlidingPill, rolePillStyle]} />
+            {ROLES.map((role) => {
+              const roleColor = role === "viewer" ? colors.text.tertiary
+                : role === "editor" ? colors.accent.primary
+                : colors.semantic.warning;
+              return (
+                <Pressable
+                  key={role}
+                  style={styles.roleChip}
+                  onPress={() => handleRoleSelect(role)}
+                >
+                  <MaterialCommunityIcons
+                    name={roleIcons[role]}
+                    size={16}
+                    color={selectedRole === role ? roleColor : colors.text.tertiary}
+                  />
+                  <Text style={[
+                    styles.roleChipText,
+                    selectedRole === role && {
+                      color: roleColor,
+                      fontWeight: "600" as const,
+                    },
+                  ]}>
+                    {role.charAt(0).toUpperCase() + role.slice(1)}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </GlassCard>
 
@@ -348,24 +399,33 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   roleSelector: { marginBottom: spacing.md },
   sectionTitle: { ...typography.labelMedium, color: colors.text.secondary, marginBottom: spacing.sm },
-  roleRow: { flexDirection: "row", gap: spacing.sm },
-  roleChip: {
+  roleRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 20,
     backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.lg,
+    padding: 4,
     borderWidth: 1,
     borderColor: colors.glass.border,
+    overflow: "hidden",
   },
-  roleChipActive: {
-    backgroundColor: `${colors.accent.primary}20`,
-    borderColor: colors.accent.primary,
+  roleSlidingPill: {
+    position: "absolute",
+    top: 4,
+    bottom: 4,
+    left: 4,
+    borderRadius: borderRadius.md,
+  },
+  roleChip: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
   },
   roleChipText: { ...typography.bodySmall, color: colors.text.tertiary },
-  roleChipTextActive: { color: colors.accent.primary, fontWeight: "600" },
   emptyState: { alignItems: "center", marginTop: 60, gap: spacing.sm },
   emptyTitle: { ...typography.headlineSmall, color: colors.text.primary },
   emptySubtitle: { ...typography.bodyMedium, color: colors.text.tertiary },

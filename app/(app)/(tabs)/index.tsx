@@ -105,6 +105,7 @@ export default function PantryScreen() {
 
   // View mode: "attention" shows only Low+Out items, "all" shows everything
   const [viewMode, setViewMode] = useState<PantryViewMode>("attention");
+  const hasInteracted = useRef(false);
 
   // Sliding pill animation: 0 = attention (left), 1 = all (right)
   const tabProgress = useSharedValue(0);
@@ -479,6 +480,7 @@ export default function PantryScreen() {
 
   const handleViewModeSwitch = (mode: PantryViewMode) => {
     if (mode === viewMode) return;
+    hasInteracted.current = true;
     impactAsync(ImpactFeedbackStyle.Light);
     setViewMode(mode);
     // Spring the pill — overshoot is clipped by container overflow: hidden
@@ -489,6 +491,10 @@ export default function PantryScreen() {
     // Reset filters when switching modes
     setCategoryFilter(null);
     setSearchQuery("");
+    // Collapse all categories in "all" mode so only headers render (fast)
+    if (mode === "all" && categories.length > 0) {
+      setCollapsedCategories(new Set(categories));
+    }
   };
 
   return (
@@ -649,7 +655,7 @@ export default function PantryScreen() {
                     onSwipeIncrease={() => handleSwipeIncrease(item)}
                     onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
                     onRemove={() => handleRemoveItem(item)}
-                    animationDelay={index * 50}
+                    animationDelay={hasInteracted.current ? 0 : index * 50}
                   />
                 ))}
               </View>
@@ -703,7 +709,7 @@ export default function PantryScreen() {
                           onSwipeIncrease={() => handleSwipeIncrease(item)}
                           onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
                           onRemove={() => handleRemoveItem(item)}
-                          animationDelay={index * 50}
+                          animationDelay={hasInteracted.current ? 0 : index * 50}
                         />
                       ))}
                     </View>
