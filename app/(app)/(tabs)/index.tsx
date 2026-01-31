@@ -164,11 +164,6 @@ export default function PantryScreen() {
     ).length;
   }, [items]);
 
-  // Pill color: green when all stocked, red when items need restocking
-  const attentionPillColor = attentionCount === 0
-    ? `${colors.semantic.success}25`
-    : `${colors.semantic.danger}25`;
-
   const slidingPillStyle = useAnimatedStyle(() => {
     return {
       width: tabPillWidth.value,
@@ -176,7 +171,7 @@ export default function PantryScreen() {
       backgroundColor: interpolateColor(
         tabProgress.value,
         [0, 1],
-        [attentionPillColor, `${colors.accent.primary}25`]
+        [`${colors.semantic.danger}25`, `${colors.accent.primary}25`]
       ),
     };
   });
@@ -549,11 +544,13 @@ export default function PantryScreen() {
             style={styles.viewModeTab}
             onPress={() => handleViewModeSwitch("attention")}
           >
-            <MaterialCommunityIcons
-              name="alert-circle-outline"
-              size={16}
-              color={viewMode !== "attention" ? colors.text.tertiary : attentionCount === 0 ? colors.semantic.success : colors.semantic.danger}
-            />
+            {attentionCount > 0 && (
+              <MaterialCommunityIcons
+                name="alert-circle-outline"
+                size={16}
+                color={viewMode === "attention" ? colors.semantic.danger : colors.text.tertiary}
+              />
+            )}
             <Text style={[
               styles.viewModeTabText,
               viewMode === "attention" && (attentionCount === 0 ? styles.viewModeTabTextAllGood : styles.viewModeTabTextAttention),
