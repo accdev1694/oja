@@ -49,7 +49,6 @@ import { RemoveButton } from "@/components/ui/RemoveButton";
 import {
   ApprovalBadge,
   ApprovalActions,
-  ContestModal,
   CommentThread,
   NotificationBell,
   NotificationDropdown,
@@ -114,8 +113,6 @@ type ListItem = {
   autoAdded?: boolean;
   priority?: "must-have" | "should-have" | "nice-to-have";
   approvalStatus?: "pending" | "approved" | "rejected" | "contested";
-  contestReason?: string;
-  contestNote?: string;
 };
 
 export default function ListDetailScreen() {
@@ -141,14 +138,8 @@ export default function ListDetailScreen() {
   // Partner mode
   const { isOwner, isPartner, canEdit, canApprove, loading: roleLoading } = usePartnerRole(id);
   const handleApproval = useMutation(api.partners.handleApproval);
-  const contestItem = useMutation(api.partners.contestItem);
-  const resolveContest = useMutation(api.partners.resolveContest);
   const commentCounts = useQuery(api.partners.getCommentCounts, items ? { listItemIds: items.map((i) => i._id) } : "skip");
 
-  // Contest modal state
-  const [showContestModal, setShowContestModal] = useState(false);
-  const [contestingItemId, setContestingItemId] = useState<Id<"listItems"> | null>(null);
-  const [contestingItemName, setContestingItemName] = useState("");
 
   // Notification state
   const [showNotifications, setShowNotifications] = useState(false);
@@ -802,32 +793,6 @@ export default function ListDetailScreen() {
     }
   }
 
-  function openContestModal(itemId: Id<"listItems">, itemName: string) {
-    setContestingItemId(itemId);
-    setContestingItemName(itemName);
-    setShowContestModal(true);
-  }
-
-  async function handleContestSubmit(reason: string, customText?: string) {
-    if (!contestingItemId) return;
-    await contestItem({
-      listItemId: contestingItemId,
-      reason,
-      customText,
-    });
-  }
-
-  async function handleResolveContest(itemId: Id<"listItems">, decision: "keep" | "remove") {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      await resolveContest({ listItemId: itemId, decision });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      console.error("Failed to resolve contest:", error);
-      Alert.alert("Error", "Failed to resolve contest");
-    }
-  }
-
   function openCommentThread(itemId: Id<"listItems">, itemName: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setCommentItemId(itemId);
@@ -1245,9 +1210,16 @@ export default function ListDetailScreen() {
                 const listCategories = [...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort();
                 const listCategoryCounts: Record<string, number> = {};
                 items.forEach((i) => { if (i.category) listCategoryCounts[i.category] = (listCategoryCounts[i.category] || 0) + 1; });
-                const displayItems = listCategoryFilter
+                const categoryFiltered = listCategoryFilter
                   ? items.filter((i) => i.category === listCategoryFilter)
                   : items;
+                // Sort pending items to top
+                const displayItems = [...categoryFiltered].sort((a, b) => {
+                  const aPending = a.approvalStatus === "pending" ? 0 : 1;
+                  const bPending = b.approvalStatus === "pending" ? 0 : 1;
+                  return aPending - bPending;
+                });
+                const pendingCount = categoryFiltered.filter((i) => i.approvalStatus === "pending").length;
                 return (
                   <>
                     <CategoryFilter
@@ -1256,6 +1228,18 @@ export default function ListDetailScreen() {
                       onSelect={setListCategoryFilter}
                       counts={listCategoryCounts}
                     />
+                    {pendingCount > 0 && (
+                      <View style={styles.pendingBanner}>
+                        <MaterialCommunityIcons
+                          name="clock-outline"
+                          size={16}
+                          color={colors.accent.warning}
+                        />
+                        <Text style={styles.pendingBannerText}>
+                          {pendingCount} {pendingCount === 1 ? "item needs" : "items need"} approval
+                        </Text>
+                      </View>
+                    )}
                     {displayItems.map((item) => (
                       <ShoppingListItem
                         key={item._id}
@@ -1269,8 +1253,6 @@ export default function ListDetailScreen() {
                         commentCount={commentCounts?.[item._id as string] ?? 0}
                         onApprove={() => handleApproveItem(item._id)}
                         onReject={() => handleRejectItem(item._id)}
-                        onContest={() => openContestModal(item._id, item.name)}
-                        onResolveContest={(decision) => handleResolveContest(item._id, decision)}
                         onOpenComments={isPartner || isOwner ? () => openCommentThread(item._id, item.name) : undefined}
                       />
                     ))}
@@ -1531,18 +1513,6 @@ export default function ListDetailScreen() {
         onClose={() => setShowNotifications(false)}
       />
 
-      {/* Contest Modal (Partner Mode) */}
-      <ContestModal
-        visible={showContestModal}
-        itemName={contestingItemName}
-        onContest={handleContestSubmit}
-        onClose={() => {
-          setShowContestModal(false);
-          setContestingItemId(null);
-          setContestingItemName("");
-        }}
-      />
-
       {/* Comment Thread (Partner Mode) */}
       <CommentThread
         visible={showCommentThread}
@@ -1719,8 +1689,6 @@ interface ShoppingListItemProps {
   commentCount?: number;
   onApprove?: () => void;
   onReject?: () => void;
-  onContest?: () => void;
-  onResolveContest?: (decision: "keep" | "remove") => void;
   onOpenComments?: () => void;
 }
 
@@ -1735,8 +1703,6 @@ function ShoppingListItem({
   commentCount,
   onApprove,
   onReject,
-  onContest,
-  onResolveContest,
   onOpenComments,
 }: ShoppingListItemProps) {
   const translateX = useSharedValue(0);
@@ -1825,7 +1791,7 @@ function ShoppingListItem({
           <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut}>
             <GlassCard
               variant="standard"
-              style={[styles.itemCard, item.isChecked && styles.itemCardChecked, item.approvalStatus === "contested" && styles.itemCardContested]}
+              style={[styles.itemCard, item.isChecked && styles.itemCardChecked, item.approvalStatus === "pending" && styles.itemCardPending]}
             >
               <View style={styles.itemRow}>
                 {/* Checkbox */}
@@ -1899,38 +1865,12 @@ function ShoppingListItem({
                     )}
                   </View>
 
-                  {/* Approval Actions for pending/contested items */}
-                  {item.approvalStatus === "pending" && canApprove && (
+                  {/* Approval Actions for pending items — owner or approver partner */}
+                  {item.approvalStatus === "pending" && (isOwner || canApprove) && (
                     <ApprovalActions
-                      isOwner={!!isOwner}
                       onApprove={onApprove ?? (() => {})}
                       onReject={onReject ?? (() => {})}
-                      onContest={onContest ?? (() => {})}
                     />
-                  )}
-
-                  {/* Contest resolution for owner */}
-                  {item.approvalStatus === "contested" && isOwner && onResolveContest && (
-                    <View style={styles.contestResolution}>
-                      <Text style={styles.contestReasonText}>
-                        Contested: {item.contestReason}
-                        {item.contestNote ? ` — ${item.contestNote}` : ""}
-                      </Text>
-                      <View style={styles.contestActions}>
-                        <Pressable
-                          style={styles.contestKeepButton}
-                          onPress={() => onResolveContest("keep")}
-                        >
-                          <Text style={styles.contestKeepText}>Keep</Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.contestRemoveButton}
-                          onPress={() => onResolveContest("remove")}
-                        >
-                          <Text style={styles.contestRemoveText}>Remove</Text>
-                        </Pressable>
-                      </View>
-                    </View>
                   )}
                 </View>
 
@@ -2002,7 +1942,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   bottomSpacer: {
-    height: spacing["2xl"],
+    height: 140,
   },
 
   // Budget Card
@@ -2197,6 +2137,23 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
 
+  // Pending approval banner
+  pendingBanner: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: spacing.xs,
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 10,
+    marginBottom: spacing.sm,
+  },
+  pendingBannerText: {
+    color: colors.accent.warning,
+    fontSize: typography.bodyMedium.fontSize,
+    fontWeight: "600" as const,
+  },
+
   // Swipe Container
   swipeContainer: {
     position: "relative",
@@ -2235,14 +2192,10 @@ const styles = StyleSheet.create({
   itemCardChecked: {
     opacity: 0.7,
   },
-  itemCardContested: {
-    borderColor: "#FF8C00",
-    borderWidth: 1.5,
-    shadowColor: "#FF8C00",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+  itemCardPending: {
+    opacity: 0.6,
+    borderColor: "rgba(245, 158, 11, 0.4)",
+    borderWidth: 1,
   },
   itemRow: {
     flexDirection: "row",
@@ -2823,56 +2776,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // Partner mode styles
-  contestResolution: {
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    backgroundColor: "rgba(255, 140, 0, 0.1)",
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: "rgba(255, 140, 0, 0.3)",
-  },
-  contestReasonText: {
-    ...typography.bodySmall,
-    color: "#FF8C00",
-    marginBottom: spacing.sm,
-  },
-  contestActions: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  contestKeepButton: {
-    flex: 1,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    backgroundColor: `${colors.accent.success}20`,
-    alignItems: "center",
-  },
-  contestKeepText: {
-    ...typography.labelSmall,
-    color: colors.accent.success,
-    fontWeight: "700",
-  },
-  contestRemoveButton: {
-    flex: 1,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    backgroundColor: `${colors.semantic.danger}20`,
-    alignItems: "center",
-  },
-  contestRemoveText: {
-    ...typography.labelSmall,
-    color: colors.semantic.danger,
-    fontWeight: "700",
-  },
   commentButton: {
-    position: "relative",
+    position: "relative" as const,
     width: 32,
     height: 32,
     borderRadius: 16,
     backgroundColor: colors.glass.background,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
   },
   commentCountBadge: {
     position: "absolute",

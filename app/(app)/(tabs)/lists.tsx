@@ -870,7 +870,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   bottomSpacer: {
-    height: 100, // Space for tab bar
+    height: 140,
   },
   listCard: {
     marginBottom: spacing.md,

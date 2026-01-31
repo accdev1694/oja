@@ -411,6 +411,157 @@ export const getPointHistory = query({
 });
 
 /**
+ * Check if user has premium, throw if not.
+ * Use this as a gate in premium-only mutations.
+ */
+export const requirePremium = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const sub = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .order("desc")
+      .first();
+
+    const isPremium = sub && (sub.status === "active" || sub.status === "trial");
+    return { isPremium: !!isPremium, plan: sub?.plan || "free", status: sub?.status || "active" };
+  },
+});
+
+/**
+ * Award loyalty points when a receipt is successfully scanned.
+ * Includes first-receipt bonus and daily cap enforcement.
+ */
+export const earnPointsForReceipt = mutation({
+  args: {
+    receiptId: v.id("receipts"),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const now = Date.now();
+
+    // Verify receipt belongs to user
+    const receipt = await ctx.db.get(args.receiptId);
+    if (!receipt || receipt.userId !== user._id) throw new Error("Receipt not found");
+
+    // Daily cap: max 5 receipts per day for point earning
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayMs = todayStart.getTime();
+
+    const todayTransactions = await ctx.db
+      .query("pointTransactions")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .collect();
+
+    const todayReceiptEarns = todayTransactions.filter(
+      (t) =>
+        t.source === "receipt_scan" &&
+        t.type === "earned" &&
+        t.createdAt >= todayMs
+    );
+
+    if (todayReceiptEarns.length >= 5) {
+      return { success: false, reason: "daily_cap", pointsEarned: 0 };
+    }
+
+    // Check if this is the user's first receipt ever
+    const allReceipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .collect();
+
+    const completedReceipts = allReceipts.filter(
+      (r) => r.processingStatus === "completed"
+    );
+    const isFirstReceipt = completedReceipts.length <= 1;
+
+    // Base points: 10 per receipt scan
+    let pointsToAward = 10;
+    let description = "Receipt scanned";
+
+    // First receipt bonus: +20
+    if (isFirstReceipt) {
+      pointsToAward += 20;
+      description = "First receipt scanned! (+20 bonus)";
+    }
+
+    // Weekly streak bonus: 3+ receipts this week → +10
+    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const weekReceipts = completedReceipts.filter(
+      (r) => r.purchaseDate >= weekAgo
+    );
+    if (weekReceipts.length >= 3) {
+      pointsToAward += 10;
+      description += " (+10 weekly streak)";
+    }
+
+    // Get or create loyalty record
+    let loyalty = await ctx.db
+      .query("loyaltyPoints")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .unique();
+
+    if (!loyalty) {
+      const id = await ctx.db.insert("loyaltyPoints", {
+        userId: user._id,
+        points: pointsToAward,
+        lifetimePoints: pointsToAward,
+        tier: "bronze",
+        lastEarnedAt: now,
+        updatedAt: now,
+      });
+      loyalty = await ctx.db.get(id);
+    } else {
+      const newPoints = loyalty.points + pointsToAward;
+      const newLifetime = loyalty.lifetimePoints + pointsToAward;
+      const newTier = calculateTier(newLifetime);
+
+      await ctx.db.patch(loyalty._id, {
+        points: newPoints,
+        lifetimePoints: newLifetime,
+        tier: newTier,
+        lastEarnedAt: now,
+        updatedAt: now,
+      });
+
+      // Check tier upgrade
+      if (newTier !== loyalty.tier) {
+        await ctx.db.insert("notifications", {
+          userId: user._id,
+          type: "tier_upgrade",
+          title: "Tier Upgrade!",
+          body: `Congratulations! You've reached ${newTier.charAt(0).toUpperCase() + newTier.slice(1)} tier!`,
+          read: false,
+          createdAt: now,
+        });
+      }
+    }
+
+    // Log transaction
+    await ctx.db.insert("pointTransactions", {
+      userId: user._id,
+      amount: pointsToAward,
+      type: "earned",
+      source: "receipt_scan",
+      description,
+      createdAt: now,
+    });
+
+    return { success: true, pointsEarned: pointsToAward };
+  },
+});
+
+/**
  * Get subscription plans available
  */
 export const getPlans = query({

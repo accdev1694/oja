@@ -621,7 +621,7 @@ const styles = StyleSheet.create({
 
   // Bottom spacing
   bottomSpacer: {
-    height: 120,
+    height: 140,
   },
 
   // Parsing Mode

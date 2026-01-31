@@ -257,29 +257,35 @@ export default function PartnersScreen() {
           </GlassButton>
         )}
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 140 }} />
       </ScrollView>
 
       {/* Invite Code Modal */}
       <Modal visible={showInviteModal} transparent animationType="fade" onRequestClose={() => setShowInviteModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowInviteModal(false)}>
           <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <MaterialCommunityIcons name="ticket-confirmation-outline" size={48} color={colors.accent.primary} />
             <Text style={styles.modalTitle}>Invite Code</Text>
             <Text style={styles.codeText}>{inviteCode}</Text>
             <Text style={styles.modalSubtitle}>Share this code with your partner</Text>
-            <View style={styles.modalActions}>
-              <View style={styles.modalActionRow}>
-                <GlassButton variant="primary" size="md" icon="content-copy" onPress={handleCopyCode} style={styles.modalActionButton}>
-                  Copy Code
-                </GlassButton>
-                <GlassButton variant="primary" size="md" icon="share-variant" onPress={handleShareCode} style={styles.modalActionButton}>
-                  Share Code
-                </GlassButton>
-              </View>
-              <GlassButton variant="secondary" size="md" onPress={() => setShowInviteModal(false)}>
-                Done
-              </GlassButton>
+            <View style={styles.inviteActions}>
+              <Pressable style={styles.inviteActionBtn} onPress={handleCopyCode}>
+                <View style={styles.inviteIconCircle}>
+                  <MaterialCommunityIcons name="content-copy" size={24} color={colors.text.primary} />
+                </View>
+                <Text style={styles.inviteActionLabel}>Copy</Text>
+              </Pressable>
+              <Pressable style={styles.inviteActionBtn} onPress={handleShareCode}>
+                <View style={styles.inviteIconCircle}>
+                  <MaterialCommunityIcons name="share-variant" size={24} color={colors.text.primary} />
+                </View>
+                <Text style={styles.inviteActionLabel}>Share</Text>
+              </Pressable>
+              <Pressable style={styles.inviteActionBtn} onPress={() => setShowInviteModal(false)}>
+                <View style={[styles.inviteIconCircle, styles.inviteDoneCircle]}>
+                  <MaterialCommunityIcons name="check-bold" size={28} color={colors.text.primary} />
+                </View>
+                <Text style={[styles.inviteActionLabel, styles.inviteDoneLabel]}>Done</Text>
+              </Pressable>
             </View>
           </Pressable>
         </Pressable>
@@ -405,9 +411,40 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   modalSubtitle: { ...typography.bodyMedium, color: colors.text.tertiary, textAlign: "center" },
-  modalActions: { width: "100%", gap: spacing.sm, marginTop: spacing.md },
-  modalActionRow: { flexDirection: "row", gap: spacing.sm },
-  modalActionButton: { flex: 1 },
+  inviteActions: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: spacing.xl,
+    marginTop: spacing.md,
+    width: "100%",
+  },
+  inviteActionBtn: {
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  inviteIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  inviteDoneCircle: {
+    backgroundColor: `${colors.accent.primary}30`,
+    borderColor: colors.accent.primary,
+  },
+  inviteActionLabel: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    fontWeight: "600",
+  },
+  inviteDoneLabel: {
+    color: colors.accent.primary,
+    fontWeight: "700",
+  },
   leaveButton: {
     marginTop: spacing.lg,
     marginHorizontal: spacing.lg,

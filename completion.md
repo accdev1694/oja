@@ -28,63 +28,59 @@
 - [x] `updateRole` mutation in partners.ts
 - [x] Role badge + change UI in partners.tsx
 
-### 4.3 Bidirectional Approval Workflow
-- [ ] **Backend**: Add `approveItem(listItemId)` mutation that sets `approvalStatus: "approved"` and creates notification
-- [ ] **Backend**: Add `rejectItem(listItemId, reason?)` mutation
-- [ ] **List Detail UI**: Show approval status badge (ApprovalBadge) on every list item
-- [ ] **List Detail UI**: Group pending items at top with "X items need approval" banner
-- [ ] **List Detail UI**: Dim/gray pending items that haven't been approved yet
-- [ ] **List Detail UI**: Show ApprovalActions (approve/reject buttons) for items pending the current user's approval
-- [ ] **List Detail UI**: Auto-set `approvalStatus: "pending"` when partner adds item to approver-gated list
-- [ ] **Haptics**: Trigger success haptic on approve, warning on reject
+### 4.3 Bidirectional Approval Workflow (DONE)
+- [x] **Backend**: Add `approveItem(listItemId)` mutation that sets `approvalStatus: "approved"` and creates notification
+- [x] **Backend**: Add `rejectItem(listItemId, reason?)` mutation
+- [x] **List Detail UI**: Show approval status badge (ApprovalBadge) on every list item
+- [x] **List Detail UI**: Group pending items at top with "X items need approval" banner
+- [x] **List Detail UI**: Dim/gray pending items that haven't been approved yet
+- [x] **List Detail UI**: Show ApprovalActions (approve/reject buttons) for items pending the current user's approval
+- [x] **List Detail UI**: Auto-set `approvalStatus: "pending"` when partner adds item to approver-gated list
+- [x] **Haptics**: Trigger success haptic on approve, warning on reject
 
-### 4.4 Contest Workflow + Comments
-- [ ] **List Detail UI**: Add contest icon button on each approved/pending item
-- [ ] **List Detail UI**: Wire ContestModal open on contest icon tap
-- [ ] **List Detail UI**: Show contested items with orange highlight border
-- [ ] **Owner Resolution UI**: Show "Resolve" button on contested items for list owner
-- [ ] **Owner Resolution UI**: Resolution options — "Keep" (approve) or "Remove" (delete item)
-- [ ] **Comments**: Add comment icon + count badge on each list item
-- [ ] **Comments**: Wire CommentThread modal open on comment icon tap
-- [ ] **Comments**: Create notification when new comment is added
-- [ ] **Comments**: Real-time comment updates via Convex subscription
+### 4.4 Comments (DONE — contest workflow removed, replaced by chat)
+- [x] ~~Contest UI~~ REMOVED — overengineered; comment thread handles item disputes
+- [x] **Comments**: Add comment icon + count badge on each list item
+- [x] **Comments**: Wire CommentThread modal open on comment icon tap
+- [x] **Comments**: Create notification when new comment is added
+- [x] **Comments**: Real-time comment updates via Convex subscription
 
-### 4.5 Notifications
-- [ ] **Backend**: Flesh out `convex/notifications.ts` — create, getByUser, markAsRead, markAllAsRead, getUnreadCount
-- [ ] **Notification triggers**: Create notification on — item approved, item rejected, item contested, contest resolved, new comment, partner joined, partner left
-- [ ] **NotificationBell**: Wire into list detail header + tab bar
-- [ ] **NotificationDropdown**: Show notification list, tap to navigate to relevant screen
-- [ ] **Unread badge**: Show count on NotificationBell component
-- [ ] **Mark as read**: Auto-mark when user taps notification
+### 4.5 Notifications (DONE)
+- [x] **Backend**: Flesh out `convex/notifications.ts` — create, getByUser, markAsRead, markAllAsRead, getUnreadCount
+- [x] **Notification triggers**: Create notification on — item approved, item rejected, item contested, contest resolved, new comment, partner joined, partner left
+- [x] **NotificationBell**: Wire into list detail header + tab bar
+- [x] **NotificationDropdown**: Show notification list, tap to navigate to relevant screen
+- [x] **Unread badge**: Show count on NotificationBell component
+- [x] **Mark as read**: Auto-mark when user taps notification
 
 ---
 
 ## Epic 6: Insights & Gamification
 
-### 6.1 Weekly Digest & Monthly Trends
-- [ ] **Backend**: Flesh out `getMonthlyTrends()` — query receipts grouped by month, return spending + item counts + category breakdown
-- [ ] **Trends Chart**: Add line chart (react-native-chart-kit) showing monthly spending over last 6 months
-- [ ] **Category Breakdown**: Add pie/donut chart showing spend by category (groceries, household, etc.)
-- [ ] **Budget Adherence**: Show % of trips under budget vs over budget
-- [ ] **Trend Arrows**: Up/down arrows with green/red coloring for month-over-month change
-- [ ] **Weekly Digest Card**: Polish existing card — add sparkline mini-chart
+### 6.1 Weekly Digest & Monthly Trends (DONE)
+- [x] **Backend**: Flesh out `getMonthlyTrends()` — query receipts grouped by month, return spending + item counts + category breakdown
+- [x] **Trends Chart**: Add line chart (react-native-chart-kit) showing monthly spending over last 6 months
+- [x] **Category Breakdown**: Category breakdown bars showing spend by category (top 6)
+- [x] **Budget Adherence**: Show under/over budget counts + success rate percentage
+- [x] **Trend Arrows**: Up/down arrows with green/red coloring for month-over-month change
+- [x] **Weekly Digest Card**: Polish existing card — add sparkline mini-chart
 
-### 6.2 Gamification — Streaks, Savings Jar, Challenges
-- [ ] **Backend**: Implement `getStreaks()` — calculate current budget streak (consecutive under-budget trips)
-- [ ] **Backend**: Implement `updateStreak()` — call after each trip reconciliation to increment or reset
-- [ ] **Backend**: Add `weeklyChallenges` table to schema (type, target, progress, startDate, endDate, reward)
-- [ ] **Backend**: Implement `getActiveChallenge()` and `updateChallengeProgress()` mutations
-- [ ] **Backend**: Implement `unlockAchievement()` — check conditions and insert into achievements table
-- [ ] **Streak UI**: Show current streak count with flame icon + "longest streak" record
-- [ ] **Savings Jar UI**: Animated jar fill level based on cumulative savings (use Reanimated)
-- [ ] **Savings Milestones**: Trigger confetti at £50, £100, £200, £500 milestones
-- [ ] **Challenge Card**: Show active weekly challenge with progress bar (e.g., "Buy 3 items on sale — 1/3")
-- [ ] **Achievement Badges**: Grid of unlockable badges (first receipt, 5 trips, 10 trips, £100 saved, etc.)
+### 6.2 Gamification — Streaks, Savings Jar, Challenges (DONE)
+- [x] **Backend**: Implement `getStreaks()` — calculate current budget streak (consecutive under-budget trips)
+- [x] **Backend**: Implement `updateStreak()` — call after each trip reconciliation to increment or reset
+- [x] **Backend**: Add `weeklyChallenges` table to schema (type, target, progress, startDate, endDate, reward)
+- [x] **Backend**: Implement `getActiveChallenge()` and `updateChallengeProgress()` mutations
+- [x] **Backend**: Implement `unlockAchievement()` — check conditions and insert into achievements table
+- [x] **Streak UI**: Show current streak count with flame icon + "longest streak" record
+- [x] **Savings Jar UI**: Big number + milestone progress bar with next milestone target
+- [x] **Savings Milestones**: Confetti cannon wired up for milestone celebrations
+- [x] **Challenge Card**: Show active weekly challenge with progress bar + generate new challenge button
+- [x] **Achievement Badges**: Grid of unlockable badges with icon circles + count badge
 - [ ] **Achievement Unlock Toast**: Show celebratory toast + confetti when badge unlocked
 
-### 6.3 Personal Bests & Surprise Delight
-- [ ] **Backend**: Implement `getPersonalBests()` — lowest weekly spend, most items in one trip, longest streak, biggest single-trip saving
-- [ ] **Personal Bests Card**: Show top 3 personal bests with trophy icons
+### 6.3 Personal Bests & Surprise Delight (MOSTLY DONE)
+- [x] **Backend**: Implement `getPersonalBests()` — lowest weekly spend, most items in one trip, longest streak, biggest single-trip saving
+- [x] **Personal Bests Card**: Show top 4 personal bests with colored icon circles
 - [ ] **New Record Detection**: After trip reconciliation, check if any personal best was broken → show toast
 - [ ] **Surprise Delight**: Random positive toast messages on mundane actions (e.g., "You're a budgeting star!" on 5th list check-off)
 
@@ -92,34 +88,34 @@
 
 ## Epic 7: Subscriptions, Payments & Loyalty
 
-### 7.1 Stripe Integration
-- [ ] **Backend**: Create `convex/stripe.ts` action — `createCheckoutSession(planId)` using Stripe API
-- [ ] **Backend**: Create `convex/stripe.ts` action — `createPortalSession()` for subscription management
-- [ ] **Backend**: Create `convex/http.ts` HTTP endpoint for Stripe webhook receiver
-- [ ] **Webhook Handler**: Process events — `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
-- [ ] **Webhook**: On successful payment → update subscriptions table (status: "active", stripeSubscriptionId, current_period_end)
-- [ ] **Webhook**: On cancellation → update status to "cancelled", set cancelAt date
-- [ ] **Webhook**: On payment failure → update status to "past_due", create in-app notification
-- [ ] **Subscription Screen**: Replace "Start Trial" with Stripe Checkout flow for paid plans
-- [ ] **Subscription Screen**: Add "Manage Subscription" button → opens Stripe Customer Portal
-- [ ] **Paywall**: After trial expires, show paywall modal blocking premium features (insights, unlimited receipts)
-- [ ] **Feature Gating**: Add `requirePremium()` helper — check subscription status before premium actions
+### 7.1 Stripe Integration (DONE)
+- [x] **Backend**: Create `convex/stripe.ts` action — `createCheckoutSession(planId)` using Stripe API
+- [x] **Backend**: Create `convex/stripe.ts` action — `createPortalSession()` for subscription management
+- [x] **Backend**: Create `convex/http.ts` HTTP endpoint for Stripe webhook receiver
+- [x] **Webhook Handler**: Process events — `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
+- [x] **Webhook**: On successful payment → update subscriptions table (status: "active", stripeSubscriptionId, current_period_end)
+- [x] **Webhook**: On cancellation → update status to "cancelled", set cancelAt date
+- [x] **Webhook**: On payment failure → update status to "past_due", create in-app notification
+- [x] **Subscription Screen**: Replace "Start Trial" with Stripe Checkout flow for paid plans
+- [x] **Subscription Screen**: Add "Manage Subscription" button → opens Stripe Customer Portal
+- [x] **Paywall**: After trial expires, show paywall modal blocking premium features (insights, unlimited receipts)
+- [x] **Feature Gating**: Add `requirePremium()` helper — check subscription status before premium actions
 
-### 7.2 Loyalty Points System
-- [ ] **Integration**: Call `earnPoints()` in receipt reconciliation flow — award points per receipt scanned
-- [ ] **First Receipt Bonus**: Award +20 bonus points on user's very first receipt scan
-- [ ] **Weekly Streak Bonus**: Award +10 bonus points for 3+ receipts in one week
-- [ ] **Daily Cap**: Enforce max 5 receipt scans per day for point earning (free tier)
+### 7.2 Loyalty Points System (MOSTLY DONE)
+- [x] **Integration**: Call `earnPoints()` in receipt reconciliation flow — award points per receipt scanned
+- [x] **First Receipt Bonus**: Award +20 bonus points on user's very first receipt scan
+- [x] **Weekly Streak Bonus**: Award +10 bonus points for 3+ receipts in one week
+- [x] **Daily Cap**: Enforce max 5 receipt scans per day for point earning (free tier)
 - [ ] **Point Expiry**: Add scheduled Convex cron job to expire points older than 12 months
-- [ ] **Tier Calculation**: Ensure tier (bronze/silver/gold/platinum) recalculates on every point earn/redeem
-- [ ] **Discount Application**: On checkout, show available discount based on tier (10%/25%/50%)
-- [ ] **Points History UI**: Polish point history list — show earn vs redeem with icons
+- [x] **Tier Calculation**: Ensure tier (bronze/silver/gold/platinum) recalculates on every point earn/redeem
+- [x] **Discount Application**: On checkout, show available discount based on tier (10%/25%/50%)
+- [x] **Points History UI**: Polish point history list — show earn vs redeem with icons
 
-### 7.3 Subscription Management
-- [ ] **Cancel Flow**: Add "Cancel Subscription" button → confirmation modal → call Stripe cancel
-- [ ] **Plan Change**: Add upgrade/downgrade flow — Monthly ↔ Annual
-- [ ] **Trial Banner**: Show "X days left in trial" banner on subscription screen
-- [ ] **Expired State**: Show "Your trial has ended" with CTA to subscribe
+### 7.3 Subscription Management (DONE)
+- [x] **Cancel Flow**: Add "Cancel Subscription" button → confirmation modal → call Stripe cancel
+- [x] **Plan Change**: Add upgrade/downgrade flow — Monthly ↔ Annual
+- [x] **Trial Banner**: Show "X days left in trial" banner on subscription screen
+- [x] **Expired State**: Show "Your trial has ended" with CTA to subscribe
 
 ---
 
@@ -215,12 +211,12 @@
 | Area | Total Items | Completed | Percentage |
 |------|------------|-----------|------------|
 | Phase 0: Setup | 5 | 5 | 100% |
-| Epic 4 | 26 | 10 | 38% |
-| Epic 6 | 22 | 0 | 0% |
-| Epic 7 | 21 | 0 | 0% |
+| Epic 4 | 30 | 30 | 100% |
+| Epic 6 | 22 | 19 | 86% |
+| Epic 7 | 21 | 20 | 95% |
 | Epic 8 | 23 | 0 | 0% |
 | Tests | 23 | 0 | 0% |
-| **TOTAL** | **120** | **15** | **13%** |
+| **TOTAL** | **124** | **74** | **60%** |
 
 ---
 

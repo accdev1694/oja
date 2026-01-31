@@ -122,7 +122,7 @@ export default function NotificationsScreen() {
           </Pressable>
         ))}
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 140 }} />
       </ScrollView>
     </GlassScreen>
   );

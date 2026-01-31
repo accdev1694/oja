@@ -335,6 +335,24 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_type", ["userId", "type"]),
 
+  // Weekly challenges
+  weeklyChallenges: defineTable({
+    userId: v.id("users"),
+    type: v.string(), // e.g. "buy_sale_items", "under_budget_trips", "scan_receipts"
+    title: v.string(),
+    description: v.string(),
+    icon: v.string(),
+    target: v.number(),
+    progress: v.number(),
+    reward: v.number(), // bonus points
+    startDate: v.string(), // ISO date
+    endDate: v.string(), // ISO date
+    completedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_active", ["userId", "endDate"]),
+
   // === Epic 7: Subscriptions & Loyalty ===
 
   // User subscriptions
@@ -388,4 +406,27 @@ export default defineSchema({
   })
     .index("by_admin", ["adminUserId"])
     .index("by_action", ["action"]),
+
+  // Feature flags
+  featureFlags: defineTable({
+    key: v.string(),
+    value: v.boolean(),
+    description: v.optional(v.string()),
+    updatedBy: v.optional(v.id("users")),
+    updatedAt: v.number(),
+  })
+    .index("by_key", ["key"]),
+
+  // In-app announcements
+  announcements: defineTable({
+    title: v.string(),
+    body: v.string(),
+    type: v.union(v.literal("info"), v.literal("warning"), v.literal("promo")),
+    active: v.boolean(),
+    startsAt: v.optional(v.number()),
+    endsAt: v.optional(v.number()),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_active", ["active"]),
 });

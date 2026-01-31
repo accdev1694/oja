@@ -46,6 +46,9 @@ export interface TabConfig {
   color?: string;
 }
 
+/** Approximate tab bar height (icon + label + padding). Use for bottom spacers. */
+export const TAB_BAR_HEIGHT = 80;
+
 export const TAB_CONFIG: Record<string, TabConfig> = {
   index: {
     name: "index",

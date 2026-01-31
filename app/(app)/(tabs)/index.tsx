@@ -500,7 +500,7 @@ export default function PantryScreen() {
         {/* Content */}
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
         >
           {Object.entries(groupedItems).map(([category, categoryItems]) => {

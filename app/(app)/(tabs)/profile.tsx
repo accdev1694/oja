@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xs,
   },
   bottomSpacer: {
-    height: 120, // Extra space for tab bar
+    height: 140,
   },
 
   // Section

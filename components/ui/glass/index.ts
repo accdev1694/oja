@@ -97,6 +97,7 @@ export {
   GlassTabBar,
   GlassTabIcon,
   TAB_CONFIG,
+  TAB_BAR_HEIGHT,
   type TabConfig,
 } from "./GlassTabBar";
 
