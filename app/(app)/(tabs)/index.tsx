@@ -32,7 +32,6 @@ import Animated, {
   withTiming,
   withDelay,
   withSequence,
-  withClamp,
   interpolateColor,
 } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -482,14 +481,11 @@ export default function PantryScreen() {
     if (mode === viewMode) return;
     impactAsync(ImpactFeedbackStyle.Light);
     setViewMode(mode);
-    // Spring the pill — withClamp keeps it within bounds while spring flows naturally
-    tabProgress.value = withClamp(
-      { min: 0, max: 1 },
-      withSpring(mode === "all" ? 1 : 0, {
-        damping: 18,
-        stiffness: 180,
-      })
-    );
+    // Spring the pill — overshoot is clipped by container overflow: hidden
+    tabProgress.value = withSpring(mode === "all" ? 1 : 0, {
+      damping: 18,
+      stiffness: 180,
+    });
     // Reset filters when switching modes
     setCategoryFilter(null);
     setSearchQuery("");
@@ -1150,6 +1146,7 @@ const styles = StyleSheet.create({
     padding: 4,
     borderWidth: 1,
     borderColor: colors.glass.border,
+    overflow: "hidden",
   },
   viewModeTab: {
     flex: 1,
