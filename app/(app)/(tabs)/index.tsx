@@ -115,18 +115,6 @@ export default function PantryScreen() {
     tabPillWidth.value = (e.nativeEvent.layout.width - 8) / 2;
   }, []);
 
-  const slidingPillStyle = useAnimatedStyle(() => {
-    return {
-      width: tabPillWidth.value,
-      transform: [{ translateX: tabProgress.value * tabPillWidth.value }],
-      backgroundColor: interpolateColor(
-        tabProgress.value,
-        [0, 1],
-        [`${colors.semantic.danger}25`, `${colors.accent.primary}25`]
-      ),
-    };
-  });
-
   // UI State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -175,6 +163,23 @@ export default function PantryScreen() {
       (item) => item.stockLevel === "low" || item.stockLevel === "out"
     ).length;
   }, [items]);
+
+  // Pill color: green when all stocked, red when items need restocking
+  const attentionPillColor = attentionCount === 0
+    ? `${colors.semantic.success}25`
+    : `${colors.semantic.danger}25`;
+
+  const slidingPillStyle = useAnimatedStyle(() => {
+    return {
+      width: tabPillWidth.value,
+      transform: [{ translateX: tabProgress.value * tabPillWidth.value }],
+      backgroundColor: interpolateColor(
+        tabProgress.value,
+        [0, 1],
+        [attentionPillColor, `${colors.accent.primary}25`]
+      ),
+    };
+  });
 
   // Filter items based on view mode, search, stock level, and category
   const filteredItems = useMemo(() => {
@@ -547,9 +552,12 @@ export default function PantryScreen() {
             <MaterialCommunityIcons
               name="alert-circle-outline"
               size={16}
-              color={viewMode === "attention" ? colors.semantic.danger : colors.text.tertiary}
+              color={viewMode !== "attention" ? colors.text.tertiary : attentionCount === 0 ? colors.semantic.success : colors.semantic.danger}
             />
-            <Text style={[styles.viewModeTabText, viewMode === "attention" && styles.viewModeTabTextAttention]}>
+            <Text style={[
+              styles.viewModeTabText,
+              viewMode === "attention" && (attentionCount === 0 ? styles.viewModeTabTextAllGood : styles.viewModeTabTextAttention),
+            ]}>
               Needs Restocking
             </Text>
             {attentionCount > 0 ? (
@@ -1181,6 +1189,10 @@ const styles = StyleSheet.create({
   },
   viewModeTabTextAttention: {
     color: colors.semantic.danger,
+    fontWeight: "600",
+  },
+  viewModeTabTextAllGood: {
+    color: colors.semantic.success,
     fontWeight: "600",
   },
   viewModeTabTextActive: {
