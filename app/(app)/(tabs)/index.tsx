@@ -32,6 +32,7 @@ import Animated, {
   withTiming,
   withDelay,
   withSequence,
+  interpolateColor,
 } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -104,6 +105,27 @@ export default function PantryScreen() {
 
   // View mode: "attention" shows only Low+Out items, "all" shows everything
   const [viewMode, setViewMode] = useState<PantryViewMode>("attention");
+
+  // Sliding pill animation: 0 = attention (left), 1 = all (right)
+  const tabProgress = useSharedValue(0);
+  const tabPillWidth = useSharedValue(0);
+
+  const onTabContainerLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
+    // Container inner width minus padding (4px each side)
+    tabPillWidth.value = (e.nativeEvent.layout.width - 8) / 2;
+  }, []);
+
+  const slidingPillStyle = useAnimatedStyle(() => {
+    return {
+      width: tabPillWidth.value,
+      transform: [{ translateX: tabProgress.value * tabPillWidth.value }],
+      backgroundColor: interpolateColor(
+        tabProgress.value,
+        [0, 1],
+        [`${colors.semantic.danger}25`, `${colors.accent.primary}25`]
+      ),
+    };
+  });
 
   // UI State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -459,6 +481,11 @@ export default function PantryScreen() {
     if (mode === viewMode) return;
     impactAsync(ImpactFeedbackStyle.Light);
     setViewMode(mode);
+    // Spring the pill to the new position — slight overshoot for organic feel
+    tabProgress.value = withSpring(mode === "all" ? 1 : 0, {
+      damping: 18,
+      stiffness: 180,
+    });
     // Reset filters when switching modes
     setCategoryFilter(null);
     setSearchQuery("");
@@ -508,30 +535,33 @@ export default function PantryScreen() {
           }
         />
 
-        {/* View Mode Tabs */}
-        <View style={styles.viewModeTabs}>
+        {/* View Mode Tabs — sliding pill animates between red↔green */}
+        <View style={styles.viewModeTabs} onLayout={onTabContainerLayout}>
+          {/* Sliding pill indicator */}
+          <Animated.View style={[styles.slidingPill, slidingPillStyle]} />
+
           <Pressable
-            style={[styles.viewModeTab, viewMode === "attention" && styles.viewModeTabActive]}
+            style={styles.viewModeTab}
             onPress={() => handleViewModeSwitch("attention")}
           >
             <MaterialCommunityIcons
               name="alert-circle-outline"
               size={16}
-              color={viewMode === "attention" ? colors.accent.primary : colors.text.tertiary}
+              color={viewMode === "attention" ? colors.semantic.danger : colors.text.tertiary}
             />
-            <Text style={[styles.viewModeTabText, viewMode === "attention" && styles.viewModeTabTextActive]}>
+            <Text style={[styles.viewModeTabText, viewMode === "attention" && styles.viewModeTabTextAttention]}>
               Needs Attention
             </Text>
             {attentionCount > 0 && (
-              <View style={[styles.viewModeBadge, viewMode === "attention" && styles.viewModeBadgeActive]}>
-                <Text style={[styles.viewModeBadgeText, viewMode === "attention" && styles.viewModeBadgeTextActive]}>
+              <View style={[styles.viewModeBadge, viewMode === "attention" && styles.viewModeBadgeAttention]}>
+                <Text style={[styles.viewModeBadgeText, viewMode === "attention" && styles.viewModeBadgeTextAttention]}>
                   {attentionCount}
                 </Text>
               </View>
             )}
           </Pressable>
           <Pressable
-            style={[styles.viewModeTab, viewMode === "all" && styles.viewModeTabActive]}
+            style={styles.viewModeTab}
             onPress={() => handleViewModeSwitch("all")}
           >
             <MaterialCommunityIcons
@@ -1127,13 +1157,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
   },
-  viewModeTabActive: {
-    backgroundColor: `${colors.accent.primary}20`,
+  slidingPill: {
+    position: "absolute",
+    top: 4,
+    bottom: 4,
+    left: 4,
+    borderRadius: borderRadius.md,
+    // width, translateX, backgroundColor driven by animated style
   },
   viewModeTabText: {
     ...typography.labelMedium,
     color: colors.text.tertiary,
     fontSize: 13,
+  },
+  viewModeTabTextAttention: {
+    color: colors.semantic.danger,
+    fontWeight: "600",
   },
   viewModeTabTextActive: {
     color: colors.accent.primary,
@@ -1147,6 +1186,9 @@ const styles = StyleSheet.create({
     minWidth: 22,
     alignItems: "center",
   },
+  viewModeBadgeAttention: {
+    backgroundColor: `${colors.semantic.danger}30`,
+  },
   viewModeBadgeActive: {
     backgroundColor: `${colors.accent.primary}30`,
   },
@@ -1154,6 +1196,9 @@ const styles = StyleSheet.create({
     ...typography.labelSmall,
     color: colors.text.tertiary,
     fontSize: 11,
+  },
+  viewModeBadgeTextAttention: {
+    color: colors.semantic.danger,
   },
   viewModeBadgeTextActive: {
     color: colors.accent.primary,
