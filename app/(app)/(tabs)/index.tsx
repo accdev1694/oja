@@ -168,7 +168,7 @@ export default function PantryScreen() {
     return { categories: sorted, categoryCounts: countMap };
   }, [items]);
 
-  // Count items needing attention (Low + Out) for badge
+  // Count items needing restocking (Low + Out) for badge
   const attentionCount = useMemo(() => {
     if (!items) return 0;
     return items.filter(
@@ -550,13 +550,21 @@ export default function PantryScreen() {
               color={viewMode === "attention" ? colors.semantic.danger : colors.text.tertiary}
             />
             <Text style={[styles.viewModeTabText, viewMode === "attention" && styles.viewModeTabTextAttention]}>
-              Needs Attention
+              Needs Restocking
             </Text>
-            {attentionCount > 0 && (
+            {attentionCount > 0 ? (
               <View style={[styles.viewModeBadge, viewMode === "attention" && styles.viewModeBadgeAttention]}>
                 <Text style={[styles.viewModeBadgeText, viewMode === "attention" && styles.viewModeBadgeTextAttention]}>
                   {attentionCount}
                 </Text>
+              </View>
+            ) : (
+              <View style={[styles.viewModeBadge, styles.viewModeBadgeAllGood]}>
+                <MaterialCommunityIcons
+                  name="check"
+                  size={12}
+                  color={colors.semantic.success}
+                />
               </View>
             )}
           </Pressable>
@@ -1189,6 +1197,9 @@ const styles = StyleSheet.create({
   },
   viewModeBadgeAttention: {
     backgroundColor: `${colors.semantic.danger}30`,
+  },
+  viewModeBadgeAllGood: {
+    backgroundColor: `${colors.semantic.success}25`,
   },
   viewModeBadgeActive: {
     backgroundColor: `${colors.accent.primary}30`,
