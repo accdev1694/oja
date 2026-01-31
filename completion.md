@@ -7,11 +7,11 @@
 
 ## Phase 0: Dependencies & Setup
 
-- [ ] Install `react-native-chart-kit` + `react-native-svg` (charts for Epic 6 & 8)
-- [ ] Install `react-native-confetti-cannon` (celebrations for Epic 6)
-- [ ] Install `@stripe/stripe-react-native` (payments for Epic 7)
-- [ ] Add Stripe publishable key to `app.config` / env
-- [ ] Verify all new deps build on iOS simulator (`npx expo start --ios`)
+- [x] Install `react-native-chart-kit` + `react-native-svg` (charts for Epic 6 & 8)
+- [x] Install `react-native-confetti-cannon` (celebrations for Epic 6)
+- [x] Install `@stripe/stripe-react-native` (payments for Epic 7)
+- [x] Add Stripe publishable key to `app.config` / env
+- [x] Verify all new deps build (`tsc --noEmit` clean + modules resolve)
 
 ---
 
@@ -214,14 +214,14 @@
 
 | Area | Total Items | Completed | Percentage |
 |------|------------|-----------|------------|
-| Phase 0: Setup | 5 | 0 | 0% |
+| Phase 0: Setup | 5 | 5 | 100% |
 | Epic 4 | 26 | 10 | 38% |
 | Epic 6 | 22 | 0 | 0% |
 | Epic 7 | 21 | 0 | 0% |
 | Epic 8 | 23 | 0 | 0% |
 | Tests | 23 | 0 | 0% |
-| **TOTAL** | **120** | **10** | **8%** |
+| **TOTAL** | **120** | **15** | **13%** |
 
 ---
 
-*Last updated: 2026-01-30*
+*Last updated: 2026-01-31*

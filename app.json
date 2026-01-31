@@ -49,6 +49,13 @@
         {
           "cameraPermission": "Allow Oja to access your camera to scan receipts"
         }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.oja.app",
+          "enableGooglePay": true
+        }
       ]
     ],
     "experiments": {
