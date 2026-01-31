@@ -153,24 +153,14 @@ export default function ListsScreen() {
           <View style={styles.headerRight}>
             <NotificationBell onPress={() => setShowNotifications(true)} />
             {tabMode === "active" && (
-              <>
-                <GlassButton
-                  variant="secondary"
-                  size="sm"
-                  icon="account-plus"
-                  onPress={() => router.push("/join-list")}
-                >
-                  Join
-                </GlassButton>
-                <GlassButton
-                  variant="primary"
-                  size="sm"
-                  icon="plus"
-                  onPress={handleOpenCreateModal}
-                >
-                  New List
-                </GlassButton>
-              </>
+              <GlassButton
+                variant="primary"
+                size="sm"
+                icon="plus"
+                onPress={handleOpenCreateModal}
+              >
+                New List
+              </GlassButton>
             )}
           </View>
         }
@@ -284,6 +274,30 @@ export default function ListsScreen() {
               )}
             </>
           )}
+
+          {/* Join a shared list — inline card */}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/join-list");
+            }}
+          >
+            <GlassCard variant="bordered" style={styles.joinCard}>
+              <View style={styles.joinCardContent}>
+                <MaterialCommunityIcons
+                  name="account-group-outline"
+                  size={22}
+                  color={colors.text.tertiary}
+                />
+                <Text style={styles.joinCardText}>Join a shared list</Text>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color={colors.text.tertiary}
+                />
+              </View>
+            </GlassCard>
+          </Pressable>
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
@@ -871,6 +885,20 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 140,
+  },
+  joinCard: {
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  joinCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  joinCardText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    flex: 1,
   },
   listCard: {
     marginBottom: spacing.md,

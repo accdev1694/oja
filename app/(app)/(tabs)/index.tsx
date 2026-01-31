@@ -63,6 +63,8 @@ import { RemoveButton } from "@/components/ui/RemoveButton";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
+type PantryViewMode = "attention" | "all";
+
 const STOCK_CATEGORIES = [
   "Dairy", "Bakery", "Produce", "Meat", "Pantry Staples", "Spices & Seasonings",
   "Condiments", "Beverages", "Snacks", "Frozen", "Canned Goods", "Grains & Pasta",
@@ -99,6 +101,9 @@ export default function PantryScreen() {
       }
     }
   }, [items?.length]);
+
+  // View mode: "attention" shows only Low+Out items, "all" shows everything
+  const [viewMode, setViewMode] = useState<PantryViewMode>("attention");
 
   // UI State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -141,19 +146,33 @@ export default function PantryScreen() {
     return { categories: sorted, categoryCounts: countMap };
   }, [items]);
 
-  // Filter items based on search, stock level, and category
+  // Count items needing attention (Low + Out) for badge
+  const attentionCount = useMemo(() => {
+    if (!items) return 0;
+    return items.filter(
+      (item) => item.stockLevel === "low" || item.stockLevel === "out"
+    ).length;
+  }, [items]);
+
+  // Filter items based on view mode, search, stock level, and category
   const filteredItems = useMemo(() => {
     if (!items) return [];
 
     return items.filter((item) => {
-      if (!stockFilters.has(item.stockLevel as StockLevel)) return false;
+      // In attention mode, only show low + out items
+      if (viewMode === "attention") {
+        if (item.stockLevel !== "low" && item.stockLevel !== "out") return false;
+      } else {
+        // In "all" mode, respect manual stock filters
+        if (!stockFilters.has(item.stockLevel as StockLevel)) return false;
+      }
       if (categoryFilter && item.category !== categoryFilter) return false;
       if (searchQuery.trim()) {
         return item.name.toLowerCase().includes(searchQuery.toLowerCase());
       }
       return true;
     });
-  }, [items, searchQuery, stockFilters, categoryFilter]);
+  }, [items, searchQuery, stockFilters, categoryFilter, viewMode]);
 
   const toggleStockFilter = (level: StockLevel) => {
     impactAsync(ImpactFeedbackStyle.Light);
@@ -436,13 +455,26 @@ export default function PantryScreen() {
 
   const activeFilterCount = 5 - stockFilters.size;
 
+  const handleViewModeSwitch = (mode: PantryViewMode) => {
+    if (mode === viewMode) return;
+    impactAsync(ImpactFeedbackStyle.Light);
+    setViewMode(mode);
+    // Reset filters when switching modes
+    setCategoryFilter(null);
+    setSearchQuery("");
+  };
+
   return (
     <GlassScreen edges={["top"]}>
       <GestureHandlerRootView style={styles.container}>
         {/* Header */}
         <SimpleHeader
           title="My Stock"
-          subtitle={`What you have at home · ${filteredItems.length} of ${items.length} items${searchQuery ? ` matching "${searchQuery}"` : ""}`}
+          subtitle={
+            viewMode === "attention"
+              ? `${attentionCount} item${attentionCount !== 1 ? "s" : ""} need restocking`
+              : `What you have at home · ${filteredItems.length} of ${items.length} items${searchQuery ? ` matching "${searchQuery}"` : ""}`
+          }
           rightElement={
             <View style={styles.headerButtons}>
               <Pressable
@@ -455,47 +487,93 @@ export default function PantryScreen() {
                 <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
                 <Text style={styles.addButtonText}>Add</Text>
               </Pressable>
-              <Pressable
-                style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
-                onPress={() => setFilterVisible(true)}
-              >
-                <MaterialCommunityIcons
-                  name="tune-variant"
-                  size={22}
-                  color={activeFilterCount > 0 ? colors.accent.primary : colors.text.secondary}
-                />
-                {activeFilterCount > 0 && (
-                  <View style={styles.filterBadge}>
-                    <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-                  </View>
-                )}
-              </Pressable>
+              {viewMode === "all" && (
+                <Pressable
+                  style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
+                  onPress={() => setFilterVisible(true)}
+                >
+                  <MaterialCommunityIcons
+                    name="tune-variant"
+                    size={22}
+                    color={activeFilterCount > 0 ? colors.accent.primary : colors.text.secondary}
+                  />
+                  {activeFilterCount > 0 && (
+                    <View style={styles.filterBadge}>
+                      <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                    </View>
+                  )}
+                </Pressable>
+              )}
             </View>
           }
         />
 
-        {/* Search */}
-        <View style={styles.searchContainer}>
-          <GlassSearchInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onClear={() => setSearchQuery("")}
-            placeholder="Search stock..."
-          />
+        {/* View Mode Tabs */}
+        <View style={styles.viewModeTabs}>
+          <Pressable
+            style={[styles.viewModeTab, viewMode === "attention" && styles.viewModeTabActive]}
+            onPress={() => handleViewModeSwitch("attention")}
+          >
+            <MaterialCommunityIcons
+              name="alert-circle-outline"
+              size={16}
+              color={viewMode === "attention" ? colors.accent.primary : colors.text.tertiary}
+            />
+            <Text style={[styles.viewModeTabText, viewMode === "attention" && styles.viewModeTabTextActive]}>
+              Needs Attention
+            </Text>
+            {attentionCount > 0 && (
+              <View style={[styles.viewModeBadge, viewMode === "attention" && styles.viewModeBadgeActive]}>
+                <Text style={[styles.viewModeBadgeText, viewMode === "attention" && styles.viewModeBadgeTextActive]}>
+                  {attentionCount}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+          <Pressable
+            style={[styles.viewModeTab, viewMode === "all" && styles.viewModeTabActive]}
+            onPress={() => handleViewModeSwitch("all")}
+          >
+            <MaterialCommunityIcons
+              name="view-list-outline"
+              size={16}
+              color={viewMode === "all" ? colors.accent.primary : colors.text.tertiary}
+            />
+            <Text style={[styles.viewModeTabText, viewMode === "all" && styles.viewModeTabTextActive]}>
+              All Items
+            </Text>
+            <View style={[styles.viewModeBadge, viewMode === "all" && styles.viewModeBadgeActive]}>
+              <Text style={[styles.viewModeBadgeText, viewMode === "all" && styles.viewModeBadgeTextActive]}>
+                {items.length}
+              </Text>
+            </View>
+          </Pressable>
         </View>
 
-        {/* Category filter chips */}
-        <CategoryFilter
-          categories={categories}
-          selected={categoryFilter}
-          onSelect={setCategoryFilter}
-          counts={categoryCounts}
-        />
+        {/* Search & filters — only in "all" mode */}
+        {viewMode === "all" && (
+          <>
+            <View style={styles.searchContainer}>
+              <GlassSearchInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onClear={() => setSearchQuery("")}
+                placeholder="Search stock..."
+              />
+            </View>
 
-        {/* Gesture hints */}
-        <View style={styles.hintRow}>
-          <TypewriterHint text="Swipe left/right to adjust  ·  Hold to set level or remove" />
-        </View>
+            <CategoryFilter
+              categories={categories}
+              selected={categoryFilter}
+              onSelect={setCategoryFilter}
+              counts={categoryCounts}
+            />
+
+            <View style={styles.hintRow}>
+              <TypewriterHint text="Swipe left/right to adjust  ·  Hold to set level or remove" />
+            </View>
+          </>
+        )}
 
         {/* Content */}
         <ScrollView
@@ -503,61 +581,94 @@ export default function PantryScreen() {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
         >
-          {Object.entries(groupedItems).map(([category, categoryItems]) => {
-            const isCollapsed = collapsedCategories.has(category);
-
-            const toggleCategory = () => {
-              impactAsync(ImpactFeedbackStyle.Light);
-              setCollapsedCategories((prev) => {
-                const newSet = new Set(prev);
-                if (newSet.has(category)) {
-                  newSet.delete(category);
-                } else {
-                  newSet.add(category);
-                }
-                return newSet;
-              });
-            };
-
-            return (
-              <View key={category} style={styles.categorySection}>
-                <TouchableOpacity
-                  style={styles.categoryHeader}
-                  onPress={toggleCategory}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.categoryTitleRow}>
-                    <Text style={styles.categoryTitle}>{category}</Text>
-                    <View style={styles.categoryCountBadge}>
-                      <Text style={styles.categoryCount}>{categoryItems.length}</Text>
-                    </View>
-                  </View>
-                  <MaterialCommunityIcons
-                    name={isCollapsed ? "chevron-right" : "chevron-down"}
-                    size={24}
-                    color={colors.text.tertiary}
-                  />
-                </TouchableOpacity>
-
-                {!isCollapsed && (
-                  <View style={styles.itemList}>
-                    {categoryItems.map((item, index) => (
-                      <PantryItemRow
-                        key={item._id}
-                        item={item}
-                        onLongPress={() => handleLongPress(item)}
-                        onSwipeDecrease={() => handleSwipeDecrease(item)}
-                        onSwipeIncrease={() => handleSwipeIncrease(item)}
-                        onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
-                        onRemove={() => handleRemoveItem(item)}
-                        animationDelay={index * 50}
-                      />
-                    ))}
-                  </View>
-                )}
+          {viewMode === "attention" ? (
+            // Attention mode: flat list, no category grouping
+            filteredItems.length === 0 ? (
+              <View style={styles.attentionEmptyContainer}>
+                <MaterialCommunityIcons
+                  name="check-circle-outline"
+                  size={64}
+                  color={colors.accent.success}
+                />
+                <Text style={styles.attentionEmptyTitle}>All stocked up!</Text>
+                <Text style={styles.attentionEmptySubtitle}>
+                  Nothing needs restocking right now. Tap "All Items" to browse your full stock.
+                </Text>
               </View>
-            );
-          })}
+            ) : (
+              <View style={styles.itemList}>
+                {filteredItems.map((item, index) => (
+                  <PantryItemRow
+                    key={item._id}
+                    item={item}
+                    onLongPress={() => handleLongPress(item)}
+                    onSwipeDecrease={() => handleSwipeDecrease(item)}
+                    onSwipeIncrease={() => handleSwipeIncrease(item)}
+                    onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
+                    onRemove={() => handleRemoveItem(item)}
+                    animationDelay={index * 50}
+                  />
+                ))}
+              </View>
+            )
+          ) : (
+            // All Items mode: grouped by category with collapsible sections
+            Object.entries(groupedItems).map(([category, categoryItems]) => {
+              const isCollapsed = collapsedCategories.has(category);
+
+              const toggleCategory = () => {
+                impactAsync(ImpactFeedbackStyle.Light);
+                setCollapsedCategories((prev) => {
+                  const newSet = new Set(prev);
+                  if (newSet.has(category)) {
+                    newSet.delete(category);
+                  } else {
+                    newSet.add(category);
+                  }
+                  return newSet;
+                });
+              };
+
+              return (
+                <View key={category} style={styles.categorySection}>
+                  <TouchableOpacity
+                    style={styles.categoryHeader}
+                    onPress={toggleCategory}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.categoryTitleRow}>
+                      <Text style={styles.categoryTitle}>{category}</Text>
+                      <View style={styles.categoryCountBadge}>
+                        <Text style={styles.categoryCount}>{categoryItems.length}</Text>
+                      </View>
+                    </View>
+                    <MaterialCommunityIcons
+                      name={isCollapsed ? "chevron-right" : "chevron-down"}
+                      size={24}
+                      color={colors.text.tertiary}
+                    />
+                  </TouchableOpacity>
+
+                  {!isCollapsed && (
+                    <View style={styles.itemList}>
+                      {categoryItems.map((item, index) => (
+                        <PantryItemRow
+                          key={item._id}
+                          item={item}
+                          onLongPress={() => handleLongPress(item)}
+                          onSwipeDecrease={() => handleSwipeDecrease(item)}
+                          onSwipeIncrease={() => handleSwipeIncrease(item)}
+                          onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
+                          onRemove={() => handleRemoveItem(item)}
+                          animationDelay={index * 50}
+                        />
+                      ))}
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )}
         </ScrollView>
 
         {/* Stock Level Picker */}
@@ -994,6 +1105,78 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: spacing["2xl"],
+  },
+  // View mode tabs
+  viewModeTabs: {
+    flexDirection: "row",
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.lg,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  viewModeTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  viewModeTabActive: {
+    backgroundColor: `${colors.accent.primary}20`,
+  },
+  viewModeTabText: {
+    ...typography.labelMedium,
+    color: colors.text.tertiary,
+    fontSize: 13,
+  },
+  viewModeTabTextActive: {
+    color: colors.accent.primary,
+    fontWeight: "600",
+  },
+  viewModeBadge: {
+    backgroundColor: colors.glass.backgroundHover,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: borderRadius.full,
+    minWidth: 22,
+    alignItems: "center",
+  },
+  viewModeBadgeActive: {
+    backgroundColor: `${colors.accent.primary}30`,
+  },
+  viewModeBadgeText: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    fontSize: 11,
+  },
+  viewModeBadgeTextActive: {
+    color: colors.accent.primary,
+  },
+  // Attention mode empty state
+  attentionEmptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: spacing["5xl"],
+    paddingHorizontal: spacing.xl,
+    gap: spacing.md,
+  },
+  attentionEmptyTitle: {
+    ...typography.headlineMedium,
+    color: colors.accent.success,
+    textAlign: "center",
+  },
+  attentionEmptySubtitle: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
   },
   searchContainer: {
     paddingHorizontal: spacing.xl,

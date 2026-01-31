@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  LayoutAnimation,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useAction } from "convex/react";
@@ -186,6 +187,10 @@ export default function ListDetailScreen() {
 
   // Category filter for items list
   const [listCategoryFilter, setListCategoryFilter] = useState<string | null>(null);
+
+  // Progressive disclosure states (Criterion 1: Simplicity)
+  const [budgetExpanded, setBudgetExpanded] = useState(false);
+  const [addFormVisible, setAddFormVisible] = useState(false);
 
   // Smart suggestions state (Story 3.10)
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -761,6 +766,19 @@ export default function ListDetailScreen() {
     setDismissedSuggestions((prev) => [...prev, suggestionName]);
   }
 
+  // Progressive disclosure handlers
+  function handleToggleBudgetExpand() {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setBudgetExpanded((prev) => !prev);
+  }
+
+  function handleToggleAddForm() {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAddFormVisible((prev) => !prev);
+  }
+
   function handleRefreshSuggestions() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     loadSuggestions();
@@ -890,8 +908,48 @@ export default function ListDetailScreen() {
             </Pressable>
           )}
 
-          {/* Budget Card - Budget Tracker when budget is set */}
-          {budget > 0 && (
+          {/* Budget Card - Collapsed summary bar (tap to expand) */}
+          {budget > 0 && !budgetExpanded && (
+            <Pressable onPress={handleToggleBudgetExpand}>
+              <GlassCard
+                variant="bordered"
+                accentColor={
+                  budgetState === "exceeded" ? colors.semantic.danger :
+                  budgetState === "impulse" ? colors.semantic.warning :
+                  colors.accent.primary
+                }
+                style={styles.budgetCollapsed}
+              >
+                <View style={styles.budgetCollapsedRow}>
+                  <View style={styles.budgetCollapsedProgress}>
+                    <BudgetProgressBar
+                      spent={currentTotal}
+                      budget={budget}
+                      size="sm"
+                    />
+                  </View>
+                  <Text style={[
+                    styles.budgetCollapsedAmount,
+                    budgetState === "exceeded" && { color: colors.semantic.danger },
+                    budgetState === "impulse" && { color: colors.semantic.warning },
+                    budgetState === "caution" && { color: colors.semantic.warning },
+                  ]}>
+                    {budgetState === "exceeded"
+                      ? `£${Math.abs(remainingWithImpulse).toFixed(2)} over`
+                      : `£${remainingBudget.toFixed(2)} left`}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name="chevron-down"
+                    size={20}
+                    color={colors.text.tertiary}
+                  />
+                </View>
+              </GlassCard>
+            </Pressable>
+          )}
+
+          {/* Budget Card - Expanded full tracker */}
+          {budget > 0 && budgetExpanded && (
             <GlassCard
               variant="bordered"
               accentColor={
@@ -942,6 +1000,17 @@ export default function ListDetailScreen() {
                       name={budgetLocked ? "lock-open-variant-outline" : "lock-outline"}
                       size={18}
                       color={budgetLocked ? colors.semantic.warning : colors.text.secondary}
+                    />
+                  </Pressable>
+                  {/* Collapse Button */}
+                  <Pressable
+                    onPress={handleToggleBudgetExpand}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialCommunityIcons
+                      name="chevron-up"
+                      size={20}
+                      color={colors.text.tertiary}
                     />
                   </Pressable>
                 </View>
@@ -1055,144 +1124,176 @@ export default function ListDetailScreen() {
             )}
           </View>
 
-          {/* Add Item Form — hidden for viewers */}
+          {/* Add Item — collapsed button or expanded form with inline suggestions */}
           {canEdit !== false && (
-          <GlassCard variant="standard" style={styles.addItemCard}>
-            <Text style={styles.addItemTitle}>Add Item</Text>
-            <View style={styles.addItemForm}>
-              <GlassInput
-                placeholder="Item name"
-                value={newItemName}
-                onChangeText={setNewItemName}
-                editable={!isAddingItem}
-                style={styles.nameInput}
-              />
-              <View style={styles.smallInputRow}>
-                <GlassInput
-                  placeholder="Qty"
-                  value={newItemQuantity}
-                  onChangeText={setNewItemQuantity}
-                  keyboardType="numeric"
-                  editable={!isAddingItem}
-                  style={styles.smallInput}
-                />
-                <GlassInput
-                  placeholder="£ Est."
-                  value={newItemPrice}
-                  onChangeText={setNewItemPrice}
-                  keyboardType="decimal-pad"
-                  editable={!isAddingItem}
-                  style={styles.smallInput}
-                />
+            <>
+              {/* Collapsed: "+ Add Item" button */}
+              {!addFormVisible && items.length > 0 && (
                 <GlassButton
-                  variant="primary"
+                  variant="secondary"
                   size="md"
                   icon="plus"
-                  onPress={handleAddItem}
-                  loading={isAddingItem}
-                  disabled={isAddingItem}
-                  style={styles.addButton}
-                />
-              </View>
-
-              {/* Price estimate hint */}
-              {priceEstimate && priceEstimate.cheapest && (
-                <Text style={styles.priceHint}>
-                  Based on £{priceEstimate.cheapest.price.toFixed(2)} at {priceEstimate.cheapest.storeName}
-                </Text>
+                  onPress={handleToggleAddForm}
+                  style={styles.addItemCollapsedButton}
+                >
+                  Add Item
+                </GlassButton>
               )}
-            </View>
-          </GlassCard>
-          )}
 
-          {/* Smart Suggestions (Story 3.10) */}
-          {items.length > 0 && (
-            <GlassCard variant="standard" style={styles.suggestionsCard}>
-              <View style={styles.suggestionsHeader}>
-                <View style={styles.suggestionsHeaderLeft}>
-                  <MaterialCommunityIcons
-                    name="lightbulb-on-outline"
-                    size={20}
-                    color={colors.accent.secondary}
-                  />
-                  <Text style={styles.suggestionsTitle}>Suggestions</Text>
-                </View>
-                <View style={styles.suggestionsHeaderRight}>
-                  {showSuggestions && suggestions.length > 0 && (
-                    <Pressable
-                      style={styles.refreshButton}
-                      onPress={handleRefreshSuggestions}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      disabled={isLoadingSuggestions}
-                    >
-                      <MaterialCommunityIcons
-                        name="refresh"
-                        size={18}
-                        color={isLoadingSuggestions ? colors.text.tertiary : colors.text.secondary}
-                      />
-                    </Pressable>
-                  )}
-                  <Pressable
-                    style={styles.toggleSuggestionsButton}
-                    onPress={handleToggleSuggestions}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <MaterialCommunityIcons
-                      name={showSuggestions ? "chevron-up" : "chevron-down"}
-                      size={20}
-                      color={colors.text.secondary}
+              {/* Expanded: Full add form with inline suggestions */}
+              {(addFormVisible || items.length === 0) && (
+                <GlassCard variant="standard" style={styles.addItemCard}>
+                  <View style={styles.addItemHeader}>
+                    <Text style={styles.addItemTitle}>Add Item</Text>
+                    {items.length > 0 && (
+                      <Pressable
+                        onPress={handleToggleAddForm}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <MaterialCommunityIcons
+                          name="close"
+                          size={20}
+                          color={colors.text.tertiary}
+                        />
+                      </Pressable>
+                    )}
+                  </View>
+                  <View style={styles.addItemForm}>
+                    <GlassInput
+                      placeholder="Item name"
+                      value={newItemName}
+                      onChangeText={setNewItemName}
+                      editable={!isAddingItem}
+                      style={styles.nameInput}
                     />
-                  </Pressable>
-                </View>
-              </View>
+                    <View style={styles.smallInputRow}>
+                      <GlassInput
+                        placeholder="Qty"
+                        value={newItemQuantity}
+                        onChangeText={setNewItemQuantity}
+                        keyboardType="numeric"
+                        editable={!isAddingItem}
+                        style={styles.smallInput}
+                      />
+                      <GlassInput
+                        placeholder="£ Est."
+                        value={newItemPrice}
+                        onChangeText={setNewItemPrice}
+                        keyboardType="decimal-pad"
+                        editable={!isAddingItem}
+                        style={styles.smallInput}
+                      />
+                      <GlassButton
+                        variant="primary"
+                        size="md"
+                        icon="plus"
+                        onPress={handleAddItem}
+                        loading={isAddingItem}
+                        disabled={isAddingItem}
+                        style={styles.addButton}
+                      />
+                    </View>
 
-              {showSuggestions && (
-                <View style={styles.suggestionsContent}>
-                  {isLoadingSuggestions ? (
-                    <View style={styles.suggestionsLoading}>
-                      <ActivityIndicator size="small" color={colors.accent.secondary} />
-                      <Text style={styles.suggestionsLoadingText}>Finding suggestions...</Text>
-                    </View>
-                  ) : suggestions.length > 0 ? (
-                    <View style={styles.suggestionsList}>
-                      {suggestions.map((suggestion, index) => (
-                        <View key={`${suggestion}-${index}`} style={styles.suggestionChip}>
-                          <Text style={styles.suggestionText}>{suggestion}</Text>
-                          <View style={styles.suggestionActions}>
-                            <Pressable
-                              style={styles.suggestionAddButton}
-                              onPress={() => handleAddSuggestion(suggestion)}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
-                              <MaterialCommunityIcons
-                                name="plus"
-                                size={16}
-                                color={colors.semantic.success}
-                              />
-                            </Pressable>
-                            <Pressable
-                              style={styles.suggestionDismissButton}
-                              onPress={() => handleDismissSuggestion(suggestion)}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
-                              <MaterialCommunityIcons
-                                name="close"
-                                size={14}
-                                color={colors.text.tertiary}
-                              />
-                            </Pressable>
-                          </View>
+                    {/* Price estimate hint */}
+                    {priceEstimate && priceEstimate.cheapest && (
+                      <Text style={styles.priceHint}>
+                        Based on £{priceEstimate.cheapest.price.toFixed(2)} at {priceEstimate.cheapest.storeName}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Inline Suggestions (moved from standalone card) */}
+                  {items.length > 0 && (
+                    <View style={styles.inlineSuggestionsContainer}>
+                      <View style={styles.suggestionsHeader}>
+                        <View style={styles.suggestionsHeaderLeft}>
+                          <MaterialCommunityIcons
+                            name="lightbulb-on-outline"
+                            size={16}
+                            color={colors.accent.secondary}
+                          />
+                          <Text style={styles.suggestionsTitle}>Suggestions</Text>
                         </View>
-                      ))}
+                        <View style={styles.suggestionsHeaderRight}>
+                          {showSuggestions && suggestions.length > 0 && (
+                            <Pressable
+                              style={styles.refreshButton}
+                              onPress={handleRefreshSuggestions}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              disabled={isLoadingSuggestions}
+                            >
+                              <MaterialCommunityIcons
+                                name="refresh"
+                                size={16}
+                                color={isLoadingSuggestions ? colors.text.tertiary : colors.text.secondary}
+                              />
+                            </Pressable>
+                          )}
+                          <Pressable
+                            style={styles.toggleSuggestionsButton}
+                            onPress={handleToggleSuggestions}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <MaterialCommunityIcons
+                              name={showSuggestions ? "chevron-up" : "chevron-down"}
+                              size={18}
+                              color={colors.text.secondary}
+                            />
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      {showSuggestions && (
+                        <View style={styles.suggestionsContent}>
+                          {isLoadingSuggestions ? (
+                            <View style={styles.suggestionsLoading}>
+                              <ActivityIndicator size="small" color={colors.accent.secondary} />
+                              <Text style={styles.suggestionsLoadingText}>Finding suggestions...</Text>
+                            </View>
+                          ) : suggestions.length > 0 ? (
+                            <View style={styles.suggestionsList}>
+                              {suggestions.map((suggestion, index) => (
+                                <View key={`${suggestion}-${index}`} style={styles.suggestionChip}>
+                                  <Text style={styles.suggestionText}>{suggestion}</Text>
+                                  <View style={styles.suggestionActions}>
+                                    <Pressable
+                                      style={styles.suggestionAddButton}
+                                      onPress={() => handleAddSuggestion(suggestion)}
+                                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                    >
+                                      <MaterialCommunityIcons
+                                        name="plus"
+                                        size={16}
+                                        color={colors.semantic.success}
+                                      />
+                                    </Pressable>
+                                    <Pressable
+                                      style={styles.suggestionDismissButton}
+                                      onPress={() => handleDismissSuggestion(suggestion)}
+                                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                    >
+                                      <MaterialCommunityIcons
+                                        name="close"
+                                        size={14}
+                                        color={colors.text.tertiary}
+                                      />
+                                    </Pressable>
+                                  </View>
+                                </View>
+                              ))}
+                            </View>
+                          ) : (
+                            <Text style={styles.noSuggestionsText}>
+                              No suggestions available
+                            </Text>
+                          )}
+                        </View>
+                      )}
                     </View>
-                  ) : (
-                    <Text style={styles.noSuggestionsText}>
-                      No suggestions available
-                    </Text>
                   )}
-                </View>
+                </GlassCard>
               )}
-            </GlassCard>
+            </>
           )}
 
           {/* Items List */}
@@ -2083,14 +2184,42 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  // Budget Collapsed Bar
+  budgetCollapsed: {
+    marginBottom: spacing.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  budgetCollapsedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  budgetCollapsedProgress: {
+    flex: 1,
+  },
+  budgetCollapsedAmount: {
+    ...typography.labelMedium,
+    color: colors.semantic.success,
+    fontWeight: "600",
+  },
+
   // Add Item Card
+  addItemCollapsedButton: {
+    marginBottom: spacing.lg,
+  },
   addItemCard: {
     marginBottom: spacing.lg,
+  },
+  addItemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
   },
   addItemTitle: {
     ...typography.labelLarge,
     color: colors.text.primary,
-    marginBottom: spacing.sm,
   },
   addItemForm: {
     gap: spacing.sm,
@@ -2672,6 +2801,12 @@ const styles = StyleSheet.create({
   },
 
   // Smart Suggestions Styles (Story 3.10)
+  inlineSuggestionsContainer: {
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.glass.border,
+  },
   suggestionsCard: {
     marginBottom: spacing.lg,
   },
