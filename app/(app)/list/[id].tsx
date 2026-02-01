@@ -26,7 +26,6 @@ import Animated, {
   withSpring,
   withTiming,
   runOnJS,
-  interpolateColor,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
@@ -37,7 +36,7 @@ import {
   GlassHeader,
   GlassInput,
   GlassCircularCheckbox,
-  BudgetProgressBar,
+  CircularBudgetDial,
   colors,
   typography,
   spacing,
@@ -133,10 +132,8 @@ export default function ListDetailScreen() {
   const startShopping = useMutation(api.shoppingLists.startShopping);
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
 
-  const toggleBudgetLock = useMutation(api.shoppingLists.toggleBudgetLock);
   const updateList = useMutation(api.shoppingLists.update);
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
-  const impulseUsage = useQuery(api.listItems.getImpulseUsage, { listId: id });
   const generateSuggestions = useAction(api.ai.generateListSuggestions);
 
   // Partner mode
@@ -164,6 +161,13 @@ export default function ListDetailScreen() {
     newItemName.trim().length >= 2 ? { itemName: newItemName.trim() } : "skip"
   );
 
+  // Item variants for the typed item name
+  const itemVariants = useQuery(
+    api.itemVariants.getWithPrices,
+    newItemName.trim().length >= 2 ? { baseItem: newItemName.trim() } : "skip"
+  );
+
+
   // Edit budget modal state
   const [showEditBudgetModal, setShowEditBudgetModal] = useState(false);
   const [editBudgetValue, setEditBudgetValue] = useState("");
@@ -189,7 +193,6 @@ export default function ListDetailScreen() {
   const [listCategoryFilter, setListCategoryFilter] = useState<string | null>(null);
 
   // Progressive disclosure states (Criterion 1: Simplicity)
-  const [budgetExpanded, setBudgetExpanded] = useState(false);
   const [addFormVisible, setAddFormVisible] = useState(false);
 
   // Smart suggestions state (Story 3.10)
@@ -292,61 +295,8 @@ export default function ListDetailScreen() {
   // Budget status
   const budget = list.budget || 0;
   const currentTotal = list.status === "shopping" ? actualTotal : estimatedTotal;
-  const budgetLocked = list.budgetLocked || false;
-
-  // Impulse Fund: 10% buffer
-  const impulseFund = budget > 0 ? budget * 0.1 : 0;
-  const totalLimit = budget + impulseFund; // Total spending limit with impulse fund
   const remainingBudget = budget - currentTotal;
-  const remainingWithImpulse = totalLimit - currentTotal;
-
-  // Budget state for color coding
-  type BudgetState = "healthy" | "caution" | "impulse" | "exceeded";
-  const getBudgetState = (): BudgetState => {
-    if (currentTotal > totalLimit) return "exceeded";
-    if (currentTotal > budget) return "impulse"; // Using impulse fund
-    if (currentTotal > budget * 0.8) return "caution";
-    return "healthy";
-  };
-  const budgetState = getBudgetState();
-
-  // Check if adding an item would exceed the budget (with impulse fund)
-  function wouldExceedBudget(itemPrice: number, quantity: number): boolean {
-    if (!budget || !budgetLocked) return false;
-    const itemTotal = itemPrice * quantity;
-    // When locked, allow spending up to budget + impulse fund
-    return (currentTotal + itemTotal) > totalLimit;
-  }
-
-  // Show budget exceeded modal
-  function showBudgetExceededModal(itemName: string, itemTotal: number, onUnlock: () => void) {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    Alert.alert(
-      "Budget + Impulse Fund Exceeded",
-      `Adding "${itemName}" (£${itemTotal.toFixed(2)}) would exceed your total limit.\n\nBudget: £${budget.toFixed(2)}\nImpulse Fund (10%): £${impulseFund.toFixed(2)}\nTotal Limit: £${totalLimit.toFixed(2)}\n\nCurrent total: £${currentTotal.toFixed(2)}\nRemaining: £${remainingWithImpulse.toFixed(2)}\n\nRemove items or unlock budget to continue.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Unlock Budget",
-          onPress: async () => {
-            await handleToggleBudgetLock();
-            onUnlock();
-          },
-        },
-      ]
-    );
-  }
-
-  // Toggle budget lock
-  async function handleToggleBudgetLock() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      await toggleBudgetLock({ id });
-    } catch (error) {
-      console.error("Failed to toggle budget lock:", error);
-      Alert.alert("Error", "Failed to update budget lock");
-    }
-  }
+  const isOverBudget = budget > 0 && currentTotal > budget;
 
   // Edit budget handlers
   function handleOpenEditBudget() {
@@ -476,18 +426,6 @@ export default function ListDetailScreen() {
     const itemName = newItemName.trim();
     const quantity = parseInt(newItemQuantity) || 1;
     const price = newItemPrice ? parseFloat(newItemPrice) : 0;
-    const itemTotal = price * quantity;
-
-    // Check budget lock
-    if (budgetLocked && budget > 0 && price > 0 && wouldExceedBudget(price, quantity)) {
-      showBudgetExceededModal(itemName, itemTotal, async () => {
-        // After unlocking, retry adding the item
-        setIsAddingItem(true);
-        await addItemToList(itemName, quantity, price || undefined);
-        setIsAddingItem(false);
-      });
-      return;
-    }
 
     await addItemToList(itemName, quantity, price || undefined);
   }
@@ -606,14 +544,14 @@ export default function ListDetailScreen() {
     setMidShopItemQuantity(1);
   }
 
-  async function handleMidShopAdd(source: "budget" | "impulse" | "next_trip") {
+  async function handleMidShopAdd(source: "add" | "next_trip") {
     if (!midShopItemName) return;
 
     setIsAddingMidShop(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const result = await addItemMidShop({
+      await addItemMidShop({
         listId: id,
         name: midShopItemName,
         estimatedPrice: midShopItemPrice,
@@ -623,39 +561,19 @@ export default function ListDetailScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // Show appropriate confirmation
-      if (source === "budget") {
-        Alert.alert("Added to Budget", `"${midShopItemName}" added to your list`);
-      } else if (source === "impulse") {
-        Alert.alert("Added from Impulse Fund", `"${midShopItemName}" added using impulse fund`);
-      } else if (source === "next_trip") {
+      if (source === "add") {
+        Alert.alert("Added to List", `"${midShopItemName}" added to your list`);
+      } else {
         Alert.alert("Saved for Later", `"${midShopItemName}" added to stock for next trip`);
       }
 
-      // Clear the form
       setNewItemName("");
       setNewItemQuantity("1");
       setNewItemPrice("");
       closeMidShopModal();
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-
-      if (errorMessage === "BUDGET_EXCEEDED") {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert(
-          "Budget Exceeded",
-          "This item would exceed your budget + impulse fund. Try using the impulse fund or defer to next trip."
-        );
-      } else if (errorMessage === "IMPULSE_EXCEEDED") {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert(
-          "Impulse Fund Exceeded",
-          "Not enough remaining in your impulse fund. Try adding to budget or defer to next trip."
-        );
-      } else {
-        console.error("Failed to add mid-shop item:", error);
-        Alert.alert("Error", "Failed to add item");
-      }
+      console.error("Failed to add mid-shop item:", error);
+      Alert.alert("Error", "Failed to add item");
     } finally {
       setIsAddingMidShop(false);
     }
@@ -767,12 +685,6 @@ export default function ListDetailScreen() {
   }
 
   // Progressive disclosure handlers
-  function handleToggleBudgetExpand() {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setBudgetExpanded((prev) => !prev);
-  }
-
   function handleToggleAddForm() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -876,219 +788,13 @@ export default function ListDetailScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Budget Card - Set Budget Prompt when no budget */}
-          {budget === 0 && (
-            <Pressable onPress={handleOpenEditBudget}>
-              <GlassCard
-                variant="bordered"
-                accentColor={colors.accent.primary}
-                style={styles.setBudgetCard}
-              >
-                <View style={styles.setBudgetContent}>
-                  <View style={styles.setBudgetIcon}>
-                    <MaterialCommunityIcons
-                      name="wallet-plus-outline"
-                      size={32}
-                      color={colors.accent.primary}
-                    />
-                  </View>
-                  <View style={styles.setBudgetText}>
-                    <Text style={styles.setBudgetTitle}>Set Your Budget</Text>
-                    <Text style={styles.setBudgetSubtitle}>
-                      Track spending and stay on target
-                    </Text>
-                  </View>
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={24}
-                    color={colors.text.tertiary}
-                  />
-                </View>
-              </GlassCard>
-            </Pressable>
-          )}
-
-          {/* Budget Card - Collapsed summary bar (tap to expand) */}
-          {budget > 0 && !budgetExpanded && (
-            <Pressable onPress={handleToggleBudgetExpand}>
-              <GlassCard
-                variant="bordered"
-                accentColor={
-                  budgetState === "exceeded" ? colors.semantic.danger :
-                  budgetState === "impulse" ? colors.semantic.warning :
-                  colors.accent.primary
-                }
-                style={styles.budgetCollapsed}
-              >
-                <View style={styles.budgetCollapsedRow}>
-                  <View style={styles.budgetCollapsedProgress}>
-                    <BudgetProgressBar
-                      spent={currentTotal}
-                      budget={budget}
-                      size="sm"
-                    />
-                  </View>
-                  <Text style={[
-                    styles.budgetCollapsedAmount,
-                    budgetState === "exceeded" && { color: colors.semantic.danger },
-                    budgetState === "impulse" && { color: colors.semantic.warning },
-                    budgetState === "caution" && { color: colors.semantic.warning },
-                  ]}>
-                    {budgetState === "exceeded"
-                      ? `£${Math.abs(remainingWithImpulse).toFixed(2)} over`
-                      : `£${remainingBudget.toFixed(2)} left`}
-                  </Text>
-                  <MaterialCommunityIcons
-                    name="chevron-down"
-                    size={20}
-                    color={colors.text.tertiary}
-                  />
-                </View>
-              </GlassCard>
-            </Pressable>
-          )}
-
-          {/* Budget Card - Expanded full tracker */}
-          {budget > 0 && budgetExpanded && (
-            <GlassCard
-              variant="bordered"
-              accentColor={
-                budgetState === "exceeded" ? colors.semantic.danger :
-                budgetState === "impulse" ? colors.semantic.warning :
-                budgetLocked ? colors.semantic.warning :
-                colors.accent.primary
-              }
-              style={styles.budgetCard}
-            >
-              <View style={styles.budgetHeader}>
-                <View style={styles.budgetLabelRow}>
-                  <MaterialCommunityIcons
-                    name={budgetLocked ? "lock" : "wallet-outline"}
-                    size={20}
-                    color={budgetLocked ? colors.semantic.warning : colors.accent.primary}
-                  />
-                  <Text style={styles.budgetLabel}>Budget Tracker</Text>
-                  {budgetLocked && (
-                    <View style={styles.lockedBadge}>
-                      <Text style={styles.lockedBadgeText}>LOCKED</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.budgetActions}>
-                  {/* Edit Budget Button */}
-                  <Pressable
-                    style={styles.editBudgetButton}
-                    onPress={handleOpenEditBudget}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <MaterialCommunityIcons
-                      name="pencil-outline"
-                      size={18}
-                      color={colors.text.secondary}
-                    />
-                    <Text style={styles.iconLabel}>Edit</Text>
-                  </Pressable>
-                  {/* Lock Budget Button */}
-                  <Pressable
-                    style={[
-                      styles.lockButton,
-                      budgetLocked && styles.lockButtonActive,
-                    ]}
-                    onPress={handleToggleBudgetLock}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <MaterialCommunityIcons
-                      name={budgetLocked ? "lock-open-variant-outline" : "lock-outline"}
-                      size={18}
-                      color={budgetLocked ? colors.semantic.warning : colors.text.secondary}
-                    />
-                    <Text style={[styles.iconLabel, budgetLocked && { color: colors.semantic.warning }]}>
-                      {budgetLocked ? "Unlock" : "Lock"}
-                    </Text>
-                  </Pressable>
-                  {/* Collapse Button */}
-                  <Pressable
-                    onPress={handleToggleBudgetExpand}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <MaterialCommunityIcons
-                      name="chevron-up"
-                      size={20}
-                      color={colors.text.tertiary}
-                    />
-                  </Pressable>
-                </View>
-              </View>
-
-              {/* Main Budget Progress */}
-              <BudgetProgressBar
-                spent={currentTotal}
-                budget={budget}
-                showAmounts
-                size="lg"
-              />
-
-              {/* Impulse Fund Display */}
-              <View style={styles.impulseFundContainer}>
-                <View style={styles.impulseFundRow}>
-                  <View style={styles.impulseFundLabel}>
-                    <MaterialCommunityIcons
-                      name="lightning-bolt"
-                      size={16}
-                      color={
-                        budgetState === "exceeded" ? colors.semantic.danger :
-                        budgetState === "impulse" ? colors.semantic.warning :
-                        colors.accent.secondary
-                      }
-                    />
-                    <Text style={styles.impulseFundText}>Impulse Fund (10%)</Text>
-                  </View>
-                  <Text style={[
-                    styles.impulseFundAmount,
-                    budgetState === "exceeded" && styles.impulseFundExceeded,
-                    budgetState === "impulse" && styles.impulseFundActive,
-                  ]}>
-                    £{impulseFund.toFixed(2)}
-                  </Text>
-                </View>
-
-                {/* Impulse Fund Status */}
-                {budgetState === "exceeded" ? (
-                  <View style={styles.impulseFundStatus}>
-                    <MaterialCommunityIcons name="alert-circle" size={14} color={colors.semantic.danger} />
-                    <Text style={[styles.impulseFundStatusText, { color: colors.semantic.danger }]}>
-                      Over total limit by £{Math.abs(remainingWithImpulse).toFixed(2)}
-                    </Text>
-                  </View>
-                ) : budgetState === "impulse" ? (
-                  <View style={styles.impulseFundStatus}>
-                    <MaterialCommunityIcons name="lightning-bolt" size={14} color={colors.semantic.warning} />
-                    <Text style={[styles.impulseFundStatusText, { color: colors.semantic.warning }]}>
-                      Using impulse fund: £{remainingWithImpulse.toFixed(2)} remaining
-                    </Text>
-                  </View>
-                ) : remainingBudget <= impulseFund ? (
-                  <View style={styles.impulseFundStatus}>
-                    <MaterialCommunityIcons name="information-outline" size={14} color={colors.text.tertiary} />
-                    <Text style={styles.impulseFundStatusText}>
-                      £{remainingWithImpulse.toFixed(2)} total remaining (includes impulse)
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-
-              {budgetLocked && remainingWithImpulse > 0 && budgetState !== "impulse" && budgetState !== "exceeded" && (
-                <Text style={styles.remainingNote}>
-                  £{remainingBudget.toFixed(2)} budget + £{impulseFund.toFixed(2)} impulse available
-                </Text>
-              )}
-
-              {list.status === "shopping" && estimatedTotal > 0 && (
-                <Text style={styles.estimateNote}>
-                  Original estimate: £{estimatedTotal.toFixed(2)}
-                </Text>
-              )}
-            </GlassCard>
+          {/* Circular Budget Dial — tap to edit */}
+          {budget > 0 && (
+            <CircularBudgetDial
+              spent={currentTotal}
+              budget={budget}
+              onPress={handleOpenEditBudget}
+            />
           )}
 
           {/* Action Buttons */}
@@ -1102,7 +808,7 @@ export default function ListDetailScreen() {
                   onPress={handleAddFromPantry}
                   style={styles.actionButton}
                 >
-                  Add Low Items
+                  Add from Pantry
                 </GlassButton>
                 <GlassButton
                   variant="primary"
@@ -1203,6 +909,46 @@ export default function ListDetailScreen() {
                       <Text style={styles.priceHint}>
                         Based on £{priceEstimate.cheapest.price.toFixed(2)} at {priceEstimate.cheapest.storeName}
                       </Text>
+                    )}
+
+                    {/* Variant picker chips */}
+                    {itemVariants && itemVariants.length > 0 && (
+                      <View style={styles.variantPickerContainer}>
+                        <Text style={styles.variantPickerLabel}>Choose a size:</Text>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.variantChipsList}
+                        >
+                          {itemVariants.map((variant) => (
+                            <Pressable
+                              key={variant._id}
+                              style={styles.variantChip}
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setNewItemName(variant.variantName);
+                                if (variant.price != null) {
+                                  setNewItemPrice(variant.price.toFixed(2));
+                                }
+                              }}
+                            >
+                              <Text style={styles.variantChipName} numberOfLines={1}>
+                                {variant.variantName}
+                              </Text>
+                              {variant.price != null && (
+                                <Text style={styles.variantChipPrice}>
+                                  £{variant.price.toFixed(2)}
+                                </Text>
+                              )}
+                              {variant.storeName && (
+                                <Text style={styles.variantChipStore} numberOfLines={1}>
+                                  {variant.storeName}
+                                </Text>
+                              )}
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                      </View>
                     )}
                   </View>
 
@@ -1390,24 +1136,24 @@ export default function ListDetailScreen() {
           style={styles.modalOverlay}
         >
           <Pressable style={styles.modalBackdrop} onPress={handleCloseEditBudget} />
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
+          <View style={styles.editBudgetModalContent}>
+            <View style={styles.editBudgetHeader}>
               <MaterialCommunityIcons
                 name="wallet-outline"
                 size={24}
                 color={colors.accent.primary}
               />
-              <Text style={styles.modalTitle}>
+              <Text style={styles.editBudgetTitle}>
                 {budget > 0 ? "Edit Budget" : "Set Budget"}
               </Text>
             </View>
 
-            <View style={styles.modalInputGroup}>
-              <Text style={styles.modalInputLabel}>Budget Amount</Text>
-              <View style={styles.budgetInputContainer}>
-                <Text style={styles.currencySymbol}>£</Text>
+            <View style={styles.editBudgetInputGroup}>
+              <Text style={styles.editBudgetInputLabel}>Budget Amount</Text>
+              <View style={styles.editBudgetInputContainer}>
+                <Text style={styles.editBudgetCurrency}>£</Text>
                 <TextInput
-                  style={styles.budgetInput}
+                  style={styles.editBudgetInput}
                   value={editBudgetValue}
                   onChangeText={setEditBudgetValue}
                   keyboardType="decimal-pad"
@@ -1418,30 +1164,11 @@ export default function ListDetailScreen() {
               </View>
             </View>
 
-            {/* Impulse Fund Preview */}
-            {parseFloat(editBudgetValue) > 0 && (
-              <View style={styles.impulseFundPreview}>
-                <View style={styles.impulseFundPreviewRow}>
-                  <MaterialCommunityIcons
-                    name="lightning-bolt"
-                    size={16}
-                    color={colors.accent.secondary}
-                  />
-                  <Text style={styles.impulseFundPreviewText}>
-                    +£{(parseFloat(editBudgetValue) * 0.1).toFixed(2)} impulse fund (10%)
-                  </Text>
-                </View>
-                <Text style={styles.impulseFundPreviewTotal}>
-                  Total spending limit: £{(parseFloat(editBudgetValue) * 1.1).toFixed(2)}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.modalActions}>
+            <View style={styles.editBudgetActions}>
               <GlassButton
                 variant="secondary"
                 onPress={handleCloseEditBudget}
-                style={styles.modalButton}
+                style={styles.editBudgetBtn}
               >
                 Cancel
               </GlassButton>
@@ -1450,7 +1177,7 @@ export default function ListDetailScreen() {
                 onPress={handleSaveBudget}
                 loading={isSavingBudget}
                 disabled={isSavingBudget}
-                style={styles.modalButton}
+                style={styles.editBudgetBtn}
               >
                 {budget > 0 ? "Update" : "Set Budget"}
               </GlassButton>
@@ -1512,26 +1239,26 @@ export default function ListDetailScreen() {
 
             {/* Option Cards */}
             <View style={styles.midShopOptions}>
-              {/* Option 1: Add to Budget */}
+              {/* Option 1: Add to List */}
               <Pressable
                 style={[
                   styles.midShopOptionCard,
                   isAddingMidShop && styles.midShopOptionDisabled,
                 ]}
-                onPress={() => handleMidShopAdd("budget")}
+                onPress={() => handleMidShopAdd("add")}
                 disabled={isAddingMidShop}
               >
                 <View style={[styles.midShopOptionIcon, { backgroundColor: `${colors.accent.primary}15` }]}>
                   <MaterialCommunityIcons
-                    name="wallet-outline"
+                    name="cart-plus"
                     size={24}
                     color={colors.accent.primary}
                   />
                 </View>
                 <View style={styles.midShopOptionText}>
-                  <Text style={styles.midShopOptionTitle}>Add to Budget</Text>
+                  <Text style={styles.midShopOptionTitle}>Add to List</Text>
                   <Text style={styles.midShopOptionDesc}>
-                    Counts toward £{budget.toFixed(0)} limit
+                    Add item to your shopping list
                   </Text>
                 </View>
                 <MaterialCommunityIcons
@@ -1541,36 +1268,7 @@ export default function ListDetailScreen() {
                 />
               </Pressable>
 
-              {/* Option 2: Use Impulse Fund */}
-              <Pressable
-                style={[
-                  styles.midShopOptionCard,
-                  isAddingMidShop && styles.midShopOptionDisabled,
-                ]}
-                onPress={() => handleMidShopAdd("impulse")}
-                disabled={isAddingMidShop}
-              >
-                <View style={[styles.midShopOptionIcon, { backgroundColor: `${colors.accent.secondary}15` }]}>
-                  <MaterialCommunityIcons
-                    name="lightning-bolt"
-                    size={24}
-                    color={colors.accent.secondary}
-                  />
-                </View>
-                <View style={styles.midShopOptionText}>
-                  <Text style={styles.midShopOptionTitle}>Use Impulse Fund</Text>
-                  <Text style={styles.midShopOptionDesc}>
-                    £{(impulseUsage?.remaining ?? impulseFund).toFixed(2)} remaining
-                  </Text>
-                </View>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={24}
-                  color={colors.text.tertiary}
-                />
-              </Pressable>
-
-              {/* Option 3: Add to Next Trip */}
+              {/* Option 2: Save for Next Trip */}
               <Pressable
                 style={[
                   styles.midShopOptionCard,
@@ -1587,7 +1285,7 @@ export default function ListDetailScreen() {
                   />
                 </View>
                 <View style={styles.midShopOptionText}>
-                  <Text style={styles.midShopOptionTitle}>Add to Next Trip</Text>
+                  <Text style={styles.midShopOptionTitle}>Save for Next Trip</Text>
                   <Text style={styles.midShopOptionDesc}>
                     Save to stock for later
                   </Text>
@@ -2065,117 +1763,6 @@ const styles = StyleSheet.create({
     height: 140,
   },
 
-  // Budget Card
-  budgetCard: {
-    marginBottom: spacing.md,
-  },
-  budgetHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.md,
-  },
-  budgetLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  budgetLabel: {
-    ...typography.labelLarge,
-    color: colors.text.primary,
-  },
-  lockedBadge: {
-    backgroundColor: `${colors.semantic.warning}20`,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginLeft: spacing.xs,
-  },
-  lockedBadgeText: {
-    ...typography.labelSmall,
-    color: colors.semantic.warning,
-    fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
-  lockButton: {
-    width: 36,
-    height: 44,
-    borderRadius: 18,
-    backgroundColor: colors.glass.background,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-  },
-  lockButtonActive: {
-    backgroundColor: `${colors.semantic.warning}20`,
-    borderColor: colors.semantic.warning,
-  },
-  remainingNote: {
-    ...typography.bodySmall,
-    color: colors.semantic.warning,
-    marginTop: spacing.sm,
-    textAlign: "center",
-    fontWeight: "500",
-  },
-  impulseFundContainer: {
-    marginTop: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.glass.border,
-  },
-  impulseFundRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  impulseFundLabel: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  impulseFundText: {
-    ...typography.bodySmall,
-    color: colors.text.secondary,
-  },
-  impulseFundAmount: {
-    ...typography.labelMedium,
-    color: colors.accent.secondary,
-    fontWeight: "600",
-  },
-  impulseFundActive: {
-    color: colors.semantic.warning,
-  },
-  impulseFundExceeded: {
-    color: colors.semantic.danger,
-  },
-  impulseFundStatus: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  impulseFundStatusText: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
-  },
-  statusText: {
-    ...typography.labelSmall,
-    fontWeight: "600",
-  },
-  estimateNote: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-    marginTop: spacing.sm,
-    textAlign: "center",
-  },
-
   // Action Buttons
   actionButtons: {
     flexDirection: "row",
@@ -2187,26 +1774,6 @@ const styles = StyleSheet.create({
   },
   fullWidthButton: {
     flex: 1,
-  },
-
-  // Budget Collapsed Bar
-  budgetCollapsed: {
-    marginBottom: spacing.md,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  budgetCollapsedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  budgetCollapsedProgress: {
-    flex: 1,
-  },
-  budgetCollapsedAmount: {
-    ...typography.labelMedium,
-    color: colors.semantic.success,
-    fontWeight: "600",
   },
 
   // Add Item Card
@@ -2249,6 +1816,45 @@ const styles = StyleSheet.create({
     color: colors.accent.primary,
     marginTop: 4,
     opacity: 0.8,
+  },
+  variantPickerContainer: {
+    marginTop: spacing.sm,
+  },
+  variantPickerLabel: {
+    ...typography.labelSmall,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  variantChipsList: {
+    gap: spacing.sm,
+    paddingVertical: 2,
+  },
+  variantChip: {
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    alignItems: "center",
+    minWidth: 90,
+  },
+  variantChipName: {
+    ...typography.labelSmall,
+    color: colors.text.primary,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  variantChipPrice: {
+    ...typography.labelSmall,
+    color: colors.accent.primary,
+    fontWeight: "700",
+  },
+  variantChipStore: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    fontSize: 9,
+    marginTop: 1,
   },
 
   // Empty State
@@ -2427,59 +2033,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
 
-  // Set Budget Card (when no budget)
-  setBudgetCard: {
-    marginBottom: spacing.md,
-  },
-  setBudgetContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  setBudgetIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: `${colors.accent.primary}15`,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  setBudgetText: {
-    flex: 1,
-  },
-  setBudgetTitle: {
-    ...typography.headlineSmall,
-    color: colors.text.primary,
-    marginBottom: 2,
-  },
-  setBudgetSubtitle: {
-    ...typography.bodySmall,
-    color: colors.text.secondary,
-  },
-
-  // Budget Actions (edit + lock buttons)
-  budgetActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  editBudgetButton: {
-    width: 36,
-    height: 44,
-    borderRadius: 18,
-    backgroundColor: colors.glass.background,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-  },
-  iconLabel: {
-    ...typography.labelSmall,
-    color: colors.text.tertiary,
-    marginTop: 2,
-    textAlign: "center",
-  },
-
   // Modal Styles
   modalOverlay: {
     flex: 1,
@@ -2490,87 +2043,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.75)",
   },
-  modalContent: {
-    width: "85%",
-    maxWidth: 360,
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.glass.borderFocus,
-    shadowColor: colors.accent.primary,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    elevation: 15,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
-  },
-  modalTitle: {
-    ...typography.headlineMedium,
-    color: colors.text.primary,
-  },
-  modalInputGroup: {
-    marginBottom: spacing.lg,
-  },
-  modalInputLabel: {
-    ...typography.labelMedium,
-    color: colors.text.secondary,
-    marginBottom: spacing.sm,
-  },
-  budgetInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    paddingHorizontal: spacing.md,
-  },
-  currencySymbol: {
-    ...typography.headlineLarge,
-    color: colors.accent.primary,
-    marginRight: spacing.xs,
-  },
-  budgetInput: {
-    flex: 1,
-    ...typography.headlineLarge,
-    color: colors.text.primary,
-    paddingVertical: spacing.md,
-  },
-  impulseFundPreview: {
-    backgroundColor: `${colors.accent.secondary}10`,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  impulseFundPreviewRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  impulseFundPreviewText: {
-    ...typography.bodyMedium,
-    color: colors.accent.secondary,
-    fontWeight: "500",
-  },
-  impulseFundPreviewTotal: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  modalButton: {
-    flex: 1,
-  },
-
   // Mid-Shop Modal Styles
   midShopModalContent: {
     width: "90%",
@@ -2966,5 +2438,61 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: colors.text.primary,
     fontWeight: "800",
+  },
+
+  // Edit budget modal styles
+  editBudgetModalContent: {
+    width: "85%",
+    maxWidth: 360,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.glass.borderFocus,
+  },
+  editBudgetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+  editBudgetTitle: {
+    ...typography.headlineMedium,
+    color: colors.text.primary,
+  },
+  editBudgetInputGroup: {
+    marginBottom: spacing.lg,
+  },
+  editBudgetInputLabel: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  editBudgetInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    paddingHorizontal: spacing.md,
+  },
+  editBudgetCurrency: {
+    ...typography.headlineLarge,
+    color: colors.accent.primary,
+    marginRight: spacing.xs,
+  },
+  editBudgetInput: {
+    flex: 1,
+    ...typography.headlineLarge,
+    color: colors.text.primary,
+    paddingVertical: spacing.md,
+  },
+  editBudgetActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  editBudgetBtn: {
+    flex: 1,
   },
 });
