@@ -285,6 +285,7 @@ export default defineSchema({
     category: v.string(),            // "Dairy"
     source: v.string(),              // "ai_seeded" | "receipt_discovered"
     commonality: v.optional(v.number()), // How often this variant appears in receipts (0-1)
+    estimatedPrice: v.optional(v.number()), // AI-generated price for this variant
   })
     .index("by_base_item", ["baseItem"]),
 
