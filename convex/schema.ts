@@ -60,6 +60,7 @@ export default defineSchema({
     // Price tracking
     lastPrice: v.optional(v.number()),
     priceSource: v.optional(v.string()), // "ai_estimate" | "receipt" | "user"
+    lastStoreName: v.optional(v.string()), // Store name from last receipt price
     preferredVariant: v.optional(v.string()), // e.g. "Whole Milk 2 Pints"
 
     // Auto-add to list when out

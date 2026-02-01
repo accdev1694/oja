@@ -503,6 +503,7 @@ export const autoRestockFromReceipt = mutation({
           stockLevel: "stocked",
           lastPrice: receiptItem.unitPrice,
           priceSource: "receipt",
+          lastStoreName: receipt.storeName,
           updatedAt: now,
         });
         restockedItems.push({
@@ -598,6 +599,7 @@ export const addFromReceipt = mutation({
     name: v.string(),
     category: v.optional(v.string()),
     price: v.optional(v.number()),
+    storeName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -625,6 +627,7 @@ export const addFromReceipt = mutation({
       ...(args.price !== undefined && {
         lastPrice: args.price,
         priceSource: "receipt" as const,
+        ...(args.storeName && { lastStoreName: args.storeName }),
       }),
       autoAddToList: false,
       createdAt: now,

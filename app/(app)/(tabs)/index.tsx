@@ -940,6 +940,7 @@ function PantryItemRow({
     icon?: string;
     lastPrice?: number;
     priceSource?: string;
+    lastStoreName?: string;
   };
   onSwipeDecrease: () => void;
   onSwipeIncrease: () => void;
@@ -995,7 +996,11 @@ function PantryItemRow({
                   {item.lastPrice != null && (
                     <Text style={styles.itemPriceLabel}>
                       £{item.lastPrice.toFixed(2)}
-                      {item.priceSource === "ai_estimate" && " est."}
+                      {item.priceSource === "ai_estimate"
+                        ? " est."
+                        : item.priceSource === "receipt" && item.lastStoreName
+                          ? ` at ${item.lastStoreName}`
+                          : ""}
                     </Text>
                   )}
                 </View>
