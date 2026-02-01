@@ -13,14 +13,28 @@ import { useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { SeedItem } from "@/convex/ai";
 import { safeHaptics } from "@/lib/utils/safeHaptics";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import {
+  GlassScreen,
+  GlassCard,
+  GlassButton,
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+} from "@/components/ui/glass";
 
 export default function ReviewItemsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ items?: string }>();
+  const insets = useSafeAreaInsets();
 
   const bulkCreate = useMutation(api.pantryItems.bulkCreate);
   const generateVariants = useAction(api.ai.generateItemVariants);
   const bulkUpsertVariants = useMutation(api.itemVariants.bulkUpsert);
+  const completeOnboarding = useMutation(api.users.completeOnboarding);
 
   const [items, setItems] = useState<SeedItem[]>(() => {
     try {
@@ -77,8 +91,9 @@ export default function ReviewItemsScreen() {
           },
           {
             text: "Continue",
-            onPress: () => {
+            onPress: async () => {
               safeHaptics.light();
+              await completeOnboarding();
               router.replace("/(app)/(tabs)");
             },
           },
@@ -101,6 +116,9 @@ export default function ReviewItemsScreen() {
 
       // Save to Convex
       await bulkCreate({ items: itemsToSave as any });
+
+      // Mark onboarding as complete
+      await completeOnboarding();
 
       safeHaptics.success();
 
@@ -130,29 +148,31 @@ export default function ReviewItemsScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <GlassScreen>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <Text style={styles.title}>Review Your Pantry</Text>
         <Text style={styles.subtitle}>
           Tap items to remove them from your pantry
         </Text>
 
-        <View style={styles.stats}>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Local Items</Text>
-            <Text style={styles.statValue}>{localItemsCount}</Text>
+        <GlassCard variant="standard" style={styles.statsCard}>
+          <View style={styles.stats}>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Local Items</Text>
+              <Text style={styles.statValue}>{localItemsCount}</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Cultural Items</Text>
+              <Text style={styles.statValue}>{culturalItemsCount}</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Selected</Text>
+              <Text style={styles.statValue}>{selectedCount}</Text>
+            </View>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Cultural Items</Text>
-            <Text style={styles.statValue}>{culturalItemsCount}</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Selected</Text>
-            <Text style={styles.statValue}>{selectedCount}</Text>
-          </View>
-        </View>
+        </GlassCard>
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -161,7 +181,7 @@ export default function ReviewItemsScreen() {
             <Text style={styles.categoryTitle}>{category}</Text>
 
             <View style={styles.itemGrid}>
-              {categoryItems.map((item, localIndex) => {
+              {categoryItems.map((item) => {
                 const globalIndex = items.indexOf(item);
                 const isSelected = selectedItems.has(globalIndex);
 
@@ -173,6 +193,7 @@ export default function ReviewItemsScreen() {
                       !isSelected && styles.itemCardDeselected,
                     ]}
                     onPress={() => toggleItem(globalIndex)}
+                    activeOpacity={0.7}
                   >
                     <View style={styles.itemContent}>
                       <Text
@@ -198,7 +219,7 @@ export default function ReviewItemsScreen() {
 
                       {isSelected && (
                         <View style={styles.checkmark}>
-                          <Text style={styles.checkmarkText}>✓</Text>
+                          <MaterialCommunityIcons name="check" size={12} color="#fff" />
                         </View>
                       )}
                     </View>
@@ -208,128 +229,118 @@ export default function ReviewItemsScreen() {
             </View>
           </View>
         ))}
+        <View style={{ height: insets.bottom + 100 }} />
       </ScrollView>
 
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+        <GlassButton
+          variant="primary"
+          size="lg"
           onPress={handleSave}
+          loading={isSaving}
           disabled={isSaving}
+          icon="check-all"
         >
-          {isSaving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.saveButtonText}>
-              Save to Pantry ({selectedCount} items)
-            </Text>
-          )}
-        </TouchableOpacity>
+          Save to Pantry ({selectedCount} items)
+        </GlassButton>
       </View>
-    </View>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFAF8",
-  },
   header: {
-    padding: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#2D3436",
+    ...typography.displaySmall,
+    color: colors.text.primary,
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
-    color: "#636E72",
-    marginBottom: 16,
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+  statsCard: {
+    padding: 0,
   },
   stats: {
     flexDirection: "row",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    padding: spacing.md,
   },
   statItem: {
     flex: 1,
     alignItems: "center",
   },
   statLabel: {
-    fontSize: 12,
-    color: "#636E72",
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
     marginBottom: 4,
   },
   statValue: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#FF6B35",
+    color: colors.accent.primary,
   },
   statDivider: {
     width: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: colors.glass.border,
     marginHorizontal: 8,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 24,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
   },
   categorySection: {
-    marginBottom: 24,
+    marginBottom: spacing.lg,
   },
   categoryTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#2D3436",
-    marginBottom: 12,
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
   },
   itemGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    gap: spacing.sm,
   },
   itemCard: {
     width: "30%",
     minWidth: 100,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
     borderWidth: 2,
-    borderColor: "#FF6B35",
+    borderColor: colors.accent.primary,
   },
   itemCardDeselected: {
-    borderColor: "#E5E7EB",
+    borderColor: colors.glass.border,
     opacity: 0.5,
   },
   itemContent: {
     position: "relative",
   },
   itemName: {
-    fontSize: 13,
+    ...typography.labelSmall,
     fontWeight: "600",
-    color: "#2D3436",
+    color: colors.text.primary,
     paddingRight: 20,
   },
   itemNameDeselected: {
-    color: "#95A5A6",
+    color: colors.text.tertiary,
   },
   itemPrice: {
-    fontSize: 12,
-    color: "#636E72",
+    ...typography.bodySmall,
+    color: colors.text.secondary,
     marginTop: 2,
   },
   itemPriceDeselected: {
-    color: "#B2BEC3",
+    color: colors.text.tertiary,
   },
   checkmark: {
     position: "absolute",
@@ -338,33 +349,14 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: "#FF6B35",
+    backgroundColor: colors.accent.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-  checkmarkText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
   footer: {
-    padding: 24,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    backgroundColor: "#FFFAF8",
-  },
-  saveButton: {
-    backgroundColor: "#FF6B35",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
+    borderTopColor: colors.glass.border,
   },
 });

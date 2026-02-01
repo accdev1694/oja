@@ -1,11 +1,12 @@
 import { Stack } from "expo-router";
+import { colors } from "@/components/ui/glass";
 
 export default function AuthLayout() {
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: "#FFFAF8" },
+        contentStyle: { backgroundColor: colors.background.primary },
       }}
     >
       <Stack.Screen name="sign-in" />

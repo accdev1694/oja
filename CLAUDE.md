@@ -13,11 +13,20 @@
 | 0. Project Setup | ✅ Complete |
 | 1. Foundation & Auth | ✅ Complete |
 | 2. Pantry Tracker | ✅ Complete |
-| 3. Shopping Lists | 🔄 In Progress |
-| **UI. Glass Redesign** | **🔄 In Progress (Priority)** |
-| 4-8. Remaining Epics | ⏳ Pending |
+| 3. Shopping Lists | ✅ Complete |
+| UI. Glass Redesign | ✅ Complete |
+| UX. Emotional Design | ✅ Complete (analysis.md recommendations implemented) |
+| 4. Partner Mode | 🔄 In Progress (backend done, frontend partial) |
+| 5. Receipt Intelligence | ✅ Complete |
+| 5.5. Zero-Blank Price Intelligence | ✅ Phases 1-4, 6 Complete (Phase 5 bracket matcher pending validation) |
+| 6. Insights & Gamification | 🔄 In Progress (UI + backend done, push notifications pending) |
+| 7. Subscription & Payments | ⏳ Placeholder |
+| 8. Admin Dashboard | ⏳ Placeholder |
 
-**Current Priority:** Glass UI Redesign (based on moodboard analysis)
+**Current Priorities:**
+1. **Push Notifications** - Smart triggers for stock reminders, streak motivation, weekly digest
+2. **Price Bracket Matcher Validation** - Test against real receipts (target >80% accuracy)
+3. **Epic 4 - Partner Mode** - Approval UI, contest UI, comments UI
 
 ---
 
@@ -28,12 +37,13 @@
 ### Required Reading Before Implementation
 
 1. **`project-context.md`** - Developer quick reference (START HERE)
-2. **`_bmad-output/implementation-artifacts/v2-build-progress.md`** - Build progress tracker
-3. **`_bmad-output/planning-artifacts/architecture-v2-expo-convex.md`** - Full architecture specification
-4. **`_bmad-output/planning-artifacts/coding-conventions-expo.md`** - Coding patterns and standards
-5. **`_bmad-output/planning-artifacts/security-guidelines-expo.md`** - Security requirements
-6. **`_bmad-output/planning-artifacts/ui-redesign-glass-system.md`** - Glass UI Design System (NEW)
-7. **`_bmad-output/planning-artifacts/epics/epic-ui-redesign.md`** - UI Redesign Epic & Stories (NEW)
+2. **`analysis.md`** - UX/UI Deep Analysis with implementation recommendations ⭐ CRITICAL
+3. **`_bmad-output/implementation-artifacts/v2-build-progress.md`** - Build progress tracker
+4. **`_bmad-output/planning-artifacts/architecture-v2-expo-convex.md`** - Full architecture specification
+5. **`_bmad-output/planning-artifacts/coding-conventions-expo.md`** - Coding patterns and standards
+6. **`_bmad-output/planning-artifacts/security-guidelines-expo.md`** - Security requirements
+7. **`_bmad-output/planning-artifacts/ui-redesign-glass-system.md`** - Glass UI Design System
+8. **`_bmad-output/planning-artifacts/epics/epic-ui-redesign.md`** - UI Redesign Epic & Stories
 
 **CRITICAL**: All agents MUST read `project-context.md` before writing ANY code.
 
@@ -47,6 +57,43 @@ The app uses a glassmorphism-inspired design with:
 
 Import glass components from: `@/components/ui/glass`
 Import design tokens from: `@/lib/design/glassTokens`
+
+### Zero-Blank Price Intelligence
+
+**CRITICAL ARCHITECTURE**: Every item in Oja shows a price estimate. Never blank. Never "?".
+
+**Three-Layer Price Cascade:**
+```
+Layer 1: Personal History (user's own receipts) → highest trust
+Layer 2: Crowdsourced Prices (all users' receipts, by region)
+Layer 3: AI Estimates (Gemini-seeded, OpenAI fallback)
+```
+
+**Key Components:**
+- `convex/itemVariants.ts` - Variant management with `getWithPrices` cascade
+- `convex/currentPrices.ts` - Crowdsourced price aggregation + bracket matcher
+- `convex/ai.ts` - `estimateItemPrice` action with `withAIFallback` wrapper
+
+**Variant Picker UX:**
+- Items with size variants (milk, oil, pasta) show picker on first add
+- User's preferred variant remembered via `pantryItem.preferredVariant`
+- Confidence labels: `~£X.XX est.` (AI) → `£X.XX at Store` (1-2 reports) → `£X.XX` (10+ reports)
+
+**See `analysis.md` → "Implementation Item: Zero-Blank Price Intelligence" for full architecture.**
+
+### Emotional Design System
+
+The app implements emotional design patterns from `analysis.md`:
+
+- **Warm accent color** (#FFB088) for celebrations and milestones
+- **Micro-celebrations** on check-off (green border flash, haptic feedback)
+- **Budget sentiment** ("Looking good — lots of room left")
+- **Savings jar warmth** with milestone encouragement
+- **Weekly narrative** ("This week you made 2 trips and stayed under budget...")
+- **Journey prompts** between tabs (Scan → Stock, Stock → Lists)
+- **Collapsible insights** for progressive disclosure
+
+Import warm tokens from: `glassTokens.colors.accent.warm`
 
 ---
 
@@ -76,7 +123,7 @@ To invoke the project lead:
 | **UI Design** | Glass Design System | Glassmorphism with deep blue gradients |
 | **Authentication** | Clerk | Managed auth with social providers |
 | **Backend** | Convex | Real-time database + serverless functions |
-| **AI/ML** | Jina AI + Gemini | Embeddings + Receipt parsing |
+| **AI/ML** | Gemini + OpenAI (fallback) + Jina AI | Receipt parsing + Price estimation + Embeddings |
 | **State** | React hooks + Convex | Real-time reactive state |
 | **Animations** | React Native Reanimated | Smooth native animations |
 | **Icons** | Expo Symbols / SF Symbols | Native iOS icons |
@@ -261,11 +308,15 @@ export const generateEmbedding = action({
 ## Critical Rules for All Agents
 
 1. **Read `project-context.md` first** - Before ANY implementation
-2. **Verify authentication** - Every mutation must check user ownership
-3. **Use indexes** - Never scan full tables
-4. **Optimistic updates** - For instant UX feedback
-5. **Haptic feedback** - On all user interactions
-6. **Handle all states** - Loading, error, empty, success
+2. **Consult `analysis.md`** - For UX/UI decisions and price intelligence architecture
+3. **Verify authentication** - Every mutation must check user ownership
+4. **Use indexes** - Never scan full tables
+5. **Optimistic updates** - For instant UX feedback
+6. **Haptic feedback** - On all user interactions
+7. **Handle all states** - Loading, error, empty, success
+8. **Zero-Blank Prices** - Every item must show a price estimate (use cascade: personal → crowdsourced → AI)
+9. **Warm Tone in Copy** - Use friendly, supportive language (not clinical/functional)
+10. **Progressive Disclosure** - Don't show everything at once; use collapsible sections
 
 ---
 
@@ -281,9 +332,11 @@ EXPO_PUBLIC_CONVEX_URL=https://...
 ### Server (Convex Dashboard)
 
 ```bash
-OPENAI_API_KEY=sk_...
+GEMINI_API_KEY=...              # Primary AI (receipt parsing, seeding, suggestions)
+OPENAI_API_KEY=sk_...           # Fallback AI (when Gemini fails)
 STRIPE_SECRET_KEY=sk_...
 CLERK_SECRET_KEY=sk_...
+JINA_API_KEY=...                # Embeddings for semantic search
 ```
 
 ---
@@ -355,19 +408,21 @@ C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.json
 
 | Artifact | Path |
 |----------|------|
+| **UX/UI Analysis** | `analysis.md` ⭐ CRITICAL - Implementation recommendations |
 | Product Brief | `_bmad-output/planning-artifacts/product-brief.md` |
 | PRD | `_bmad-output/planning-artifacts/prd.md` |
 | Architecture v2 | `_bmad-output/planning-artifacts/architecture-v2-expo-convex.md` |
 | Coding Conventions | `_bmad-output/planning-artifacts/coding-conventions-expo.md` |
 | Security Guidelines | `_bmad-output/planning-artifacts/security-guidelines-expo.md` |
-| **Glass UI Design** | `_bmad-output/planning-artifacts/ui-redesign-glass-system.md` |
-| **UI Redesign Epic** | `_bmad-output/planning-artifacts/epics/epic-ui-redesign.md` |
+| Glass UI Design | `_bmad-output/planning-artifacts/ui-redesign-glass-system.md` |
+| UI Redesign Epic | `_bmad-output/planning-artifacts/epics/epic-ui-redesign.md` |
 | Epics & Stories | `_bmad-output/planning-artifacts/epics/` |
 | Sprint Status | `_bmad-output/implementation-artifacts/sprint-status.yaml` |
 | Story Files | `_bmad-output/implementation-artifacts/stories/` |
 | Developer Reference | `project-context.md` |
-| **Glass Tokens** | `lib/design/glassTokens.ts` |
-| **Glass Components** | `components/ui/glass/` |
+| Glass Tokens | `lib/design/glassTokens.ts` |
+| Glass Components | `components/ui/glass/` |
+| **Real Receipts** | `receipts/` - 19 receipts for bracket matcher validation |
 
 ---
 
@@ -386,6 +441,42 @@ C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.json
 3. **Continue implementation:**
    - Review sprint-status.yaml for current story
    - Load the Developer agent: `/bmad:bmm:agents:dev`
+
+---
+
+## Pending Work (from analysis.md)
+
+### High Priority - Retention & Engagement
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| **Push Notifications** | 3 trigger types: stock reminder, streak motivation, weekly digest | High |
+| **First-Week Nurture Sequence** | Daily helpful nudges for new users (Day 2, 3, 5) | Medium |
+| **Price Intelligence Surface** | Show users interesting price data from history + community | High |
+
+### Medium Priority - UX Improvements
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| **Teal Reduction** | Reserve teal for primary CTAs only (partially done) | Low |
+| **Fixed Action Areas** | Pin primary actions at bottom of screens | Medium |
+| **Savings Milestone Celebrations** | Trophy screens at £10, £25, £50, £100 | Medium |
+
+### Price Intelligence - Pending Validation
+
+| Item | Description | Status |
+|------|-------------|--------|
+| **Bracket Matcher Accuracy** | Test against 19 receipts in `receipts/` folder | Target: >80% |
+| **Admin Receipt Seeding Portal** | Bulk scan 50-100 receipts before launch | Not started |
+
+### Verification Plan (from analysis.md)
+
+See `analysis.md` → "Verification Plan" for 20 test cases covering:
+- Onboarding zero-blank guarantee
+- Variant price persistence
+- Receipt flow with/without sizes
+- AI fallback testing
+- Budget accuracy validation
 
 ---
 
@@ -431,4 +522,4 @@ C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.json
 
 ---
 
-_This file configures Claude Code for the Oja project. Updated 2026-01-28 for Glass UI redesign._
+_This file configures Claude Code for the Oja project. Updated 2026-02-01 to align with analysis.md (UX/UI deep analysis + Zero-Blank Price Intelligence)._

@@ -1,8 +1,7 @@
 import React, { useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import Animated, { FadeIn, FadeOut, runOnJS } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import * as Haptics from "expo-haptics";
 import { GaugeIndicator, type StockLevel } from "./GaugeIndicator";
 
 interface PantryItemCardProps {
@@ -10,7 +9,6 @@ interface PantryItemCardProps {
   name: string;
   category: string;
   stockLevel: StockLevel;
-  onLongPress: () => void;
   onSwipeDecrease: () => void;
   onSwipeIncrease?: () => void;
   onMeasure?: (x: number, y: number) => void;
@@ -20,8 +18,7 @@ interface PantryItemCardProps {
  * PantryItemCard - Individual pantry item with gauge indicator
  *
  * Features:
- * - Animated gauge needle showing stock level
- * - Long-press to open stock picker
+ * - Segmented gauge showing stock level
  * - Swipe left to decrease, right to increase (card stays still)
  * - Measures position for fly animation
  */
@@ -30,24 +27,11 @@ export function PantryItemCard({
   name,
   category,
   stockLevel,
-  onLongPress,
   onSwipeDecrease,
   onSwipeIncrease,
   onMeasure,
 }: PantryItemCardProps) {
   const cardRef = useRef<View>(null);
-
-  const handleLongPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    if (cardRef.current && onMeasure) {
-      cardRef.current.measure((x, y, width, height, pageX, pageY) => {
-        onMeasure(pageX + width / 2, pageY + height / 2);
-      });
-    }
-
-    onLongPress();
-  };
 
   const panGesture = Gesture.Pan()
     .activeOffsetX([-20, 20])
@@ -59,14 +43,6 @@ export function PantryItemCard({
         runOnJS(onSwipeIncrease)();
       }
     });
-
-  const longPressGesture = Gesture.LongPress()
-    .minDuration(400)
-    .onStart(() => {
-      runOnJS(handleLongPress)();
-    });
-
-  const composedGesture = Gesture.Race(panGesture, longPressGesture);
 
   const getCategoryEmoji = (cat: string): string => {
     const emojiMap: Record<string, string> = {
@@ -87,7 +63,7 @@ export function PantryItemCard({
 
   return (
     <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)}>
-      <GestureDetector gesture={composedGesture}>
+      <GestureDetector gesture={panGesture}>
         <Animated.View>
           <View ref={cardRef} collapsable={false} style={styles.card}>
             {/* Gauge indicator */}
@@ -99,17 +75,10 @@ export function PantryItemCard({
                 {getCategoryEmoji(category)} {name}
               </Text>
               <Text style={styles.levelText}>
-                {stockLevel === "stocked" && "Fully stocked"}
-                {stockLevel === "good" && "Good supply"}
-                {stockLevel === "half" && "Half stocked"}
+                {stockLevel === "stocked" && "Stocked"}
                 {stockLevel === "low" && "Running low"}
                 {stockLevel === "out" && "Out of stock"}
               </Text>
-            </View>
-
-            {/* Hold indicator */}
-            <View style={styles.holdHint}>
-              <Text style={styles.holdHintText}>Hold</Text>
             </View>
           </View>
         </Animated.View>
@@ -128,7 +97,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    gap: 12,
+    gap: 16,
   },
   info: {
     flex: 1,
@@ -142,16 +111,5 @@ const styles = StyleSheet.create({
   levelText: {
     fontSize: 12,
     color: "#636E72",
-  },
-  holdHint: {
-    backgroundColor: "rgba(0, 0, 0, 0.05)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  holdHintText: {
-    fontSize: 10,
-    color: "#9CA3AF",
-    fontWeight: "500",
   },
 });

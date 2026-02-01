@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
-import { ConvexReactClient } from "convex/react";
+import { ConvexReactClient, useMutation, useQuery } from "convex/react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { api } from "@/convex/_generated/api";
 
 const convex = new ConvexReactClient(
   process.env.EXPO_PUBLIC_CONVEX_URL as string,
@@ -24,20 +25,56 @@ function InitialLayout() {
   const segments = useSegments();
   const router = useRouter();
 
+  // Query current user to check onboarding status
+  const currentUser = useQuery(
+    api.users.getCurrent,
+    isLoaded && isSignedIn ? {} : "skip"
+  );
+  // Ensure user record exists in Convex when signed in
+  const getOrCreate = useMutation(api.users.getOrCreate);
+  const creatingUser = useRef(false);
+
+  // Ensure Convex user record exists whenever signed in but no record found
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    // currentUser === undefined means query still loading; null means no record
+    if (currentUser === null && !creatingUser.current) {
+      creatingUser.current = true;
+      getOrCreate()
+        .catch(() => {})
+        .finally(() => {
+          creatingUser.current = false;
+        });
+    }
+  }, [isLoaded, isSignedIn, currentUser]);
+
   useEffect(() => {
     if (!isLoaded) return;
 
     const inAuthGroup = segments[0] === "(auth)";
     const inOnboarding = segments[0] === "onboarding";
 
-    if (isSignedIn && inAuthGroup) {
-      // User is signed in but on auth screen, redirect to app
-      router.replace("/(app)/(tabs)");
-    } else if (!isSignedIn && !inAuthGroup) {
-      // User is not signed in and not on auth screen, redirect to sign in
+    if (!isSignedIn && !inAuthGroup) {
       router.replace("/(auth)/sign-in");
+      return;
     }
-  }, [isLoaded, isSignedIn, segments]);
+
+    if (isSignedIn && inAuthGroup) {
+      // Just signed in — redirect away from auth; getOrCreate runs via
+      // the other effect once getCurrent resolves to null
+      router.replace("/");
+      return;
+    }
+
+    // Wait for user record to load (undefined = loading, null = not found yet)
+    if (isSignedIn && currentUser !== undefined && currentUser !== null) {
+      if (!currentUser.onboardingComplete && !inOnboarding) {
+        router.replace("/onboarding/welcome");
+      } else if (currentUser.onboardingComplete && inOnboarding) {
+        router.replace("/(app)/(tabs)");
+      }
+    }
+  }, [isLoaded, isSignedIn, segments, currentUser]);
 
   return <Slot />;
 }

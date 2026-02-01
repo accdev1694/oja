@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -8,12 +8,8 @@ import {
   Pressable,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import {
-  GaugeIndicator,
-  STOCK_LEVEL_ORDER,
-  STOCK_LEVEL_PERCENTAGES,
-  type StockLevel,
-} from "./GaugeIndicator";
+import { type StockLevel } from "./GaugeIndicator";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 interface StockLevelPickerProps {
   visible: boolean;
@@ -24,12 +20,15 @@ interface StockLevelPickerProps {
   onRemove?: () => void;
 }
 
-const LEVELS: { key: StockLevel; label: string; color: string }[] = [
-  { key: "stocked", label: "Full", color: "#10B981" },
-  { key: "good", label: "Good", color: "#34D399" },
-  { key: "half", label: "Half", color: "#EAB308" },
-  { key: "low", label: "Low", color: "#F59E0B" },
-  { key: "out", label: "Out", color: "#EF4444" },
+const SIMPLE_LEVELS: {
+  key: StockLevel;
+  label: string;
+  color: string;
+  icon: "check-circle" | "minus-circle" | "close-circle";
+}[] = [
+  { key: "stocked", label: "Stocked", color: "#10B981", icon: "check-circle" },
+  { key: "low", label: "Running Low", color: "#F59E0B", icon: "minus-circle" },
+  { key: "out", label: "Out", color: "#EF4444", icon: "close-circle" },
 ];
 
 export function StockLevelPicker({
@@ -40,23 +39,11 @@ export function StockLevelPicker({
   onClose,
   onRemove,
 }: StockLevelPickerProps) {
-  const [previewLevel, setPreviewLevel] = useState<StockLevel>(currentLevel);
+  const activeKey = currentLevel;
 
-  // Reset preview when modal opens
-  React.useEffect(() => {
-    if (visible) {
-      setPreviewLevel(currentLevel);
-    }
-  }, [visible, currentLevel]);
-
-  const handleLevelPress = (level: StockLevel) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPreviewLevel(level);
-  };
-
-  const handleConfirm = () => {
+  const handleSelect = (level: StockLevel) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSelect(previewLevel);
+    onSelect(level);
   };
 
   return (
@@ -68,55 +55,62 @@ export function StockLevelPicker({
     >
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.modal} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.title}>Update Stock Level</Text>
           <Text style={styles.itemName}>{itemName}</Text>
+          <Text style={styles.subtitle}>Set stock level</Text>
 
-          {/* Large gauge */}
-          <View style={styles.gaugeContainer}>
-            <GaugeIndicator level={previewLevel} size="large" />
-          </View>
-
-          {/* Level buttons */}
-          <View style={styles.buttonsRow}>
-            {LEVELS.map((level) => (
-              <TouchableOpacity
-                key={level.key}
-                style={[
-                  styles.levelButton,
-                  previewLevel === level.key && styles.levelButtonActive,
-                  { borderColor: level.color },
-                ]}
-                onPress={() => handleLevelPress(level.key)}
-              >
-                <View style={[styles.levelDot, { backgroundColor: level.color }]} />
-                <Text
+          {/* 3 level buttons — tap to apply immediately */}
+          <View style={styles.levelsColumn}>
+            {SIMPLE_LEVELS.map((level) => {
+              const isActive = activeKey === level.key;
+              return (
+                <TouchableOpacity
+                  key={level.key}
                   style={[
-                    styles.levelLabel,
-                    previewLevel === level.key && styles.levelLabelActive,
+                    styles.levelRow,
+                    isActive && { borderColor: level.color, backgroundColor: `${level.color}15` },
                   ]}
+                  onPress={() => handleSelect(level.key)}
+                  activeOpacity={0.7}
                 >
-                  {level.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <MaterialCommunityIcons
+                    name={level.icon}
+                    size={22}
+                    color={isActive ? level.color : "rgba(255, 255, 255, 0.4)"}
+                  />
+                  <Text
+                    style={[
+                      styles.levelLabel,
+                      isActive && { color: level.color, fontWeight: "700" },
+                    ]}
+                  >
+                    {level.label}
+                  </Text>
+                  {isActive && (
+                    <View style={styles.currentBadge}>
+                      <Text style={styles.currentBadgeText}>current</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
-
-          {/* Confirm button */}
-          <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
-            <Text style={styles.confirmButtonText}>Confirm</Text>
-          </TouchableOpacity>
-
-          {/* Cancel button */}
-          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
 
           {/* Remove button */}
           {onRemove && (
             <TouchableOpacity style={styles.removeButton} onPress={onRemove}>
+              <MaterialCommunityIcons
+                name="delete-outline"
+                size={16}
+                color="#EF4444"
+              />
               <Text style={styles.removeButtonText}>Remove from Stock</Text>
             </TouchableOpacity>
           )}
+
+          {/* Cancel */}
+          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
         </Pressable>
       </Pressable>
     </Modal>
@@ -132,93 +126,77 @@ const styles = StyleSheet.create({
   },
   modal: {
     backgroundColor: "#0F1A2E",
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 20,
-    width: "85%",
-    maxWidth: 360,
+    width: "80%",
+    maxWidth: 320,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
   },
-  title: {
+  itemName: {
     fontSize: 18,
     fontWeight: "700",
     color: "#FFFFFF",
     marginBottom: 2,
   },
-  itemName: {
-    fontSize: 15,
-    color: "rgba(255, 255, 255, 0.6)",
-    marginBottom: 12,
-  },
-  gaugeContainer: {
+  subtitle: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.5)",
     marginBottom: 16,
-    alignItems: "center",
   },
-  buttonsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginBottom: 16,
+  levelsColumn: {
     width: "100%",
-    justifyContent: "center",
+    gap: 8,
+    marginBottom: 16,
   },
-  levelButton: {
-    width: "30%",
+  levelRow: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.15)",
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-  },
-  levelButtonActive: {
-    backgroundColor: "rgba(0, 212, 170, 0.15)",
-  },
-  levelDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginBottom: 4,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    gap: 12,
   },
   levelLabel: {
-    fontSize: 11,
-    color: "rgba(255, 255, 255, 0.5)",
+    fontSize: 15,
+    color: "rgba(255, 255, 255, 0.6)",
     fontWeight: "500",
+    flex: 1,
   },
-  levelLabelActive: {
-    color: "#FFFFFF",
-    fontWeight: "700",
+  currentBadge: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
-  confirmButton: {
-    backgroundColor: "#00D4AA",
-    paddingVertical: 12,
-    paddingHorizontal: 48,
-    borderRadius: 12,
-    width: "100%",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  confirmButtonText: {
-    color: "#0B1426",
-    fontSize: 16,
+  currentBadgeText: {
+    fontSize: 10,
     fontWeight: "600",
-  },
-  cancelButton: {
-    paddingVertical: 10,
-  },
-  cancelButtonText: {
-    color: "rgba(255, 255, 255, 0.5)",
-    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.4)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   removeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingVertical: 10,
-    marginTop: 4,
+    marginBottom: 4,
   },
   removeButtonText: {
     color: "#EF4444",
     fontSize: 14,
     fontWeight: "500",
+  },
+  cancelButton: {
+    paddingVertical: 8,
+  },
+  cancelButtonText: {
+    color: "rgba(255, 255, 255, 0.5)",
+    fontSize: 14,
   },
 });

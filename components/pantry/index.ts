@@ -7,8 +7,6 @@ export {
 } from "./GaugeIndicator";
 export type { StockLevel } from "./GaugeIndicator";
 
-export { StockLevelPicker } from "./StockLevelPicker";
-
 export { FlyToListAnimation } from "./FlyToListAnimation";
 
 export { PantryItemCard } from "./PantryItemCard";

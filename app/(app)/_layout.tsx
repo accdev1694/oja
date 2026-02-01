@@ -147,7 +147,7 @@ function PersistentTabBar() {
   // Stock tab badge: count of Low + Out items
   const pantryItems = useQuery(
     api.pantryItems.getByUser,
-    user?._id ? { userId: user._id } : "skip"
+    user?._id ? {} : "skip"
   );
   const stockBadge = React.useMemo(() => {
     if (!pantryItems) return 0;

@@ -4,15 +4,28 @@ import { useState, useCallback } from "react";
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Pressable,
+  ScrollView,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import {
+  GlassScreen,
+  GlassCard,
+  GlassButton,
+  GlassInput,
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+} from "@/components/ui/glass";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -21,6 +34,7 @@ export default function SignUpScreen() {
   const { startOAuthFlow: startGoogleOAuth } = useOAuth({ strategy: "oauth_google" });
   const { startOAuthFlow: startAppleOAuth } = useOAuth({ strategy: "oauth_apple" });
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
@@ -106,223 +120,248 @@ export default function SignUpScreen() {
 
   if (pendingVerification) {
     return (
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
-      >
-        <View style={styles.content}>
-          <Text style={styles.title}>Verify your email</Text>
-          <Text style={styles.subtitle}>
-            We sent a verification code to {emailAddress}
-          </Text>
+      <GlassScreen>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.flex}
+        >
+          <View style={[styles.content, { paddingTop: insets.top + spacing.xl }]}>
+            <View style={styles.iconContainer}>
+              <MaterialCommunityIcons name="email-check-outline" size={48} color={colors.accent.primary} />
+            </View>
+            <Text style={styles.title}>Verify your email</Text>
+            <Text style={styles.subtitle}>
+              We sent a verification code to {emailAddress}
+            </Text>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? (
+              <GlassCard variant="bordered" accentColor={colors.accent.error} style={styles.errorCard}>
+                <Text style={styles.errorText}>{error}</Text>
+              </GlassCard>
+            ) : null}
 
-          <TextInput
-            style={styles.input}
-            placeholder="Verification code"
-            placeholderTextColor="#9CA3AF"
-            value={code}
-            onChangeText={setCode}
-            keyboardType="number-pad"
-          />
+            <GlassInput
+              placeholder="Verification code"
+              value={code}
+              onChangeText={setCode}
+              keyboardType="number-pad"
+              iconLeft="shield-key-outline"
+            />
 
-          <TouchableOpacity
-            style={[styles.button, isLoading && styles.buttonDisabled]}
-            onPress={onVerifyPress}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Verify</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+            <View style={styles.spacer} />
+
+            <GlassButton
+              variant="primary"
+              size="lg"
+              onPress={onVerifyPress}
+              loading={isLoading}
+              disabled={isLoading || !code}
+            >
+              Verify
+            </GlassButton>
+          </View>
+        </KeyboardAvoidingView>
+      </GlassScreen>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
-    >
-      <View style={styles.content}>
-        <Text style={styles.title}>Create account</Text>
-        <Text style={styles.subtitle}>Start your budget-first shopping journey</Text>
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#9CA3AF"
-          value={emailAddress}
-          onChangeText={setEmailAddress}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          autoComplete="email"
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#9CA3AF"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoComplete="password-new"
-        />
-
-        <TouchableOpacity
-          style={[styles.button, isLoading && styles.buttonDisabled]}
-          onPress={onSignUpPress}
-          disabled={isLoading}
+    <GlassScreen>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.flex}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: insets.top + spacing["2xl"], paddingBottom: insets.bottom + spacing.lg },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Create Account</Text>
-          )}
-        </TouchableOpacity>
+          <View style={styles.iconContainer}>
+            <MaterialCommunityIcons name="cart-plus" size={48} color={colors.accent.primary} />
+          </View>
+          <Text style={styles.title}>Create account</Text>
+          <Text style={styles.subtitle}>Start your budget-first shopping journey</Text>
 
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or sign up with</Text>
-          <View style={styles.dividerLine} />
-        </View>
+          {error ? (
+            <GlassCard variant="bordered" accentColor={colors.accent.error} style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
+            </GlassCard>
+          ) : null}
 
-        <View style={styles.oauthContainer}>
-          <TouchableOpacity
-            style={[styles.oauthButton, isLoading && styles.buttonDisabled]}
-            onPress={() => onOAuthPress("google")}
-            disabled={isLoading}
+          <GlassInput
+            placeholder="Email"
+            value={emailAddress}
+            onChangeText={setEmailAddress}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            iconLeft="email-outline"
+          />
+
+          <View style={{ height: spacing.sm }} />
+
+          <GlassInput
+            placeholder="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoComplete="password-new"
+            iconLeft="lock-outline"
+          />
+
+          <View style={styles.spacer} />
+
+          <GlassButton
+            variant="primary"
+            size="lg"
+            onPress={onSignUpPress}
+            loading={isLoading}
+            disabled={isLoading || !emailAddress || !password}
           >
-            <Text style={styles.oauthButtonText}>Google</Text>
-          </TouchableOpacity>
+            Create Account
+          </GlassButton>
 
-          {Platform.OS === "ios" && (
-            <TouchableOpacity
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or sign up with</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* OAuth Buttons */}
+          <View style={styles.oauthContainer}>
+            <Pressable
               style={[styles.oauthButton, isLoading && styles.buttonDisabled]}
-              onPress={() => onOAuthPress("apple")}
+              onPress={() => onOAuthPress("google")}
               disabled={isLoading}
             >
-              <Text style={styles.oauthButtonText}>Apple</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+              <MaterialCommunityIcons name="google" size={20} color={colors.text.primary} />
+              <Text style={styles.oauthButtonText}>Google</Text>
+            </Pressable>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account? </Text>
-          <Link href="/(auth)/sign-in" asChild>
-            <TouchableOpacity>
-              <Text style={styles.link}>Sign in</Text>
-            </TouchableOpacity>
-          </Link>
-        </View>
-      </View>
-    </KeyboardAvoidingView>
+            {Platform.OS === "ios" && (
+              <Pressable
+                style={[styles.oauthButton, isLoading && styles.buttonDisabled]}
+                onPress={() => onOAuthPress("apple")}
+                disabled={isLoading}
+              >
+                <MaterialCommunityIcons name="apple" size={20} color={colors.text.primary} />
+                <Text style={styles.oauthButtonText}>Apple</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Already have an account? </Text>
+            <Link href="/(auth)/sign-in" asChild>
+              <Pressable>
+                <Text style={styles.linkText}>Sign in</Text>
+              </Pressable>
+            </Link>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  flex: {
     flex: 1,
-    backgroundColor: "#FFFAF8",
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "center",
-    padding: 24,
+    paddingHorizontal: spacing.lg,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: `${colors.accent.primary}20`,
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "center",
+    marginBottom: spacing.lg,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#2D3436",
-    marginBottom: 8,
+    ...typography.displaySmall,
+    color: colors.text.primary,
+    textAlign: "center",
+    marginBottom: spacing.xs,
   },
   subtitle: {
-    fontSize: 16,
-    color: "#6B7280",
-    marginBottom: 32,
+    ...typography.bodyLarge,
+    color: colors.text.secondary,
+    textAlign: "center",
+    marginBottom: spacing.xl,
   },
-  error: {
-    color: "#EF4444",
-    marginBottom: 16,
-    fontSize: 14,
+  errorCard: {
+    marginBottom: spacing.md,
   },
-  input: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    marginBottom: 16,
-    color: "#2D3436",
+  errorText: {
+    ...typography.bodySmall,
+    color: colors.accent.error,
   },
-  button: {
-    backgroundColor: "#FF6B35",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 24,
-  },
-  footerText: {
-    color: "#6B7280",
-    fontSize: 14,
-  },
-  link: {
-    color: "#FF6B35",
-    fontSize: 14,
-    fontWeight: "600",
+  spacer: {
+    height: spacing.lg,
   },
   divider: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 24,
+    marginVertical: spacing.lg,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: colors.glass.border,
   },
   dividerText: {
-    marginHorizontal: 16,
-    color: "#6B7280",
-    fontSize: 14,
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginHorizontal: spacing.md,
   },
   oauthContainer: {
     flexDirection: "row",
-    gap: 12,
-    marginBottom: 8,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
   oauthButton: {
     flex: 1,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    padding: 16,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
   },
   oauthButtonText: {
-    color: "#2D3436",
-    fontSize: 16,
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: spacing.lg,
+  },
+  footerText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+  },
+  linkText: {
+    ...typography.bodyMedium,
+    color: colors.accent.primary,
     fontWeight: "600",
   },
 });

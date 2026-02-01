@@ -1,7 +1,8 @@
 # Oja v2 Build Progress
 
-> **Last Updated:** 2026-01-30
-> **Stack:** Expo + Clerk + Convex + Jina AI + Gemini
+> **Last Updated:** 2026-02-01
+> **Stack:** Expo + Clerk + Convex + Gemini + OpenAI (fallback) + Jina AI
+> **Key Reference:** `analysis.md` - UX/UI deep analysis with implementation status
 
 ---
 
@@ -16,11 +17,13 @@
 | 3. Shopping Lists with Budget Control (Epic 3) | ✅ Complete | 10/10 |
 | 4. Partner Mode & Collaboration (Epic 4) | 🔄 In Progress | 2/5 (backend + invite/join UI done; approval, contest, comments, notification UI missing) |
 | 5. Receipt Intelligence & Price History (Epic 5) | ✅ Complete | 6/6 |
-| 6. Insights, Gamification & Progress (Epic 6) | ⏳ Placeholder | 0/3 (UI screen + backend queries exist but not validated/tested; no challenges, no weekly push digests) |
+| 5.5. Zero-Blank Price Intelligence | ✅ Phases 1-4, 6 | 5/6 (bracket matcher validation pending) |
+| 6. Insights, Gamification & Progress (Epic 6) | 🔄 In Progress | 2/3 (UI + backend done; push notifications pending) |
 | 7. Subscription, Payments & Loyalty (Epic 7) | ⏳ Placeholder | 0/3 (UI screen + backend queries exist but Stripe not integrated; no real payment flow) |
 | 8. Admin Dashboard & Operations (Epic 8) | ⏳ Placeholder | 0/5 (UI screen + backend queries exist but not validated/tested; no moderation tools, no catalog management) |
 | 9. Testing & Quality Assurance | ✅ Complete | 83 tests passing |
 | UI. Glass UI Redesign (Epic UI) | ✅ Complete | 17/17 |
+| UX. Emotional Design (analysis.md) | ✅ Complete | All recommendations implemented |
 
 ---
 
@@ -264,19 +267,73 @@
 
 ---
 
-## Phase 6: Insights & Gamification (Epic 6)
+## Phase 5.5: Zero-Blank Price Intelligence ✅ Mostly Complete
 
-### Stories (TBD)
+> **Reference:** `analysis.md` → "Implementation Item: Zero-Blank Price Intelligence"
+
+### Implementation Phases
+
+| Phase | Description | Status | Notes |
+|-------|-------------|--------|-------|
+| 1 | Foundation — Persist AI Variant Prices | ✅ | `estimatedPrice` on `itemVariants`, 3-layer cascade in `getWithPrices`, personal priceHistory lookup |
+| 2 | Zero-Blank for Non-Variant Items | ✅ | `defaultSize`/`defaultUnit` on `pantryItems`, AI prompt updated |
+| 3 | AI Fallback Provider | ✅ | `withAIFallback` wrapper, OpenAI as fallback when Gemini fails |
+| 4 | Real-Time AI Estimation | ✅ | `estimateItemPrice` action, `upsertAIEstimate` mutation |
+| 5 | Price-Bracket Matcher | ⏳ | Validation against 19 receipts in `receipts/` pending (target >80%) |
+| 6 | Variant Picker UI | ✅ | Confidence labels, "Your usual" badge, selected state, "Not sure" option |
+
+### Key Files
+
+- `convex/itemVariants.ts` - `getWithPrices` with 3-layer cascade + priceSource/reportCount
+- `convex/currentPrices.ts` - Bracket matcher + `upsertAIEstimate`
+- `convex/ai.ts` - `estimateItemPrice` + `withAIFallback` wrapper
+- `app/(app)/list/[id].tsx` - Enhanced variant picker with zero-blank UX
+
+---
+
+## Phase 6: Insights & Gamification (Epic 6) 🔄 In Progress
+
+### Stories
 
 | ID | Story | Status | Notes |
 |----|-------|--------|-------|
-| 6-1 | Weekly digest | ⏳ | |
-| 6-2 | Monthly trends | ⏳ | |
-| 6-3 | Budget streak | ⏳ | Fire emoji |
-| 6-4 | Savings jar | ⏳ | Animated |
-| 6-5 | Weekly challenge | ⏳ | |
-| 6-6 | Personal best | ⏳ | |
-| 6-7 | Surprise delight | ⏳ | Random rewards |
+| 6-1 | Weekly digest | ✅ | `generateWeeklyNarrative()` — 2-3 sentence summary from digest data |
+| 6-2 | Monthly trends | ✅ | Insights screen with collapsible sections |
+| 6-3 | Budget streak | ✅ | Fire emoji, streak tracking |
+| 6-4 | Savings jar | ✅ | Milestone-based warmth messaging |
+| 6-5 | Weekly challenge | ⏳ | UI exists, backend pending |
+| 6-6 | Personal best | ✅ | Personal bests in collapsible section |
+| 6-7 | Surprise delight | ✅ | Milestone toasts via `useDelightToast` |
+| 6-8 | Push notifications | ⏳ | Stock reminders, streak motivation, weekly digest (NOT STARTED) |
+
+---
+
+## UX: Emotional Design (analysis.md) ✅ Complete
+
+### Implemented Recommendations
+
+| Category | Item | Status | Notes |
+|----------|------|--------|-------|
+| **Color** | Warm accent (#FFB088) | ✅ | `accent.warm` + `semantic.warm` tokens |
+| **Color** | Teal reduction | ✅ | Chips, filters, notifications → white/indigo |
+| **Color** | Tab color personality | ✅ | `SimpleHeader` accepts `accentColor` prop |
+| **Color** | Background warmth | ✅ | Shifted from #0B1426 → #0D1528 |
+| **Emotional** | Micro-celebrations | ✅ | Green border flash on check-off (600ms) |
+| **Emotional** | Budget sentiment | ✅ | Sentiment line below dial, color-matched |
+| **Emotional** | Savings jar warmth | ✅ | Milestone-based encouragement messages |
+| **Emotional** | Voice audit | ✅ | Warmed up all empty state copy |
+| **Layout** | Profile simplification | ✅ | 3 sections: Account + Quick Stats + Nav Links |
+| **Layout** | Collapsible insights | ✅ | `GlassCollapsible` for 6 sections |
+| **Layout** | Section gaps | ✅ | Bumped to 48px (`layout.sectionGap`) |
+| **Navigation** | Journey prompts | ✅ | Stock→Lists banner, Trip summary→Stock banner |
+| **Navigation** | Smart tab badges | ✅ | Stock tab red badge with Low+Out count |
+| **Navigation** | Shallow navigation | ✅ | Insights/Subscription as modal overlays |
+| **Retention** | Weekly narrative | ✅ | 2-3 sentence summary in Insights |
+| **Retention** | New user milestone path | ✅ | Profile shows step-by-step checklist |
+| **Retention** | Social proof | ✅ | Empty states mention community |
+| **Retention** | Discovery zone | ✅ | "Did You Know?" daily tips in Insights |
+| **Retention** | Visible investment | ✅ | Profile shows items/receipts/trips tracked |
+| **Retention** | Milestone celebrations | ✅ | `useDelightToast` for £10/£25/£50/£100 |
 
 ---
 
@@ -297,6 +354,12 @@
 
 | Date | Change |
 |------|--------|
+| 2026-02-01 | **CLAUDE.md Sync** - Updated to align with `analysis.md` (UX/UI deep analysis) |
+| 2026-02-01 | Added Phase 5.5: Zero-Blank Price Intelligence (5/6 phases complete) |
+| 2026-02-01 | Added UX: Emotional Design section documenting all implemented recommendations |
+| 2026-02-01 | Updated Phase 6 status to In Progress (UI + backend done, push notifications pending) |
+| 2026-02-01 | Added `analysis.md` as critical reference document |
+| 2026-01-31 | **UX/UI Deep Analysis** - `analysis.md` created with 6-criterion audit + Zero-Blank Price Intelligence spec |
 | 2026-01-30 | **Status Audit** - Corrected overstated completion: Epic 4 downgraded to In Progress (2/5), Epics 6/7/8 downgraded to Placeholder (UI+backend scaffolding exists but not validated/tested, missing key features) |
 | 2026-01-30 | **All-Category Expansion** - AI prompt expanded from grocery-only to 24 categories (Household, Personal Care, Electronics, etc.) |
 | 2026-01-30 | Expanded icon system: ~60 new keyword mappings + 12 non-food category mappings (client + server) |
