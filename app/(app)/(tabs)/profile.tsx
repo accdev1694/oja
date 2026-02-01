@@ -46,7 +46,7 @@ export default function ProfileScreen() {
   if (allLists === undefined || pantryItems === undefined) {
     return (
       <GlassScreen>
-        <SimpleHeader title="Profile" subtitle="Loading..." />
+        <SimpleHeader title="Profile" accentColor={colors.semantic.profile} subtitle="Loading..." />
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.skeletonContent}>
           {/* Account Skeleton */}
           <View style={styles.section}>
@@ -98,6 +98,7 @@ export default function ProfileScreen() {
     <GlassScreen>
       <SimpleHeader
         title="Profile"
+        accentColor={colors.semantic.profile}
         subtitle="Your insights & settings"
       />
 
@@ -273,6 +274,26 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+
+        {/* Visible Investment — Your Data */}
+        <GlassCard variant="standard" style={styles.investmentCard}>
+          <View style={styles.investmentRow}>
+            <View style={styles.investmentStat}>
+              <Text style={styles.investmentValue}>{pantryItems.length}</Text>
+              <Text style={styles.investmentLabel}>items tracked</Text>
+            </View>
+            <View style={styles.investmentDivider} />
+            <View style={styles.investmentStat}>
+              <Text style={styles.investmentValue}>{receipts?.length ?? 0}</Text>
+              <Text style={styles.investmentLabel}>receipts scanned</Text>
+            </View>
+            <View style={styles.investmentDivider} />
+            <View style={styles.investmentStat}>
+              <Text style={styles.investmentValue}>{completedLists.length}</Text>
+              <Text style={styles.investmentLabel}>trips completed</Text>
+            </View>
+          </View>
+        </GlassCard>
 
         {/* Loyalty & Subscription Section */}
         <View style={styles.section}>
@@ -618,6 +639,36 @@ const styles = StyleSheet.create({
     ...typography.displaySmall,
     color: colors.accent.primary,
     fontWeight: "700",
+  },
+
+  // Visible Investment
+  investmentCard: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  investmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+  },
+  investmentStat: {
+    alignItems: "center",
+    flex: 1,
+  },
+  investmentValue: {
+    ...typography.headlineMedium,
+    color: colors.text.primary,
+    fontWeight: "700",
+  },
+  investmentLabel: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  investmentDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: colors.glass.border,
   },
 
   // Adherence

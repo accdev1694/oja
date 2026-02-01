@@ -4,12 +4,14 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  Pressable,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 
 import {
   GlassScreen,
@@ -303,6 +305,32 @@ export default function TripSummaryScreen() {
           </View>
         </GlassCard>
 
+        {/* Journey prompt: bridge Scan → Stock */}
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.navigate("/(app)/(tabs)/" as any);
+          }}
+        >
+          <GlassCard style={styles.journeyBanner}>
+            <View style={styles.journeyRow}>
+              <MaterialCommunityIcons
+                name="fridge-outline"
+                size={20}
+                color={colors.accent.primary}
+              />
+              <Text style={styles.journeyText}>
+                Update your stock levels?
+              </Text>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={18}
+                color={colors.text.tertiary}
+              />
+            </View>
+          </GlassCard>
+        </Pressable>
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
@@ -463,6 +491,23 @@ const styles = StyleSheet.create({
   statusText: {
     ...typography.labelSmall,
     fontWeight: "600",
+  },
+
+  // Journey prompt
+  journeyBanner: {
+    marginBottom: spacing.md,
+    borderColor: `${colors.accent.primary}30`,
+    borderWidth: 1,
+  },
+  journeyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  journeyText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    flex: 1,
   },
 
   bottomSpacer: {

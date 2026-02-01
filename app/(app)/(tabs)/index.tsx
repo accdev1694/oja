@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import {
   View,
@@ -80,6 +81,7 @@ const STOCK_LEVELS: { level: StockLevel; label: string; color: string }[] = [
 ];
 
 export default function PantryScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const items = useQuery(api.pantryItems.getByUser);
   const activeLists = useQuery(api.shoppingLists.getActive);
@@ -171,6 +173,12 @@ export default function PantryScreen() {
     return items.filter(
       (item) => item.stockLevel === "low" || item.stockLevel === "out"
     ).length;
+  }, [items]);
+
+  // Count items completely out of stock (for journey prompt)
+  const outCount = useMemo(() => {
+    if (!items) return 0;
+    return items.filter((item) => item.stockLevel === "out").length;
   }, [items]);
 
   const slidingPillStyle = useAnimatedStyle(() => {
@@ -392,7 +400,7 @@ export default function PantryScreen() {
   if (items === undefined) {
     return (
       <GlassScreen edges={["top"]}>
-        <SimpleHeader title="My Stock" subtitle="What you have at home · Loading..." />
+        <SimpleHeader title="My Stock" subtitle="What you have at home · Loading..." accentColor={colors.semantic.pantry} />
         <View style={styles.skeletonContainer}>
           <View style={styles.skeletonSection}>
             <View style={styles.skeletonSectionHeader}>
@@ -420,7 +428,7 @@ export default function PantryScreen() {
   if (items.length === 0) {
     return (
       <GlassScreen edges={["top"]}>
-        <SimpleHeader title="My Stock" subtitle="What you have at home · 0 items" />
+        <SimpleHeader title="My Stock" subtitle="What you have at home · 0 items" accentColor={colors.semantic.pantry} />
         <View style={styles.emptyContainer}>
           <EmptyPantry />
         </View>
@@ -463,6 +471,7 @@ export default function PantryScreen() {
         {/* Header */}
         <SimpleHeader
           title="My Stock"
+          accentColor={colors.semantic.pantry}
           subtitle={
             viewMode === "attention"
               ? `${attentionCount} item${attentionCount !== 1 ? "s" : ""} need restocking`
@@ -599,6 +608,33 @@ export default function PantryScreen() {
               </View>
             ) : (
               <View style={styles.itemList}>
+                {/* Journey prompt: bridge Stock → Lists */}
+                {outCount > 0 && (
+                  <Pressable
+                    onPress={() => {
+                      impactAsync(ImpactFeedbackStyle.Light);
+                      router.navigate("/(app)/(tabs)/lists" as any);
+                    }}
+                  >
+                    <GlassCard style={styles.journeyBanner}>
+                      <View style={styles.journeyRow}>
+                        <MaterialCommunityIcons
+                          name="cart-arrow-right"
+                          size={20}
+                          color={colors.accent.primary}
+                        />
+                        <Text style={styles.journeyText}>
+                          {outCount} item{outCount !== 1 ? "s" : ""} out — add to your next list?
+                        </Text>
+                        <MaterialCommunityIcons
+                          name="chevron-right"
+                          size={18}
+                          color={colors.text.tertiary}
+                        />
+                      </View>
+                    </GlassCard>
+                  </Pressable>
+                )}
                 {filteredItems.map((item, index) => (
                   <PantryItemRow
                     key={item._id}
@@ -1360,6 +1396,21 @@ const styles = StyleSheet.create({
   },
   itemList: {
     gap: spacing.md,
+  },
+  journeyBanner: {
+    marginBottom: spacing.xs,
+    borderColor: `${colors.accent.primary}30`,
+    borderWidth: 1,
+  },
+  journeyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  journeyText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    flex: 1,
   },
   itemRowContainer: {
     borderRadius: borderRadius.lg,

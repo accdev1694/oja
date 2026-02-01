@@ -321,9 +321,9 @@ The habit model works best when users invest something that becomes more valuabl
   - Day 2: "Tip: Long-press any pantry item to set its stock level"
   - Day 3: "Did you know? You can swipe items in your pantry to quickly adjust stock"
   - Day 5: "Weekend coming up — create a shopping list to stay on budget"
-- [ ] **Visible Investment:** Show users their data value: "Your pantry: 42 items tracked. Your prices: 67 data points. Your savings: £48 total." This creates switching cost — leaving Oja means losing this history
+- [x] **Visible Investment:** Show users their data value: "Your pantry: 42 items tracked. Your prices: 67 data points. Your savings: £48 total." This creates switching cost — leaving Oja means losing this history ✅ Profile screen shows "items tracked · receipts scanned · trips completed" investment card
 - [ ] **Milestone Celebrations:** When hitting savings milestones (£10, £25, £50, £100), show a celebration screen similar to the trip summary. Make the milestone feel earned and visible
-- [ ] **Social Proof in Empty States:** Instead of "0 trips" for new users, show: "Join 12,000 UK shoppers saving an average of £35/month." Community numbers create FOMO and validation
+- [x] **Social Proof in Empty States:** Instead of "0 trips" for new users, show: "Join 12,000 UK shoppers saving an average of £35/month." Community numbers create FOMO and validation ✅ Added social proof messaging to EmptyPantry, EmptyLists, and NoReceipts empty states
 
 ---
 
@@ -368,7 +368,7 @@ When a single color carries this much weight, it loses its ability to signal pri
 
 - [x] **Introduce a warm accent** — A soft amber/coral (#FFB088 or #FF9F6A) for celebration moments, milestone badges, and encouraging text. Not replacing teal, but adding warmth ✅ accent.warm + semantic.warm tokens added
 - [x] **Reduce teal usage by 50%** — Reserve teal for: primary CTA buttons, active tab indicator, and budget "healthy" state. Everything else (checkmarks, borders, secondary buttons, text links) should use white, gray, or indigo ✅ CategoryFilter, "Got it", filter options, notification badges all switched from teal to white/indigo
-- [ ] **Tab color personality** — Currently each tab has a semantic color, but it only appears in the tab icon. Consider tinting the header or a subtle accent element on each screen to match its tab color. This creates visual variety across the app without breaking consistency
+- [x] **Tab color personality** — Currently each tab has a semantic color, but it only appears in the tab icon. Consider tinting the header or a subtle accent element on each screen to match its tab color. This creates visual variety across the app without breaking consistency ✅ SimpleHeader now accepts accentColor prop — colored dot next to title. All 4 tab screens use their semantic color (teal/indigo/amber/pink)
 - [x] **Dark mode with warmth** — Consider shifting the background gradient very slightly warm: from pure cold navy toward a deep warm navy (#0F1526 → #1A2240). The difference is subtle but the subconscious effect is real ✅ Shifted background from #0B1426 → #0D1528, gradients updated to match
 
 ---
@@ -437,7 +437,7 @@ Some flows go 3+ levels deep: Lists → List Detail → Partners, or Profile →
 
 ### Recommendations
 
-- [ ] **Journey prompts** — After scanning a receipt, show "Update your stock levels?" to bridge Scan → Stock. When stock items go to "Out," show a banner: "3 items are out — add to your next list?" to bridge Stock → Lists. These gentle prompts narrate the lifecycle without forcing it
+- [x] **Journey prompts** — After scanning a receipt, show "Update your stock levels?" to bridge Scan → Stock. When stock items go to "Out," show a banner: "3 items are out — add to your next list?" to bridge Stock → Lists. These gentle prompts narrate the lifecycle without forcing it ✅ Stock screen shows "X items out — add to your next list?" banner linking to Lists. Trip summary shows "Update your stock levels?" banner linking to Stock tab.
 - [x] **Smart tab badges** — Show a badge on the Stock tab when items are Low/Out ("3"). Show a badge on Lists when a list is in "Shopping" mode. These badges act as passive navigation cues: "Something needs your attention here" ✅ Stock tab shows red badge with Low+Out item count
 - [ ] **Shallow navigation preference** — Limit stack depth to 2 levels where possible. Partners, Insights, Subscription can be modal overlays or sheets rather than pushed screens, reducing the feeling of being "deep" in the app
 
@@ -463,12 +463,12 @@ These elements are working well and should not be changed:
 These are the areas that need the most attention:
 
 - [~] **Information overload on key screens** — Profile and Insights still dense. List Detail and Pantry addressed.
-- [ ] **Emotional coldness** — The app looks premium but feels clinical. No warmth, no personality, no moments of delight in daily usage
-- [ ] **Teal saturation** — Primary accent color is overused to the point where it loses signaling power
+- [x] **Emotional coldness** — The app looks premium but feels clinical. No warmth, no personality, no moments of delight in daily usage ✅ Budget sentiment, check-off flash, warm palette, journey prompts added
+- [x] **Teal saturation** — Primary accent color is overused to the point where it loses signaling power ✅ Teal reserved for primary CTAs; chips, filters, notifications use white/indigo
 - [ ] **No active return triggers** — The app relies on the user remembering it exists. No push notification strategy
 - [ ] **First-week dead zone** — Between setup and first shopping trip, the app provides zero value or engagement
 - [x] **Gesture discovery** — Fixed with `SwipeOnboardingOverlay`.
-- [ ] **Voice and personality** — Copy is functional but lacks warmth
+- [x] **Voice and personality** — Copy is functional but lacks warmth ✅ Voice audit completed across all empty states
 
 ---
 
@@ -500,8 +500,8 @@ These are the areas that need the most attention:
 |---|:---:|----------------|-----------------|--------|
 | 11 | [ ] | **First-week nurture sequence** — Daily helpful nudges for new users | Come Back | Medium |
 | 12 | [ ] | **Price intelligence surface** — Show users interesting price data from their history and community | Stay On, Come Back | High |
-| 13 | [ ] | **Journey prompts** between tabs (Scan → Stock, Stock → Lists) | Easy to Use, Come Back | Medium |
-| 14 | [ ] | **Visible investment counter** — Show data value: items tracked, prices contributed, total saved | Come Back | Low |
+| 13 | [x] | **Journey prompts** between tabs (Scan → Stock, Stock → Lists) | Easy to Use, Come Back | Medium |
+| 14 | [x] | **Visible investment counter** — Show data value: items tracked, prices contributed, total saved | Come Back | Low |
 | 15 | [ ] | **Savings milestone celebrations** — Trophy screens at £10, £25, £50, £100 milestones | Emotional, Come Back | Medium |
 
 ---

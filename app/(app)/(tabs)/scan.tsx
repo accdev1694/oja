@@ -278,6 +278,7 @@ export default function ScanScreen() {
     <GlassScreen>
       <SimpleHeader
         title="Scan Receipt"
+        accentColor={colors.semantic.scan}
         subtitle="Track spending & build price history"
       />
 

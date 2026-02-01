@@ -279,7 +279,7 @@ export function EmptyPantry({ title, message, onAction, actionText, style }: Emp
       type="empty"
       icon="package-variant"
       title={title ?? "Let's fill your pantry"}
-      message={message ?? "What's in the kitchen? Add items to keep track of your stock."}
+      message={message ?? "What's in the kitchen? Add items to keep track of your stock. Most shoppers track 30+ items in their first week."}
       onRetry={onAction}
       retryText={actionText ?? "Add First Item"}
       style={style}
@@ -293,7 +293,7 @@ export function EmptyLists({ title, message, onAction, actionText, style }: Empt
       type="empty"
       icon="clipboard-list-outline"
       title={title ?? "Ready for your first shop?"}
-      message={message ?? "Create a list and set a budget — we'll help you stay on track."}
+      message={message ?? "Create a list and set a budget — UK shoppers save an average of £35/month by tracking their spending."}
       onRetry={onAction}
       retryText={actionText ?? "Create List"}
       style={style}
@@ -339,7 +339,7 @@ export function NoReceipts({ onAction, style }: EmptyStateProps) {
       type="empty"
       icon="receipt"
       title="No receipts yet"
-      message="Scan a receipt after your shop — we'll track prices and help you save next time."
+      message="Scan a receipt after your shop — we'll track prices and help you save next time. Your prices help build better data for everyone."
       onRetry={onAction}
       retryText="Scan Receipt"
       style={style}

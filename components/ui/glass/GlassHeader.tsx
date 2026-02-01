@@ -384,6 +384,8 @@ export interface SimpleHeaderProps {
   rightElement?: React.ReactNode;
   /** Include safe area top padding (set false when used inside GlassScreen) */
   includeSafeArea?: boolean;
+  /** Optional accent color shown as a subtle dot next to the title */
+  accentColor?: string;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -392,6 +394,7 @@ export function SimpleHeader({
   subtitle,
   rightElement,
   includeSafeArea = false, // Default false - assumes used inside GlassScreen which handles safe area
+  accentColor,
   style,
 }: SimpleHeaderProps) {
   const insets = useSafeAreaInsets();
@@ -406,9 +409,14 @@ export function SimpleHeader({
     >
       <View style={styles.simpleHeaderContent}>
         <View style={styles.simpleHeaderText}>
-          <Text style={styles.simpleTitle}>{title}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {accentColor && (
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accentColor }} />
+            )}
+            <Text style={styles.simpleTitle}>{title}</Text>
+          </View>
           {subtitle && (
-            <Text style={styles.simpleSubtitle}>{subtitle}</Text>
+            <Text style={[styles.simpleSubtitle, accentColor ? { marginLeft: 14 } : undefined]}>{subtitle}</Text>
           )}
         </View>
         {rightElement}

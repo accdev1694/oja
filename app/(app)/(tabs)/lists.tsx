@@ -171,6 +171,7 @@ export default function ListsScreen() {
       {/* Header with New List button */}
       <SimpleHeader
         title="Shopping Lists"
+        accentColor={colors.semantic.lists}
         subtitle={
           tabMode === "active"
             ? lists && lists.length > 0
