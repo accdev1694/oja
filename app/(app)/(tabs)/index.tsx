@@ -42,7 +42,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   GaugeIndicator,
-  StockLevelPicker,
   STOCK_LEVEL_ORDER,
   type StockLevel,
 } from "@/components/pantry";
@@ -62,7 +61,6 @@ import {
   spacing,
   borderRadius,
 } from "@/components/ui/glass";
-import { CategoryFilter } from "@/components/ui/CategoryFilter";
 import { RemoveButton } from "@/components/ui/RemoveButton";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -76,9 +74,7 @@ const STOCK_CATEGORIES = [
 ];
 
 const STOCK_LEVELS: { level: StockLevel; label: string; color: string }[] = [
-  { level: "stocked", label: "Fully Stocked", color: colors.budget.healthy },
-  { level: "good", label: "Good", color: colors.accent.success },
-  { level: "half", label: "Half", color: colors.accent.warning },
+  { level: "stocked", label: "Stocked", color: colors.budget.healthy },
   { level: "low", label: "Running Low", color: colors.budget.caution },
   { level: "out", label: "Out of Stock", color: colors.budget.exceeded },
 ];
@@ -121,18 +117,10 @@ export default function PantryScreen() {
 
   // UI State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
-  const [pickerVisible, setPickerVisible] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<{
-    id: Id<"pantryItems">;
-    name: string;
-    category: string;
-    stockLevel: StockLevel;
-  } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
   const [stockFilters, setStockFilters] = useState<Set<StockLevel>>(
-    new Set(["stocked", "good", "half", "low", "out"])
+    new Set<StockLevel>(["stocked", "low", "out"])
   );
 
   // Add item modal
@@ -171,14 +159,10 @@ export default function PantryScreen() {
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Derive unique categories from items
-  const { categories, categoryCounts } = useMemo(() => {
-    if (!items) return { categories: [], categoryCounts: {} };
-    const countMap: Record<string, number> = {};
-    items.forEach((item) => {
-      countMap[item.category] = (countMap[item.category] || 0) + 1;
-    });
-    const sorted = Object.keys(countMap).sort((a, b) => a.localeCompare(b));
-    return { categories: sorted, categoryCounts: countMap };
+  const categories = useMemo(() => {
+    if (!items) return [];
+    const cats = new Set(items.map((item) => item.category));
+    return [...cats].sort((a, b) => a.localeCompare(b));
   }, [items]);
 
   // Count items needing restocking (Low + Out) for badge
@@ -213,13 +197,12 @@ export default function PantryScreen() {
         // In "all" mode, respect manual stock filters
         if (!stockFilters.has(item.stockLevel as StockLevel)) return false;
       }
-      if (categoryFilter && item.category !== categoryFilter) return false;
       if (searchQuery.trim()) {
         return item.name.toLowerCase().includes(searchQuery.toLowerCase());
       }
       return true;
     });
-  }, [items, searchQuery, stockFilters, categoryFilter, viewMode]);
+  }, [items, searchQuery, stockFilters, viewMode]);
 
   const toggleStockFilter = (level: StockLevel) => {
     impactAsync(ImpactFeedbackStyle.Light);
@@ -243,22 +226,6 @@ export default function PantryScreen() {
     setItemPositions((prev) => ({ ...prev, [itemId]: { x, y } }));
   }, []);
 
-  const handleLongPress = (item: {
-    _id: Id<"pantryItems">;
-    name: string;
-    category: string;
-    stockLevel: string;
-  }) => {
-    impactAsync(ImpactFeedbackStyle.Heavy);
-    setSelectedItem({
-      id: item._id,
-      name: item.name,
-      category: item.category,
-      stockLevel: item.stockLevel as StockLevel,
-    });
-    setPickerVisible(true);
-  };
-
   // Auto-add "out" item to shopping list with toast
   const autoAddToShoppingList = async (
     item: { _id: Id<"pantryItems">; name: string; category: string },
@@ -279,7 +246,6 @@ export default function PantryScreen() {
         listId = await createList({
           name: listName,
           budget: 50,
-          budgetLocked: false,
         });
       }
 
@@ -305,37 +271,6 @@ export default function PantryScreen() {
       setToastVisible(false);
     }, 2200);
   }, []);
-
-  const handleSelectStockLevel = async (level: StockLevel) => {
-    if (!selectedItem) return;
-
-    setPickerVisible(false);
-
-    try {
-      await updateStockLevel({ id: selectedItem.id, stockLevel: level });
-
-      if (level === "out" && selectedItem.stockLevel !== "out") {
-        const pos = itemPositions[selectedItem.id as string];
-        await autoAddToShoppingList(
-          {
-            _id: selectedItem.id,
-            name: selectedItem.name,
-            category: selectedItem.category,
-          },
-          pos || { x: SCREEN_WIDTH / 2, y: 300 }
-        );
-      }
-    } catch (error) {
-      console.error("Failed to update stock level:", error);
-    }
-
-    setSelectedItem(null);
-  };
-
-  const handleClosePicker = () => {
-    setPickerVisible(false);
-    setSelectedItem(null);
-  };
 
   const handleAddItem = async () => {
     const name = newItemName.trim();
@@ -515,7 +450,6 @@ export default function PantryScreen() {
       stiffness: 180,
     });
     // Reset filters when switching modes
-    setCategoryFilter(null);
     setSearchQuery("");
     // Collapse all categories in "all" mode so only headers render (fast)
     if (mode === "all" && categories.length > 0) {
@@ -637,15 +571,8 @@ export default function PantryScreen() {
               />
             </View>
 
-            <CategoryFilter
-              categories={categories}
-              selected={categoryFilter}
-              onSelect={setCategoryFilter}
-              counts={categoryCounts}
-            />
-
             <View style={styles.hintRow}>
-              <TypewriterHint text="Swipe left/right to adjust  ·  Hold to set level or remove" />
+              <TypewriterHint text="Swipe left/right to adjust stock level" />
             </View>
           </>
         )}
@@ -676,7 +603,6 @@ export default function PantryScreen() {
                   <PantryItemRow
                     key={item._id}
                     item={item}
-                    onLongPress={() => handleLongPress(item)}
                     onSwipeDecrease={() => handleSwipeDecrease(item)}
                     onSwipeIncrease={() => handleSwipeIncrease(item)}
                     onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
@@ -730,7 +656,6 @@ export default function PantryScreen() {
                         <PantryItemRow
                           key={item._id}
                           item={item}
-                          onLongPress={() => handleLongPress(item)}
                           onSwipeDecrease={() => handleSwipeDecrease(item)}
                           onSwipeIncrease={() => handleSwipeIncrease(item)}
                           onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
@@ -745,20 +670,6 @@ export default function PantryScreen() {
             })
           )}
         </ScrollView>
-
-        {/* Stock Level Picker */}
-        <StockLevelPicker
-          visible={pickerVisible}
-          currentLevel={selectedItem?.stockLevel || "stocked"}
-          itemName={selectedItem?.name || ""}
-          onSelect={handleSelectStockLevel}
-          onClose={handleClosePicker}
-          onRemove={selectedItem ? () => {
-            setPickerVisible(false);
-            handleRemoveItem({ _id: selectedItem.id, name: selectedItem.name });
-            setSelectedItem(null);
-          } : undefined}
-        />
 
         {/* Added-to-list Toast */}
         {toastVisible && (
@@ -806,7 +717,7 @@ export default function PantryScreen() {
                   variant="ghost"
                   size="md"
                   onPress={() => {
-                    setStockFilters(new Set(["stocked", "good", "half", "low", "out"]));
+                    setStockFilters(new Set<StockLevel>(["stocked", "low", "out"]));
                     impactAsync(ImpactFeedbackStyle.Light);
                   }}
                 >
@@ -1015,7 +926,6 @@ const onboardingStyles = StyleSheet.create({
 // Pantry Item Row Component — uses GestureDetector instead of Swipeable
 function PantryItemRow({
   item,
-  onLongPress,
   onSwipeDecrease,
   onSwipeIncrease,
   onMeasure,
@@ -1028,8 +938,9 @@ function PantryItemRow({
     category: string;
     stockLevel: string;
     icon?: string;
+    lastPrice?: number;
+    priceSource?: string;
   };
-  onLongPress: () => void;
   onSwipeDecrease: () => void;
   onSwipeIncrease: () => void;
   onMeasure: (x: number, y: number) => void;
@@ -1037,15 +948,6 @@ function PantryItemRow({
   animationDelay?: number;
 }) {
   const cardRef = useRef<View>(null);
-
-  const handleLongPress = () => {
-    if (cardRef.current) {
-      cardRef.current.measure((x, y, width, height, pageX, pageY) => {
-        onMeasure(pageX + width / 2, pageY + height / 2);
-      });
-    }
-    onLongPress();
-  };
 
   // Pan gesture — card does NOT move, only triggers stock level change
   const panGesture = Gesture.Pan()
@@ -1061,26 +963,14 @@ function PantryItemRow({
       }
     });
 
-  const longPressGesture = Gesture.LongPress()
-    .minDuration(400)
-    .onStart(() => {
-      runOnJS(handleLongPress)();
-    });
-
-  const composedGesture = Gesture.Race(panGesture, longPressGesture);
-
   const iconName = getSafeIcon(item.icon, item.category) as keyof typeof MaterialCommunityIcons.glyphMap;
 
   const stockLabel =
     item.stockLevel === "stocked"
-      ? "Fully stocked"
-      : item.stockLevel === "good"
-        ? "Good supply"
-        : item.stockLevel === "half"
-          ? "Half stocked"
-          : item.stockLevel === "low"
-            ? "Running low"
-            : "Out of stock";
+      ? "Stocked"
+      : item.stockLevel === "low"
+        ? "Running low"
+        : "Out of stock";
 
   return (
     <Animated.View
@@ -1088,7 +978,7 @@ function PantryItemRow({
       exiting={FadeOut.duration(150)}
       style={styles.itemRowContainer}
     >
-      <GestureDetector gesture={composedGesture}>
+      <GestureDetector gesture={panGesture}>
         <Animated.View>
           <View ref={cardRef} collapsable={false}>
             <GlassCard style={styles.itemCard}>
@@ -1100,7 +990,15 @@ function PantryItemRow({
                 <Text style={styles.itemName} numberOfLines={1}>
                   {item.name}
                 </Text>
-                <Text style={styles.stockLevelText}>{stockLabel}</Text>
+                <View style={styles.itemSubRow}>
+                  <Text style={styles.stockLevelText}>{stockLabel}</Text>
+                  {item.lastPrice != null && (
+                    <Text style={styles.itemPriceLabel}>
+                      £{item.lastPrice.toFixed(2)}
+                      {item.priceSource === "ai_estimate" && " est."}
+                    </Text>
+                  )}
+                </View>
               </View>
 
               {/* Remove button */}
@@ -1465,7 +1363,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: spacing.md,
-    gap: spacing.sm,
+    gap: spacing.lg,
   },
   itemInfo: {
     flex: 1,
@@ -1481,6 +1379,16 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     lineHeight: 24,
     color: colors.text.tertiary,
+  },
+  itemSubRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  itemPriceLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.accent.primary,
   },
   // Modal styles
   modalOverlay: {
