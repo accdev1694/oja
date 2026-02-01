@@ -88,11 +88,17 @@ export default function ReviewItemsScreen() {
     setIsSaving(true);
 
     try {
-      // Get selected items
-      const itemsToSave = items.filter((_, i) => selectedItems.has(i));
+      // Get selected items and normalize stock levels to 3-level system
+      const stockMap: Record<string, string> = { good: "stocked", half: "low" };
+      const itemsToSave = items
+        .filter((_, i) => selectedItems.has(i))
+        .map((item) => ({
+          ...item,
+          stockLevel: stockMap[item.stockLevel] || item.stockLevel,
+        }));
 
       // Save to Convex
-      await bulkCreate({ items: itemsToSave });
+      await bulkCreate({ items: itemsToSave as any });
 
       safeHaptics.success();
 
@@ -162,6 +168,17 @@ export default function ReviewItemsScreen() {
                       >
                         {item.name}
                       </Text>
+
+                      {item.estimatedPrice != null && (
+                        <Text
+                          style={[
+                            styles.itemPrice,
+                            !isSelected && styles.itemPriceDeselected,
+                          ]}
+                        >
+                          ~£{item.estimatedPrice.toFixed(2)}
+                        </Text>
+                      )}
 
                       {isSelected && (
                         <View style={styles.checkmark}>
@@ -289,6 +306,14 @@ const styles = StyleSheet.create({
   },
   itemNameDeselected: {
     color: "#95A5A6",
+  },
+  itemPrice: {
+    fontSize: 12,
+    color: "#636E72",
+    marginTop: 2,
+  },
+  itemPriceDeselected: {
+    color: "#B2BEC3",
   },
   checkmark: {
     position: "absolute",
