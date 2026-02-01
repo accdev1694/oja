@@ -203,3 +203,100 @@ export const clearAllData = mutation({
     return { deletedUsers: users.length, deletedPantryItems: pantryItems.length };
   },
 });
+
+/**
+ * DEVELOPMENT ONLY: List all users (for debugging)
+ */
+export const listAllUsers = query({
+  args: {},
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+    return users.map((u) => ({
+      id: u._id,
+      email: u.email,
+      name: u.name,
+      onboardingComplete: u.onboardingComplete,
+    }));
+  },
+});
+
+/**
+ * DEVELOPMENT ONLY: Reset a specific user for re-onboarding
+ * Deletes all user data (pantry, lists, receipts) and resets onboarding status
+ */
+export const resetUserByEmail = mutation({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    // Find user by email
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .unique();
+
+    if (!user) {
+      throw new Error(`User not found: ${args.email}`);
+    }
+
+    // Delete all pantry items for this user
+    const pantryItems = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const item of pantryItems) {
+      await ctx.db.delete(item._id);
+    }
+
+    // Delete all shopping lists for this user
+    const shoppingLists = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    // Delete all list items for each list
+    for (const list of shoppingLists) {
+      const listItems = await ctx.db
+        .query("listItems")
+        .withIndex("by_list", (q) => q.eq("listId", list._id))
+        .collect();
+      for (const item of listItems) {
+        await ctx.db.delete(item._id);
+      }
+      await ctx.db.delete(list._id);
+    }
+
+    // Delete all receipts for this user
+    const receipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const receipt of receipts) {
+      await ctx.db.delete(receipt._id);
+    }
+
+    // Delete price history for this user
+    const priceHistory = await ctx.db
+      .query("priceHistory")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const price of priceHistory) {
+      await ctx.db.delete(price._id);
+    }
+
+    // Reset user onboarding status
+    await ctx.db.patch(user._id, {
+      onboardingComplete: false,
+      cuisinePreferences: undefined,
+      country: undefined,
+      updatedAt: Date.now(),
+    });
+
+    return {
+      email: args.email,
+      deletedPantryItems: pantryItems.length,
+      deletedShoppingLists: shoppingLists.length,
+      deletedReceipts: receipts.length,
+      deletedPriceHistory: priceHistory.length,
+      message: "User reset for re-onboarding",
+    };
+  },
+});

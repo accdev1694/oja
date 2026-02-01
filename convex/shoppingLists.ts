@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { canCreateList } from "./lib/featureGating";
 
 /**
  * Get all shopping lists for the current user
@@ -49,13 +50,27 @@ export const getActive = query({
       return [];
     }
 
-    return await ctx.db
+    // Fetch both "active" and "shopping" status lists
+    const active = await ctx.db
       .query("shoppingLists")
       .withIndex("by_user_status", (q) =>
         q.eq("userId", user._id).eq("status", "active")
       )
       .order("desc")
       .collect();
+
+    const shopping = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", user._id).eq("status", "shopping")
+      )
+      .order("desc")
+      .collect();
+
+    // Merge and sort by updatedAt descending (shopping lists first since they're in progress)
+    return [...shopping, ...active].sort(
+      (a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt)
+    );
   },
 });
 
@@ -109,8 +124,6 @@ export const create = mutation({
   args: {
     name: v.string(),
     budget: v.optional(v.number()),
-    budgetLocked: v.optional(v.boolean()),
-    impulseFund: v.optional(v.number()),
     storeName: v.optional(v.string()),
     plannedDate: v.optional(v.number()),
   },
@@ -129,6 +142,12 @@ export const create = mutation({
       throw new Error("User not found");
     }
 
+    // Feature gating: check list limit for free tier
+    const access = await canCreateList(ctx, user._id);
+    if (!access.allowed) {
+      throw new Error(access.reason ?? "List limit reached");
+    }
+
     const now = Date.now();
 
     const listId = await ctx.db.insert("shoppingLists", {
@@ -136,8 +155,6 @@ export const create = mutation({
       name: args.name,
       status: "active",
       budget: args.budget,
-      budgetLocked: args.budgetLocked ?? false,
-      impulseFund: args.impulseFund,
       storeName: args.storeName,
       plannedDate: args.plannedDate,
       createdAt: now,
@@ -164,8 +181,6 @@ export const update = mutation({
       )
     ),
     budget: v.optional(v.number()),
-    budgetLocked: v.optional(v.boolean()),
-    impulseFund: v.optional(v.number()),
     storeName: v.optional(v.string()),
     plannedDate: v.optional(v.number()),
   },
@@ -197,8 +212,6 @@ export const update = mutation({
     if (args.name !== undefined) updates.name = args.name;
     if (args.status !== undefined) updates.status = args.status;
     if (args.budget !== undefined) updates.budget = args.budget;
-    if (args.budgetLocked !== undefined) updates.budgetLocked = args.budgetLocked;
-    if (args.impulseFund !== undefined) updates.impulseFund = args.impulseFund;
     if (args.storeName !== undefined) updates.storeName = args.storeName;
     if (args.plannedDate !== undefined) updates.plannedDate = args.plannedDate;
 
@@ -286,41 +299,6 @@ export const startShopping = mutation({
 });
 
 /**
- * Toggle budget lock mode
- */
-export const toggleBudgetLock = mutation({
-  args: { id: v.id("shoppingLists") },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    const list = await ctx.db.get(args.id);
-    if (!list) {
-      throw new Error("List not found");
-    }
-
-    // Verify ownership
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
-
-    if (!user || list.userId !== user._id) {
-      throw new Error("Unauthorized");
-    }
-
-    await ctx.db.patch(args.id, {
-      budgetLocked: !list.budgetLocked,
-      updatedAt: Date.now(),
-    });
-
-    return await ctx.db.get(args.id);
-  },
-});
-
-/**
  * Complete shopping (change status to "completed")
  */
 export const completeShopping = mutation({
@@ -347,10 +325,29 @@ export const completeShopping = mutation({
     }
 
     const now = Date.now();
+
+    // Calculate actualTotal from item-level actual prices
+    const items = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.id))
+      .collect();
+
+    const actualTotal = items.reduce((sum, item) => {
+      if (item.isChecked && item.actualPrice) {
+        return sum + item.actualPrice * item.quantity;
+      }
+      // Fall back to estimated price for checked items without actual price
+      if (item.isChecked && item.estimatedPrice) {
+        return sum + item.estimatedPrice * item.quantity;
+      }
+      return sum;
+    }, 0);
+
     await ctx.db.patch(args.id, {
       status: "completed",
       completedAt: now,
       updatedAt: now,
+      actualTotal: actualTotal > 0 ? actualTotal : undefined,
     });
 
     return await ctx.db.get(args.id);

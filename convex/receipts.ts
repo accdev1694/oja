@@ -250,6 +250,44 @@ export const linkToList = mutation({
 
     // Link receipt to list
     await ctx.db.patch(args.receiptId, { listId: args.listId });
+
+    // Correct list actualTotal from receipt total (receipt is source of truth)
+    await ctx.db.patch(args.listId, {
+      actualTotal: receipt.total,
+      receiptId: args.receiptId,
+      updatedAt: Date.now(),
+    });
+
+    // Match receipt items to list items and correct actual prices
+    if (receipt.items && receipt.items.length > 0) {
+      const listItems = await ctx.db
+        .query("listItems")
+        .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+        .collect();
+
+      for (const listItem of listItems) {
+        const listItemLower = listItem.name.toLowerCase().trim();
+
+        // Find best matching receipt item (exact or substring match)
+        const match = receipt.items.find((ri) => {
+          const riLower = ri.name.toLowerCase().trim();
+          return (
+            riLower === listItemLower ||
+            riLower.includes(listItemLower) ||
+            listItemLower.includes(riLower)
+          );
+        });
+
+        if (match) {
+          await ctx.db.patch(listItem._id, {
+            actualPrice: match.unitPrice,
+            isChecked: true,
+            updatedAt: Date.now(),
+          });
+        }
+      }
+    }
+
     return { success: true };
   },
 });

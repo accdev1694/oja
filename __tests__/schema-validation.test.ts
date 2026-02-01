@@ -1,6 +1,6 @@
 describe("Schema Validation", () => {
   // Stock level values
-  const validStockLevels = ["stocked", "good", "half", "low", "out"];
+  const validStockLevels = ["stocked", "low", "out"];
   const validPriorities = ["must-have", "should-have", "nice-to-have"];
   const validListStatuses = ["active", "shopping", "completed", "archived"];
   const validPartnerRoles = ["viewer", "editor", "approver"];
@@ -11,8 +11,8 @@ describe("Schema Validation", () => {
   const validPointTypes = ["earned", "redeemed", "expired"];
 
   describe("Stock Levels", () => {
-    it("should have 5 valid levels", () => {
-      expect(validStockLevels).toHaveLength(5);
+    it("should have 3 valid levels", () => {
+      expect(validStockLevels).toHaveLength(3);
     });
 
     it("should include all expected levels", () => {
@@ -22,7 +22,7 @@ describe("Schema Validation", () => {
 
     it("should have correct ordering (best to worst)", () => {
       expect(validStockLevels[0]).toBe("stocked");
-      expect(validStockLevels[4]).toBe("out");
+      expect(validStockLevels[2]).toBe("out");
     });
   });
 

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getIconForItem } from "./iconMapping";
+import { canAddPantryItem } from "./lib/featureGating";
 
 /**
  * Bulk create pantry items for a user
@@ -78,6 +79,29 @@ export const bulkCreate = mutation({
     );
 
     await Promise.all(promises);
+
+    // Gamification: progress "add_items" challenge if active
+    if (newItems.length > 0) {
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const challenges = await ctx.db
+          .query("weeklyChallenges")
+          .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+          .collect();
+        const active = challenges.find(
+          (c: any) => c.type === "add_items" && c.endDate >= today && !c.completedAt
+        );
+        if (active) {
+          const newProgress = Math.min(active.progress + newItems.length, active.target);
+          await ctx.db.patch(active._id, {
+            progress: newProgress,
+            ...(newProgress >= active.target ? { completedAt: Date.now() } : {}),
+          });
+        }
+      } catch {
+        // Non-critical
+      }
+    }
 
     return { count: promises.length, skipped: args.items.length - newItems.length };
   },
@@ -169,6 +193,12 @@ export const create = mutation({
       throw new Error("User not found");
     }
 
+    // Feature gating: check pantry item limit for free tier
+    const access = await canAddPantryItem(ctx, user._id);
+    if (!access.allowed) {
+      throw new Error(access.reason ?? "Pantry item limit reached");
+    }
+
     const now = Date.now();
 
     const itemId = await ctx.db.insert("pantryItems", {
@@ -181,6 +211,27 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // Gamification: progress "add_items" challenge if active
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const challenges = await ctx.db
+        .query("weeklyChallenges")
+        .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+        .collect();
+      const active = challenges.find(
+        (c: any) => c.type === "add_items" && c.endDate >= today && !c.completedAt
+      );
+      if (active) {
+        const newProgress = Math.min(active.progress + 1, active.target);
+        await ctx.db.patch(active._id, {
+          progress: newProgress,
+          ...(newProgress >= active.target ? { completedAt: Date.now() } : {}),
+        });
+      }
+    } catch {
+      // Non-critical
+    }
 
     return itemId;
   },

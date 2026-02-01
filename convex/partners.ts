@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireFeature } from "./lib/featureGating";
 
 // Helper to get authenticated user (auto-creates if missing, e.g. partner who skipped onboarding)
 async function requireUser(ctx: any) {
@@ -105,6 +106,13 @@ export const createInviteCode = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+
+    // Feature gating: partner mode is premium only
+    const access = await requireFeature(ctx, user._id, "partnerMode");
+    if (!access.allowed) {
+      throw new Error(access.reason ?? "Partner mode requires Premium");
+    }
+
     const list = await ctx.db.get(args.listId);
     if (!list || list.userId !== user._id) throw new Error("Unauthorized");
 

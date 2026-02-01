@@ -401,9 +401,8 @@ export const addFromPantrySelected = mutation({
 });
 
 /**
- * Add an item during mid-shop with 3 options:
- * - budget: Add to main budget
- * - impulse: Add to impulse fund
+ * Add an item during mid-shop with 2 options:
+ * - add: Add to the shopping list (always allowed, even over budget)
  * - next_trip: Defer to next trip (add to pantry as "out")
  */
 export const addItemMidShop = mutation({
@@ -412,8 +411,7 @@ export const addItemMidShop = mutation({
     name: v.string(),
     estimatedPrice: v.number(),
     source: v.union(
-      v.literal("budget"),
-      v.literal("impulse"),
+      v.literal("add"),
       v.literal("next_trip")
     ),
     quantity: v.optional(v.number()),
@@ -441,30 +439,9 @@ export const addItemMidShop = mutation({
 
     const now = Date.now();
     const quantity = args.quantity ?? 1;
-    const itemTotal = args.estimatedPrice * quantity;
 
-    // Calculate current list total
-    const items = await ctx.db
-      .query("listItems")
-      .withIndex("by_list", (q) => q.eq("listId", args.listId))
-      .collect();
-
-    const currentTotal = items.reduce((sum, item) => {
-      return sum + (item.estimatedPrice || 0) * item.quantity;
-    }, 0);
-
-    if (args.source === "budget") {
-      // Check budget lock
-      const budget = list.budget || 0;
-      const impulseFund = budget * 0.1;
-      const totalLimit = budget + impulseFund;
-      const newTotal = currentTotal + itemTotal;
-
-      if (list.budgetLocked && budget > 0 && newTotal > totalLimit) {
-        throw new Error("BUDGET_EXCEEDED");
-      }
-
-      // Add to list as regular item
+    if (args.source === "add") {
+      // Always allow adding — no budget lock or impulse fund checks
       const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
@@ -475,49 +452,12 @@ export const addItemMidShop = mutation({
         priority: "should-have",
         isChecked: false,
         autoAdded: false,
-        isImpulse: false,
         addedMidShop: true,
         createdAt: now,
         updatedAt: now,
       });
 
-      return { success: true, itemId, source: "budget" };
-
-    } else if (args.source === "impulse") {
-      // Calculate impulse fund usage
-      const budget = list.budget || 0;
-      const impulseFund = budget * 0.1;
-
-      const impulseUsed = items
-        .filter((item) => item.isImpulse)
-        .reduce((sum, item) => {
-          return sum + (item.estimatedPrice || 0) * item.quantity;
-        }, 0);
-
-      const impulseRemaining = impulseFund - impulseUsed;
-
-      if (itemTotal > impulseRemaining) {
-        throw new Error("IMPULSE_EXCEEDED");
-      }
-
-      // Add as impulse item
-      const itemId = await ctx.db.insert("listItems", {
-        listId: args.listId,
-        userId: user._id,
-        name: args.name,
-        category: args.category,
-        quantity,
-        estimatedPrice: args.estimatedPrice,
-        priority: "nice-to-have",
-        isChecked: false,
-        autoAdded: false,
-        isImpulse: true,
-        addedMidShop: true,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      return { success: true, itemId, source: "impulse", impulseRemaining: impulseRemaining - itemTotal };
+      return { success: true, itemId, source: "add" };
 
     } else if (args.source === "next_trip") {
       // Add to pantry as "Out" - will auto-add to next list
@@ -526,7 +466,7 @@ export const addItemMidShop = mutation({
         name: args.name,
         category: args.category || "Uncategorized",
         stockLevel: "out",
-        autoAddToList: true, // So it shows up on next shopping list
+        autoAddToList: true,
         createdAt: now,
         updatedAt: now,
       });
@@ -538,50 +478,3 @@ export const addItemMidShop = mutation({
   },
 });
 
-/**
- * Get impulse fund usage for a list
- */
-export const getImpulseUsage = query({
-  args: { listId: v.id("shoppingLists") },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return { used: 0, remaining: 0, total: 0, items: [] };
-    }
-
-    const list = await ctx.db.get(args.listId);
-    if (!list) {
-      return { used: 0, remaining: 0, total: 0, items: [] };
-    }
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
-
-    if (!user || list.userId !== user._id) {
-      return { used: 0, remaining: 0, total: 0, items: [] };
-    }
-
-    const items = await ctx.db
-      .query("listItems")
-      .withIndex("by_list", (q) => q.eq("listId", args.listId))
-      .collect();
-
-    const impulseItems = items.filter((item) => item.isImpulse);
-    const impulseUsed = impulseItems.reduce((sum, item) => {
-      return sum + (item.estimatedPrice || 0) * item.quantity;
-    }, 0);
-
-    const budget = list.budget || 0;
-    const impulseFund = budget * 0.1;
-    const impulseRemaining = impulseFund - impulseUsed;
-
-    return {
-      used: impulseUsed,
-      remaining: impulseRemaining,
-      total: impulseFund,
-      items: impulseItems,
-    };
-  },
-});

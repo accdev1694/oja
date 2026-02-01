@@ -1,31 +1,18 @@
-describe("Budget & Impulse Fund Logic", () => {
-  // Replicate the budget calculation logic from listItems.ts
+describe("Budget Logic", () => {
+  // Simplified budget calculation — no impulse fund, no budget lock
   function calculateBudgetStatus(
     budget: number,
-    items: { estimatedPrice?: number; quantity: number; isImpulse?: boolean }[]
+    items: { estimatedPrice?: number; quantity: number }[]
   ) {
     const currentTotal = items.reduce(
       (sum, item) => sum + (item.estimatedPrice || 0) * item.quantity,
       0
     );
 
-    const impulseFund = budget * 0.1;
-    const impulseUsed = items
-      .filter((item) => item.isImpulse)
-      .reduce((sum, item) => sum + (item.estimatedPrice || 0) * item.quantity, 0);
-
-    const impulseRemaining = impulseFund - impulseUsed;
-    const totalLimit = budget + impulseFund;
-
     return {
       currentTotal,
       budget,
-      impulseFund,
-      impulseUsed,
-      impulseRemaining,
-      totalLimit,
-      isOverBudget: currentTotal > budget,
-      isOverTotalLimit: currentTotal > totalLimit,
+      isOverBudget: budget > 0 && currentTotal > budget,
       budgetRemaining: budget - currentTotal,
       percentUsed: budget > 0 ? (currentTotal / budget) * 100 : 0,
     };
@@ -42,21 +29,6 @@ describe("Budget & Impulse Fund Logic", () => {
       expect(result.budgetRemaining).toBe(37);
     });
 
-    it("should calculate impulse fund as 10% of budget", () => {
-      const result = calculateBudgetStatus(100, []);
-      expect(result.impulseFund).toBe(10);
-    });
-
-    it("should track impulse spending", () => {
-      const items = [
-        { estimatedPrice: 5, quantity: 1, isImpulse: true },
-        { estimatedPrice: 10, quantity: 1, isImpulse: false },
-      ];
-      const result = calculateBudgetStatus(100, items);
-      expect(result.impulseUsed).toBe(5);
-      expect(result.impulseRemaining).toBe(5);
-    });
-
     it("should detect over budget", () => {
       const items = [{ estimatedPrice: 60, quantity: 1 }];
       const result = calculateBudgetStatus(50, items);
@@ -64,16 +36,18 @@ describe("Budget & Impulse Fund Logic", () => {
       expect(result.budgetRemaining).toBe(-10);
     });
 
-    it("should detect over total limit", () => {
-      const items = [{ estimatedPrice: 56, quantity: 1 }];
+    it("should allow adding items over budget (no lock)", () => {
+      const items = [{ estimatedPrice: 100, quantity: 1 }];
       const result = calculateBudgetStatus(50, items);
-      expect(result.isOverTotalLimit).toBe(true);
+      // Over budget is just informational, not blocking
+      expect(result.isOverBudget).toBe(true);
+      expect(result.currentTotal).toBe(100);
     });
 
     it("should handle zero budget", () => {
       const result = calculateBudgetStatus(0, []);
       expect(result.percentUsed).toBe(0);
-      expect(result.impulseFund).toBe(0);
+      expect(result.isOverBudget).toBe(false);
     });
 
     it("should calculate percent used", () => {
