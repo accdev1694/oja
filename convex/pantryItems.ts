@@ -459,9 +459,11 @@ export const autoRestockFromReceipt = mutation({
       );
 
       if (exactMatch) {
-        // Exact match - auto-restock
+        // Exact match - auto-restock + update price from receipt
         await ctx.db.patch(exactMatch._id, {
           stockLevel: "stocked",
+          lastPrice: receiptItem.unitPrice,
+          priceSource: "receipt",
           updatedAt: now,
         });
         restockedItems.push({
@@ -513,6 +515,7 @@ export const autoRestockFromReceipt = mutation({
 export const confirmFuzzyRestock = mutation({
   args: {
     pantryItemId: v.id("pantryItems"),
+    price: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -537,6 +540,10 @@ export const confirmFuzzyRestock = mutation({
 
     await ctx.db.patch(args.pantryItemId, {
       stockLevel: "stocked",
+      ...(args.price !== undefined && {
+        lastPrice: args.price,
+        priceSource: "receipt",
+      }),
       updatedAt: Date.now(),
     });
 
@@ -551,6 +558,7 @@ export const addFromReceipt = mutation({
   args: {
     name: v.string(),
     category: v.optional(v.string()),
+    price: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -575,6 +583,10 @@ export const addFromReceipt = mutation({
       category: args.category || "other",
       icon: getIconForItem(args.name, args.category || "other"),
       stockLevel: "stocked",
+      ...(args.price !== undefined && {
+        lastPrice: args.price,
+        priceSource: "receipt" as const,
+      }),
       autoAddToList: false,
       createdAt: now,
       updatedAt: now,
