@@ -407,6 +407,125 @@ IMPORTANT RULES:
   },
 });
 
+/**
+ * Generate size variants for items flagged as hasVariants during onboarding.
+ * Called after pantry seeding to populate the itemVariants table.
+ * Returns variant data for bulk insert via itemVariants.bulkUpsert.
+ */
+export const generateItemVariants = action({
+  args: {
+    items: v.array(
+      v.object({
+        name: v.string(),
+        category: v.string(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    if (args.items.length === 0) return [];
+
+    const itemList = args.items
+      .map((i) => `- ${i.name} (${i.category})`)
+      .join("\n");
+
+    const prompt = `You are a UK grocery expert. For each item below, generate the 3-5 most common size variants that shoppers would find in UK supermarkets (Tesco, Sainsbury's, Asda, Aldi, Lidl, Morrisons).
+
+Items:
+${itemList}
+
+For each item, return variants with realistic current GBP prices (the standard/common size price).
+
+Return ONLY valid JSON array:
+[
+  {
+    "baseItem": "whole milk",
+    "variantName": "Whole Milk 1 Pint",
+    "size": "1 pint",
+    "unit": "pint",
+    "category": "Dairy",
+    "estimatedPrice": 0.65
+  },
+  {
+    "baseItem": "whole milk",
+    "variantName": "Whole Milk 2 Pints",
+    "size": "2 pints",
+    "unit": "pint",
+    "category": "Dairy",
+    "estimatedPrice": 1.15
+  },
+  {
+    "baseItem": "whole milk",
+    "variantName": "Whole Milk 4 Pints",
+    "size": "4 pints",
+    "unit": "pint",
+    "category": "Dairy",
+    "estimatedPrice": 1.55
+  }
+]
+
+RULES:
+- baseItem must be lowercase
+- Include only sizes commonly available in UK supermarkets
+- Prices should be realistic current UK supermarket prices
+- For items like eggs: use 6-pack, 10-pack, 15-pack (not litres)
+- For rice/pasta: use 500g, 1kg, 2kg
+- For liquids: use pints or litres as commonly sold
+- For household items like toilet paper: use roll counts (4-pack, 9-pack, etc.)
+- No explanations, ONLY the JSON array`;
+
+    try {
+      const model = genAI.getGenerativeModel({
+        model: "gemini-2.0-flash",
+        generationConfig: {
+          temperature: 0.5,
+          maxOutputTokens: 4000,
+        },
+      });
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      let responseText = response.text().trim();
+
+      // Remove markdown code blocks
+      if (responseText.startsWith("```json")) {
+        responseText = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "");
+      } else if (responseText.startsWith("```")) {
+        responseText = responseText.replace(/```\n?/g, "");
+      }
+
+      const variants = JSON.parse(responseText);
+
+      if (!Array.isArray(variants)) {
+        console.error("Invalid variants response format");
+        return [];
+      }
+
+      // Validate and normalize
+      return variants
+        .filter(
+          (v: any) =>
+            v.baseItem &&
+            v.variantName &&
+            v.size &&
+            v.unit &&
+            v.category
+        )
+        .map((v: any) => ({
+          baseItem: v.baseItem.toLowerCase().trim(),
+          variantName: v.variantName,
+          size: v.size,
+          unit: v.unit,
+          category: v.category,
+          source: "ai_seeded" as const,
+          estimatedPrice: typeof v.estimatedPrice === "number" ? v.estimatedPrice : undefined,
+        }));
+    } catch (error) {
+      console.error("Variant generation failed:", error);
+      return [];
+    }
+  },
+});
+
 function getFallbackItems(country: string, cuisines: string[]): SeedItem[] {
   const basicItems: SeedItem[] = [
     // Dairy (10)
