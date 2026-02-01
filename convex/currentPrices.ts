@@ -162,6 +162,65 @@ export const upsertFromReceipt = mutation({
 });
 
 /**
+ * Insert an AI-estimated price into currentPrices.
+ * Used by the estimateItemPrice action when no price data exists.
+ * Sets reportCount: 0 and confidence: 0.05 to distinguish from receipt-verified prices.
+ */
+export const upsertAIEstimate = mutation({
+  args: {
+    normalizedName: v.string(),
+    itemName: v.string(),
+    unitPrice: v.number(),
+    userId: v.id("users"),
+    size: v.optional(v.string()),
+    unit: v.optional(v.string()),
+    variantName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const storeName = "AI Estimate";
+
+    // Check if AI estimate already exists for this item
+    const existing = await ctx.db
+      .query("currentPrices")
+      .withIndex("by_item_store", (q) =>
+        q.eq("normalizedName", args.normalizedName).eq("storeName", storeName)
+      )
+      .first();
+
+    if (existing) {
+      // Update if existing is also an AI estimate
+      await ctx.db.patch(existing._id, {
+        unitPrice: args.unitPrice,
+        averagePrice: args.unitPrice,
+        confidence: 0.05,
+        updatedAt: now,
+        ...(args.size && { size: args.size }),
+        ...(args.unit && { unit: args.unit }),
+        ...(args.variantName && { variantName: args.variantName }),
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("currentPrices", {
+      normalizedName: args.normalizedName,
+      itemName: args.itemName,
+      storeName,
+      unitPrice: args.unitPrice,
+      averagePrice: args.unitPrice,
+      reportCount: 0,
+      confidence: 0.05,
+      lastSeenDate: now,
+      lastReportedBy: args.userId,
+      updatedAt: now,
+      ...(args.size && { size: args.size }),
+      ...(args.unit && { unit: args.unit }),
+      ...(args.variantName && { variantName: args.variantName }),
+    });
+  },
+});
+
+/**
  * Get the best (cheapest) current price for an item across all stores.
  */
 export const getEstimate = query({

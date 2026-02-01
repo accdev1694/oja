@@ -1,4 +1,5 @@
 import { action } from "./_generated/server";
+import { api } from "./_generated/api";
 import { v } from "convex/values";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
@@ -553,6 +554,130 @@ RULES:
     } catch (error) {
       console.error("Variant generation failed (both providers):", error);
       return [];
+    }
+  },
+});
+
+/**
+ * Real-time AI price estimation for unknown items.
+ * Called when a user adds an item that has no existing price data anywhere.
+ * Returns estimated price + category + size info, and writes to currentPrices + itemVariants.
+ */
+export const estimateItemPrice = action({
+  args: {
+    itemName: v.string(),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const normalizedName = args.itemName.toLowerCase().trim();
+
+    const prompt = `You are a UK grocery pricing expert. For the item "${args.itemName}", provide:
+1. A realistic current UK supermarket price in GBP
+2. The grocery category
+3. Whether this item has common size variants (like milk has 1pt, 2pt, 4pt)
+4. If it has variants: list the 3-5 most common UK supermarket size variants with prices
+5. If no variants: provide the standard size and unit
+
+Return ONLY valid JSON:
+{
+  "name": "${args.itemName}",
+  "normalizedName": "${normalizedName}",
+  "category": "Dairy",
+  "estimatedPrice": 1.15,
+  "hasVariants": true,
+  "defaultSize": null,
+  "defaultUnit": null,
+  "variants": [
+    { "variantName": "Whole Milk 1 Pint", "size": "1 pint", "unit": "pint", "estimatedPrice": 0.65 },
+    { "variantName": "Whole Milk 2 Pints", "size": "2 pints", "unit": "pint", "estimatedPrice": 1.15 }
+  ]
+}
+
+For items WITHOUT variants (e.g., ketchup), set hasVariants=false, variants=[], and provide defaultSize/defaultUnit:
+{
+  "name": "Ketchup",
+  "normalizedName": "ketchup",
+  "category": "Condiments",
+  "estimatedPrice": 1.50,
+  "hasVariants": false,
+  "defaultSize": "460g",
+  "defaultUnit": "g",
+  "variants": []
+}
+
+RULES:
+- Prices must be realistic current UK supermarket prices in GBP
+- Category should match common grocery categories
+- No explanations, ONLY the JSON object`;
+
+    interface EstimateResult {
+      name: string;
+      normalizedName: string;
+      category: string;
+      estimatedPrice: number;
+      hasVariants: boolean;
+      defaultSize?: string | null;
+      defaultUnit?: string | null;
+      variants: Array<{
+        variantName: string;
+        size: string;
+        unit: string;
+        estimatedPrice: number;
+      }>;
+    }
+
+    function parseEstimateResponse(text: string): EstimateResult {
+      const cleaned = stripCodeBlocks(text);
+      const parsed = JSON.parse(cleaned);
+      if (!parsed.name || typeof parsed.estimatedPrice !== "number") {
+        throw new Error("Invalid estimate response format");
+      }
+      return parsed;
+    }
+
+    try {
+      const result = await withAIFallback(
+        async () => parseEstimateResponse(await geminiGenerate(prompt, { temperature: 0.3, maxTokens: 2000 })),
+        async () => parseEstimateResponse(await openaiGenerate(prompt, { temperature: 0.3, maxTokens: 2000 })),
+        "estimateItemPrice"
+      );
+
+      // Write to currentPrices as AI Estimate with reportCount: 0
+      await ctx.runMutation(api.currentPrices.upsertAIEstimate, {
+        normalizedName: result.normalizedName || normalizedName,
+        itemName: result.name || args.itemName,
+        unitPrice: result.estimatedPrice,
+        userId: args.userId,
+        ...(result.defaultSize ? { size: result.defaultSize } : {}),
+        ...(result.defaultUnit ? { unit: result.defaultUnit } : {}),
+      });
+
+      // Write variants if any
+      if (result.hasVariants && result.variants?.length > 0) {
+        await ctx.runMutation(api.itemVariants.bulkUpsert, {
+          variants: result.variants.map((v) => ({
+            baseItem: result.normalizedName || normalizedName,
+            variantName: v.variantName,
+            size: v.size,
+            unit: v.unit,
+            category: result.category,
+            source: "ai_seeded",
+            estimatedPrice: v.estimatedPrice,
+          })),
+        });
+      }
+
+      return {
+        estimatedPrice: result.estimatedPrice,
+        category: result.category,
+        hasVariants: result.hasVariants,
+        defaultSize: result.defaultSize,
+        defaultUnit: result.defaultUnit,
+        variantCount: result.variants?.length || 0,
+      };
+    } catch (error) {
+      console.error("estimateItemPrice failed:", error);
+      return null;
     }
   },
 });
