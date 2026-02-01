@@ -9,7 +9,7 @@ import {
   Alert,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useMutation } from "convex/react";
+import { useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { SeedItem } from "@/convex/ai";
 import { safeHaptics } from "@/lib/utils/safeHaptics";
@@ -19,6 +19,8 @@ export default function ReviewItemsScreen() {
   const params = useLocalSearchParams<{ items?: string }>();
 
   const bulkCreate = useMutation(api.pantryItems.bulkCreate);
+  const generateVariants = useAction(api.ai.generateItemVariants);
+  const bulkUpsertVariants = useMutation(api.itemVariants.bulkUpsert);
 
   const [items, setItems] = useState<SeedItem[]>(() => {
     try {
@@ -101,6 +103,20 @@ export default function ReviewItemsScreen() {
       await bulkCreate({ items: itemsToSave as any });
 
       safeHaptics.success();
+
+      // Fire variant seeding in the background (don't block navigation)
+      const variantItems = itemsToSave.filter((item) => item.hasVariants);
+      if (variantItems.length > 0) {
+        generateVariants({
+          items: variantItems.map((i) => ({ name: i.name, category: i.category })),
+        })
+          .then((variants) => {
+            if (variants && variants.length > 0) {
+              bulkUpsertVariants({ variants }).catch(console.error);
+            }
+          })
+          .catch(console.error);
+      }
 
       // Navigate to main app
       router.replace("/(app)/(tabs)");
