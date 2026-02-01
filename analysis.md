@@ -164,8 +164,8 @@ Teal (#00D4AA) is used for: primary buttons, active tab indicators, progress bar
 
 ### Recommendations
 
-- [ ] **Profile:** Reduce to: Account card + one "Quick Stats" summary line ("3 lists this month · £48 saved") + navigation links (Insights, Subscription, Settings). Move detailed stats to the Insights screen where they belong
-- [ ] **Insights:** Lead with one emotional headline ("You saved £48 this month") with a single visual. Collapse detailed sections behind expandable cards. Let the user choose what to drill into rather than dumping everything
+- [x] **Profile:** Reduce to: Account card + one "Quick Stats" summary line ("3 lists this month · £48 saved") + navigation links (Insights, Subscription, Settings). Move detailed stats to the Insights screen where they belong ✅ Simplified to Account + Quick Stats row (trips/items/receipts/pts) + nav links (Insights, Subscription, Stock Alerts). Removed stats grid, stock overview, receipts, loyalty details
+- [x] **Insights:** Lead with one emotional headline ("You saved £48 this month") with a single visual. Collapse detailed sections behind expandable cards. Let the user choose what to drill into rather than dumping everything ✅ Created GlassCollapsible component. Wrapped Monthly Trends, Budget Adherence, Top Categories, Streaks, Personal Bests, Achievements in collapsible sections (collapsed by default). Top 3 sections remain always visible
 - [x] **List Detail:** Progressive disclosure — add-item form hidden behind "+ Add Item" button. *(Implemented.)*
 - [x] **Pantry:** "Needs Attention" default view with "All Items" as secondary. *(Implemented.)*
 - [x] **Teal usage:** Reserve teal exclusively for **primary CTAs and active states.** Use the secondary color (indigo #6366F1) or white/gray for secondary interactive elements. Budget healthy state can use green (#10B981) without teal. Checkmarks can be white on teal background (smaller teal surface area). The rule: if you can only tap one thing on screen, THAT thing is teal ✅ Filter chips → white, "Got it" → white, filter selected → white, notification indicators → indigo
@@ -414,7 +414,7 @@ Several screens require extensive vertical scrolling: Pantry (100 items), List D
 ### Recommendations
 
 - [x] **Increase section gaps** between major functional zones from 32px to 48-56px. This creates visual "chapters" that let the user process one zone before encountering the next ✅ Token bumped to 48px (screens to adopt `layout.sectionGap` progressively)
-- [ ] **Limit visible zones** — No screen should show more than 3 major sections without scrolling. If more exists, use progressive disclosure (collapsed sections, "See more" links)
+- [x] **Limit visible zones** — No screen should show more than 3 major sections without scrolling. If more exists, use progressive disclosure (collapsed sections, "See more" links) ✅ Insights: 6 sections wrapped in GlassCollapsible (collapsed by default). Profile: simplified from 6 sections to 3 (Account + Quick Stats + Nav Links)
 - [ ] **Fixed action areas** — For screens with a primary action (List Detail: adding items, Pantry: reviewing stock), pin the primary action at the bottom of the screen so it's always accessible without scrolling. The content above can scroll; the action stays fixed
 
 ---

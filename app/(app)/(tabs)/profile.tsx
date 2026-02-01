@@ -18,11 +18,9 @@ import {
   GlassButton,
   SimpleHeader,
   SkeletonCard,
-  SkeletonStatCard,
   colors,
   typography,
   spacing,
-  borderRadius,
 } from "@/components/ui/glass";
 
 export default function ProfileScreen() {
@@ -48,26 +46,13 @@ export default function ProfileScreen() {
       <GlassScreen>
         <SimpleHeader title="Profile" accentColor={colors.semantic.profile} subtitle="Loading..." />
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.skeletonContent}>
-          {/* Account Skeleton */}
           <View style={styles.section}>
-            <View style={styles.skeletonSectionTitle} />
             <SkeletonCard />
           </View>
-
-          {/* Stats Skeleton */}
           <View style={styles.section}>
-            <View style={styles.skeletonSectionTitle} />
-            <View style={styles.statsGrid}>
-              <SkeletonStatCard />
-              <SkeletonStatCard />
-              <SkeletonStatCard />
-              <SkeletonStatCard />
-            </View>
+            <SkeletonCard />
           </View>
-
-          {/* Pantry Skeleton */}
           <View style={styles.section}>
-            <View style={styles.skeletonSectionTitle} />
             <SkeletonCard />
           </View>
         </ScrollView>
@@ -77,20 +62,6 @@ export default function ProfileScreen() {
 
   // Calculate stats
   const completedLists = allLists.filter((list) => list.status === "completed");
-  const activeLists = allLists.filter((list) => list.status === "active");
-  const shoppingLists = allLists.filter((list) => list.status === "shopping");
-
-  const totalSpent = completedLists.reduce((sum, list) => {
-    return sum + (list.budget || 0);
-  }, 0);
-
-  const budgetAdherence =
-    completedLists.length > 0
-      ? (completedLists.filter((list) => (list.budget || 0) > 0).length /
-          completedLists.length) *
-        100
-      : 0;
-
   const outOfStockItems = pantryItems.filter((item) => item.stockLevel === "out").length;
   const lowStockItems = pantryItems.filter((item) => item.stockLevel === "low").length;
 
@@ -131,12 +102,9 @@ export default function ProfileScreen() {
           </GlassCard>
         </View>
 
-        {/* Shopping Stats Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Shopping Stats</Text>
-
-          {/* New user milestone path */}
-          {completedLists.length === 0 && allLists.length === 0 && (
+        {/* New user milestone path */}
+        {completedLists.length === 0 && allLists.length === 0 && (
+          <View style={styles.section}>
             <GlassCard variant="standard" style={styles.milestonePath}>
               <Text style={styles.milestoneTitle}>Your journey starts here</Text>
               <Text style={styles.milestoneSubtitle}>
@@ -162,311 +130,108 @@ export default function ProfileScreen() {
                 ))}
               </View>
             </GlassCard>
-          )}
-
-          {/* Stats Grid */}
-          <View style={styles.statsGrid}>
-            <StatCard
-              value={allLists.length}
-              label="Total Lists"
-              icon="clipboard-list"
-              color={colors.semantic.lists}
-            />
-            <StatCard
-              value={completedLists.length}
-              label="Completed"
-              icon="check-circle"
-              color={colors.accent.primary}
-            />
-            <StatCard
-              value={activeLists.length}
-              label="Active"
-              icon="clipboard-edit-outline"
-              color={colors.accent.secondary}
-            />
-            <StatCard
-              value={shoppingLists.length}
-              label="Shopping"
-              icon="cart"
-              color={colors.semantic.warning}
-            />
           </View>
+        )}
 
-          {/* Total Spent Card */}
-          <GlassCard variant="standard" style={styles.spentCard}>
-            <View style={styles.spentRow}>
-              <View style={styles.spentIconContainer}>
-                <MaterialCommunityIcons
-                  name="cash-multiple"
-                  size={28}
-                  color={colors.accent.primary}
-                />
-              </View>
-              <View style={styles.spentInfo}>
-                <Text style={styles.spentLabel}>Total Spent</Text>
-                <Text style={styles.spentValue}>£{totalSpent.toFixed(2)}</Text>
-              </View>
+        {/* Quick Stats — single condensed row */}
+        <GlassCard variant="standard" style={styles.quickStatsCard}>
+          <View style={styles.quickStatsRow}>
+            <View style={styles.quickStat}>
+              <Text style={styles.quickStatValue}>{completedLists.length}</Text>
+              <Text style={styles.quickStatLabel}>trips</Text>
             </View>
-          </GlassCard>
-
-          {/* Budget Adherence */}
-          {completedLists.length > 0 && (
-            <GlassCard variant="standard">
-              <View style={styles.adherenceRow}>
-                <MaterialCommunityIcons
-                  name="chart-donut"
-                  size={24}
-                  color={colors.text.secondary}
-                />
-                <View style={styles.adherenceInfo}>
-                  <Text style={styles.adherenceLabel}>Budget Tracking</Text>
-                  <Text style={styles.adherenceValue}>
-                    {budgetAdherence.toFixed(0)}% of trips tracked
-                  </Text>
-                </View>
-              </View>
-            </GlassCard>
-          )}
-        </View>
-
-        {/* Stock Overview Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Stock Overview</Text>
-
-          {/* Total Items */}
-          <GlassCard variant="bordered" accentColor={colors.semantic.pantry}>
-            <View style={styles.pantryTotalRow}>
-              <MaterialCommunityIcons
-                name="package-variant"
-                size={32}
-                color={colors.semantic.pantry}
-              />
-              <View style={styles.pantryTotalInfo}>
-                <Text style={styles.pantryTotalValue}>{pantryItems.length}</Text>
-                <Text style={styles.pantryTotalLabel}>Total Items in Stock</Text>
-              </View>
+            <View style={styles.quickStatDivider} />
+            <View style={styles.quickStat}>
+              <Text style={styles.quickStatValue}>{pantryItems.length}</Text>
+              <Text style={styles.quickStatLabel}>items</Text>
             </View>
-          </GlassCard>
-
-          {/* Stock Alerts */}
-          {(outOfStockItems > 0 || lowStockItems > 0) && (
-            <View style={styles.alertsContainer}>
-              {outOfStockItems > 0 && (
-                <GlassCard variant="standard" style={styles.alertCard}>
-                  <View style={styles.alertRow}>
-                    <View style={[styles.alertIconContainer, styles.alertIconDanger]}>
-                      <MaterialCommunityIcons
-                        name="alert-circle"
-                        size={20}
-                        color={colors.semantic.danger}
-                      />
-                    </View>
-                    <View style={styles.alertInfo}>
-                      <Text style={styles.alertTitle}>Out of Stock</Text>
-                      <Text style={[styles.alertValue, styles.alertValueDanger]}>
-                        {outOfStockItems} {outOfStockItems === 1 ? "item" : "items"}
-                      </Text>
-                    </View>
-                    <MaterialCommunityIcons
-                      name="chevron-right"
-                      size={24}
-                      color={colors.text.tertiary}
-                    />
-                  </View>
-                </GlassCard>
-              )}
-
-              {lowStockItems > 0 && (
-                <GlassCard variant="standard" style={styles.alertCard}>
-                  <View style={styles.alertRow}>
-                    <View style={[styles.alertIconContainer, styles.alertIconWarning]}>
-                      <MaterialCommunityIcons
-                        name="alert"
-                        size={20}
-                        color={colors.semantic.warning}
-                      />
-                    </View>
-                    <View style={styles.alertInfo}>
-                      <Text style={styles.alertTitle}>Low Stock</Text>
-                      <Text style={[styles.alertValue, styles.alertValueWarning]}>
-                        {lowStockItems} {lowStockItems === 1 ? "item" : "items"}
-                      </Text>
-                    </View>
-                    <MaterialCommunityIcons
-                      name="chevron-right"
-                      size={24}
-                      color={colors.text.tertiary}
-                    />
-                  </View>
-                </GlassCard>
-              )}
+            <View style={styles.quickStatDivider} />
+            <View style={styles.quickStat}>
+              <Text style={styles.quickStatValue}>{receipts?.length ?? 0}</Text>
+              <Text style={styles.quickStatLabel}>receipts</Text>
             </View>
-          )}
-        </View>
-
-        {/* Visible Investment — Your Data */}
-        <GlassCard variant="standard" style={styles.investmentCard}>
-          <View style={styles.investmentRow}>
-            <View style={styles.investmentStat}>
-              <Text style={styles.investmentValue}>{pantryItems.length}</Text>
-              <Text style={styles.investmentLabel}>items tracked</Text>
-            </View>
-            <View style={styles.investmentDivider} />
-            <View style={styles.investmentStat}>
-              <Text style={styles.investmentValue}>{receipts?.length ?? 0}</Text>
-              <Text style={styles.investmentLabel}>receipts scanned</Text>
-            </View>
-            <View style={styles.investmentDivider} />
-            <View style={styles.investmentStat}>
-              <Text style={styles.investmentValue}>{completedLists.length}</Text>
-              <Text style={styles.investmentLabel}>trips completed</Text>
+            <View style={styles.quickStatDivider} />
+            <View style={styles.quickStat}>
+              <Text style={[styles.quickStatValue, { color: colors.accent.primary }]}>
+                {loyalty?.points ?? 0}
+              </Text>
+              <Text style={styles.quickStatLabel}>pts</Text>
             </View>
           </View>
         </GlassCard>
 
-        {/* Loyalty & Subscription Section */}
+        {/* Navigation Links */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Loyalty & Rewards</Text>
-
-          {/* Loyalty Points Card */}
-          <GlassCard variant="bordered" accentColor={tierColor(loyalty?.tier)}>
-            <View style={styles.loyaltyRow}>
-              <View style={[styles.tierBadge, { backgroundColor: `${tierColor(loyalty?.tier)}20` }]}>
-                <MaterialCommunityIcons
-                  name={tierIcon(loyalty?.tier)}
-                  size={28}
-                  color={tierColor(loyalty?.tier)}
-                />
-              </View>
-              <View style={styles.loyaltyInfo}>
-                <Text style={styles.loyaltyTierLabel}>
-                  {(loyalty?.tier || "bronze").charAt(0).toUpperCase() + (loyalty?.tier || "bronze").slice(1)} Tier
-                </Text>
-                <Text style={[styles.loyaltyPoints, { color: tierColor(loyalty?.tier) }]}>
-                  {loyalty?.points ?? 0} pts
-                </Text>
-              </View>
-              {(loyalty?.discount ?? 0) > 0 && (
-                <View style={[styles.discountBadge, { backgroundColor: `${tierColor(loyalty?.tier)}20` }]}>
-                  <Text style={[styles.discountText, { color: tierColor(loyalty?.tier) }]}>
-                    {loyalty?.discount}% off
-                  </Text>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/(app)/insights" as any);
+            }}
+          >
+            <GlassCard variant="standard" style={styles.navCard}>
+              <View style={styles.navRow}>
+                <View style={[styles.navIcon, { backgroundColor: `${colors.accent.primary}20` }]}>
+                  <MaterialCommunityIcons name="chart-line" size={20} color={colors.accent.primary} />
                 </View>
-              )}
-            </View>
-
-            {/* Progress to next tier */}
-            {loyalty?.nextTier && (loyalty?.pointsToNextTier ?? 0) > 0 && (
-              <View style={styles.tierProgress}>
-                <View style={styles.tierProgressBar}>
-                  <View
-                    style={[
-                      styles.tierProgressFill,
-                      {
-                        backgroundColor: tierColor(loyalty?.tier),
-                        width: `${Math.min(100, ((loyalty?.lifetimePoints ?? 0) / ((loyalty?.lifetimePoints ?? 0) + (loyalty?.pointsToNextTier ?? 1))) * 100)}%`,
-                      },
-                    ]}
-                  />
+                <View style={styles.navInfo}>
+                  <Text style={styles.navTitle}>Insights</Text>
+                  <Text style={styles.navSubtitle}>Trends, savings & achievements</Text>
                 </View>
-                <Text style={styles.tierProgressText}>
-                  {loyalty?.pointsToNextTier} pts to {loyalty?.nextTier}
-                </Text>
-              </View>
-            )}
-          </GlassCard>
-
-          {/* Subscription Card */}
-          <GlassCard variant="standard" style={styles.subscriptionCard}>
-            <View style={styles.subscriptionRow}>
-              <MaterialCommunityIcons
-                name={subscription?.plan === "free" ? "crown-outline" : "crown"}
-                size={24}
-                color={subscription?.plan === "free" ? colors.text.tertiary : colors.accent.secondary}
-              />
-              <View style={styles.subscriptionInfo}>
-                <Text style={styles.subscriptionPlan}>
-                  {subscription?.plan === "free" ? "Free Plan" : "Premium"}
-                </Text>
-                <Text style={styles.subscriptionStatus}>
-                  {subscription?.plan === "free"
-                    ? "Upgrade for price history, insights & more"
-                    : `Status: ${subscription?.status}`}
-                </Text>
-              </View>
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={24}
-                color={colors.text.tertiary}
-              />
-            </View>
-          </GlassCard>
-        </View>
-
-        {/* Receipt History Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Receipts</Text>
-
-          {receipts && receipts.length > 0 ? (
-            <>
-              {receipts.slice(0, 5).map((receipt) => (
-                <Pressable
-                  key={receipt._id}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    router.push(`/receipt/${receipt._id}/confirm` as any);
-                  }}
-                >
-                  <GlassCard variant="standard" style={styles.receiptCard}>
-                    <View style={styles.receiptRow}>
-                      <View style={styles.receiptIconContainer}>
-                        <MaterialCommunityIcons
-                          name="receipt"
-                          size={20}
-                          color={
-                            receipt.processingStatus === "completed"
-                              ? colors.accent.primary
-                              : receipt.processingStatus === "failed"
-                              ? colors.semantic.danger
-                              : colors.semantic.warning
-                          }
-                        />
-                      </View>
-                      <View style={styles.receiptInfo}>
-                        <Text style={styles.receiptStore} numberOfLines={1}>
-                          {receipt.storeName}
-                        </Text>
-                        <Text style={styles.receiptDate}>
-                          {new Date(receipt.purchaseDate).toLocaleDateString()} · {receipt.items.length} items
-                        </Text>
-                      </View>
-                      <Text style={styles.receiptTotal}>
-                        £{receipt.total.toFixed(2)}
-                      </Text>
-                    </View>
-                  </GlassCard>
-                </Pressable>
-              ))}
-
-              {receipts.length > 5 && (
-                <Text style={styles.moreReceiptsText}>
-                  + {receipts.length - 5} more receipts
-                </Text>
-              )}
-            </>
-          ) : (
-            <GlassCard variant="standard">
-              <View style={styles.emptyReceipts}>
-                <MaterialCommunityIcons
-                  name="receipt"
-                  size={32}
-                  color={colors.text.tertiary}
-                />
-                <Text style={styles.emptyReceiptsText}>
-                  No receipts scanned yet
-                </Text>
+                <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.tertiary} />
               </View>
             </GlassCard>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              // Subscription screen — placeholder navigation
+            }}
+          >
+            <GlassCard variant="standard" style={styles.navCard}>
+              <View style={styles.navRow}>
+                <View style={[styles.navIcon, { backgroundColor: `${colors.accent.secondary}20` }]}>
+                  <MaterialCommunityIcons
+                    name={subscription?.plan === "free" ? "crown-outline" : "crown"}
+                    size={20}
+                    color={colors.accent.secondary}
+                  />
+                </View>
+                <View style={styles.navInfo}>
+                  <Text style={styles.navTitle}>
+                    {subscription?.plan === "free" ? "Free Plan" : "Premium"}
+                  </Text>
+                  <Text style={styles.navSubtitle}>
+                    {loyalty?.points ?? 0} pts · {(loyalty?.tier || "bronze").charAt(0).toUpperCase() + (loyalty?.tier || "bronze").slice(1)} tier
+                  </Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.tertiary} />
+              </View>
+            </GlassCard>
+          </Pressable>
+
+          {outOfStockItems > 0 && (
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.navigate("/(app)/(tabs)/" as any);
+              }}
+            >
+              <GlassCard variant="standard" style={styles.navCard}>
+                <View style={styles.navRow}>
+                  <View style={[styles.navIcon, { backgroundColor: `${colors.semantic.danger}20` }]}>
+                    <MaterialCommunityIcons name="alert-circle" size={20} color={colors.semantic.danger} />
+                  </View>
+                  <View style={styles.navInfo}>
+                    <Text style={styles.navTitle}>Stock Alerts</Text>
+                    <Text style={styles.navSubtitle}>
+                      {outOfStockItems} out{lowStockItems > 0 ? ` · ${lowStockItems} low` : ""}
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.tertiary} />
+                </View>
+              </GlassCard>
+            </Pressable>
           )}
         </View>
 
@@ -486,55 +251,6 @@ export default function ProfileScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </GlassScreen>
-  );
-}
-
-// =============================================================================
-// TIER HELPERS
-// =============================================================================
-
-const TIER_COLORS: Record<string, string> = {
-  bronze: "#CD7F32",
-  silver: "#C0C0C0",
-  gold: "#FFD700",
-  platinum: "#E5E4E2",
-};
-
-const TIER_ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
-  bronze: "shield-outline",
-  silver: "shield-half-full",
-  gold: "shield-star",
-  platinum: "shield-crown",
-};
-
-function tierColor(tier?: string): string {
-  return TIER_COLORS[tier || "bronze"] || TIER_COLORS.bronze;
-}
-
-function tierIcon(tier?: string): keyof typeof MaterialCommunityIcons.glyphMap {
-  return TIER_ICONS[tier || "bronze"] || TIER_ICONS.bronze;
-}
-
-// =============================================================================
-// STAT CARD COMPONENT
-// =============================================================================
-
-interface StatCardProps {
-  value: number;
-  label: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  color: string;
-}
-
-function StatCard({ value, label, icon, color }: StatCardProps) {
-  return (
-    <GlassCard variant="standard" style={styles.statCard}>
-      <View style={[styles.statIconContainer, { backgroundColor: `${color}20` }]}>
-        <MaterialCommunityIcons name={icon} size={20} color={color} />
-      </View>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </GlassCard>
   );
 }
 
@@ -568,7 +284,7 @@ const styles = StyleSheet.create({
 
   // Section
   section: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   sectionTitle: {
     ...typography.labelLarge,
@@ -604,72 +320,6 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
 
-  // Stats Grid
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  statCard: {
-    width: "48%",
-    flexGrow: 1,
-    alignItems: "center",
-    paddingVertical: spacing.md,
-  },
-  statIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: spacing.xs,
-  },
-  statValue: {
-    ...typography.displaySmall,
-    fontWeight: "700",
-    marginBottom: 2,
-  },
-  statLabel: {
-    ...typography.labelSmall,
-    color: colors.text.tertiary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  // Spent Card
-  spentCard: {
-    marginBottom: spacing.sm,
-  },
-  spentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  spentIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: `${colors.accent.primary}20`,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  spentInfo: {
-    flex: 1,
-  },
-  spentLabel: {
-    ...typography.labelSmall,
-    color: colors.text.secondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  spentValue: {
-    ...typography.displaySmall,
-    color: colors.accent.primary,
-    fontWeight: "700",
-  },
-
   // Milestone path (new user)
   milestonePath: {
     marginBottom: spacing.md,
@@ -701,245 +351,62 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
   },
 
-  // Visible Investment
-  investmentCard: {
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.md,
+  // Quick Stats
+  quickStatsCard: {
+    marginBottom: spacing.lg,
   },
-  investmentRow: {
+  quickStatsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
   },
-  investmentStat: {
+  quickStat: {
     alignItems: "center",
     flex: 1,
   },
-  investmentValue: {
+  quickStatValue: {
     ...typography.headlineMedium,
     color: colors.text.primary,
     fontWeight: "700",
   },
-  investmentLabel: {
+  quickStatLabel: {
     ...typography.labelSmall,
     color: colors.text.tertiary,
     marginTop: 2,
   },
-  investmentDivider: {
+  quickStatDivider: {
     width: 1,
-    height: 32,
+    height: 28,
     backgroundColor: colors.glass.border,
   },
 
-  // Adherence
-  adherenceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  adherenceInfo: {
-    flex: 1,
-  },
-  adherenceLabel: {
-    ...typography.labelSmall,
-    color: colors.text.tertiary,
-    marginBottom: 2,
-  },
-  adherenceValue: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-  },
-
-  // Pantry Total
-  pantryTotalRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  pantryTotalInfo: {
-    flex: 1,
-  },
-  pantryTotalValue: {
-    ...typography.displayMedium,
-    color: colors.semantic.pantry,
-    fontWeight: "700",
-  },
-  pantryTotalLabel: {
-    ...typography.bodySmall,
-    color: colors.text.secondary,
-  },
-
-  // Stock Alerts
-  alertsContainer: {
-    marginTop: spacing.sm,
-    gap: spacing.sm,
-  },
-  alertCard: {
-    // No extra margin needed
-  },
-  alertRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  alertIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  alertIconDanger: {
-    backgroundColor: `${colors.semantic.danger}20`,
-  },
-  alertIconWarning: {
-    backgroundColor: `${colors.semantic.warning}20`,
-  },
-  alertInfo: {
-    flex: 1,
-  },
-  alertTitle: {
-    ...typography.bodySmall,
-    color: colors.text.secondary,
-    marginBottom: 2,
-  },
-  alertValue: {
-    ...typography.bodyLarge,
-    fontWeight: "600",
-  },
-  alertValueDanger: {
-    color: colors.semantic.danger,
-  },
-  alertValueWarning: {
-    color: colors.semantic.warning,
-  },
-
-  // Loyalty
-  loyaltyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  tierBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loyaltyInfo: {
-    flex: 1,
-  },
-  loyaltyTierLabel: {
-    ...typography.labelSmall,
-    color: colors.text.secondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  loyaltyPoints: {
-    ...typography.displaySmall,
-    fontWeight: "700",
-  },
-  discountBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
-  },
-  discountText: {
-    ...typography.labelMedium,
-    fontWeight: "700",
-  },
-  tierProgress: {
-    marginTop: spacing.md,
-  },
-  tierProgressBar: {
-    height: 6,
-    backgroundColor: colors.glass.backgroundStrong,
-    borderRadius: 3,
-    overflow: "hidden",
-    marginBottom: 6,
-  },
-  tierProgressFill: {
-    height: "100%",
-    borderRadius: 3,
-  },
-  tierProgressText: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-
-  // Subscription
-  subscriptionCard: {
-    marginTop: spacing.sm,
-  },
-  subscriptionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  subscriptionInfo: {
-    flex: 1,
-  },
-  subscriptionPlan: {
-    ...typography.labelMedium,
-    color: colors.text.primary,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  subscriptionStatus: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-
-  // Receipts
-  receiptCard: {
+  // Navigation Cards
+  navCard: {
     marginBottom: spacing.xs,
   },
-  receiptRow: {
+  navRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
-  receiptIconContainer: {
+  navIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: `${colors.accent.primary}15`,
     justifyContent: "center",
     alignItems: "center",
   },
-  receiptInfo: {
+  navInfo: {
     flex: 1,
   },
-  receiptStore: {
+  navTitle: {
     ...typography.bodyMedium,
     color: colors.text.primary,
     fontWeight: "600",
     marginBottom: 2,
   },
-  receiptDate: {
+  navSubtitle: {
     ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-  receiptTotal: {
-    ...typography.labelMedium,
-    color: colors.text.primary,
-    fontWeight: "700",
-  },
-  moreReceiptsText: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-    textAlign: "center",
-    marginTop: spacing.sm,
-  },
-  emptyReceipts: {
-    alignItems: "center",
-    paddingVertical: spacing.lg,
-    gap: spacing.sm,
-  },
-  emptyReceiptsText: {
-    ...typography.bodyMedium,
     color: colors.text.tertiary,
   },
 

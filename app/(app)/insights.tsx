@@ -28,6 +28,7 @@ import {
   GlassCard,
   GlassHeader,
   GlassProgressBar,
+  GlassCollapsible,
   GlassToast,
   SkeletonCard,
   colors,
@@ -330,16 +331,12 @@ export default function InsightsScreen() {
         {/* ============ MONTHLY TRENDS (CHART) ============ */}
         {monthlyTrends && monthlyTrends.months.length > 1 && (
           <Animated.View entering={FadeInDown.delay(400).duration(400)}>
-            <GlassCard style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons
-                  name="chart-line"
-                  size={22}
-                  color={colors.accent.primary}
-                />
-                <Text style={styles.sectionTitle}>Monthly Trends</Text>
-              </View>
-
+            <View style={styles.section}>
+            <GlassCollapsible
+              title="Monthly Trends"
+              icon="chart-line"
+              iconColor={colors.accent.primary}
+            >
               <LineChart
                 data={{
                   labels: monthlyTrends.months.map((m: any) => m.label),
@@ -426,23 +423,20 @@ export default function InsightsScreen() {
                   </View>
                 ))}
               </View>
-            </GlassCard>
+            </GlassCollapsible>
+            </View>
           </Animated.View>
         )}
 
         {/* ============ BUDGET ADHERENCE ============ */}
         {monthlyTrends && monthlyTrends.budgetAdherence.total > 0 && (
           <Animated.View entering={FadeInDown.delay(450).duration(400)}>
-            <GlassCard style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons
-                  name="target"
-                  size={22}
-                  color={colors.accent.info}
-                />
-                <Text style={styles.sectionTitle}>Budget Adherence</Text>
-              </View>
-
+            <View style={styles.section}>
+            <GlassCollapsible
+              title="Budget Adherence"
+              icon="target"
+              iconColor={colors.accent.info}
+            >
               <View style={styles.budgetAdherenceRow}>
                 <View style={styles.adherenceStatBox}>
                   <Text style={[styles.adherenceNumber, { color: colors.accent.success }]}>
@@ -477,23 +471,21 @@ export default function InsightsScreen() {
                   <Text style={styles.adherenceLabel}>Success Rate</Text>
                 </View>
               </View>
-            </GlassCard>
+            </GlassCollapsible>
+            </View>
           </Animated.View>
         )}
 
         {/* ============ CATEGORY BREAKDOWN ============ */}
         {monthlyTrends && monthlyTrends.categoryBreakdown.length > 0 && (
           <Animated.View entering={FadeInDown.delay(500).duration(400)}>
-            <GlassCard style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons
-                  name="chart-pie"
-                  size={22}
-                  color={colors.accent.secondary}
-                />
-                <Text style={styles.sectionTitle}>Top Categories</Text>
-              </View>
-
+            <View style={styles.section}>
+            <GlassCollapsible
+              title="Top Categories"
+              icon="chart-pie"
+              iconColor={colors.accent.secondary}
+              badge={monthlyTrends.categoryBreakdown.length}
+            >
               <View style={styles.categoryList}>
                 {monthlyTrends.categoryBreakdown.map((cat: any, i: number) => {
                   const totalAll = monthlyTrends.categoryBreakdown.reduce(
@@ -533,22 +525,19 @@ export default function InsightsScreen() {
                   );
                 })}
               </View>
-            </GlassCard>
+            </GlassCollapsible>
+            </View>
           </Animated.View>
         )}
 
         {/* ============ STREAKS ============ */}
         <Animated.View entering={FadeInDown.delay(550).duration(400)}>
-          <GlassCard style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons
-                name="fire"
-                size={22}
-                color={colors.semantic.fire}
-              />
-              <Text style={styles.sectionTitle}>Streaks</Text>
-            </View>
-
+          <View style={styles.section}>
+          <GlassCollapsible
+            title="Streaks"
+            icon="fire"
+            iconColor={colors.semantic.fire}
+          >
             {streaks && streaks.length > 0 ? (
               streaks.map((streak: any) => (
                 <View key={streak._id} style={styles.streakRow}>
@@ -587,22 +576,19 @@ export default function InsightsScreen() {
                 Complete shopping trips to build streaks!
               </Text>
             )}
-          </GlassCard>
+          </GlassCollapsible>
+          </View>
         </Animated.View>
 
         {/* ============ PERSONAL BESTS ============ */}
         {personalBests && (
           <Animated.View entering={FadeInDown.delay(600).duration(400)}>
-            <GlassCard style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons
-                  name="trophy"
-                  size={22}
-                  color={colors.accent.warning}
-                />
-                <Text style={styles.sectionTitle}>Personal Bests</Text>
-              </View>
-
+            <View style={styles.section}>
+            <GlassCollapsible
+              title="Personal Bests"
+              icon="trophy"
+              iconColor={colors.accent.warning}
+            >
               <View style={styles.bestsGrid}>
                 <BestItem
                   icon="cash-minus"
@@ -629,29 +615,20 @@ export default function InsightsScreen() {
                   color={colors.accent.primary}
                 />
               </View>
-            </GlassCard>
+            </GlassCollapsible>
+            </View>
           </Animated.View>
         )}
 
         {/* ============ ACHIEVEMENTS ============ */}
         <Animated.View entering={FadeInDown.delay(650).duration(400)}>
-          <GlassCard style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons
-                name="medal"
-                size={22}
-                color={colors.accent.secondary}
-              />
-              <Text style={styles.sectionTitle}>Achievements</Text>
-              {achievements && achievements.length > 0 && (
-                <View style={styles.achievementCountBadge}>
-                  <Text style={styles.achievementCountText}>
-                    {achievements.length}
-                  </Text>
-                </View>
-              )}
-            </View>
-
+          <View style={styles.section}>
+          <GlassCollapsible
+            title="Achievements"
+            icon="medal"
+            iconColor={colors.accent.secondary}
+            badge={achievements && achievements.length > 0 ? achievements.length : undefined}
+          >
             {achievements && achievements.length > 0 ? (
               <View style={styles.achievementsGrid}>
                 {achievements.map((a: any) => (
@@ -684,7 +661,8 @@ export default function InsightsScreen() {
                 </Text>
               </View>
             )}
-          </GlassCard>
+          </GlassCollapsible>
+          </View>
         </Animated.View>
 
         <View style={{ height: 140 }} />

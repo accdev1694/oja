@@ -89,6 +89,8 @@ export {
   type ProgressBarSize,
 } from "./GlassProgressBar";
 
+export { CircularBudgetDial } from "./CircularBudgetDial";
+
 // =============================================================================
 // NAVIGATION COMPONENTS
 // =============================================================================
@@ -173,6 +175,15 @@ export {
   type PulseAnimationProps,
   type SuccessCheckProps,
 } from "./GlassAnimations";
+
+// =============================================================================
+// COLLAPSIBLE COMPONENTS
+// =============================================================================
+
+export {
+  GlassCollapsible,
+  type GlassCollapsibleProps,
+} from "./GlassCollapsible";
 
 // =============================================================================
 // TOAST COMPONENTS
