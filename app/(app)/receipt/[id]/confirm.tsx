@@ -421,6 +421,14 @@ export default function ConfirmReceiptScreen() {
           </View>
         </GlassCard>
 
+        {/* Community contribution nudge */}
+        <View style={styles.contributionRow}>
+          <MaterialCommunityIcons name="heart-outline" size={14} color={colors.text.tertiary} />
+          <Text style={styles.contributionText}>
+            Your prices help build better data for shoppers everywhere.
+          </Text>
+        </View>
+
         {/* Save Button */}
         <GlassButton
           variant="primary"
@@ -825,6 +833,18 @@ const styles = StyleSheet.create({
     ...typography.labelLarge,
     color: colors.accent.primary,
     fontWeight: "700",
+  },
+
+  contributionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginBottom: spacing.md,
+  },
+  contributionText: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
   },
 
   bottomSpacer: {

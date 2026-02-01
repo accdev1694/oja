@@ -135,6 +135,35 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Shopping Stats</Text>
 
+          {/* New user milestone path */}
+          {completedLists.length === 0 && allLists.length === 0 && (
+            <GlassCard variant="standard" style={styles.milestonePath}>
+              <Text style={styles.milestoneTitle}>Your journey starts here</Text>
+              <Text style={styles.milestoneSubtitle}>
+                Most shoppers save £30+ in their first month. Here's how to get there:
+              </Text>
+              <View style={styles.milestoneSteps}>
+                {[
+                  { icon: "package-variant" as const, text: "Add items to your stock", done: pantryItems.length > 0 },
+                  { icon: "clipboard-list-outline" as const, text: "Create your first list", done: false },
+                  { icon: "camera" as const, text: "Scan a receipt", done: false },
+                  { icon: "trophy-outline" as const, text: "See your first savings", done: false },
+                ].map((step, i) => (
+                  <View key={i} style={styles.milestoneStep}>
+                    <MaterialCommunityIcons
+                      name={step.done ? "check-circle" : step.icon}
+                      size={18}
+                      color={step.done ? colors.accent.primary : colors.text.tertiary}
+                    />
+                    <Text style={[styles.milestoneStepText, step.done && styles.milestoneStepDone]}>
+                      {step.text}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </GlassCard>
+          )}
+
           {/* Stats Grid */}
           <View style={styles.statsGrid}>
             <StatCard
@@ -639,6 +668,37 @@ const styles = StyleSheet.create({
     ...typography.displaySmall,
     color: colors.accent.primary,
     fontWeight: "700",
+  },
+
+  // Milestone path (new user)
+  milestonePath: {
+    marginBottom: spacing.md,
+  },
+  milestoneTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: 4,
+  },
+  milestoneSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+  milestoneSteps: {
+    gap: spacing.sm,
+  },
+  milestoneStep: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  milestoneStepText: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
+  },
+  milestoneStepDone: {
+    color: colors.accent.primary,
+    textDecorationLine: "line-through",
   },
 
   // Visible Investment
