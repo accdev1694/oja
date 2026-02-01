@@ -295,8 +295,28 @@ export default function PantryScreen() {
       setNewItemName("");
       setNewItemCategory("Pantry Staples");
       setNewItemStock("stocked");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to add item:", error);
+      const msg = error?.message ?? error?.data ?? "";
+      if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
+        notificationAsync(NotificationFeedbackType.Warning);
+        if (Platform.OS === "web") {
+          if (window.confirm("You've reached the 50-item limit on the Free plan.\n\nUpgrade to Premium for unlimited pantry items?")) {
+            router.push("/(app)/subscription");
+          }
+        } else {
+          Alert.alert(
+            "Pantry Limit Reached",
+            "Free plan allows up to 50 pantry items. Upgrade to Premium for unlimited items.",
+            [
+              { text: "Maybe Later", style: "cancel" },
+              { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
+            ]
+          );
+        }
+      } else {
+        Alert.alert("Error", "Failed to add pantry item");
+      }
     }
   };
 

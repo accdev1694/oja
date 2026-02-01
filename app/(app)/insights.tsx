@@ -49,6 +49,7 @@ export default function InsightsScreen() {
   const prevAchievementCount = useRef<number | null>(null);
   const { toast, dismiss, onAchievementUnlock } = useDelightToast();
 
+  const subscription = useQuery(api.subscriptions.getCurrentSubscription);
   const digest = useQuery(api.insights.getWeeklyDigest);
   const savingsJar = useQuery(api.insights.getSavingsJar);
   const streaks = useQuery(api.insights.getStreaks);
@@ -56,6 +57,8 @@ export default function InsightsScreen() {
   const personalBests = useQuery(api.insights.getPersonalBests);
   const monthlyTrends = useQuery(api.insights.getMonthlyTrends);
   const activeChallenge = useQuery(api.insights.getActiveChallenge);
+
+  const isPremium = subscription?.plan !== "free" && (subscription as any)?.isActive !== false;
 
   const generateChallenge = useMutation(api.insights.generateChallenge);
 
@@ -96,6 +99,52 @@ export default function InsightsScreen() {
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
+        </View>
+      </GlassScreen>
+    );
+  }
+
+  // Premium gate: show teaser for free users
+  if (!isPremium) {
+    return (
+      <GlassScreen>
+        <GlassHeader title="Insights" showBack onBack={() => router.back()} />
+        <View style={styles.premiumGate}>
+          <View style={styles.premiumIconContainer}>
+            <MaterialCommunityIcons name="chart-areaspline" size={64} color={colors.accent.primary} />
+          </View>
+          <Text style={styles.premiumTitle}>Unlock Insights</Text>
+          <Text style={styles.premiumDescription}>
+            Get detailed spending analytics, weekly digests, challenges, streaks, and personal bests with Premium.
+          </Text>
+
+          {/* Teaser: show savings jar as motivation */}
+          {savingsJar && savingsJar.totalSaved > 0 && (
+            <GlassCard style={styles.premiumTeaser}>
+              <MaterialCommunityIcons name="piggy-bank-outline" size={28} color={colors.accent.warm} />
+              <Text style={styles.premiumTeaserText}>
+                You've saved £{savingsJar.totalSaved.toFixed(2)} so far — see the full breakdown with Premium!
+              </Text>
+            </GlassCard>
+          )}
+
+          <TouchableOpacity
+            style={styles.premiumButton}
+            onPress={() => {
+              impactAsync(ImpactFeedbackStyle.Medium);
+              router.push("/(app)/subscription" as any);
+            }}
+          >
+            <MaterialCommunityIcons name="crown" size={20} color={colors.background.primary} />
+            <Text style={styles.premiumButtonText}>Upgrade to Premium</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.premiumDismiss}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.premiumDismissText}>Maybe later</Text>
+          </TouchableOpacity>
         </View>
       </GlassScreen>
     );
@@ -840,6 +889,69 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     gap: spacing.md,
+  },
+  premiumGate: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+  },
+  premiumIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: `${colors.accent.primary}20`,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.lg,
+  },
+  premiumTitle: {
+    ...typography.displaySmall,
+    color: colors.text.primary,
+    textAlign: "center",
+    marginBottom: spacing.sm,
+  },
+  premiumDescription: {
+    ...typography.bodyLarge,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: spacing.xl,
+  },
+  premiumTeaser: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+    padding: spacing.md,
+  },
+  premiumTeaserText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    flex: 1,
+  },
+  premiumButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.accent.primary,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  premiumButtonText: {
+    ...typography.bodyLarge,
+    color: colors.background.primary,
+    fontWeight: "700",
+  },
+  premiumDismiss: {
+    paddingVertical: spacing.sm,
+  },
+  premiumDismissText: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
   },
   scrollView: { flex: 1 },
   scrollContent: {

@@ -46,6 +46,28 @@ export default function NotificationsScreen() {
     if (!notification.read) {
       markRead({ id: notification._id });
     }
+
+    // Deep link to relevant screen based on notification type
+    switch (notification.type) {
+      case "achievement_unlocked":
+      case "challenge_completed":
+        router.push("/(app)/insights" as any);
+        break;
+      case "tier_upgrade":
+      case "trial_started":
+        router.push("/(app)/subscription" as any);
+        break;
+      case "approval_requested":
+      case "item_approved":
+      case "item_rejected":
+        if (notification.data?.listId) {
+          router.push(`/(app)/list/${notification.data.listId}` as any);
+        }
+        break;
+      case "partner_joined":
+        router.push("/(app)/partners" as any);
+        break;
+    }
   }
 
   function handleMarkAllRead() {

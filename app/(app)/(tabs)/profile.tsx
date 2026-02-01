@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,7 +8,7 @@ import {
 } from "react-native";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -33,6 +34,18 @@ export default function ProfileScreen() {
   const loyalty = useQuery(api.subscriptions.getLoyaltyPoints);
   const subscription = useQuery(api.subscriptions.getCurrentSubscription);
   const receipts = useQuery(api.receipts.getByUser);
+  const activeChallenge = useQuery(api.insights.getActiveChallenge);
+  const generateChallenge = useMutation(api.insights.generateChallenge);
+
+  // Auto-generate a weekly challenge if none active
+  const challengeSeeded = useRef(false);
+  useEffect(() => {
+    if (activeChallenge === undefined || challengeSeeded.current) return; // still loading
+    if (activeChallenge === null) {
+      challengeSeeded.current = true;
+      generateChallenge().catch(console.warn);
+    }
+  }, [activeChallenge]);
 
   const handleSignOut = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

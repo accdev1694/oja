@@ -7,7 +7,7 @@ import {
   Pressable,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -37,6 +37,11 @@ export default function TripSummaryScreen() {
   const summary = useQuery(api.shoppingLists.getTripSummary, { id: listId });
   const personalBests = useQuery(api.insights.getPersonalBests);
   const savingsJar = useQuery(api.insights.getSavingsJar);
+  const activeChallenge = useQuery(api.insights.getActiveChallenge);
+
+  // Gamification mutations
+  const updateStreak = useMutation(api.insights.updateStreak);
+  const updateChallengeProgress = useMutation(api.insights.updateChallengeProgress);
 
   // Check for new personal records once both data are loaded
   useEffect(() => {
@@ -66,6 +71,33 @@ export default function TripSummaryScreen() {
       return () => clearTimeout(timer);
     }
   }, [savingsJar, summary]);
+
+  // Gamification: update streak and challenge progress on trip completion
+  const gamificationDone = useRef(false);
+  useEffect(() => {
+    if (!summary || gamificationDone.current) return;
+    gamificationDone.current = true;
+
+    (async () => {
+      try {
+        // Update shopping streak
+        await updateStreak({ type: "shopping" });
+
+        // Update challenge progress based on trip outcome
+        if (activeChallenge && !activeChallenge.completedAt) {
+          if (activeChallenge.type === "complete_lists") {
+            await updateChallengeProgress({ challengeId: activeChallenge._id, increment: 1 });
+          } else if (activeChallenge.type === "under_budget" && summary.savedMoney) {
+            await updateChallengeProgress({ challengeId: activeChallenge._id, increment: 1 });
+          } else if (activeChallenge.type === "save_money" && summary.savedMoney) {
+            await updateChallengeProgress({ challengeId: activeChallenge._id, increment: Math.abs(summary.difference) });
+          }
+        }
+      } catch (err) {
+        console.warn("Gamification update failed:", err);
+      }
+    })();
+  }, [summary, activeChallenge]);
 
   if (summary === undefined) {
     return (

@@ -495,6 +495,48 @@ export const updateChallengeProgress = mutation({
     });
 
     if (completed) {
+      const now = Date.now();
+
+      // Award reward points for completing the challenge
+      let loyalty = await ctx.db
+        .query("loyaltyPoints")
+        .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+        .unique();
+
+      if (!loyalty) {
+        const lid = await ctx.db.insert("loyaltyPoints", {
+          userId: user._id,
+          points: challenge.reward,
+          lifetimePoints: challenge.reward,
+          tier: "bronze",
+          lastEarnedAt: now,
+          updatedAt: now,
+        });
+        loyalty = await ctx.db.get(lid);
+      } else {
+        const newPoints = loyalty.points + challenge.reward;
+        const newLifetime = loyalty.lifetimePoints + challenge.reward;
+        const newTier = newLifetime >= 5000 ? "platinum" : newLifetime >= 2000 ? "gold" : newLifetime >= 500 ? "silver" : "bronze";
+
+        await ctx.db.patch(loyalty._id, {
+          points: newPoints,
+          lifetimePoints: newLifetime,
+          tier: newTier,
+          lastEarnedAt: now,
+          updatedAt: now,
+        });
+      }
+
+      // Log the points transaction
+      await ctx.db.insert("pointTransactions", {
+        userId: user._id,
+        amount: challenge.reward,
+        type: "earned",
+        source: "challenge",
+        description: `Completed challenge: ${challenge.title}`,
+        createdAt: now,
+      });
+
       // Award achievement for first challenge completion
       const existingAch = await ctx.db
         .query("achievements")
@@ -508,7 +550,7 @@ export const updateChallengeProgress = mutation({
           title: "Challenge Accepted",
           description: "Completed your first weekly challenge",
           icon: "flag-checkered",
-          unlockedAt: Date.now(),
+          unlockedAt: now,
         });
       }
 
@@ -519,7 +561,7 @@ export const updateChallengeProgress = mutation({
         body: `You completed "${challenge.title}" — +${challenge.reward} points!`,
         data: { challengeId: args.challengeId },
         read: false,
-        createdAt: Date.now(),
+        createdAt: now,
       });
     }
 
