@@ -1,10 +1,20 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+/** Confidence score: higher reportCount + more recent = higher confidence (0-1) */
+function computeConfidence(reportCount: number, daysSinceLastSeen: number): number {
+  // Base confidence from report count (max 0.5 from count alone)
+  const countFactor = Math.min(reportCount / 10, 0.5);
+  // Recency factor (max 0.5 from recency, decays over 30 days)
+  const recencyFactor = Math.max(0, 0.5 * (1 - daysSinceLastSeen / 30));
+  return Math.min(countFactor + recencyFactor, 1);
+}
+
 /**
  * Upsert current prices from a confirmed receipt.
  * For each item, if a newer price exists we skip; otherwise we update.
- * This keeps a single "freshest price" row per item per store.
+ * Passes through size/unit from receipt items when available.
+ * Computes confidence score based on report count and recency.
  */
 export const upsertFromReceipt = mutation({
   args: {
@@ -39,14 +49,33 @@ export const upsertFromReceipt = mutation({
         )
         .first();
 
+      const daysSinceReceipt = Math.max(0, (now - receipt.purchaseDate) / (1000 * 60 * 60 * 24));
+
       if (existing) {
         // Only update if receipt date is newer
         if (receipt.purchaseDate >= existing.lastSeenDate) {
+          const newReportCount = existing.reportCount + 1;
+          const confidence = computeConfidence(newReportCount, daysSinceReceipt);
+
           await ctx.db.patch(existing._id, {
             unitPrice: item.unitPrice,
             itemName: item.name,
+            // Pass through size/unit from receipt when available
+            ...(item.size && { size: item.size }),
+            ...(item.unit && { unit: item.unit }),
+            // Update aggregated price data
+            minPrice: existing.minPrice !== undefined
+              ? Math.min(existing.minPrice, item.unitPrice)
+              : item.unitPrice,
+            maxPrice: existing.maxPrice !== undefined
+              ? Math.max(existing.maxPrice, item.unitPrice)
+              : item.unitPrice,
+            averagePrice: existing.averagePrice !== undefined
+              ? (existing.averagePrice * existing.reportCount + item.unitPrice) / newReportCount
+              : item.unitPrice,
+            confidence,
             lastSeenDate: receipt.purchaseDate,
-            reportCount: existing.reportCount + 1,
+            reportCount: newReportCount,
             lastReportedBy: user._id,
             updatedAt: now,
           });
@@ -54,11 +83,20 @@ export const upsertFromReceipt = mutation({
         }
       } else {
         // Insert new price record
+        const confidence = computeConfidence(1, daysSinceReceipt);
+
         await ctx.db.insert("currentPrices", {
           normalizedName,
           itemName: item.name,
           storeName: receipt.storeName,
+          // Pass through size/unit from receipt when available
+          ...(item.size && { size: item.size }),
+          ...(item.unit && { unit: item.unit }),
           unitPrice: item.unitPrice,
+          averagePrice: item.unitPrice,
+          minPrice: item.unitPrice,
+          maxPrice: item.unitPrice,
+          confidence,
           lastSeenDate: receipt.purchaseDate,
           reportCount: 1,
           lastReportedBy: user._id,
@@ -99,6 +137,7 @@ export const getEstimate = query({
         price: sorted[0].unitPrice,
         storeName: sorted[0].storeName,
         lastSeen: sorted[0].lastSeenDate,
+        confidence: sorted[0].confidence,
       },
       average: avg,
       storeCount: prices.length,
@@ -116,7 +155,7 @@ export const batchGetEstimates = query({
   handler: async (ctx, args) => {
     const results: Record<
       string,
-      { cheapest: number; storeName: string; average: number } | null
+      { cheapest: number; storeName: string; average: number; confidence?: number } | null
     > = {};
 
     for (const name of args.itemNames) {
@@ -140,6 +179,7 @@ export const batchGetEstimates = query({
         cheapest: sorted[0].unitPrice,
         storeName: sorted[0].storeName,
         average: avg,
+        confidence: sorted[0].confidence,
       };
     }
 
