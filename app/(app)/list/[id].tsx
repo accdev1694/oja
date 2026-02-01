@@ -104,6 +104,28 @@ function areItemsSimilar(name1: string, name2: string): boolean {
   return false;
 }
 
+/**
+ * Get a confidence label for a price based on its source and report count.
+ * reportCount: 0 = "~est.", 1-2 = "at StoreName", 3-9 = "avg", 10+ = no qualifier
+ */
+function getPriceLabel(
+  price: number,
+  priceSource: "personal" | "crowdsourced" | "ai_estimate",
+  reportCount: number,
+  storeName: string | null
+): { prefix: string; suffix: string } {
+  if (priceSource === "ai_estimate" || reportCount === 0) {
+    return { prefix: "~", suffix: "est." };
+  }
+  if (reportCount <= 2 && storeName) {
+    return { prefix: "", suffix: `at ${storeName}` };
+  }
+  if (reportCount < 10) {
+    return { prefix: "", suffix: "avg" };
+  }
+  return { prefix: "", suffix: "" };
+}
+
 type ListItem = {
   _id: Id<"listItems">;
   name: string;
@@ -135,6 +157,7 @@ export default function ListDetailScreen() {
   const updateList = useMutation(api.shoppingLists.update);
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
   const generateSuggestions = useAction(api.ai.generateListSuggestions);
+  const estimateItemPrice = useAction(api.ai.estimateItemPrice);
 
   // Partner mode
   const { isOwner, isPartner, canEdit, canApprove, loading: roleLoading } = usePartnerRole(id);
@@ -155,6 +178,8 @@ export default function ListDetailScreen() {
   const [newItemName, setNewItemName] = useState("");
   const [newItemQuantity, setNewItemQuantity] = useState("1");
   const [newItemPrice, setNewItemPrice] = useState("");
+  const [selectedVariantName, setSelectedVariantName] = useState<string | null>(null);
+  const [isEstimatingPrice, setIsEstimatingPrice] = useState(false);
 
   // Price estimate from current prices database
   const priceEstimate = useQuery(
@@ -162,10 +187,16 @@ export default function ListDetailScreen() {
     newItemName.trim().length >= 2 ? { itemName: newItemName.trim() } : "skip"
   );
 
-  // Item variants for the typed item name
+  // Item variants for the typed item name (with 3-layer price cascade)
   const itemVariants = useQuery(
     api.itemVariants.getWithPrices,
-    newItemName.trim().length >= 2 ? { baseItem: newItemName.trim() } : "skip"
+    newItemName.trim().length >= 2
+      ? {
+          baseItem: newItemName.trim(),
+          ...(list?.userId ? { userId: list.userId } : {}),
+          ...(list?.storeName ? { storeName: list.storeName } : {}),
+        }
+      : "skip"
   );
 
 
@@ -208,6 +239,35 @@ export default function ListDetailScreen() {
       setNewItemPrice(priceEstimate.cheapest.price.toFixed(2));
     }
   }, [priceEstimate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset selected variant when item name changes
+  useEffect(() => {
+    setSelectedVariantName(null);
+  }, [newItemName]);
+
+  // Trigger AI price estimation for completely unknown items
+  useEffect(() => {
+    if (
+      newItemName.trim().length < 2 ||
+      isEstimatingPrice ||
+      !list?.userId
+    ) return;
+
+    // Wait for both queries to resolve (not undefined/loading)
+    if (priceEstimate === undefined || itemVariants === undefined) return;
+
+    // If we already have price data from either source, no need to estimate
+    if (priceEstimate !== null || (itemVariants && itemVariants.length > 0)) return;
+
+    // No price data anywhere — trigger AI estimation
+    setIsEstimatingPrice(true);
+    estimateItemPrice({
+      itemName: newItemName.trim(),
+      userId: list.userId,
+    })
+      .catch(console.error)
+      .finally(() => setIsEstimatingPrice(false));
+  }, [newItemName, priceEstimate, itemVariants, list?.userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load suggestions when items change (Story 3.10)
   const loadSuggestions = useCallback(async () => {
@@ -905,10 +965,13 @@ export default function ListDetailScreen() {
                       />
                     </View>
 
-                    {/* Price estimate hint */}
-                    {priceEstimate && priceEstimate.cheapest && (
+                    {/* Price estimate hint (only show when no variants available) */}
+                    {priceEstimate && priceEstimate.cheapest && (!itemVariants || itemVariants.length === 0) && (
                       <Text style={styles.priceHint}>
-                        Based on £{priceEstimate.cheapest.price.toFixed(2)} at {priceEstimate.cheapest.storeName}
+                        {priceEstimate.cheapest.confidence != null && priceEstimate.cheapest.confidence < 0.1
+                          ? `~£${priceEstimate.cheapest.price.toFixed(2)} est.`
+                          : `Based on £${priceEstimate.cheapest.price.toFixed(2)} at ${priceEstimate.cheapest.storeName}`
+                        }
                       </Text>
                     )}
 
@@ -921,39 +984,67 @@ export default function ListDetailScreen() {
                           showsHorizontalScrollIndicator={false}
                           contentContainerStyle={styles.variantChipsList}
                         >
-                          {itemVariants.map((variant) => (
-                            <Pressable
-                              key={variant._id}
-                              style={styles.variantChip}
-                              onPress={() => {
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                setNewItemName(variant.variantName);
-                                if (variant.price != null) {
-                                  setNewItemPrice(variant.price.toFixed(2));
-                                }
-                                // Persist preferred variant on pantry item (fire-and-forget)
-                                setPreferredVariant({
-                                  itemName: variant.baseItem,
-                                  preferredVariant: variant.variantName,
-                                }).catch(console.error);
-                              }}
-                            >
-                              <Text style={styles.variantChipName} numberOfLines={1}>
-                                {variant.variantName}
-                              </Text>
-                              {variant.price != null && (
-                                <Text style={styles.variantChipPrice}>
-                                  £{variant.price.toFixed(2)}
+                          {itemVariants.map((variant) => {
+                            const isSelected = selectedVariantName === variant.variantName;
+                            const label = variant.price != null
+                              ? getPriceLabel(variant.price, variant.priceSource, variant.reportCount, variant.storeName)
+                              : null;
+
+                            return (
+                              <Pressable
+                                key={variant._id}
+                                style={[styles.variantChip, isSelected && styles.variantChipSelected]}
+                                onPress={() => {
+                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                  setSelectedVariantName(variant.variantName);
+                                  setNewItemName(variant.variantName);
+                                  if (variant.price != null) {
+                                    setNewItemPrice(variant.price.toFixed(2));
+                                  }
+                                  // Persist preferred variant on pantry item (fire-and-forget)
+                                  setPreferredVariant({
+                                    itemName: variant.baseItem,
+                                    preferredVariant: variant.variantName,
+                                  }).catch(console.error);
+                                }}
+                              >
+                                <Text style={[styles.variantChipName, isSelected && styles.variantChipNameSelected]} numberOfLines={1}>
+                                  {variant.variantName}
                                 </Text>
-                              )}
-                              {variant.storeName && (
-                                <Text style={styles.variantChipStore} numberOfLines={1}>
-                                  {variant.storeName}
-                                </Text>
-                              )}
-                            </Pressable>
-                          ))}
+                                {variant.price != null && label && (
+                                  <Text style={[styles.variantChipPrice, isSelected && styles.variantChipPriceSelected]}>
+                                    {label.prefix}£{variant.price.toFixed(2)}{label.suffix ? ` ${label.suffix}` : ""}
+                                  </Text>
+                                )}
+                                {variant.priceSource === "personal" && (
+                                  <Text style={styles.variantChipBadge}>Your usual</Text>
+                                )}
+                              </Pressable>
+                            );
+                          })}
+                          {/* "Other / not sure" option */}
+                          <Pressable
+                            style={[styles.variantChip, styles.variantChipOther]}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              setSelectedVariantName(null);
+                              // Use base-item average price if available
+                              if (priceEstimate?.average) {
+                                setNewItemPrice(priceEstimate.average.toFixed(2));
+                              }
+                            }}
+                          >
+                            <Text style={styles.variantChipName}>Not sure</Text>
+                          </Pressable>
                         </ScrollView>
+                      </View>
+                    )}
+
+                    {/* Loading indicator for AI price estimation */}
+                    {isEstimatingPrice && (
+                      <View style={styles.estimatingContainer}>
+                        <ActivityIndicator size="small" color={colors.accent.primary} />
+                        <Text style={styles.estimatingText}>Getting price estimate...</Text>
                       </View>
                     )}
                   </View>
@@ -1861,6 +1952,38 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     fontSize: 9,
     marginTop: 1,
+  },
+  variantChipSelected: {
+    borderColor: colors.accent.primary,
+    backgroundColor: "rgba(0, 212, 170, 0.15)",
+  },
+  variantChipNameSelected: {
+    color: colors.accent.primary,
+  },
+  variantChipPriceSelected: {
+    color: colors.accent.primary,
+  },
+  variantChipBadge: {
+    ...typography.labelSmall,
+    fontSize: 9,
+    color: colors.accent.secondary,
+    marginTop: 2,
+    fontWeight: "600",
+  },
+  variantChipOther: {
+    borderStyle: "dashed" as any,
+    opacity: 0.7,
+  },
+  estimatingContainer: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  estimatingText: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    fontStyle: "italic" as const,
   },
 
   // Empty State
