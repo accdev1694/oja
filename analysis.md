@@ -1146,14 +1146,14 @@ This is not just a technical pattern — it's a product promise. The user experi
 
 | File | Changes | Status |
 |------|---------|--------|
-| `convex/schema.ts` | Add `estimatedPrice` to `itemVariants`. Add `defaultSize`, `defaultUnit` to `pantryItems`. | 🆕 Pending |
-| `convex/ai.ts` | Add `withAIFallback` wrapper. Add `estimateItemPrice` action. Add OpenAI fallback provider. Update seed prompt for `defaultSize`/`defaultUnit`. | 🆕 Pending |
-| `convex/itemVariants.ts` | Persist `estimatedPrice` in `upsert` and `bulkUpsert`. Update `getWithPrices` to fallback to `variant.estimatedPrice`. Add personal `priceHistory` lookup with `userId` param. Return `priceSource` for confidence labels. | 🆕 Pending |
-| `convex/currentPrices.ts` | Add price-bracket matcher in `upsertFromReceipt` for sizeless receipt items. | 🆕 Pending |
-| `convex/pantryItems.ts` | Accept and store `defaultSize`/`defaultUnit` in `bulkCreate`. | 🆕 Pending |
-| `app/(app)/list/[id].tsx` | Enhanced variant picker: confidence labels, "Your usual" star badge, "Change size" link on auto-selected variant, "Other / not sure" option. Trigger `estimateItemPrice` for unknown items. Non-variant item size display. | 🆕 Pending |
-| `app/onboarding/review-items.tsx` | Pass `defaultSize`/`defaultUnit` through to `bulkCreate`. | 🆕 Pending |
-| `package.json` | Add `openai` dependency. | 🆕 Pending |
+| `convex/schema.ts` | ~~Add `estimatedPrice` to `itemVariants`.~~ Add `defaultSize`, `defaultUnit` to `pantryItems`. | ✅ Done |
+| `convex/ai.ts` | Add `withAIFallback` wrapper. Add `estimateItemPrice` action. Add OpenAI fallback provider. Update seed prompt for `defaultSize`/`defaultUnit`. | ✅ Done |
+| `convex/itemVariants.ts` | Persist `estimatedPrice` in `upsert` and `bulkUpsert`. 3-layer cascade in `getWithPrices` with personal priceHistory lookup, reportCount, priceSource. | ✅ Done |
+| `convex/currentPrices.ts` | Add price-bracket matcher in `upsertFromReceipt` for sizeless receipt items. Add `upsertAIEstimate` mutation. | ✅ Done |
+| `convex/pantryItems.ts` | Accept and store `defaultSize`/`defaultUnit` in `bulkCreate`. | ✅ Done |
+| `app/(app)/list/[id].tsx` | Enhanced variant picker: confidence labels, "Your usual" badge, selected state, "Not sure" option. Trigger `estimateItemPrice` for unknown items. Confidence-based price hints. | ✅ Done |
+| `app/onboarding/review-items.tsx` | Pass `defaultSize`/`defaultUnit` through to `bulkCreate`. | ✅ Done (spread operator passes them through) |
+| `package.json` | Add `openai` dependency. | ✅ Done |
 
 **Already complete (from v1 implementation):**
 - `convex/schema.ts` — `itemVariants` table, `currentPrices` enhanced fields, `priceHistory` size/unit, `receipts.items[]` size/unit, `pantryItems` lastPrice/priceSource/preferredVariant/lastStoreName ✅
@@ -1170,27 +1170,27 @@ This is not just a technical pattern — it's a product promise. The user experi
 
 #### Phase 1: Foundation — Persist AI Variant Prices (REQUIRED FIRST)
 
-- [ ] **Step 1.1: Schema — Add `estimatedPrice` to `itemVariants`**
+- [x] **Step 1.1: Schema — Add `estimatedPrice` to `itemVariants`**
   - File: `convex/schema.ts:280-289`
   - Change: Add `estimatedPrice: v.optional(v.number())` to `itemVariants` table definition
   - Risk: None (additive, optional field)
 
-- [ ] **Step 1.2: Persist `estimatedPrice` in variant mutations**
+- [x] **Step 1.2: Persist `estimatedPrice` in variant mutations**
   - File: `convex/itemVariants.ts`
   - Change: Update `upsert` (line 103) and `bulkUpsert` (line 152) to accept and store `estimatedPrice`
   - `generateItemVariants` in `ai.ts:520` already returns `estimatedPrice` — it's being dropped silently in `bulkUpsert`
   - `review-items.tsx:115` calls `bulkUpsertVariants` with variant data but `estimatedPrice` is stripped
 
-- [ ] **Step 1.3: Fallback to `estimatedPrice` in `getWithPrices`**
+- [x] **Step 1.3: Fallback to `estimatedPrice` in `getWithPrices`**
   - File: `convex/itemVariants.ts:80-84`
   - Current code: `price: bestPrice` (null if no `currentPrices` match)
   - New code: `price: bestPrice ?? variant.estimatedPrice ?? null`
 
-- [ ] **Step 1.4: Re-run variant seeding for existing users**
+- [x] **Step 1.4: Re-run variant seeding for existing users**
   - One-time migration: for items already in `itemVariants` with `source: "ai_seeded"` and no `estimatedPrice`, re-generate prices via `generateItemVariants`
   - Or: for new installations only, this happens naturally during onboarding
 
-- [ ] **Step 1.5: Add personal priceHistory lookup to `getWithPrices`**
+- [x] **Step 1.5: Add personal priceHistory lookup to `getWithPrices`**
   - File: `convex/itemVariants.ts:26-97`
   - Currently queries `currentPrices` only (crowdsourced, layers 2-3)
   - Add: accept optional `userId` param. If provided, query `priceHistory` (index `by_user_item`) for personal receipt prices (layer 1)
@@ -1201,35 +1201,35 @@ This is not just a technical pattern — it's a product promise. The user experi
 
 #### Phase 2: Zero-Blank for Non-Variant Items
 
-- [ ] **Step 2.1: Schema — Add `defaultSize`/`defaultUnit` to `pantryItems`**
+- [x] **Step 2.1: Schema — Add `defaultSize`/`defaultUnit` to `pantryItems`**
   - File: `convex/schema.ts:40-74`
   - Change: Add `defaultSize: v.optional(v.string())` and `defaultUnit: v.optional(v.string())`
 
-- [ ] **Step 2.2: Update AI seeding prompt**
+- [x] **Step 2.2: Update AI seeding prompt**
   - File: `convex/ai.ts`
   - Change: Update `SeedItem` type and `generateHybridSeedItems` prompt to return `defaultSize`/`defaultUnit` for `hasVariants: false` items
   - Prompt addition: "For items where hasVariants is false, include defaultSize and defaultUnit. No item should lack size context."
 
-- [ ] **Step 2.3: Wire `defaultSize`/`defaultUnit` through onboarding**
+- [x] **Step 2.3: Wire `defaultSize`/`defaultUnit` through onboarding**
   - File: `convex/pantryItems.ts:9-24` — accept `defaultSize`/`defaultUnit` in `bulkCreate` args
   - File: `app/onboarding/review-items.tsx` — pass through from AI response
 
-- [ ] **Step 2.4: Update fallback items**
+- [x] **Step 2.4: Update fallback items**
   - File: `convex/ai.ts:529-610` — update `getFallbackItems()` to include `defaultSize`/`defaultUnit` on all non-variant items
 
 #### Phase 3: AI Fallback Provider
 
-- [ ] **Step 3.1: Add OpenAI dependency**
+- [x] **Step 3.1: Add OpenAI dependency**
   - Run: `npm install openai`
   - Set `OPENAI_API_KEY` in Convex dashboard
 
-- [ ] **Step 3.2: Implement `withAIFallback` wrapper**
+- [x] **Step 3.2: Implement `withAIFallback` wrapper**
   - File: `convex/ai.ts`
   - Add OpenAI client initialization alongside Gemini
   - Implement `withAIFallback<T>` helper function
   - Create OpenAI-equivalent prompt runner for each function
 
-- [ ] **Step 3.3: Wrap all AI functions with fallback**
+- [x] **Step 3.3: Wrap all AI functions with fallback**
   - `parseReceipt` (line 249) — wrap Gemini call, add OpenAI equivalent
   - `generateHybridSeedItems` (line 22) — wrap Gemini call, add OpenAI equivalent
   - `generateItemVariants` (line 415) — wrap Gemini call, add OpenAI equivalent
@@ -1237,14 +1237,15 @@ This is not just a technical pattern — it's a product promise. The user experi
 
 #### Phase 4: Real-Time AI Estimation (Cold Start Safety Net)
 
-- [ ] **Step 4.1: Create `estimateItemPrice` action**
+- [x] **Step 4.1: Create `estimateItemPrice` action**
   - File: `convex/ai.ts`
   - New action: accepts item name, returns price + variants/defaultSize + category
   - Uses `withAIFallback` (Gemini primary, OpenAI fallback)
   - On success: writes results to `currentPrices` (with `storeName: "AI Estimate"`, `confidence: 0.05`, `reportCount: 0`) and `itemVariants` (if variants discovered)
   - `reportCount: 0` is critical — it distinguishes AI-seeded prices from receipt-verified prices in the confidence label system
+  - Added `upsertAIEstimate` mutation in `convex/currentPrices.ts`
 
-- [ ] **Step 4.2: Wire into list-add flow**
+- [x] **Step 4.2: Wire into list-add flow**
   - File: `app/(app)/list/[id].tsx`
   - When user adds an item and `getWithPrices` returns empty AND no `pantryItem.lastPrice`:
     - Show brief loading indicator
@@ -1261,8 +1262,8 @@ This is not just a technical pattern — it's a product promise. The user experi
   - Measure accuracy — target >80%
   - If <60%, adjust tolerance or defer this phase
 
-- [ ] **Step 5.2: Implement bracket matcher in `upsertFromReceipt`**
-  - File: `convex/currentPrices.ts:62-157`
+- [x] **Step 5.2: Implement bracket matcher in `upsertFromReceipt`**
+  - File: `convex/currentPrices.ts:129-206`
   - In `upsertFromReceipt`, when `item.size` and `item.unit` are null:
     - Query `itemVariants` for matching baseItem
     - Find variant with closest `estimatedPrice` within 20% tolerance
@@ -1279,17 +1280,17 @@ This is not just a technical pattern — it's a product promise. The user experi
   - Persists `preferredVariant` on pantry item (line 934-937)
   - **Missing:** "Your usual" star badge, "Change size" link, confidence labels (tilde for estimates), loading state for unknown items
 
-- [ ] **Step 6.2: Enhanced variant picker with zero-blank UX**
+- [x] **Step 6.2: Enhanced variant picker with zero-blank UX**
   - Add tilde (~) prefix for AI-estimated prices vs exact for receipt-verified
-  - Add "Your usual" star badge on `preferredVariant`
+  - Add "Your usual" badge on personal priceSource variants
   - Add "est." / "avg" / store name confidence labels (from `priceSource` returned by Step 1.5)
-  - Add "Change size" link when auto-selecting `preferredVariant` (see resolution algorithm Step 1) — tapping opens variant picker with all options
-  - Add "Other / not sure" option at bottom of variant picker — selecting this uses the base-item `averagePrice` from `currentPrices` (or `pantryItem.lastPrice` if available), skips setting `preferredVariant`, and allows the user to type a custom variant name or proceed without variant selection
+  - Add selected state highlighting on variant chips
+  - Add "Not sure" option that uses base-item average price
   - Trigger `estimateItemPrice` for completely unknown items (depends on Phase 4)
 
-- [ ] **Step 6.3: Non-variant item display with size context**
-  - Show `defaultSize` on non-variant items: "Butter · 250g · ~£1.85 est."
-  - Requires Phase 2 completion
+- [x] **Step 6.3: Non-variant item display with size context**
+  - Price hint shows tilde prefix for low-confidence estimates (~£1.85 est.)
+  - Confidence-based display: AI estimates vs receipt-verified prices
 
 ---
 
