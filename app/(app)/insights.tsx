@@ -104,7 +104,13 @@ export default function InsightsScreen() {
     <GlassScreen>
       <GlassHeader
         title="Insights"
-        subtitle="Your shopping intelligence"
+        subtitle={
+          savingsJar && savingsJar.totalSaved > 0
+            ? `You've saved £${savingsJar.totalSaved.toFixed(2)} so far`
+            : digest && digest.tripsCount > 0
+              ? `${digest.tripsCount} trip${digest.tripsCount !== 1 ? "s" : ""} this week`
+              : "Your shopping intelligence"
+        }
         showBack
         onBack={() => router.back()}
       />
@@ -283,12 +289,25 @@ export default function InsightsScreen() {
                 <Text style={styles.savingsBigNumber}>
                   £{savingsJar.totalSaved.toFixed(2)}
                 </Text>
-                <Text style={styles.savingsSubtext}>
-                  Saved across {savingsJar.tripsCount} trip
-                  {savingsJar.tripsCount !== 1 ? "s" : ""}
-                  {savingsJar.averageSaved > 0 &&
-                    ` · £${savingsJar.averageSaved.toFixed(2)} avg`}
-                </Text>
+                {savingsJar.totalSaved === 0 ? (
+                  <Text style={styles.savingsSubtext}>
+                    Your first savings are just one trip away. Create a list with a budget and we'll track the difference.
+                  </Text>
+                ) : (
+                  <Text style={styles.savingsSubtext}>
+                    {savingsJar.totalSaved >= 100
+                      ? "Triple digits! You're a budgeting pro."
+                      : savingsJar.totalSaved >= 50
+                        ? "Halfway to £100 — keep the momentum going!"
+                        : savingsJar.totalSaved >= 25
+                          ? "Solid progress. Every shop adds up."
+                          : "Great start! Consistency is the key."}
+                    {" "}Saved across {savingsJar.tripsCount} trip
+                    {savingsJar.tripsCount !== 1 ? "s" : ""}
+                    {savingsJar.averageSaved > 0 &&
+                      ` · £${savingsJar.averageSaved.toFixed(2)} avg`}
+                  </Text>
+                )}
 
                 {/* Milestone progress */}
                 <View style={styles.milestoneRow}>
