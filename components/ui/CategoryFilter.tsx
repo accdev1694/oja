@@ -101,8 +101,8 @@ const styles = StyleSheet.create({
     borderColor: colors.glass.border,
   },
   chipActive: {
-    backgroundColor: "rgba(0, 212, 170, 0.15)",
-    borderColor: "rgba(0, 212, 170, 0.4)",
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    borderColor: "rgba(255, 255, 255, 0.35)",
   },
   chipText: {
     ...typography.labelSmall,
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   chipTextActive: {
-    color: colors.accent.primary,
+    color: colors.text.primary,
     fontWeight: "600",
   },
 });

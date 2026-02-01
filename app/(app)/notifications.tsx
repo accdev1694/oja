@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
   emptyTitle: { ...typography.headlineSmall, color: colors.text.primary },
   emptySubtitle: { ...typography.bodyMedium, color: colors.text.tertiary },
   notifCard: { marginBottom: spacing.sm },
-  unreadCard: { borderColor: `${colors.accent.primary}40`, borderWidth: 1 },
+  unreadCard: { borderColor: `${colors.accent.secondary}40`, borderWidth: 1 },
   notifRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
   iconCircle: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center" },
   notifContent: { flex: 1 },
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: colors.accent.primary,
+    backgroundColor: colors.accent.secondary,
     marginTop: 4,
   },
 });

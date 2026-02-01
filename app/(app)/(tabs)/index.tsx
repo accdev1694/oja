@@ -912,14 +912,14 @@ const onboardingStyles = StyleSheet.create({
   gotItButton: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
-    backgroundColor: `${colors.accent.primary}20`,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: `${colors.accent.primary}40`,
+    borderColor: "rgba(255, 255, 255, 0.25)",
   },
   gotItText: {
     ...typography.labelLarge,
-    color: colors.accent.primary,
+    color: colors.text.primary,
   },
 });
 
@@ -1434,8 +1434,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   filterOptionSelected: {
-    backgroundColor: colors.semantic.pantryGlow,
-    borderColor: colors.accent.primary,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
   filterOptionLabel: {
     ...typography.bodyLarge,

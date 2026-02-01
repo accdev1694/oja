@@ -168,7 +168,7 @@ Teal (#00D4AA) is used for: primary buttons, active tab indicators, progress bar
 - [ ] **Insights:** Lead with one emotional headline ("You saved £48 this month") with a single visual. Collapse detailed sections behind expandable cards. Let the user choose what to drill into rather than dumping everything
 - [x] **List Detail:** Progressive disclosure — add-item form hidden behind "+ Add Item" button. *(Implemented.)*
 - [x] **Pantry:** "Needs Attention" default view with "All Items" as secondary. *(Implemented.)*
-- [ ] **Teal usage:** Reserve teal exclusively for **primary CTAs and active states.** Use the secondary color (indigo #6366F1) or white/gray for secondary interactive elements. Budget healthy state can use green (#10B981) without teal. Checkmarks can be white on teal background (smaller teal surface area). The rule: if you can only tap one thing on screen, THAT thing is teal
+- [x] **Teal usage:** Reserve teal exclusively for **primary CTAs and active states.** Use the secondary color (indigo #6366F1) or white/gray for secondary interactive elements. Budget healthy state can use green (#10B981) without teal. Checkmarks can be white on teal background (smaller teal surface area). The rule: if you can only tap one thing on screen, THAT thing is teal ✅ Filter chips → white, "Got it" → white, filter selected → white, notification indicators → indigo
 
 ---
 
@@ -367,7 +367,7 @@ When a single color carries this much weight, it loses its ability to signal pri
 ### Recommendations
 
 - [x] **Introduce a warm accent** — A soft amber/coral (#FFB088 or #FF9F6A) for celebration moments, milestone badges, and encouraging text. Not replacing teal, but adding warmth ✅ accent.warm + semantic.warm tokens added
-- [ ] **Reduce teal usage by 50%** — Reserve teal for: primary CTA buttons, active tab indicator, and budget "healthy" state. Everything else (checkmarks, borders, secondary buttons, text links) should use white, gray, or indigo
+- [x] **Reduce teal usage by 50%** — Reserve teal for: primary CTA buttons, active tab indicator, and budget "healthy" state. Everything else (checkmarks, borders, secondary buttons, text links) should use white, gray, or indigo ✅ CategoryFilter, "Got it", filter options, notification badges all switched from teal to white/indigo
 - [ ] **Tab color personality** — Currently each tab has a semantic color, but it only appears in the tab icon. Consider tinting the header or a subtle accent element on each screen to match its tab color. This creates visual variety across the app without breaking consistency
 - [x] **Dark mode with warmth** — Consider shifting the background gradient very slightly warm: from pure cold navy toward a deep warm navy (#0F1526 → #1A2240). The difference is subtle but the subconscious effect is real ✅ Shifted background from #0B1426 → #0D1528, gradients updated to match
 
