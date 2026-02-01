@@ -38,8 +38,6 @@ import { CategoryFilter } from "@/components/ui/CategoryFilter";
 const STOCK_COLORS: Record<string, string> = {
   out: "#EF4444",
   low: "#F59E0B",
-  half: "#EAB308",
-  good: "#34D399",
   stocked: "#10B981",
 };
 
@@ -47,9 +45,7 @@ const STOCK_COLORS: Record<string, string> = {
 const STOCK_SORT_ORDER: Record<string, number> = {
   out: 0,
   low: 1,
-  half: 2,
-  good: 3,
-  stocked: 4,
+  stocked: 2,
 };
 
 export default function PantryPickScreen() {
@@ -98,7 +94,15 @@ export default function PantryPickScreen() {
     return items.map((i) => i._id as string);
   }, [items]);
 
+  const lowItemIds = useMemo(() => {
+    if (!items) return [];
+    return items
+      .filter((i) => i.stockLevel === "low" || i.stockLevel === "out")
+      .map((i) => i._id as string);
+  }, [items]);
+
   const allSelected = allItemIds.length > 0 && selectedIds.size === allItemIds.length;
+  const allLowSelected = lowItemIds.length > 0 && lowItemIds.every((id) => selectedIds.has(id));
 
   const toggleItem = useCallback(
     (id: string) => {
@@ -124,6 +128,25 @@ export default function PantryPickScreen() {
       setSelectedIds(new Set(allItemIds));
     }
   }, [allSelected, allItemIds]);
+
+  const toggleLow = useCallback(() => {
+    impactAsync(ImpactFeedbackStyle.Medium);
+    if (allLowSelected) {
+      // Deselect only the low/out items, keep any other selections
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        lowItemIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      // Add all low/out items to selection
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        lowItemIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  }, [allLowSelected, lowItemIds]);
 
   const handleConfirm = async () => {
     if (selectedIds.size === 0 || !listId) return;
@@ -191,17 +214,31 @@ export default function PantryPickScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Master select */}
-      <TouchableOpacity style={styles.masterRow} onPress={toggleAll} activeOpacity={0.7}>
-        <MaterialCommunityIcons
-          name={allSelected ? "checkbox-marked" : "checkbox-blank-outline"}
-          size={24}
-          color={allSelected ? colors.accent.primary : colors.text.tertiary}
-        />
-        <Text style={styles.masterText}>
-          {allSelected ? "Deselect All" : `Select All (${allItemIds.length} items)`}
-        </Text>
-      </TouchableOpacity>
+      {/* Quick select actions */}
+      <View style={styles.quickActions}>
+        <TouchableOpacity style={styles.quickActionButton} onPress={toggleAll} activeOpacity={0.7}>
+          <MaterialCommunityIcons
+            name={allSelected ? "checkbox-marked" : "checkbox-blank-outline"}
+            size={20}
+            color={allSelected ? colors.accent.primary : colors.text.tertiary}
+          />
+          <Text style={styles.quickActionText}>
+            {allSelected ? "Deselect All" : "Select All"}
+          </Text>
+        </TouchableOpacity>
+        {lowItemIds.length > 0 && (
+          <TouchableOpacity style={styles.quickActionButton} onPress={toggleLow} activeOpacity={0.7}>
+            <MaterialCommunityIcons
+              name={allLowSelected ? "checkbox-marked" : "checkbox-blank-outline"}
+              size={20}
+              color={allLowSelected ? colors.semantic.warning : colors.text.tertiary}
+            />
+            <Text style={styles.quickActionText}>
+              {allLowSelected ? "Deselect Low" : `Low / Out (${lowItemIds.length})`}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Category filter chips */}
       <CategoryFilter
@@ -275,7 +312,7 @@ export default function PantryPickScreen() {
           <MaterialCommunityIcons
             name="cart-plus"
             size={20}
-            color={selectedIds.size === 0 ? colors.text.tertiary : "#0B1426"}
+            color={selectedIds.size === 0 ? colors.text.tertiary : colors.text.inverse}
           />
           <Text
             style={[
@@ -333,21 +370,27 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.text.secondary,
   },
-  masterRow: {
+  quickActions: {
     flexDirection: "row",
-    alignItems: "center",
     gap: spacing.sm,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.sm,
+  },
+  quickActionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     backgroundColor: colors.glass.background,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.glass.border,
   },
-  masterText: {
-    ...typography.bodyLarge,
+  quickActionText: {
+    ...typography.labelMedium,
     color: colors.text.primary,
     fontWeight: "600",
   },
@@ -448,7 +491,7 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0B1426",
+    color: colors.text.inverse,
   },
   confirmButtonTextDisabled: {
     color: colors.text.tertiary,

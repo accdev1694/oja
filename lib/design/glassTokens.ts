@@ -14,13 +14,13 @@ import { Platform } from "react-native";
 export const colors = {
   // Background Colors
   background: {
-    primary: "#0B1426", // Deep navy (main background)
-    secondary: "#111D32", // Slightly lighter navy
-    tertiary: "#162033", // Card hover state
+    primary: "#0D1528", // Deep navy with subtle warmth
+    secondary: "#121E34", // Slightly lighter navy
+    tertiary: "#172136", // Card hover state
     gradient: {
-      start: "#0B1426",
-      middle: "#1A2744",
-      end: "#0F1829",
+      start: "#0D1528",
+      middle: "#1B2845",
+      end: "#101A2B",
     },
   },
 
@@ -45,6 +45,9 @@ export const colors = {
     secondary: "#6366F1", // Indigo (secondary actions)
     secondaryLight: "#818CF8",
     secondaryDark: "#4F46E5",
+    warm: "#FFB088", // Soft coral (celebrations, milestones)
+    warmLight: "#FFCDB2",
+    warmDark: "#FF9F6A",
     success: "#10B981", // Emerald green
     successLight: "#34D399",
     warning: "#F59E0B", // Amber/Gold
@@ -72,7 +75,7 @@ export const colors = {
     secondary: "rgba(255, 255, 255, 0.7)",
     tertiary: "rgba(255, 255, 255, 0.65)",
     disabled: "rgba(255, 255, 255, 0.3)",
-    inverse: "#0B1426",
+    inverse: "#0D1528",
     link: "#00D4AA",
   },
 
@@ -90,9 +93,11 @@ export const colors = {
     success: "#10B981",
     warning: "#F59E0B",
     danger: "#EF4444",
-    // Gamification
+    // Gamification & Celebrations
     fire: "#FF6B35",
     fireGlow: "rgba(255, 107, 53, 0.15)",
+    warm: "#FFB088",
+    warmGlow: "rgba(255, 176, 136, 0.15)",
   },
 
   // Chart Colors (for category charts, pie charts, etc.)
@@ -112,9 +117,9 @@ export const colors = {
 
 export const gradients = {
   // Background gradients (for LinearGradient)
-  backgroundMain: ["#0B1426", "#1A2744", "#0F1829"] as const,
-  backgroundRadial: ["#1A2744", "#0B1426"] as const,
-  backgroundSubtle: ["#0B1426", "#0F1829"] as const,
+  backgroundMain: ["#0D1528", "#1B2845", "#101A2B"] as const,
+  backgroundRadial: ["#1B2845", "#0D1528"] as const,
+  backgroundSubtle: ["#0D1528", "#101A2B"] as const,
 
   // Accent gradients
   accentPrimary: ["#00D4AA", "#00B894"] as const,

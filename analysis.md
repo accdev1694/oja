@@ -221,7 +221,7 @@ The glass design gives a visual identity. But the voice gives emotional identity
 
 ### Recommendations
 
-- [ ] **Add a warm accent color** to the palette — a soft amber or coral (#FFB088 or similar) used sparingly for celebration moments, milestones, and encouraging text. Not replacing teal, but complementing it with warmth
+- [x] **Add a warm accent color** to the palette — a soft amber or coral (#FFB088 or similar) used sparingly for celebration moments, milestones, and encouraging text. Not replacing teal, but complementing it with warmth ✅ Added accent.warm (#FFB088) + semantic.warm + warmGlow tokens
 - [ ] **Micro-celebrations on check-off** — When checking off a list item, briefly flash the item row green, show a subtle checkmark burst animation, and update the progress indicator with a smooth fill. The physical equivalent: the satisfying click of a pen checking a box
 - [x] **Budget tracker emotional mode** — Below or instead of the numbers, show a one-line sentiment: "Looking good — lots of room left" (green), "Getting close — stay focused" (amber), "Over budget — time to review" (red). Lead with feeling, support with data ✅ Sentiment line added below dial, color-matched to budget state
 - [ ] **Savings jar warmth** — At £0.00, show an illustration of an empty jar with "Your first savings are just one trip away." At any positive amount, show the jar filling with animated coins/notes. The visual metaphor makes the abstract (savings) feel tangible
@@ -366,10 +366,10 @@ When a single color carries this much weight, it loses its ability to signal pri
 
 ### Recommendations
 
-- [ ] **Introduce a warm accent** — A soft amber/coral (#FFB088 or #FF9F6A) for celebration moments, milestone badges, and encouraging text. Not replacing teal, but adding warmth
+- [x] **Introduce a warm accent** — A soft amber/coral (#FFB088 or #FF9F6A) for celebration moments, milestone badges, and encouraging text. Not replacing teal, but adding warmth ✅ accent.warm + semantic.warm tokens added
 - [ ] **Reduce teal usage by 50%** — Reserve teal for: primary CTA buttons, active tab indicator, and budget "healthy" state. Everything else (checkmarks, borders, secondary buttons, text links) should use white, gray, or indigo
 - [ ] **Tab color personality** — Currently each tab has a semantic color, but it only appears in the tab icon. Consider tinting the header or a subtle accent element on each screen to match its tab color. This creates visual variety across the app without breaking consistency
-- [ ] **Dark mode with warmth** — Consider shifting the background gradient very slightly warm: from pure cold navy toward a deep warm navy (#0F1526 → #1A2240). The difference is subtle but the subconscious effect is real
+- [x] **Dark mode with warmth** — Consider shifting the background gradient very slightly warm: from pure cold navy toward a deep warm navy (#0F1526 → #1A2240). The difference is subtle but the subconscious effect is real ✅ Shifted background from #0B1426 → #0D1528, gradients updated to match
 
 ---
 
@@ -392,7 +392,7 @@ Budget amounts use the Numbers typography scale (24-36px bold tabular figures). 
 ### Recommendations
 
 - [ ] **Reduce item name size** from 28px to 20-22px. Increase stock level indicator size or visual weight. The hierarchy should be: stock status (visual/icon) → item name → details. The user's eye should land on "is this item OK?" before "what is this item?"
-- [ ] **Budget typography narrative** — On the list detail, consider showing *one* number prominently: the remaining amount or budget percentage. Supporting figures can be smaller. The user's question is "How much can I still spend?" — answer that loudly, explain it quietly
+- [x] **Budget typography narrative** — On the list detail, consider showing *one* number prominently: the remaining amount or budget percentage. Supporting figures can be smaller. The user's question is "How much can I still spend?" — answer that loudly, explain it quietly ✅ CircularBudgetDial already shows remaining as hero; sentiment line reinforces emotional narrative; "of £XX" is 10px tertiary
 - [x] **Micro-copy styling** — Helper text, hint text, and tertiary labels (12px, 50% opacity white) are technically readable but practically invisible on the dark background. Consider bumping these to 60-70% opacity for better accessibility without sacrificing hierarchy ✅ Bumped to 65% opacity
 
 ---
