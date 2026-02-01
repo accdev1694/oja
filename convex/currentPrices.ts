@@ -11,6 +11,26 @@ function computeConfidence(reportCount: number, daysSinceLastSeen: number): numb
 }
 
 /**
+ * Weighted 30-day average: newer prices weigh more.
+ * weight = max(0, 1 - (daysSincePurchase / 30))
+ * Prices older than 30 days get zero weight (the existing average represents them).
+ */
+function computeWeightedAverage(
+  existingAverage: number,
+  existingCount: number,
+  newPrice: number,
+  daysSincePurchase: number
+): number {
+  const newWeight = Math.max(0, 1 - daysSincePurchase / 30);
+  // Existing average represents accumulated history; give it a base weight
+  // that decays as the data ages, but at least 0.3 to prevent wild swings
+  const existingWeight = Math.max(0.3, 1 - (existingCount > 1 ? 0.1 : 0));
+  const totalWeight = existingWeight + newWeight;
+  if (totalWeight === 0) return newPrice;
+  return (existingAverage * existingWeight + newPrice * newWeight) / totalWeight;
+}
+
+/**
  * Upsert current prices from a confirmed receipt.
  * For each item, if a newer price exists we skip; otherwise we update.
  * Passes through size/unit from receipt items when available.
@@ -72,7 +92,7 @@ export const upsertFromReceipt = mutation({
               ? Math.max(existing.maxPrice, item.unitPrice)
               : item.unitPrice,
             averagePrice: existing.averagePrice !== undefined
-              ? (existing.averagePrice * existing.reportCount + item.unitPrice) / newReportCount
+              ? computeWeightedAverage(existing.averagePrice, existing.reportCount, item.unitPrice, daysSinceReceipt)
               : item.unitPrice,
             confidence,
             lastSeenDate: receipt.purchaseDate,
