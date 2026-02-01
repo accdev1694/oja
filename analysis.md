@@ -83,10 +83,10 @@ The header shows: title + notification bell + "+ New List" button. "Join a share
 
 ### Recommendations
 
-- [ ] **List Detail:** Surface suggestions only after the user starts typing (currently always visible in add-item section)
+- [x] **List Detail:** Surface suggestions only after the user starts typing (currently always visible in add-item section)
 - [x] **Pantry:** Default to "Needs Attention" view (Low + Out). "All items" as secondary. *(Implemented.)*
 - [x] **Stock Level Picker:** Reduced to 3 levels (Stocked / Low / Out). *(Implemented.)*
-- [ ] **Lists Header:** Move notification bell out of header to reduce clutter. Header should be: title + "+ New List" only
+- [x] **Lists Header:** Move notification bell out of header to reduce clutter. Header should be: title + "+ New List" only
 
 ---
 
@@ -117,7 +117,7 @@ The "Suggestions" section shows chips like "cereal, coffee, tea, sugar, eggs." W
 
 ### Recommendations
 
-- [ ] **Budget dial:** Add a subtle "tap to edit" hint on first view or a small pencil badge on the dial to signal editability
+- [x] **Budget dial:** Add a subtle "tap to edit" hint on first view or a small pencil badge on the dial to signal editability
 - [x] **Gesture onboarding:** Interactive swipe tutorial on first launch. *(Implemented — `SwipeOnboardingOverlay`.)*
 - [x] **Button labels:** "Add from Pantry" and "Go Shopping". *(Implemented.)*
 - [x] **Suggestions context:** Subtitle shown explaining suggestion source. *(Implemented.)*
