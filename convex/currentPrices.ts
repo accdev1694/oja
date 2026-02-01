@@ -37,6 +37,7 @@ export const upsertFromReceipt = mutation({
 
     const now = Date.now();
     let upsertCount = 0;
+    let variantsDiscovered = 0;
 
     for (const item of receipt.items) {
       const normalizedName = item.name.toLowerCase().trim();
@@ -104,9 +105,39 @@ export const upsertFromReceipt = mutation({
         });
         upsertCount++;
       }
+
+      // Variant discovery: if receipt has size/unit, auto-insert into itemVariants
+      if (item.size && item.unit) {
+        // Extract base item name (strip size info from name for baseItem key)
+        const baseItem = normalizedName
+          .replace(/\d+\s*(ml|l|g|kg|pt|pint|pints|pack|oz|lb)\b/gi, "")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        const existingVariants = await ctx.db
+          .query("itemVariants")
+          .withIndex("by_base_item", (q) => q.eq("baseItem", baseItem || normalizedName))
+          .collect();
+
+        const isDuplicate = existingVariants.some(
+          (v) => v.variantName.toLowerCase() === item.name.toLowerCase()
+        );
+
+        if (!isDuplicate) {
+          await ctx.db.insert("itemVariants", {
+            baseItem: baseItem || normalizedName,
+            variantName: item.name,
+            size: item.size,
+            unit: item.unit,
+            category: item.category || "Other",
+            source: "receipt_discovered",
+          });
+          variantsDiscovered++;
+        }
+      }
     }
 
-    return { upsertCount };
+    return { upsertCount, variantsDiscovered };
   },
 });
 
