@@ -41,6 +41,9 @@ export const savePriceHistoryFromReceipt = mutation({
         receiptId: args.receiptId,
         itemName: item.name,
         normalizedName: item.name.toLowerCase().trim(),
+        // Pass through size/unit from receipt when available
+        ...(item.size && { size: item.size }),
+        ...(item.unit && { unit: item.unit }),
         price: item.totalPrice,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
