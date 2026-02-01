@@ -77,6 +77,7 @@ export const create = mutation({
   args: {
     imageStorageId: v.string(), // Convex file storage ID
     listId: v.optional(v.id("shoppingLists")),
+    isAdminSeed: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -106,6 +107,7 @@ export const create = mutation({
       processingStatus: "pending",
       purchaseDate: now,
       createdAt: now,
+      ...(args.isAdminSeed && { isAdminSeed: true }),
     });
 
     return receiptId;
