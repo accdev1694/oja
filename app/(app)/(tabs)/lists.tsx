@@ -37,7 +37,7 @@ import {
   borderRadius,
   animations,
 } from "@/components/ui/glass";
-import { NotificationBell, NotificationDropdown } from "@/components/partners";
+import { NotificationDropdown } from "@/components/partners";
 
 type TabMode = "active" | "history";
 
@@ -147,7 +147,6 @@ export default function ListsScreen() {
       const listId = await createList({
         name: newListName.trim(),
         budget: budget > 0 ? budget : undefined,
-        budgetLocked: false,
       });
 
       handleCloseCreateModal();
@@ -182,19 +181,16 @@ export default function ListsScreen() {
               : undefined
         }
         rightElement={
-          <View style={styles.headerRight}>
-            <NotificationBell onPress={() => setShowNotifications(true)} />
-            {tabMode === "active" && (
-              <GlassButton
-                variant="primary"
-                size="sm"
-                icon="plus"
-                onPress={handleOpenCreateModal}
-              >
-                New List
-              </GlassButton>
-            )}
-          </View>
+          tabMode === "active" ? (
+            <GlassButton
+              variant="primary"
+              size="sm"
+              icon="plus"
+              onPress={handleOpenCreateModal}
+            >
+              New List
+            </GlassButton>
+          ) : undefined
         }
       />
 
@@ -411,16 +407,6 @@ export default function ListsScreen() {
                 Set to 0 for no budget tracking
               </Text>
             </View>
-
-            {/* Impulse Fund Preview */}
-            {parseFloat(newListBudget) > 0 && (
-              <View style={styles.impulseFundPreview}>
-                <MaterialCommunityIcons name="lightning-bolt" size={16} color={colors.accent.secondary} />
-                <Text style={styles.impulseFundPreviewText}>
-                  +£{(parseFloat(newListBudget) * 0.1).toFixed(2)} impulse fund (10%)
-                </Text>
-              </View>
-            )}
 
             {/* Action Buttons */}
             <View style={styles.modalActions}>
@@ -1059,13 +1045,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // Header right
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-
   // Shared lists section
   sharedSectionHeader: {
     flexDirection: "row",
@@ -1159,21 +1138,6 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.text.tertiary,
     marginTop: spacing.xs,
-  },
-  impulseFundPreview: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    backgroundColor: `${colors.accent.secondary}15`,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 8,
-    marginBottom: spacing.lg,
-  },
-  impulseFundPreviewText: {
-    ...typography.bodySmall,
-    color: colors.accent.secondary,
-    fontWeight: "500",
   },
   modalActions: {
     flexDirection: "row",

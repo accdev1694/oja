@@ -1049,8 +1049,8 @@ export default function ListDetailScreen() {
                     )}
                   </View>
 
-                  {/* Inline Suggestions (moved from standalone card) */}
-                  {items.length > 0 && (
+                  {/* Inline Suggestions — only visible when add form is open */}
+                  {items.length > 0 && addFormVisible && (
                     <View style={styles.inlineSuggestionsContainer}>
                       <View style={styles.suggestionsHeader}>
                         <View style={styles.suggestionsHeaderLeft}>
