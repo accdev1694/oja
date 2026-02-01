@@ -265,11 +265,11 @@ Dark themes are excellent for reducing eye strain and battery usage. They're les
 
 ### Recommendations
 
-- [ ] **Weekly Insights Narrative:** Instead of raw numbers, generate a 2-3 sentence insight: "This week you made 2 trips and stayed under budget on both. Your dairy spending dropped 15%. You're building a solid streak!" This gives users a reason to check Insights regularly
+- [x] **Weekly Insights Narrative:** Instead of raw numbers, generate a 2-3 sentence insight: "This week you made 2 trips and stayed under budget on both. Your dairy spending dropped 15%. You're building a solid streak!" This gives users a reason to check Insights regularly ✅ Added generateWeeklyNarrative() that produces 2-3 sentence summary from digest data (trip count, spending comparison, savings)
 - [ ] **Price Intelligence:** Show users interesting price data from their history and community: "Milk is 12% cheaper at Aldi this month" or "You pay an average of £2.10 for bread — the best local price is £1.85." This turns a utility into an advisor
 - [x] **New User State:** Replace all zeroes with aspirational messaging and projected milestones: "Most users save £30 in their first month." Show a visual "path" of what's coming: first trip → first receipt → first savings → first streak ✅ Profile shows milestone path for new users: "Your journey starts here" with step-by-step checklist (stock → list → receipt → savings)
 - [x] **Community Contribution Visibility:** After scanning a receipt, show: "Your prices will help X shoppers in [city]." After a few scans: "You've contributed 23 prices — you're helping build the UK's most accurate grocery database." Pride in contribution = reason to scan = reason to return ✅ Receipt confirm screen shows "Your prices help build better data for shoppers everywhere" with heart icon. NoReceipts empty state also mentions community contribution.
-- [ ] **Warm "Discovery" Zone:** Consider a dedicated content area (maybe within Insights or a fifth tab) that surfaces tips, price trends, seasonal savings advice, or meal planning hints. Content that rewards browsing
+- [x] **Warm "Discovery" Zone:** Consider a dedicated content area (maybe within Insights or a fifth tab) that surfaces tips, price trends, seasonal savings advice, or meal planning hints. Content that rewards browsing ✅ Added "Did You Know?" section at bottom of Insights with rotating daily shopping tips (10 UK-relevant tips about food waste, savings, seasonal produce)
 
 ---
 

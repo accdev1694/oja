@@ -166,6 +166,11 @@ export default function InsightsScreen() {
                   />
                 </View>
 
+                {/* Weekly Narrative */}
+                <Text style={styles.weeklyNarrative}>
+                  {generateWeeklyNarrative(digest)}
+                </Text>
+
                 {/* Sparkline */}
                 {digest.dailySparkline && digest.dailySparkline.some((v: number) => v > 0) && (
                   <View style={styles.sparklineContainer}>
@@ -665,6 +670,23 @@ export default function InsightsScreen() {
           </View>
         </Animated.View>
 
+        {/* ============ DISCOVERY ZONE ============ */}
+        <Animated.View entering={FadeInDown.delay(700).duration(400)}>
+          <GlassCard style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons
+                name="lightbulb-on-outline"
+                size={22}
+                color={colors.accent.warning}
+              />
+              <Text style={styles.sectionTitle}>Did You Know?</Text>
+            </View>
+            <Text style={styles.discoveryTip}>
+              {getSeasonalTip()}
+            </Text>
+          </GlassCard>
+        </Animated.View>
+
         <View style={{ height: 140 }} />
       </ScrollView>
 
@@ -694,6 +716,72 @@ export default function InsightsScreen() {
       />
     </GlassScreen>
   );
+}
+
+// =============================================================================
+// DISCOVERY ZONE — SEASONAL TIPS
+// =============================================================================
+
+const SHOPPING_TIPS = [
+  "The average UK household throws away £60 of food per month. Tracking your stock levels helps reduce waste.",
+  "Shopping with a list reduces impulse purchases by up to 30%. You're already ahead of the curve.",
+  "Buying seasonal produce can save 20-40% compared to out-of-season imports.",
+  "Store-brand items are typically 30% cheaper than branded equivalents for identical quality.",
+  "The most expensive items are usually placed at eye level. Check the top and bottom shelves.",
+  "Frozen fruit and veg retain more nutrients than 'fresh' items that have been on shelves for days.",
+  "Meal planning for just 3 days a week can reduce your weekly food bill by 20%.",
+  "Yellow sticker bargains are typically available 2-3 hours before closing time.",
+  "Buying in bulk only saves money if you actually use everything before it expires.",
+  "The UK wastes 9.5 million tonnes of food annually. Every item you track helps.",
+];
+
+function getSeasonalTip(): string {
+  // Rotate tips daily based on day of year
+  const dayOfYear = Math.floor(
+    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000
+  );
+  return SHOPPING_TIPS[dayOfYear % SHOPPING_TIPS.length];
+}
+
+// =============================================================================
+// WEEKLY NARRATIVE GENERATOR
+// =============================================================================
+
+function generateWeeklyNarrative(digest: {
+  thisWeekTotal: number;
+  lastWeekTotal: number;
+  percentChange: number;
+  tripsCount: number;
+  budgetSaved: number;
+}): string {
+  const parts: string[] = [];
+
+  // Trip summary
+  if (digest.tripsCount === 0) {
+    parts.push("No shopping trips this week — your wallet is having a rest.");
+  } else {
+    parts.push(
+      `You made ${digest.tripsCount} trip${digest.tripsCount !== 1 ? "s" : ""} this week, spending £${digest.thisWeekTotal.toFixed(2)} total.`
+    );
+  }
+
+  // Comparison with last week
+  if (digest.lastWeekTotal > 0 && digest.tripsCount > 0) {
+    if (digest.percentChange < -10) {
+      parts.push(`That's ${Math.abs(digest.percentChange).toFixed(0)}% less than last week — nice restraint.`);
+    } else if (digest.percentChange > 10) {
+      parts.push(`That's ${digest.percentChange.toFixed(0)}% more than last week.`);
+    } else if (digest.tripsCount > 0) {
+      parts.push("Pretty consistent with last week.");
+    }
+  }
+
+  // Savings encouragement
+  if (digest.budgetSaved > 0) {
+    parts.push(`You saved £${digest.budgetSaved.toFixed(2)} against your budgets. Keep it up!`);
+  }
+
+  return parts.join(" ");
 }
 
 // =============================================================================
@@ -794,6 +882,22 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.text.tertiary,
     fontSize: 11,
+  },
+
+  // Discovery zone
+  discoveryTip: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    lineHeight: 22,
+    fontStyle: "italic",
+  },
+
+  // Weekly narrative
+  weeklyNarrative: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    marginTop: spacing.md,
+    lineHeight: 22,
   },
 
   // Sparkline
