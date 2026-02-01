@@ -126,6 +126,85 @@ export const upsertFromReceipt = mutation({
         upsertCount++;
       }
 
+      // Price-bracket matcher: when receipt item lacks size/unit, infer variant from price
+      if (!item.size && !item.unit) {
+        const baseItem = normalizedName
+          .replace(/\d+\s*(ml|l|g|kg|pt|pint|pints|pack|oz|lb)\b/gi, "")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        // Check if user has a preferredVariant on their pantry item — always prefer that
+        const pantryItem = await ctx.db
+          .query("pantryItems")
+          .withIndex("by_user", (q) => q.eq("userId", user._id))
+          .filter((q) => q.eq(q.field("name"), item.name))
+          .first();
+
+        if (pantryItem?.preferredVariant) {
+          // User has explicitly chosen a variant — associate price with it
+          const preferredVariants = await ctx.db
+            .query("itemVariants")
+            .withIndex("by_base_item", (q) => q.eq("baseItem", baseItem || normalizedName))
+            .collect();
+
+          const preferred = preferredVariants.find(
+            (v) => v.variantName.toLowerCase() === pantryItem.preferredVariant!.toLowerCase()
+          );
+
+          if (preferred) {
+            // Update the currentPrices entry with the variant's size/unit
+            const priceRow = existing ?? await ctx.db
+              .query("currentPrices")
+              .withIndex("by_item_store", (q) =>
+                q.eq("normalizedName", normalizedName).eq("storeName", receipt.storeName)
+              )
+              .first();
+
+            if (priceRow) {
+              await ctx.db.patch(priceRow._id, {
+                variantName: preferred.variantName,
+                size: preferred.size,
+                unit: preferred.unit,
+              });
+            }
+          }
+        } else {
+          // No preferredVariant — try bracket matching against known variant prices
+          const variants = await ctx.db
+            .query("itemVariants")
+            .withIndex("by_base_item", (q) => q.eq("baseItem", baseItem || normalizedName))
+            .collect();
+
+          if (variants.length > 0) {
+            const TOLERANCE = 0.20; // 20% price tolerance
+            const matches = variants.filter((v) => {
+              if (v.estimatedPrice == null) return false;
+              const diff = Math.abs(item.unitPrice - v.estimatedPrice) / v.estimatedPrice;
+              return diff <= TOLERANCE;
+            });
+
+            // Only associate if exactly one match (unambiguous)
+            if (matches.length === 1) {
+              const match = matches[0];
+              const priceRow = existing ?? await ctx.db
+                .query("currentPrices")
+                .withIndex("by_item_store", (q) =>
+                  q.eq("normalizedName", normalizedName).eq("storeName", receipt.storeName)
+                )
+                .first();
+
+              if (priceRow) {
+                await ctx.db.patch(priceRow._id, {
+                  variantName: match.variantName,
+                  size: match.size,
+                  unit: match.unit,
+                });
+              }
+            }
+          }
+        }
+      }
+
       // Variant discovery: if receipt has size/unit, auto-insert into itemVariants
       if (item.size && item.unit) {
         // Extract base item name (strip size info from name for baseItem key)
