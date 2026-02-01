@@ -336,6 +336,9 @@ export const handleSubscriptionUpdated = internalMutation({
 
     if (!sub) return;
 
+    // Detect billing period change → reset scan credits
+    const periodChanged = sub.currentPeriodStart !== args.currentPeriodStart;
+
     await ctx.db.patch(sub._id, {
       status: args.status,
       stripeSubscriptionId: args.stripeSubscriptionId,
@@ -343,6 +346,24 @@ export const handleSubscriptionUpdated = internalMutation({
       currentPeriodEnd: args.currentPeriodEnd,
       updatedAt: Date.now(),
     });
+
+    // Create fresh scan credits record for new billing period
+    if (periodChanged && (args.status === "active" || args.status === "trial")) {
+      const isAnnual = sub.plan === "premium_annual";
+      await ctx.db.insert("scanCredits", {
+        userId: sub.userId,
+        periodStart: args.currentPeriodStart,
+        periodEnd: args.currentPeriodEnd,
+        scansThisPeriod: 0,
+        creditsEarned: 0,
+        maxScans: isAnnual ? 48 : 4,
+        maxCredits: isAnnual ? 12.0 : 1.0,
+        creditPerScan: 0.25,
+        appliedToInvoice: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    }
   },
 });
 

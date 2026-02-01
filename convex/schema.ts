@@ -432,6 +432,37 @@ export default defineSchema({
   })
     .index("by_user", ["userId"]),
 
+  // Scan credits (receipt scan discount toward subscription)
+  scanCredits: defineTable({
+    userId: v.id("users"),
+    periodStart: v.number(),
+    periodEnd: v.number(),
+    scansThisPeriod: v.number(),
+    creditsEarned: v.number(),
+    maxScans: v.number(),
+    maxCredits: v.number(),
+    creditPerScan: v.number(),
+    appliedToInvoice: v.boolean(),
+    stripeInvoiceId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_period", ["userId", "periodEnd"]),
+
+  // Individual scan credit events (audit trail)
+  scanCreditTransactions: defineTable({
+    userId: v.id("users"),
+    scanCreditId: v.id("scanCredits"),
+    receiptId: v.id("receipts"),
+    creditAmount: v.number(),
+    scanNumber: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_scan_credit", ["scanCreditId"])
+    .index("by_receipt", ["receiptId"]),
+
   // === Epic 8: Admin ===
 
   // Admin audit logs

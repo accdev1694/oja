@@ -47,6 +47,7 @@ export default function SubscriptionScreen() {
   const plans = useQuery(api.subscriptions.getPlans);
   const loyalty = useQuery(api.subscriptions.getLoyaltyPoints);
   const pointHistory = useQuery(api.subscriptions.getPointHistory);
+  const scanCredits = useQuery(api.subscriptions.getScanCredits);
 
   const startTrial = useMutation(api.subscriptions.startFreeTrial);
   const cancelSub = useMutation(api.subscriptions.cancelSubscription);
@@ -288,6 +289,102 @@ export default function SubscriptionScreen() {
             )}
           </GlassCard>
         </Animated.View>
+
+        {/* Scan Credits — receipt scans reduce subscription price */}
+        {scanCredits && (
+          <Animated.View entering={FadeInDown.duration(400).delay(150)}>
+            <GlassCard style={styles.scanCreditsCard}>
+              <View style={styles.sectionHeader}>
+                <MaterialCommunityIcons
+                  name="barcode-scan"
+                  size={24}
+                  color={colors.accent.primary}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.scanCreditsTitle}>Scan Credits</Text>
+                  <Text style={styles.scanCreditsSubtitle}>
+                    Each receipt scan saves you £0.25
+                  </Text>
+                </View>
+              </View>
+
+              {/* Scan progress dots */}
+              <View style={styles.scanDotsRow}>
+                {Array.from({ length: scanCredits.maxScans > 8 ? 4 : scanCredits.maxScans }).map((_, i) => {
+                  const filled = i < (scanCredits.maxScans > 8
+                    ? Math.ceil(scanCredits.scansThisPeriod / (scanCredits.maxScans / 4))
+                    : scanCredits.scansThisPeriod);
+                  return (
+                    <View
+                      key={i}
+                      style={[
+                        styles.scanDot,
+                        filled ? styles.scanDotFilled : styles.scanDotEmpty,
+                      ]}
+                    >
+                      {filled ? (
+                        <MaterialCommunityIcons name="check" size={14} color="#fff" />
+                      ) : (
+                        <MaterialCommunityIcons name="camera-outline" size={14} color={colors.text.tertiary} />
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* Credit progress bar */}
+              <View style={styles.creditProgressContainer}>
+                <View style={styles.creditProgressTrack}>
+                  <View
+                    style={[
+                      styles.creditProgressFill,
+                      { width: `${Math.min(100, (scanCredits.creditsEarned / scanCredits.maxCredits) * 100)}%` },
+                    ]}
+                  />
+                </View>
+                <View style={styles.creditAmountRow}>
+                  <Text style={styles.creditEarned}>
+                    £{scanCredits.creditsEarned.toFixed(2)} earned
+                  </Text>
+                  <Text style={styles.creditMax}>
+                    of £{scanCredits.maxCredits.toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Effective price */}
+              {scanCredits.creditsEarned > 0 && (
+                <View style={styles.effectivePriceRow}>
+                  <Text style={styles.effectivePriceLabel}>Next renewal:</Text>
+                  <View style={styles.effectivePriceValues}>
+                    <Text style={styles.effectivePriceStrike}>
+                      £{scanCredits.basePrice.toFixed(2)}
+                    </Text>
+                    <Text style={styles.effectivePriceValue}>
+                      £{scanCredits.effectivePrice.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Encouragement */}
+              {scanCredits.scansThisPeriod < scanCredits.maxScans ? (
+                <Text style={styles.scanEncouragement}>
+                  Scan {scanCredits.maxScans - scanCredits.scansThisPeriod} more receipt
+                  {scanCredits.maxScans - scanCredits.scansThisPeriod !== 1 ? "s" : ""} to
+                  save £{(scanCredits.maxCredits - scanCredits.creditsEarned).toFixed(2)} more
+                </Text>
+              ) : (
+                <View style={styles.scanMaxedRow}>
+                  <MaterialCommunityIcons name="check-circle" size={16} color={colors.semantic.success} />
+                  <Text style={styles.scanMaxedText}>
+                    Maximum credits earned this period!
+                  </Text>
+                </View>
+              )}
+            </GlassCard>
+          </Animated.View>
+        )}
 
         {/* Free Trial CTA — only for free users who haven't had a subscription */}
         {!isPremium && !isExpired && subscription?.plan === "free" && (
@@ -720,6 +817,109 @@ const styles = StyleSheet.create({
   currentBadgeText: {
     ...typography.bodyMedium,
     color: colors.accent.primary,
+    fontWeight: "600",
+  },
+
+  // Scan Credits
+  scanCreditsCard: { marginBottom: spacing.md },
+  scanCreditsTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+  },
+  scanCreditsSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  scanDotsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: spacing.md,
+    marginVertical: spacing.md,
+  },
+  scanDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scanDotFilled: {
+    backgroundColor: colors.accent.primary,
+  },
+  scanDotEmpty: {
+    backgroundColor: `${colors.text.tertiary}20`,
+    borderWidth: 1,
+    borderColor: `${colors.text.tertiary}40`,
+  },
+  creditProgressContainer: { marginBottom: spacing.sm },
+  creditProgressTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: `${colors.text.tertiary}20`,
+    overflow: "hidden",
+  },
+  creditProgressFill: {
+    height: "100%",
+    borderRadius: 4,
+    backgroundColor: colors.accent.primary,
+  },
+  creditAmountRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: spacing.xs,
+  },
+  creditEarned: {
+    ...typography.bodyMedium,
+    color: colors.accent.primary,
+    fontWeight: "700",
+  },
+  creditMax: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  effectivePriceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: `${colors.semantic.success}10`,
+    padding: spacing.sm,
+    borderRadius: 8,
+    marginBottom: spacing.sm,
+  },
+  effectivePriceLabel: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+  },
+  effectivePriceValues: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  effectivePriceStrike: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
+    textDecorationLine: "line-through",
+  },
+  effectivePriceValue: {
+    ...typography.headlineSmall,
+    color: colors.semantic.success,
+    fontWeight: "700",
+  },
+  scanEncouragement: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    fontStyle: "italic",
+  },
+  scanMaxedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+  },
+  scanMaxedText: {
+    ...typography.bodyMedium,
+    color: colors.semantic.success,
     fontWeight: "600",
   },
 

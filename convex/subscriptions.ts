@@ -592,6 +592,7 @@ export const getPlans = query({
           "Insights & gamification",
           "Export data",
           "Priority support",
+          "Earn up to £1.00/mo back with receipt scans",
         ],
       },
       {
@@ -604,8 +605,190 @@ export const getPlans = query({
           "Everything in Monthly",
           "Save £14.89/year",
           "Early access to new features",
+          "Earn up to £12.00/yr back with receipt scans",
         ],
       },
     ];
+  },
+});
+
+// =============================================
+// Scan Credits — Receipt scans reduce subscription price
+// =============================================
+
+/**
+ * Get current scan credit status for the authenticated user.
+ * Returns null for free users or users without a subscription.
+ */
+export const getScanCredits = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) return null;
+
+    const sub = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .order("desc")
+      .first();
+
+    // No subscription or free plan → no credits
+    if (!sub || sub.plan === "free" || sub.status === "expired") {
+      return null;
+    }
+
+    const now = Date.now();
+    const isAnnual = sub.plan === "premium_annual";
+    const basePrice = isAnnual ? 21.99 : 2.99;
+    const maxScans = isAnnual ? 48 : 4;
+    const maxCredits = isAnnual ? 12.0 : 1.0;
+
+    // Find credit record for current billing period
+    const credit = await ctx.db
+      .query("scanCredits")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .order("desc")
+      .first();
+
+    if (credit && credit.periodStart <= now && credit.periodEnd > now) {
+      return {
+        scansThisPeriod: credit.scansThisPeriod,
+        creditsEarned: credit.creditsEarned,
+        maxScans: credit.maxScans,
+        maxCredits: credit.maxCredits,
+        creditPerScan: credit.creditPerScan,
+        effectivePrice: parseFloat(Math.max(0, basePrice - credit.creditsEarned).toFixed(2)),
+        basePrice,
+        periodEnd: credit.periodEnd,
+        plan: sub.plan,
+      };
+    }
+
+    // No credit record for current period — return defaults
+    return {
+      scansThisPeriod: 0,
+      creditsEarned: 0,
+      maxScans,
+      maxCredits,
+      creditPerScan: 0.25,
+      effectivePrice: basePrice,
+      basePrice,
+      periodEnd: sub.currentPeriodEnd || null,
+      plan: sub.plan,
+    };
+  },
+});
+
+/**
+ * Award a scan credit when a receipt is confirmed.
+ * Called alongside earnPointsForReceipt.
+ * £0.25 per scan, capped at £1.00/month (4 scans) or £12.00/year (48 scans).
+ */
+export const earnScanCredit = mutation({
+  args: {
+    receiptId: v.id("receipts"),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const now = Date.now();
+
+    // Verify receipt belongs to user
+    const receipt = await ctx.db.get(args.receiptId);
+    if (!receipt || receipt.userId !== user._id) throw new Error("Receipt not found");
+
+    // Get subscription — must have active premium
+    const sub = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .order("desc")
+      .first();
+
+    if (!sub || sub.plan === "free") {
+      return { success: false, reason: "no_premium", creditEarned: 0 };
+    }
+    if (sub.status !== "active" && sub.status !== "trial") {
+      return { success: false, reason: "inactive_subscription", creditEarned: 0 };
+    }
+
+    // Deduplicate: check if this receipt already earned a credit
+    const existingTx = await ctx.db
+      .query("scanCreditTransactions")
+      .withIndex("by_receipt", (q: any) => q.eq("receiptId", args.receiptId))
+      .first();
+    if (existingTx) {
+      return { success: false, reason: "already_credited", creditEarned: 0 };
+    }
+
+    const isAnnual = sub.plan === "premium_annual";
+    const maxScans = isAnnual ? 48 : 4;
+    const maxCredits = isAnnual ? 12.0 : 1.0;
+    const creditPerScan = 0.25;
+    const periodStart = sub.currentPeriodStart || now;
+    const periodEnd = sub.currentPeriodEnd || now + 30 * 24 * 60 * 60 * 1000;
+
+    // Get or create credit record for current billing period
+    let credit = await ctx.db
+      .query("scanCredits")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .order("desc")
+      .first();
+
+    if (!credit || credit.periodEnd <= now) {
+      const id = await ctx.db.insert("scanCredits", {
+        userId: user._id,
+        periodStart,
+        periodEnd,
+        scansThisPeriod: 0,
+        creditsEarned: 0,
+        maxScans,
+        maxCredits,
+        creditPerScan,
+        appliedToInvoice: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+      credit = (await ctx.db.get(id))!;
+    }
+
+    // Check cap
+    if (credit.scansThisPeriod >= credit.maxScans) {
+      return { success: false, reason: "monthly_cap", creditEarned: 0 };
+    }
+
+    // Award credit
+    const newScans = credit.scansThisPeriod + 1;
+    const newCredits = parseFloat(
+      Math.min(credit.maxCredits, credit.creditsEarned + creditPerScan).toFixed(2)
+    );
+
+    await ctx.db.patch(credit._id, {
+      scansThisPeriod: newScans,
+      creditsEarned: newCredits,
+      updatedAt: now,
+    });
+
+    // Log transaction
+    await ctx.db.insert("scanCreditTransactions", {
+      userId: user._id,
+      scanCreditId: credit._id,
+      receiptId: args.receiptId,
+      creditAmount: creditPerScan,
+      scanNumber: newScans,
+      createdAt: now,
+    });
+
+    return {
+      success: true,
+      creditEarned: creditPerScan,
+      totalCredits: newCredits,
+      scansUsed: newScans,
+      maxScans: credit.maxScans,
+    };
   },
 });

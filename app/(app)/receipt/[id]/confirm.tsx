@@ -54,6 +54,13 @@ export default function ConfirmReceiptScreen() {
   const checkDuplicate = useMutation(api.receipts.checkDuplicate);
   const upsertCurrentPrices = useMutation(api.currentPrices.upsertFromReceipt);
 
+  // Gamification mutations
+  const earnPointsForReceipt = useMutation(api.subscriptions.earnPointsForReceipt);
+  const earnScanCredit = useMutation(api.subscriptions.earnScanCredit);
+  const updateStreak = useMutation(api.insights.updateStreak);
+  const activeChallenge = useQuery(api.insights.getActiveChallenge);
+  const updateChallengeProgress = useMutation(api.insights.updateChallengeProgress);
+
   // Local state for edited items
   const [editedItems, setEditedItems] = useState<ReceiptItem[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -238,6 +245,27 @@ export default function ConfirmReceiptScreen() {
       // Step 4: Check for price alerts
       const alerts = await checkPriceAlerts({ receiptId });
 
+      // Step 5: Gamification — earn points, update streak, progress challenge
+      let pointsEarned = 0;
+      let creditEarned = 0;
+      try {
+        const pointsResult = await earnPointsForReceipt({ receiptId });
+        if (pointsResult.success) {
+          pointsEarned = pointsResult.pointsEarned;
+        }
+        const creditResult = await earnScanCredit({ receiptId });
+        if (creditResult.success) {
+          creditEarned = creditResult.creditEarned;
+        }
+        await updateStreak({ type: "receipt_scanner" });
+        if (activeChallenge && activeChallenge.type === "scan_receipts" && !activeChallenge.completedAt) {
+          await updateChallengeProgress({ challengeId: activeChallenge._id, increment: 1 });
+        }
+      } catch (gamErr) {
+        // Non-critical — don't block receipt save
+        console.warn("Gamification update failed:", gamErr);
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       // Determine navigation destination
@@ -269,10 +297,15 @@ export default function ConfirmReceiptScreen() {
           ]);
         }
       } else {
+        const pointsMsg = pointsEarned > 0 ? `+${pointsEarned} pts` : "";
+        const creditMsg = creditEarned > 0 ? `+£${creditEarned.toFixed(2)} credit` : "";
+        const rewardMsg = [pointsMsg, creditMsg].filter(Boolean).join(", ");
+        const suffix = rewardMsg ? ` (${rewardMsg})` : "";
         if (Platform.OS === "web") {
+          window.alert(`Receipt Saved\n\nYour receipt has been saved successfully${suffix}`);
           navigateAfterSave();
         } else {
-          Alert.alert("Receipt Saved", "Your receipt has been saved successfully", [
+          Alert.alert("Receipt Saved", `Your receipt has been saved successfully${suffix}`, [
             { text: "OK", onPress: navigateAfterSave },
           ]);
         }
