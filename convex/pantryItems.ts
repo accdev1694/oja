@@ -14,11 +14,11 @@ export const bulkCreate = mutation({
         category: v.string(),
         stockLevel: v.union(
           v.literal("stocked"),
-          v.literal("good"),
-          v.literal("half"),
           v.literal("low"),
           v.literal("out")
         ),
+        estimatedPrice: v.optional(v.number()),
+        hasVariants: v.optional(v.boolean()),
       })
     ),
   },
@@ -40,14 +40,32 @@ export const bulkCreate = mutation({
 
     const now = Date.now();
 
-    // Insert all items with icons
-    const promises = args.items.map((item) =>
+    // Get existing items to avoid duplicates
+    const existing = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    const existingNames = new Set(
+      existing.map((e) => e.name.toLowerCase().trim())
+    );
+
+    // Insert only items that don't already exist
+    const newItems = args.items.filter(
+      (item) => !existingNames.has(item.name.toLowerCase().trim())
+    );
+
+    const promises = newItems.map((item) =>
       ctx.db.insert("pantryItems", {
         userId: user._id,
         name: item.name,
         category: item.category,
         icon: getIconForItem(item.name, item.category),
         stockLevel: item.stockLevel,
+        // Price seeding from AI estimates
+        ...(item.estimatedPrice !== undefined && {
+          lastPrice: item.estimatedPrice,
+          priceSource: "ai_estimate" as const,
+        }),
         autoAddToList: false,
         createdAt: now,
         updatedAt: now,
@@ -56,7 +74,7 @@ export const bulkCreate = mutation({
 
     await Promise.all(promises);
 
-    return { count: promises.length };
+    return { count: promises.length, skipped: args.items.length - newItems.length };
   },
 });
 
@@ -126,8 +144,6 @@ export const create = mutation({
     category: v.string(),
     stockLevel: v.union(
       v.literal("stocked"),
-      v.literal("good"),
-      v.literal("half"),
       v.literal("low"),
       v.literal("out")
     ),
@@ -176,8 +192,6 @@ export const update = mutation({
     stockLevel: v.optional(
       v.union(
         v.literal("stocked"),
-        v.literal("good"),
-        v.literal("half"),
         v.literal("low"),
         v.literal("out")
       )
@@ -258,8 +272,6 @@ export const updateStockLevel = mutation({
     id: v.id("pantryItems"),
     stockLevel: v.union(
       v.literal("stocked"),
-      v.literal("good"),
-      v.literal("half"),
       v.literal("low"),
       v.literal("out")
     ),
@@ -569,5 +581,85 @@ export const addFromReceipt = mutation({
     });
 
     return pantryItemId;
+  },
+});
+
+/**
+ * Migrate stock levels from 5-level to 3-level system.
+ * Maps: "good" → "stocked", "half" → "low"
+ */
+export const migrateStockLevels = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const items = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    let migrated = 0;
+    for (const item of items) {
+      const level = item.stockLevel as string;
+      if (level === "good") {
+        await ctx.db.patch(item._id, { stockLevel: "stocked", updatedAt: Date.now() });
+        migrated++;
+      } else if (level === "half") {
+        await ctx.db.patch(item._id, { stockLevel: "low", updatedAt: Date.now() });
+        migrated++;
+      }
+    }
+
+    return { migrated, total: items.length };
+  },
+});
+
+/**
+ * Remove duplicate pantry items (keeps the most recently updated one).
+ */
+export const removeDuplicates = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const items = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    // Group by lowercase name
+    const byName: Record<string, typeof items> = {};
+    for (const item of items) {
+      const key = item.name.toLowerCase().trim();
+      if (!byName[key]) byName[key] = [];
+      byName[key].push(item);
+    }
+
+    let removed = 0;
+    for (const [, dupes] of Object.entries(byName)) {
+      if (dupes.length <= 1) continue;
+      // Keep the one with the latest updatedAt
+      dupes.sort((a, b) => b.updatedAt - a.updatedAt);
+      for (let i = 1; i < dupes.length; i++) {
+        await ctx.db.delete(dupes[i]._id);
+        removed++;
+      }
+    }
+
+    return { removed, totalBefore: items.length, totalAfter: items.length - removed };
   },
 });
