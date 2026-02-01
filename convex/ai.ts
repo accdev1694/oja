@@ -1,8 +1,73 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
+
+/**
+ * AI fallback wrapper: tries primary (Gemini) first, falls back to secondary (OpenAI).
+ * Both providers fail → throws the fallback error.
+ */
+async function withAIFallback<T>(
+  primary: () => Promise<T>,
+  fallback: () => Promise<T>,
+  operationName: string
+): Promise<T> {
+  try {
+    return await primary();
+  } catch (primaryError) {
+    console.warn(`[${operationName}] Primary AI (Gemini) failed, trying fallback (OpenAI):`, primaryError);
+    try {
+      return await fallback();
+    } catch (fallbackError) {
+      console.error(`[${operationName}] Both AI providers failed:`, { primaryError, fallbackError });
+      throw fallbackError;
+    }
+  }
+}
+
+/**
+ * Run a prompt through OpenAI GPT-4o-mini and return the text response.
+ * Used as fallback when Gemini is unavailable.
+ */
+async function openaiGenerate(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [{ role: "user", content: prompt }],
+    temperature: options?.temperature ?? 0.7,
+    max_tokens: options?.maxTokens ?? 4000,
+  });
+  return completion.choices[0]?.message?.content?.trim() || "";
+}
+
+/**
+ * Run a prompt through Gemini and return the text response.
+ */
+async function geminiGenerate(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    generationConfig: {
+      temperature: options?.temperature ?? 0.7,
+      maxOutputTokens: options?.maxTokens ?? 4000,
+    },
+  });
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  return response.text().trim();
+}
+
+/** Strip markdown code blocks from AI response */
+function stripCodeBlocks(text: string): string {
+  if (text.startsWith("```json")) {
+    return text.replace(/```json\n?/g, "").replace(/```\n?/g, "");
+  }
+  if (text.startsWith("```")) {
+    return text.replace(/```\n?/g, "");
+  }
+  return text;
+}
 
 export interface SeedItem {
   name: string;
@@ -76,36 +141,16 @@ IMPORTANT:
 - No explanations, ONLY the JSON array
 - Exactly ${totalItems} items`;
 
-    try {
-      const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash",
-        generationConfig: {
-          temperature: 0.8, // Some creativity for variety
-          maxOutputTokens: 4000,
-        },
-      });
-
-      const fullPrompt = `You are a household inventory expert who generates realistic stock lists covering groceries and household essentials. Always respond with valid JSON only.
+    const fullPrompt = `You are a household inventory expert who generates realistic stock lists covering groceries and household essentials. Always respond with valid JSON only.
 
 ${prompt}`;
 
-      const result = await model.generateContent(fullPrompt);
-      const response = await result.response;
-      const responseText = response.text().trim();
+    function parseSeedResponse(responseText: string): SeedItem[] {
+      if (!responseText) throw new Error("No response from AI");
+      const cleaned = stripCodeBlocks(responseText);
+      const items: SeedItem[] = JSON.parse(cleaned);
+      if (!Array.isArray(items) || items.length === 0) throw new Error("Invalid response format");
 
-      if (!responseText) {
-        throw new Error("No response from AI");
-      }
-
-      // Parse JSON response
-      const items: SeedItem[] = JSON.parse(responseText);
-
-      // Validate response
-      if (!Array.isArray(items) || items.length === 0) {
-        throw new Error("Invalid response format");
-      }
-
-      // Ensure we have exactly 200 items (or close to it)
       const validItems = items
         .filter((item) =>
           item.name &&
@@ -119,17 +164,20 @@ ${prompt}`;
           defaultSize: typeof item.defaultSize === "string" ? item.defaultSize : undefined,
           defaultUnit: typeof item.defaultUnit === "string" ? item.defaultUnit : undefined,
         }))
-        .slice(0, totalItems); // Take first 200
+        .slice(0, totalItems);
 
-      if (validItems.length < 50) {
-        throw new Error("Not enough valid items generated");
-      }
-
+      if (validItems.length < 50) throw new Error("Not enough valid items generated");
       return validItems;
+    }
+
+    try {
+      return await withAIFallback(
+        async () => parseSeedResponse(await geminiGenerate(fullPrompt, { temperature: 0.8 })),
+        async () => parseSeedResponse(await openaiGenerate(fullPrompt, { temperature: 0.8 })),
+        "generateHybridSeedItems"
+      );
     } catch (error) {
       console.error("AI generation failed:", error);
-
-      // Return fallback items if AI fails
       return getFallbackItems(country, cuisines);
     }
   },
@@ -175,36 +223,24 @@ Rules:
 Return ONLY a JSON array of item names, nothing else:
 ["item1", "item2", "item3", "item4", "item5"]`;
 
-    try {
-      const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash",
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 200,
-        },
-      });
-
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const responseText = response.text().trim();
-
-      if (!responseText) {
-        return getFallbackSuggestions(currentItems);
-      }
-
-      // Parse JSON response
-      const suggestions: string[] = JSON.parse(responseText);
-
-      if (!Array.isArray(suggestions)) {
-        return getFallbackSuggestions(currentItems);
-      }
-
-      // Filter out excluded items and limit to 5
+    function parseSuggestions(text: string): string[] {
+      if (!text) throw new Error("Empty response");
+      const cleaned = stripCodeBlocks(text);
+      const suggestions: string[] = JSON.parse(cleaned);
+      if (!Array.isArray(suggestions)) throw new Error("Not an array");
       return suggestions
         .filter((item) => !excludeItems.some(
           (excluded) => excluded.toLowerCase() === item.toLowerCase()
         ))
         .slice(0, 5);
+    }
+
+    try {
+      return await withAIFallback(
+        async () => parseSuggestions(await geminiGenerate(prompt, { maxTokens: 200 })),
+        async () => parseSuggestions(await openaiGenerate(prompt, { maxTokens: 200 })),
+        "generateListSuggestions"
+      );
     } catch (error) {
       console.error("AI suggestion generation failed:", error);
       return getFallbackSuggestions(currentItems);
@@ -275,11 +311,7 @@ export const parseReceipt = action({
       }
       const base64Image = btoa(binary);
 
-      const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash",
-      });
-
-      const prompt = `You are a receipt parser for a UK grocery shopping app. Extract as much data as possible from this receipt image, even if some parts are unclear.
+      const receiptPrompt = `You are a receipt parser for a UK grocery shopping app. Extract as much data as possible from this receipt image, even if some parts are unclear.
 
 Extract the following information (use your best judgment if unclear):
 1. Store name (if unclear, use "Unknown Store")
@@ -338,27 +370,32 @@ IMPORTANT RULES:
 - Ignore: loyalty discounts, bag charges, VAT codes (A/B/D), SKU numbers, promotional lines ("Price Crunch", "50p off")
 - Be lenient and helpful - users need their receipts parsed even if quality isn't perfect`;
 
-      const result = await model.generateContent([
-        { text: prompt },
-        {
-          inlineData: {
-            mimeType: "image/jpeg",
-            data: base64Image,
-          },
-        },
-      ]);
-
-      const responseText = result.response.text().trim();
-
-      // Remove markdown code blocks if present
-      let jsonText = responseText;
-      if (jsonText.startsWith("```json")) {
-        jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "");
-      } else if (jsonText.startsWith("```")) {
-        jsonText = jsonText.replace(/```\n?/g, "");
+      async function geminiParseReceipt(): Promise<any> {
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const result = await model.generateContent([
+          { text: receiptPrompt },
+          { inlineData: { mimeType: "image/jpeg", data: base64Image } },
+        ]);
+        return JSON.parse(stripCodeBlocks(result.response.text().trim()));
       }
 
-      const parsed = JSON.parse(jsonText);
+      async function openaiParseReceipt(): Promise<any> {
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: receiptPrompt },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
+            ],
+          }],
+          max_tokens: 4000,
+        });
+        const text = completion.choices[0]?.message?.content?.trim() || "";
+        return JSON.parse(stripCodeBlocks(text));
+      }
+
+      const parsed = await withAIFallback(geminiParseReceipt, openaiParseReceipt, "parseReceipt");
 
       // Provide fallback values for missing fields
       const storeName = parsed.storeName || "Unknown Store";
@@ -479,34 +516,14 @@ RULES:
 - For household items like toilet paper: use roll counts (4-pack, 9-pack, etc.)
 - No explanations, ONLY the JSON array`;
 
-    try {
-      const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash",
-        generationConfig: {
-          temperature: 0.5,
-          maxOutputTokens: 4000,
-        },
-      });
-
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      let responseText = response.text().trim();
-
-      // Remove markdown code blocks
-      if (responseText.startsWith("```json")) {
-        responseText = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "");
-      } else if (responseText.startsWith("```")) {
-        responseText = responseText.replace(/```\n?/g, "");
-      }
-
-      const variants = JSON.parse(responseText);
+    function parseVariantResponse(text: string) {
+      const cleaned = stripCodeBlocks(text);
+      const variants = JSON.parse(cleaned);
 
       if (!Array.isArray(variants)) {
-        console.error("Invalid variants response format");
-        return [];
+        throw new Error("Invalid variants response format — expected array");
       }
 
-      // Validate and normalize
       return variants
         .filter(
           (v: any) =>
@@ -525,8 +542,16 @@ RULES:
           source: "ai_seeded" as const,
           estimatedPrice: typeof v.estimatedPrice === "number" ? v.estimatedPrice : undefined,
         }));
+    }
+
+    try {
+      return await withAIFallback(
+        async () => parseVariantResponse(await geminiGenerate(prompt, { temperature: 0.5, maxTokens: 4000 })),
+        async () => parseVariantResponse(await openaiGenerate(prompt, { temperature: 0.5, maxTokens: 4000 })),
+        "generateItemVariants"
+      );
     } catch (error) {
-      console.error("Variant generation failed:", error);
+      console.error("Variant generation failed (both providers):", error);
       return [];
     }
   },
