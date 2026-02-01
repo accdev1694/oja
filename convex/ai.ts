@@ -7,7 +7,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 export interface SeedItem {
   name: string;
   category: string;
-  stockLevel: "stocked" | "good" | "low" | "out";
+  stockLevel: "stocked" | "low" | "out";
 }
 
 /**
@@ -48,15 +48,14 @@ ${cuisineBreakdown}
 CATEGORIES (assign each item to one):
 Dairy, Bakery, Produce, Meat, Pantry Staples, Spices & Seasonings, Condiments, Beverages, Snacks, Frozen, Canned Goods, Grains & Pasta, Oils & Vinegars, Baking, Ethnic Ingredients, Household, Personal Care, Health & Wellness, Baby & Kids, Pets, Electronics, Clothing, Garden & Outdoor, Office & Stationery
 
-STOCK LEVELS (assign realistically):
-- stocked: Items that last long and you'd have plenty (flour, rice, pasta, batteries)
-- good: Items you likely have (milk, eggs, common spices, soap)
-- low: Items that run out frequently (fresh produce, bread, toilet paper)
-- out: Items you might not have yet (specialty ingredients, replacement bulbs)
+STOCK LEVELS (assign realistically — only 3 levels):
+- stocked: Items you have plenty of (flour, rice, pasta, batteries, milk, eggs, common spices)
+- low: Items running low or that run out frequently (fresh produce, bread, toilet paper)
+- out: Items you've run out of or might not have (specialty ingredients, replacement bulbs)
 
 Return ONLY valid JSON array:
 [
-  {"name": "Whole Milk", "category": "Dairy", "stockLevel": "good"},
+  {"name": "Whole Milk", "category": "Dairy", "stockLevel": "stocked"},
   {"name": "White Bread", "category": "Bakery", "stockLevel": "low"},
   {"name": "Toilet Paper", "category": "Household", "stockLevel": "low"},
   ...
@@ -103,7 +102,7 @@ ${prompt}`;
         .filter((item) =>
           item.name &&
           item.category &&
-          ["stocked", "good", "low", "out"].includes(item.stockLevel)
+          ["stocked", "low", "out"].includes(item.stockLevel)
         )
         .slice(0, totalItems); // Take first 200
 
@@ -265,17 +264,19 @@ export const parseReceipt = action({
         model: "gemini-2.0-flash",
       });
 
-      const prompt = `You are a receipt parser. Extract as much data as possible from this receipt image, even if some parts are unclear.
+      const prompt = `You are a receipt parser for a UK grocery shopping app. Extract as much data as possible from this receipt image, even if some parts are unclear.
 
 Extract the following information (use your best judgment if unclear):
 1. Store name (if unclear, use "Unknown Store")
 2. Store address (if visible, otherwise omit)
 3. Purchase date (in ISO format YYYY-MM-DD, or use today's date if unclear)
 4. All items with:
-   - Item name (be lenient with partial/blurry text)
-   - Quantity (default to 1 if not shown)
-   - Unit price (best estimate)
-   - Total price for that item
+   - Item name: Clean, readable product name. Expand obvious abbreviations (e.g., "TS WHL MLK 2PT" → "Whole Milk 2 Pints", "BRIT S/MILK" → "British Semi-Skimmed Milk")
+   - Size: Product size/weight if visible on the receipt line (e.g., "2L", "500g", "4 pack", "2 pints"). Use null if not on receipt — do NOT guess.
+   - Unit: Unit of measurement if determinable from size (e.g., "L", "g", "pack", "pint"). Use null if size is null.
+   - Quantity: Number of units purchased (default to 1). Handle "2 x £2.19" as quantity: 2.
+   - Unit price (price per single unit)
+   - Total price for that line item
 5. Subtotal (if visible)
 6. Tax amount (if visible)
 7. Grand total (REQUIRED - extract this even if other fields are unclear)
@@ -287,10 +288,20 @@ Return ONLY valid JSON in this exact format:
   "purchaseDate": "2026-01-29",
   "items": [
     {
-      "name": "Milk",
+      "name": "Whole Milk 2 Pints",
+      "size": "2 pints",
+      "unit": "pint",
       "quantity": 1,
-      "unitPrice": 2.50,
-      "totalPrice": 2.50
+      "unitPrice": 1.15,
+      "totalPrice": 1.15
+    },
+    {
+      "name": "Bananas",
+      "size": null,
+      "unit": null,
+      "quantity": 1,
+      "unitPrice": 0.75,
+      "totalPrice": 0.75
     }
   ],
   "subtotal": 10.00,
@@ -300,13 +311,16 @@ Return ONLY valid JSON in this exact format:
 
 IMPORTANT RULES:
 - DO extract data even if the receipt is blurry, wrinkled, or partially obscured
-- DO make reasonable guesses for unclear text (e.g., "Mlk" → "Milk")
+- DO expand abbreviations to clean readable names (e.g., "Mlk" → "Milk", "ORG BNS" → "Organic Bananas")
+- DO extract size from the item description when it's printed on the receipt
+- DO NOT guess sizes — if the receipt just says "MILK" with no size, set size and unit to null
 - DO extract at least the total amount - this is the most important field
 - DO extract as many items as you can see, even if some text is unclear
 - If an item name is completely illegible, use generic names like "Item 1", "Item 2"
 - All prices should be numbers (not strings)
 - Quantities should be integers
 - Date must be in YYYY-MM-DD format
+- Ignore: loyalty discounts, bag charges, VAT codes (A/B/D), SKU numbers, promotional lines ("Price Crunch", "50p off")
 - Be lenient and helpful - users need their receipts parsed even if quality isn't perfect`;
 
       const result = await model.generateContent([
@@ -340,6 +354,8 @@ IMPORTANT RULES:
       if (items.length === 0 && total > 0) {
         items.push({
           name: "Receipt Items",
+          size: null,
+          unit: null,
           quantity: 1,
           unitPrice: total,
           totalPrice: total,
@@ -385,9 +401,9 @@ IMPORTANT RULES:
 function getFallbackItems(country: string, cuisines: string[]): SeedItem[] {
   const basicItems: SeedItem[] = [
     // Dairy (10)
-    { name: "Whole Milk", category: "Dairy", stockLevel: "good" },
-    { name: "Butter", category: "Dairy", stockLevel: "good" },
-    { name: "Eggs", category: "Dairy", stockLevel: "good" },
+    { name: "Whole Milk", category: "Dairy", stockLevel: "stocked" },
+    { name: "Butter", category: "Dairy", stockLevel: "stocked" },
+    { name: "Eggs", category: "Dairy", stockLevel: "stocked" },
     { name: "Cheddar Cheese", category: "Dairy", stockLevel: "stocked" },
     { name: "Plain Yogurt", category: "Dairy", stockLevel: "low" },
     { name: "Cream", category: "Dairy", stockLevel: "out" },
@@ -406,18 +422,18 @@ function getFallbackItems(country: string, cuisines: string[]): SeedItem[] {
     // Pantry Staples (15)
     { name: "All-Purpose Flour", category: "Pantry Staples", stockLevel: "stocked" },
     { name: "White Sugar", category: "Pantry Staples", stockLevel: "stocked" },
-    { name: "Brown Sugar", category: "Pantry Staples", stockLevel: "good" },
+    { name: "Brown Sugar", category: "Pantry Staples", stockLevel: "stocked" },
     { name: "Salt", category: "Pantry Staples", stockLevel: "stocked" },
     { name: "Black Pepper", category: "Pantry Staples", stockLevel: "stocked" },
     { name: "White Rice", category: "Pantry Staples", stockLevel: "stocked" },
     { name: "Pasta", category: "Pantry Staples", stockLevel: "stocked" },
-    { name: "Spaghetti", category: "Pantry Staples", stockLevel: "good" },
+    { name: "Spaghetti", category: "Pantry Staples", stockLevel: "stocked" },
     { name: "Oats", category: "Pantry Staples", stockLevel: "stocked" },
-    { name: "Baking Powder", category: "Pantry Staples", stockLevel: "good" },
-    { name: "Baking Soda", category: "Pantry Staples", stockLevel: "good" },
+    { name: "Baking Powder", category: "Pantry Staples", stockLevel: "stocked" },
+    { name: "Baking Soda", category: "Pantry Staples", stockLevel: "stocked" },
     { name: "Honey", category: "Pantry Staples", stockLevel: "stocked" },
-    { name: "Cornstarch", category: "Pantry Staples", stockLevel: "good" },
-    { name: "Vanilla Extract", category: "Pantry Staples", stockLevel: "good" },
+    { name: "Cornstarch", category: "Pantry Staples", stockLevel: "stocked" },
+    { name: "Vanilla Extract", category: "Pantry Staples", stockLevel: "stocked" },
     { name: "Cocoa Powder", category: "Pantry Staples", stockLevel: "stocked" },
 
     // Oils & Condiments (10)
@@ -425,41 +441,41 @@ function getFallbackItems(country: string, cuisines: string[]): SeedItem[] {
     { name: "Vegetable Oil", category: "Oils & Vinegars", stockLevel: "stocked" },
     { name: "Vinegar", category: "Oils & Vinegars", stockLevel: "stocked" },
     { name: "Soy Sauce", category: "Condiments", stockLevel: "stocked" },
-    { name: "Ketchup", category: "Condiments", stockLevel: "good" },
-    { name: "Mustard", category: "Condiments", stockLevel: "good" },
-    { name: "Mayonnaise", category: "Condiments", stockLevel: "good" },
+    { name: "Ketchup", category: "Condiments", stockLevel: "stocked" },
+    { name: "Mustard", category: "Condiments", stockLevel: "stocked" },
+    { name: "Mayonnaise", category: "Condiments", stockLevel: "stocked" },
     { name: "Hot Sauce", category: "Condiments", stockLevel: "out" },
     { name: "Worcestershire Sauce", category: "Condiments", stockLevel: "out" },
-    { name: "Balsamic Vinegar", category: "Oils & Vinegars", stockLevel: "good" },
+    { name: "Balsamic Vinegar", category: "Oils & Vinegars", stockLevel: "stocked" },
 
     // Canned/Jarred (10)
     { name: "Canned Tomatoes", category: "Canned Goods", stockLevel: "stocked" },
-    { name: "Tomato Paste", category: "Canned Goods", stockLevel: "good" },
+    { name: "Tomato Paste", category: "Canned Goods", stockLevel: "stocked" },
     { name: "Chicken Broth", category: "Canned Goods", stockLevel: "stocked" },
-    { name: "Vegetable Broth", category: "Canned Goods", stockLevel: "good" },
+    { name: "Vegetable Broth", category: "Canned Goods", stockLevel: "stocked" },
     { name: "Canned Beans", category: "Canned Goods", stockLevel: "stocked" },
-    { name: "Chickpeas", category: "Canned Goods", stockLevel: "good" },
+    { name: "Chickpeas", category: "Canned Goods", stockLevel: "stocked" },
     { name: "Tuna", category: "Canned Goods", stockLevel: "out" },
     { name: "Coconut Milk", category: "Canned Goods", stockLevel: "out" },
-    { name: "Peanut Butter", category: "Pantry Staples", stockLevel: "good" },
-    { name: "Jam", category: "Condiments", stockLevel: "good" },
+    { name: "Peanut Butter", category: "Pantry Staples", stockLevel: "stocked" },
+    { name: "Jam", category: "Condiments", stockLevel: "stocked" },
 
     // Household (8)
     { name: "Toilet Paper", category: "Household", stockLevel: "low" },
     { name: "Kitchen Roll", category: "Household", stockLevel: "low" },
-    { name: "Bin Bags", category: "Household", stockLevel: "good" },
-    { name: "Dish Soap", category: "Household", stockLevel: "good" },
-    { name: "Laundry Detergent", category: "Household", stockLevel: "good" },
-    { name: "All-Purpose Cleaner", category: "Household", stockLevel: "good" },
+    { name: "Bin Bags", category: "Household", stockLevel: "stocked" },
+    { name: "Dish Soap", category: "Household", stockLevel: "stocked" },
+    { name: "Laundry Detergent", category: "Household", stockLevel: "stocked" },
+    { name: "All-Purpose Cleaner", category: "Household", stockLevel: "stocked" },
     { name: "Sponges", category: "Household", stockLevel: "low" },
-    { name: "Aluminium Foil", category: "Household", stockLevel: "good" },
+    { name: "Aluminium Foil", category: "Household", stockLevel: "stocked" },
 
     // Personal Care (5)
-    { name: "Hand Soap", category: "Personal Care", stockLevel: "good" },
-    { name: "Toothpaste", category: "Personal Care", stockLevel: "good" },
-    { name: "Shampoo", category: "Personal Care", stockLevel: "good" },
+    { name: "Hand Soap", category: "Personal Care", stockLevel: "stocked" },
+    { name: "Toothpaste", category: "Personal Care", stockLevel: "stocked" },
+    { name: "Shampoo", category: "Personal Care", stockLevel: "stocked" },
     { name: "Deodorant", category: "Personal Care", stockLevel: "low" },
-    { name: "Body Wash", category: "Personal Care", stockLevel: "good" },
+    { name: "Body Wash", category: "Personal Care", stockLevel: "stocked" },
   ];
 
   return basicItems;
