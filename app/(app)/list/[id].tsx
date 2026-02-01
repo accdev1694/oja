@@ -1622,6 +1622,17 @@ function ShoppingListItem({
 }: ShoppingListItemProps) {
   const translateX = useSharedValue(0);
   const scale = useSharedValue(1);
+  const checkFlash = useSharedValue(0);
+  const prevCheckedRef = React.useRef(item.isChecked);
+
+  // Celebration flash when item gets checked
+  React.useEffect(() => {
+    if (item.isChecked && !prevCheckedRef.current) {
+      checkFlash.value = 1;
+      checkFlash.value = withTiming(0, { duration: 600 });
+    }
+    prevCheckedRef.current = item.isChecked;
+  }, [item.isChecked]);
 
   const currentPriority = item.priority || "should-have";
   const priorityConfig = PRIORITY_CONFIG[currentPriority];
@@ -1677,6 +1688,13 @@ function ShoppingListItem({
     opacity: translateX.value < -20 ? Math.min((-translateX.value - 20) / 30, 1) : 0,
   }));
 
+  const checkFlashStyle = useAnimatedStyle(() => ({
+    borderColor: checkFlash.value > 0
+      ? `rgba(16, 185, 129, ${checkFlash.value * 0.6})`
+      : "transparent",
+    borderWidth: checkFlash.value > 0 ? 1.5 : 0,
+  }));
+
   const handlePressIn = () => {
     scale.value = withSpring(0.98, animations.spring.stiff);
   };
@@ -1704,6 +1722,7 @@ function ShoppingListItem({
       <GestureDetector gesture={panGesture}>
         <Animated.View style={animatedStyle}>
           <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut}>
+            <Animated.View style={[{ borderRadius: 16 }, checkFlashStyle]}>
             <GlassCard
               variant="standard"
               style={[styles.itemCard, item.isChecked && styles.itemCardChecked, item.approvalStatus === "pending" && styles.itemCardPending]}
@@ -1813,6 +1832,7 @@ function ShoppingListItem({
                 <RemoveButton onPress={onRemove} size="md" />
               </View>
             </GlassCard>
+            </Animated.View>
           </Pressable>
         </Animated.View>
       </GestureDetector>

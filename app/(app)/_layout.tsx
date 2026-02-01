@@ -12,6 +12,9 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import React from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 import {
   TAB_CONFIG,
@@ -65,9 +68,10 @@ interface TabItemProps {
   config: (typeof TAB_CONFIG)[string];
   isFocused: boolean;
   onPress: () => void;
+  badge?: number;
 }
 
-function TabItem({ config, isFocused, onPress }: TabItemProps) {
+function TabItem({ config, isFocused, onPress, badge }: TabItemProps) {
   const scale = useSharedValue(1);
   const bgOpacity = useSharedValue(isFocused ? 1 : 0);
 
@@ -113,7 +117,14 @@ function TabItem({ config, isFocused, onPress }: TabItemProps) {
             animatedBg,
           ]}
         />
-        <MaterialCommunityIcons name={iconName} size={24} color={iconColor} />
+        <View style={{ position: "relative" }}>
+          <MaterialCommunityIcons name={iconName} size={24} color={iconColor} />
+          {badge != null && badge > 0 && (
+            <View style={tabStyles.badge}>
+              <Text style={tabStyles.badgeText}>{badge > 99 ? "99+" : badge}</Text>
+            </View>
+          )}
+        </View>
         <Text style={[tabStyles.tabLabel, { color: textColor }, isFocused && tabStyles.tabLabelActive]}>
           {config.title}
         </Text>
@@ -131,6 +142,19 @@ function PersistentTabBar() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPadding = Math.max(insets.bottom, spacing.sm);
+  const { user } = useCurrentUser();
+
+  // Stock tab badge: count of Low + Out items
+  const pantryItems = useQuery(
+    api.pantryItems.getByUser,
+    user?._id ? { userId: user._id } : "skip"
+  );
+  const stockBadge = React.useMemo(() => {
+    if (!pantryItems) return 0;
+    return pantryItems.filter(
+      (item: any) => item.stockLevel === "low" || item.stockLevel === "out"
+    ).length;
+  }, [pantryItems]);
 
   const show = shouldShowTabBar(pathname);
   const activeTab = getActiveTab(pathname);
@@ -153,12 +177,14 @@ function PersistentTabBar() {
     <View style={[tabStyles.tabBarInner, { paddingBottom: bottomPadding }]}>
       {tabs.map((tabName) => {
         const config = TAB_CONFIG[tabName];
+        const badge = tabName === "index" ? stockBadge : undefined;
         return (
           <TabItem
             key={tabName}
             config={config}
             isFocused={activeTab === tabName}
             onPress={() => handleTabPress(tabName)}
+            badge={badge}
           />
         );
       })}
@@ -282,5 +308,23 @@ const tabStyles = StyleSheet.create({
   },
   tabLabelActive: {
     fontWeight: "600",
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -8,
+    backgroundColor: colors.semantic.danger,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "700",
+    lineHeight: 12,
   },
 });

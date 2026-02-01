@@ -1374,9 +1374,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   itemName: {
-    fontSize: 28,
-    fontWeight: "700",
-    lineHeight: 34,
+    fontSize: 20,
+    fontWeight: "600",
+    lineHeight: 26,
     color: colors.text.primary,
   },
   stockLevelText: {

@@ -222,7 +222,7 @@ The glass design gives a visual identity. But the voice gives emotional identity
 ### Recommendations
 
 - [x] **Add a warm accent color** to the palette — a soft amber or coral (#FFB088 or similar) used sparingly for celebration moments, milestones, and encouraging text. Not replacing teal, but complementing it with warmth ✅ Added accent.warm (#FFB088) + semantic.warm + warmGlow tokens
-- [ ] **Micro-celebrations on check-off** — When checking off a list item, briefly flash the item row green, show a subtle checkmark burst animation, and update the progress indicator with a smooth fill. The physical equivalent: the satisfying click of a pen checking a box
+- [x] **Micro-celebrations on check-off** — When checking off a list item, briefly flash the item row green, show a subtle checkmark burst animation, and update the progress indicator with a smooth fill. The physical equivalent: the satisfying click of a pen checking a box ✅ Green border flash animation on check-off (600ms fade), haptic feedback already present
 - [x] **Budget tracker emotional mode** — Below or instead of the numbers, show a one-line sentiment: "Looking good — lots of room left" (green), "Getting close — stay focused" (amber), "Over budget — time to review" (red). Lead with feeling, support with data ✅ Sentiment line added below dial, color-matched to budget state
 - [ ] **Savings jar warmth** — At £0.00, show an illustration of an empty jar with "Your first savings are just one trip away." At any positive amount, show the jar filling with animated coins/notes. The visual metaphor makes the abstract (savings) feel tangible
 - [x] **Voice audit** — Review all empty states, button labels, and section headers. Replace functional language with warm-but-clear alternatives. The goal: if the app could talk, it would sound like a supportive friend who's good with money, not a financial advisor ✅ Warmed up all empty state copy across pantry, lists, list detail, receipts
@@ -391,7 +391,7 @@ Budget amounts use the Numbers typography scale (24-36px bold tabular figures). 
 
 ### Recommendations
 
-- [ ] **Reduce item name size** from 28px to 20-22px. Increase stock level indicator size or visual weight. The hierarchy should be: stock status (visual/icon) → item name → details. The user's eye should land on "is this item OK?" before "what is this item?"
+- [x] **Reduce item name size** from 28px to 20-22px. Increase stock level indicator size or visual weight. The hierarchy should be: stock status (visual/icon) → item name → details. The user's eye should land on "is this item OK?" before "what is this item?" ✅ Reduced from 28px/700 to 20px/600. Stock text at 18px now has better visual parity
 - [x] **Budget typography narrative** — On the list detail, consider showing *one* number prominently: the remaining amount or budget percentage. Supporting figures can be smaller. The user's question is "How much can I still spend?" — answer that loudly, explain it quietly ✅ CircularBudgetDial already shows remaining as hero; sentiment line reinforces emotional narrative; "of £XX" is 10px tertiary
 - [x] **Micro-copy styling** — Helper text, hint text, and tertiary labels (12px, 50% opacity white) are technically readable but practically invisible on the dark background. Consider bumping these to 60-70% opacity for better accessibility without sacrificing hierarchy ✅ Bumped to 65% opacity
 
@@ -438,7 +438,7 @@ Some flows go 3+ levels deep: Lists → List Detail → Partners, or Profile →
 ### Recommendations
 
 - [ ] **Journey prompts** — After scanning a receipt, show "Update your stock levels?" to bridge Scan → Stock. When stock items go to "Out," show a banner: "3 items are out — add to your next list?" to bridge Stock → Lists. These gentle prompts narrate the lifecycle without forcing it
-- [ ] **Smart tab badges** — Show a badge on the Stock tab when items are Low/Out ("3"). Show a badge on Lists when a list is in "Shopping" mode. These badges act as passive navigation cues: "Something needs your attention here"
+- [x] **Smart tab badges** — Show a badge on the Stock tab when items are Low/Out ("3"). Show a badge on Lists when a list is in "Shopping" mode. These badges act as passive navigation cues: "Something needs your attention here" ✅ Stock tab shows red badge with Low+Out item count
 - [ ] **Shallow navigation preference** — Limit stack depth to 2 levels where possible. Partners, Insights, Subscription can be modal overlays or sheets rather than pushed screens, reducing the feeling of being "deep" in the app
 
 ---
