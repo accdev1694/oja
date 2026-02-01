@@ -48,16 +48,19 @@ export default defineSchema({
     // Stock levels
     stockLevel: v.union(
       v.literal("stocked"),
-      v.literal("good"),
-      v.literal("half"),
       v.literal("low"),
-      v.literal("out")
+      v.literal("out"),
+      // TEMP: old values kept for migration — remove after running migrateStockLevels
+      v.literal("good"),
+      v.literal("half")
     ),
     quantity: v.optional(v.number()),
     unit: v.optional(v.string()),
 
     // Price tracking
     lastPrice: v.optional(v.number()),
+    priceSource: v.optional(v.string()), // "ai_estimate" | "receipt" | "user"
+    preferredVariant: v.optional(v.string()), // e.g. "Whole Milk 2 Pints"
 
     // Auto-add to list when out
     autoAddToList: v.boolean(),
@@ -82,8 +85,8 @@ export default defineSchema({
 
     // Budget
     budget: v.optional(v.number()),
-    budgetLocked: v.boolean(),
-    impulseFund: v.optional(v.number()),
+    budgetLocked: v.optional(v.boolean()), // Deprecated — kept for existing data
+    impulseFund: v.optional(v.number()), // Deprecated — kept for existing data
 
     // Store
     storeName: v.optional(v.string()),
@@ -135,7 +138,7 @@ export default defineSchema({
     autoAdded: v.boolean(),
 
     // Mid-shop add tracking
-    isImpulse: v.optional(v.boolean()), // Added from impulse fund
+    isImpulse: v.optional(v.boolean()), // Deprecated — kept for existing data
     addedMidShop: v.optional(v.boolean()), // Added during shopping
 
     // Approval workflow (Epic 4 - Partner Mode)
@@ -186,6 +189,8 @@ export default defineSchema({
         unitPrice: v.number(),
         totalPrice: v.number(),
         category: v.optional(v.string()),
+        size: v.optional(v.string()),      // "2L", "500g", "6-pack"
+        unit: v.optional(v.string()),      // "L", "g", "pack"
       })
     ),
 
@@ -199,6 +204,9 @@ export default defineSchema({
       v.literal("completed"),
       v.literal("failed")
     ),
+
+    // Admin pre-launch seeding flag
+    isAdminSeed: v.optional(v.boolean()),
 
     purchaseDate: v.number(),
     createdAt: v.number(),
@@ -214,11 +222,22 @@ export default defineSchema({
   // Current best-known prices (freshest price per item per store)
   currentPrices: defineTable({
     normalizedName: v.string(),
+    variantName: v.optional(v.string()),  // "Whole Milk 2 Pints"
     itemName: v.string(),         // Display name (original casing)
+    size: v.optional(v.string()), // "2 pints"
+    unit: v.optional(v.string()), // "pint"
     storeName: v.string(),
-    unitPrice: v.number(),
-    lastSeenDate: v.number(),     // purchaseDate from receipt
-    reportCount: v.number(),      // How many receipts contributed
+    region: v.optional(v.string()), // Postcode area (Phase 2)
+
+    // Price data
+    unitPrice: v.number(),         // Most recent single report (existing field)
+    averagePrice: v.optional(v.number()),  // Weighted 30-day average
+    minPrice: v.optional(v.number()),      // Lowest in 30 days
+    maxPrice: v.optional(v.number()),      // Highest in 30 days
+    reportCount: v.number(),       // How many receipts contributed
+    confidence: v.optional(v.number()),    // 0-1 based on reportCount + recency
+
+    lastSeenDate: v.number(),      // purchaseDate from receipt
     lastReportedBy: v.id("users"),
     updatedAt: v.number(),
   })
@@ -234,6 +253,8 @@ export default defineSchema({
     // Item info
     itemName: v.string(),
     normalizedName: v.string(), // Lowercase for fuzzy matching
+    size: v.optional(v.string()),  // "2 pints"
+    unit: v.optional(v.string()),  // "pint"
 
     // Price info
     price: v.number(),
@@ -253,6 +274,18 @@ export default defineSchema({
     .index("by_user_item", ["userId", "normalizedName"])
     .index("by_user_item_date", ["userId", "normalizedName", "purchaseDate"])
     .index("by_receipt", ["receiptId"]),
+
+  // Item variants (size-aware pricing)
+  itemVariants: defineTable({
+    baseItem: v.string(),            // "milk" (normalized)
+    variantName: v.string(),         // "Whole Milk 2 Pints"
+    size: v.string(),                // "2 pints"
+    unit: v.string(),                // "pint"
+    category: v.string(),            // "Dairy"
+    source: v.string(),              // "ai_seeded" | "receipt_discovered"
+    commonality: v.optional(v.number()), // How often this variant appears in receipts (0-1)
+  })
+    .index("by_base_item", ["baseItem"]),
 
   // === Epic 4: Partner Mode & Collaboration ===
 
