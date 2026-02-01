@@ -10,6 +10,8 @@ export interface SeedItem {
   stockLevel: "stocked" | "low" | "out";
   estimatedPrice?: number;    // Realistic UK grocery price in GBP
   hasVariants?: boolean;      // true if item has meaningful size variants (milk, rice, eggs)
+  defaultSize?: string;       // For hasVariants=false: "250g", "400g tin", "per item"
+  defaultUnit?: string;       // For hasVariants=false: "g", "tin", "each"
 }
 
 /**
@@ -58,8 +60,9 @@ STOCK LEVELS (assign realistically — only 3 levels):
 Return ONLY valid JSON array:
 [
   {"name": "Whole Milk", "category": "Dairy", "stockLevel": "stocked", "estimatedPrice": 1.15, "hasVariants": true},
-  {"name": "White Bread", "category": "Bakery", "stockLevel": "low", "estimatedPrice": 1.10, "hasVariants": false},
+  {"name": "White Bread", "category": "Bakery", "stockLevel": "low", "estimatedPrice": 1.10, "hasVariants": false, "defaultSize": "800g loaf", "defaultUnit": "loaf"},
   {"name": "Toilet Paper", "category": "Household", "stockLevel": "low", "estimatedPrice": 3.50, "hasVariants": true},
+  {"name": "Butter", "category": "Dairy", "stockLevel": "stocked", "estimatedPrice": 1.85, "hasVariants": false, "defaultSize": "250g", "defaultUnit": "g"},
   ...
 ]
 
@@ -69,6 +72,7 @@ IMPORTANT:
 - Include 10-15 non-food household essentials (cleaning supplies, toiletries, paper goods, etc.)
 - Include a realistic current grocery estimated price in GBP for each item (the most common size/variant price)
 - Set hasVariants to true for items where size materially affects price (e.g., milk, rice, eggs, cooking oil, laundry detergent, shampoo) and false for standard-size items (e.g., bananas, butter, tinned beans, single spice jars)
+- For items where hasVariants is false, include defaultSize (e.g., "250g", "400g tin", "per item", "bunch") and defaultUnit (e.g., "g", "tin", "each"). Every non-variant item must have defaultSize and defaultUnit.
 - No explanations, ONLY the JSON array
 - Exactly ${totalItems} items`;
 
@@ -112,6 +116,8 @@ ${prompt}`;
           ...item,
           estimatedPrice: typeof item.estimatedPrice === "number" ? item.estimatedPrice : undefined,
           hasVariants: typeof item.hasVariants === "boolean" ? item.hasVariants : undefined,
+          defaultSize: typeof item.defaultSize === "string" ? item.defaultSize : undefined,
+          defaultUnit: typeof item.defaultUnit === "string" ? item.defaultUnit : undefined,
         }))
         .slice(0, totalItems); // Take first 200
 
@@ -530,80 +536,80 @@ function getFallbackItems(country: string, cuisines: string[]): SeedItem[] {
   const basicItems: SeedItem[] = [
     // Dairy (10)
     { name: "Whole Milk", category: "Dairy", stockLevel: "stocked", estimatedPrice: 1.15, hasVariants: true },
-    { name: "Butter", category: "Dairy", stockLevel: "stocked", estimatedPrice: 1.85, hasVariants: false },
+    { name: "Butter", category: "Dairy", stockLevel: "stocked", estimatedPrice: 1.85, hasVariants: false, defaultSize: "250g", defaultUnit: "g" },
     { name: "Eggs", category: "Dairy", stockLevel: "stocked", estimatedPrice: 2.10, hasVariants: true },
     { name: "Cheddar Cheese", category: "Dairy", stockLevel: "stocked", estimatedPrice: 2.50, hasVariants: true },
     { name: "Plain Yogurt", category: "Dairy", stockLevel: "low", estimatedPrice: 0.80, hasVariants: true },
     { name: "Cream", category: "Dairy", stockLevel: "out", estimatedPrice: 1.00, hasVariants: true },
-    { name: "Parmesan Cheese", category: "Dairy", stockLevel: "stocked", estimatedPrice: 2.80, hasVariants: false },
-    { name: "Mozzarella Cheese", category: "Dairy", stockLevel: "out", estimatedPrice: 1.50, hasVariants: false },
-    { name: "Sour Cream", category: "Dairy", stockLevel: "out", estimatedPrice: 0.90, hasVariants: false },
+    { name: "Parmesan Cheese", category: "Dairy", stockLevel: "stocked", estimatedPrice: 2.80, hasVariants: false, defaultSize: "100g", defaultUnit: "g" },
+    { name: "Mozzarella Cheese", category: "Dairy", stockLevel: "out", estimatedPrice: 1.50, hasVariants: false, defaultSize: "125g", defaultUnit: "g" },
+    { name: "Sour Cream", category: "Dairy", stockLevel: "out", estimatedPrice: 0.90, hasVariants: false, defaultSize: "300ml", defaultUnit: "ml" },
     { name: "Greek Yogurt", category: "Dairy", stockLevel: "low", estimatedPrice: 1.50, hasVariants: true },
 
     // Bakery (5)
-    { name: "White Bread", category: "Bakery", stockLevel: "low", estimatedPrice: 1.10, hasVariants: false },
-    { name: "Whole Wheat Bread", category: "Bakery", stockLevel: "low", estimatedPrice: 1.30, hasVariants: false },
-    { name: "Bagels", category: "Bakery", stockLevel: "out", estimatedPrice: 1.50, hasVariants: false },
-    { name: "Tortillas", category: "Bakery", stockLevel: "out", estimatedPrice: 1.20, hasVariants: false },
-    { name: "Pita Bread", category: "Bakery", stockLevel: "out", estimatedPrice: 0.85, hasVariants: false },
+    { name: "White Bread", category: "Bakery", stockLevel: "low", estimatedPrice: 1.10, hasVariants: false, defaultSize: "800g loaf", defaultUnit: "loaf" },
+    { name: "Whole Wheat Bread", category: "Bakery", stockLevel: "low", estimatedPrice: 1.30, hasVariants: false, defaultSize: "800g loaf", defaultUnit: "loaf" },
+    { name: "Bagels", category: "Bakery", stockLevel: "out", estimatedPrice: 1.50, hasVariants: false, defaultSize: "5 pack", defaultUnit: "pack" },
+    { name: "Tortillas", category: "Bakery", stockLevel: "out", estimatedPrice: 1.20, hasVariants: false, defaultSize: "8 pack", defaultUnit: "pack" },
+    { name: "Pita Bread", category: "Bakery", stockLevel: "out", estimatedPrice: 0.85, hasVariants: false, defaultSize: "6 pack", defaultUnit: "pack" },
 
     // Pantry Staples (15)
     { name: "All-Purpose Flour", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 0.85, hasVariants: true },
     { name: "White Sugar", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 0.75, hasVariants: true },
-    { name: "Brown Sugar", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false },
-    { name: "Salt", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 0.65, hasVariants: false },
-    { name: "Black Pepper", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 1.20, hasVariants: false },
+    { name: "Brown Sugar", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false, defaultSize: "500g", defaultUnit: "g" },
+    { name: "Salt", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 0.65, hasVariants: false, defaultSize: "750g", defaultUnit: "g" },
+    { name: "Black Pepper", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 1.20, hasVariants: false, defaultSize: "100g", defaultUnit: "g" },
     { name: "White Rice", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: true },
     { name: "Pasta", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 0.70, hasVariants: true },
-    { name: "Spaghetti", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 0.70, hasVariants: false },
+    { name: "Spaghetti", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 0.70, hasVariants: false, defaultSize: "500g", defaultUnit: "g" },
     { name: "Oats", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 1.20, hasVariants: true },
-    { name: "Baking Powder", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 1.10, hasVariants: false },
-    { name: "Baking Soda", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 0.65, hasVariants: false },
+    { name: "Baking Powder", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 1.10, hasVariants: false, defaultSize: "170g", defaultUnit: "g" },
+    { name: "Baking Soda", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 0.65, hasVariants: false, defaultSize: "200g", defaultUnit: "g" },
     { name: "Honey", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 2.50, hasVariants: true },
-    { name: "Cornstarch", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 0.80, hasVariants: false },
-    { name: "Vanilla Extract", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 2.00, hasVariants: false },
-    { name: "Cocoa Powder", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false },
+    { name: "Cornstarch", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 0.80, hasVariants: false, defaultSize: "250g", defaultUnit: "g" },
+    { name: "Vanilla Extract", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 2.00, hasVariants: false, defaultSize: "38ml", defaultUnit: "ml" },
+    { name: "Cocoa Powder", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false, defaultSize: "250g", defaultUnit: "g" },
 
     // Oils & Condiments (10)
     { name: "Olive Oil", category: "Oils & Vinegars", stockLevel: "stocked", estimatedPrice: 3.50, hasVariants: true },
     { name: "Vegetable Oil", category: "Oils & Vinegars", stockLevel: "stocked", estimatedPrice: 1.80, hasVariants: true },
-    { name: "Vinegar", category: "Oils & Vinegars", stockLevel: "stocked", estimatedPrice: 0.75, hasVariants: false },
-    { name: "Soy Sauce", category: "Condiments", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false },
-    { name: "Ketchup", category: "Condiments", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false },
-    { name: "Mustard", category: "Condiments", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false },
-    { name: "Mayonnaise", category: "Condiments", stockLevel: "stocked", estimatedPrice: 1.80, hasVariants: false },
-    { name: "Hot Sauce", category: "Condiments", stockLevel: "out", estimatedPrice: 1.50, hasVariants: false },
-    { name: "Worcestershire Sauce", category: "Condiments", stockLevel: "out", estimatedPrice: 1.50, hasVariants: false },
-    { name: "Balsamic Vinegar", category: "Oils & Vinegars", stockLevel: "stocked", estimatedPrice: 2.00, hasVariants: false },
+    { name: "Vinegar", category: "Oils & Vinegars", stockLevel: "stocked", estimatedPrice: 0.75, hasVariants: false, defaultSize: "568ml", defaultUnit: "ml" },
+    { name: "Soy Sauce", category: "Condiments", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false, defaultSize: "150ml", defaultUnit: "ml" },
+    { name: "Ketchup", category: "Condiments", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false, defaultSize: "460g", defaultUnit: "g" },
+    { name: "Mustard", category: "Condiments", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false, defaultSize: "180g", defaultUnit: "g" },
+    { name: "Mayonnaise", category: "Condiments", stockLevel: "stocked", estimatedPrice: 1.80, hasVariants: false, defaultSize: "400g", defaultUnit: "g" },
+    { name: "Hot Sauce", category: "Condiments", stockLevel: "out", estimatedPrice: 1.50, hasVariants: false, defaultSize: "150ml", defaultUnit: "ml" },
+    { name: "Worcestershire Sauce", category: "Condiments", stockLevel: "out", estimatedPrice: 1.50, hasVariants: false, defaultSize: "150ml", defaultUnit: "ml" },
+    { name: "Balsamic Vinegar", category: "Oils & Vinegars", stockLevel: "stocked", estimatedPrice: 2.00, hasVariants: false, defaultSize: "250ml", defaultUnit: "ml" },
 
     // Canned/Jarred (10)
-    { name: "Canned Tomatoes", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 0.55, hasVariants: false },
-    { name: "Tomato Paste", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 0.60, hasVariants: false },
-    { name: "Chicken Broth", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false },
-    { name: "Vegetable Broth", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false },
-    { name: "Canned Beans", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 0.50, hasVariants: false },
-    { name: "Chickpeas", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 0.55, hasVariants: false },
-    { name: "Tuna", category: "Canned Goods", stockLevel: "out", estimatedPrice: 1.00, hasVariants: false },
-    { name: "Coconut Milk", category: "Canned Goods", stockLevel: "out", estimatedPrice: 1.20, hasVariants: false },
+    { name: "Canned Tomatoes", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 0.55, hasVariants: false, defaultSize: "400g tin", defaultUnit: "tin" },
+    { name: "Tomato Paste", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 0.60, hasVariants: false, defaultSize: "200g tube", defaultUnit: "tube" },
+    { name: "Chicken Broth", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false, defaultSize: "500ml", defaultUnit: "ml" },
+    { name: "Vegetable Broth", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false, defaultSize: "500ml", defaultUnit: "ml" },
+    { name: "Canned Beans", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 0.50, hasVariants: false, defaultSize: "400g tin", defaultUnit: "tin" },
+    { name: "Chickpeas", category: "Canned Goods", stockLevel: "stocked", estimatedPrice: 0.55, hasVariants: false, defaultSize: "400g tin", defaultUnit: "tin" },
+    { name: "Tuna", category: "Canned Goods", stockLevel: "out", estimatedPrice: 1.00, hasVariants: false, defaultSize: "145g tin", defaultUnit: "tin" },
+    { name: "Coconut Milk", category: "Canned Goods", stockLevel: "out", estimatedPrice: 1.20, hasVariants: false, defaultSize: "400ml tin", defaultUnit: "tin" },
     { name: "Peanut Butter", category: "Pantry Staples", stockLevel: "stocked", estimatedPrice: 1.80, hasVariants: true },
-    { name: "Jam", category: "Condiments", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false },
+    { name: "Jam", category: "Condiments", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false, defaultSize: "340g jar", defaultUnit: "jar" },
 
     // Household (8)
     { name: "Toilet Paper", category: "Household", stockLevel: "low", estimatedPrice: 3.50, hasVariants: true },
     { name: "Kitchen Roll", category: "Household", stockLevel: "low", estimatedPrice: 2.50, hasVariants: true },
     { name: "Bin Bags", category: "Household", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: true },
-    { name: "Dish Soap", category: "Household", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false },
+    { name: "Dish Soap", category: "Household", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false, defaultSize: "500ml", defaultUnit: "ml" },
     { name: "Laundry Detergent", category: "Household", stockLevel: "stocked", estimatedPrice: 4.50, hasVariants: true },
-    { name: "All-Purpose Cleaner", category: "Household", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false },
-    { name: "Sponges", category: "Household", stockLevel: "low", estimatedPrice: 1.00, hasVariants: false },
-    { name: "Aluminium Foil", category: "Household", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false },
+    { name: "All-Purpose Cleaner", category: "Household", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false, defaultSize: "750ml", defaultUnit: "ml" },
+    { name: "Sponges", category: "Household", stockLevel: "low", estimatedPrice: 1.00, hasVariants: false, defaultSize: "3 pack", defaultUnit: "pack" },
+    { name: "Aluminium Foil", category: "Household", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false, defaultSize: "10m roll", defaultUnit: "roll" },
 
     // Personal Care (5)
-    { name: "Hand Soap", category: "Personal Care", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false },
-    { name: "Toothpaste", category: "Personal Care", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false },
+    { name: "Hand Soap", category: "Personal Care", stockLevel: "stocked", estimatedPrice: 1.00, hasVariants: false, defaultSize: "250ml", defaultUnit: "ml" },
+    { name: "Toothpaste", category: "Personal Care", stockLevel: "stocked", estimatedPrice: 1.50, hasVariants: false, defaultSize: "100ml", defaultUnit: "ml" },
     { name: "Shampoo", category: "Personal Care", stockLevel: "stocked", estimatedPrice: 2.50, hasVariants: true },
-    { name: "Deodorant", category: "Personal Care", stockLevel: "low", estimatedPrice: 2.00, hasVariants: false },
-    { name: "Body Wash", category: "Personal Care", stockLevel: "stocked", estimatedPrice: 2.00, hasVariants: false },
+    { name: "Deodorant", category: "Personal Care", stockLevel: "low", estimatedPrice: 2.00, hasVariants: false, defaultSize: "250ml", defaultUnit: "ml" },
+    { name: "Body Wash", category: "Personal Care", stockLevel: "stocked", estimatedPrice: 2.00, hasVariants: false, defaultSize: "250ml", defaultUnit: "ml" },
   ];
 
   return basicItems;

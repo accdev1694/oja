@@ -19,6 +19,8 @@ export const bulkCreate = mutation({
         ),
         estimatedPrice: v.optional(v.number()),
         hasVariants: v.optional(v.boolean()),
+        defaultSize: v.optional(v.string()),
+        defaultUnit: v.optional(v.string()),
       })
     ),
   },
@@ -66,6 +68,9 @@ export const bulkCreate = mutation({
           lastPrice: item.estimatedPrice,
           priceSource: "ai_estimate" as const,
         }),
+        // Size context for non-variant items
+        ...(item.defaultSize && { defaultSize: item.defaultSize }),
+        ...(item.defaultUnit && { defaultUnit: item.defaultUnit }),
         autoAddToList: false,
         createdAt: now,
         updatedAt: now,

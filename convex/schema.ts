@@ -63,6 +63,10 @@ export default defineSchema({
     lastStoreName: v.optional(v.string()), // Store name from last receipt price
     preferredVariant: v.optional(v.string()), // e.g. "Whole Milk 2 Pints"
 
+    // Size context for non-variant items (hasVariants: false)
+    defaultSize: v.optional(v.string()), // "250g", "400g tin", "per item"
+    defaultUnit: v.optional(v.string()), // "g", "tin", "each"
+
     // Auto-add to list when out
     autoAddToList: v.boolean(),
 
