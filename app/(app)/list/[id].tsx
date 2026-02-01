@@ -139,6 +139,7 @@ export default function ListDetailScreen() {
   // Partner mode
   const { isOwner, isPartner, canEdit, canApprove, loading: roleLoading } = usePartnerRole(id);
   const handleApproval = useMutation(api.partners.handleApproval);
+  const setPreferredVariant = useMutation(api.pantryItems.setPreferredVariant);
   const commentCounts = useQuery(api.partners.getCommentCounts, items ? { listItemIds: items.map((i) => i._id) } : "skip");
 
 
@@ -930,6 +931,11 @@ export default function ListDetailScreen() {
                                 if (variant.price != null) {
                                   setNewItemPrice(variant.price.toFixed(2));
                                 }
+                                // Persist preferred variant on pantry item (fire-and-forget)
+                                setPreferredVariant({
+                                  itemName: variant.baseItem,
+                                  preferredVariant: variant.variantName,
+                                }).catch(console.error);
                               }}
                             >
                               <Text style={styles.variantChipName} numberOfLines={1}>

@@ -307,6 +307,45 @@ export const updateStockLevel = mutation({
 });
 
 /**
+ * Set the preferred variant for a pantry item.
+ * Called when the user selects a variant chip in the list add form.
+ */
+export const setPreferredVariant = mutation({
+  args: {
+    itemName: v.string(),
+    preferredVariant: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) return;
+
+    // Find the pantry item by name (case-insensitive)
+    const normalizedName = args.itemName.toLowerCase().trim();
+    const items = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    const match = items.find(
+      (item) => item.name.toLowerCase().trim() === normalizedName
+    );
+
+    if (match) {
+      await ctx.db.patch(match._id, {
+        preferredVariant: args.preferredVariant,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
+
+/**
  * Migrate existing items to have icons
  * Re-assigns icons to ALL items using the mapping
  */
