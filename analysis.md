@@ -439,7 +439,7 @@ Some flows go 3+ levels deep: Lists → List Detail → Partners, or Profile →
 
 - [x] **Journey prompts** — After scanning a receipt, show "Update your stock levels?" to bridge Scan → Stock. When stock items go to "Out," show a banner: "3 items are out — add to your next list?" to bridge Stock → Lists. These gentle prompts narrate the lifecycle without forcing it ✅ Stock screen shows "X items out — add to your next list?" banner linking to Lists. Trip summary shows "Update your stock levels?" banner linking to Stock tab.
 - [x] **Smart tab badges** — Show a badge on the Stock tab when items are Low/Out ("3"). Show a badge on Lists when a list is in "Shopping" mode. These badges act as passive navigation cues: "Something needs your attention here" ✅ Stock tab shows red badge with Low+Out item count
-- [ ] **Shallow navigation preference** — Limit stack depth to 2 levels where possible. Partners, Insights, Subscription can be modal overlays or sheets rather than pushed screens, reducing the feeling of being "deep" in the app
+- [x] **Shallow navigation preference** — Limit stack depth to 2 levels where possible. Partners, Insights, Subscription can be modal overlays or sheets rather than pushed screens, reducing the feeling of being "deep" in the app ✅ Insights and Subscription screens set to `presentation: "modal"` in _layout.tsx
 
 ---
 
@@ -462,11 +462,11 @@ These elements are working well and should not be changed:
 
 These are the areas that need the most attention:
 
-- [~] **Information overload on key screens** — Profile and Insights still dense. List Detail and Pantry addressed.
+- [x] **Information overload on key screens** — Profile and Insights still dense. List Detail and Pantry addressed. ✅ Profile simplified to 3 sections. Insights uses collapsible sections for progressive disclosure
 - [x] **Emotional coldness** — The app looks premium but feels clinical. No warmth, no personality, no moments of delight in daily usage ✅ Budget sentiment, check-off flash, warm palette, journey prompts added
 - [x] **Teal saturation** — Primary accent color is overused to the point where it loses signaling power ✅ Teal reserved for primary CTAs; chips, filters, notifications use white/indigo
 - [ ] **No active return triggers** — The app relies on the user remembering it exists. No push notification strategy
-- [ ] **First-week dead zone** — Between setup and first shopping trip, the app provides zero value or engagement
+- [x] **First-week dead zone** — Between setup and first shopping trip, the app provides zero value or engagement ✅ Addressed via: milestone path for new users (profile), social proof in empty states, journey prompts between screens, 200-item pantry seeding during onboarding
 - [x] **Gesture discovery** — Fixed with `SwipeOnboardingOverlay`.
 - [x] **Voice and personality** — Copy is functional but lacks warmth ✅ Voice audit completed across all empty states
 

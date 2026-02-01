@@ -242,8 +242,14 @@ export default function AppLayout() {
         <Stack.Screen name="partners" />
         <Stack.Screen name="join-list" />
         <Stack.Screen name="notifications" />
-        <Stack.Screen name="insights" />
-        <Stack.Screen name="subscription" />
+        <Stack.Screen
+          name="insights"
+          options={{ presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="subscription"
+          options={{ presentation: "modal" }}
+        />
         <Stack.Screen name="admin" />
       </Stack>
       <PersistentTabBar />
