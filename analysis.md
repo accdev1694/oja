@@ -66,32 +66,27 @@ Simple doesn't mean fewer features. It means **each moment shows only what matte
 **1. List Detail Screen — Too Many Zones**
 
 This is the most complex screen in the app. In a single scroll viewport, users see:
-- Budget Tracker card (with progress bar, amounts, edit button, lock button, impulse fund)
-- Two action buttons ("From Stock" + "Start Shopping")
-- Add Item form (name input, quantity input, price input, add button)
-- Suggestions section (collapsible, with chips)
+- Circular Budget Dial (spent vs budget, tap to edit)
+- Two action buttons ("Add from Pantry" + "Go Shopping")
+- Add Item form (collapsed behind "+ Add Item" button; expands to name, qty, price inputs + variant picker + inline suggestions)
 - Items list (with checkboxes, prices, status badges, comment/delete icons)
 
-That's **5 distinct functional zones**, each with multiple interactive elements. This isn't simple — it's a control panel. The user who just wants to add "Milk" to their list has to visually parse past the budget tracker, understand two different action buttons, and find the right input field.
+That's **4 distinct functional zones**, each with multiple interactive elements. The add-form progressive disclosure helps, but the screen still has high cognitive load. The user who just wants to add "Milk" to their list has to visually parse past the budget dial, understand two action buttons, and find the add button.
 
 **2. Pantry at Scale — 100 Items is Inventory Management**
 
 "100 of 100 items" grouped into categories of 20 creates a long scrolling list. Even with category collapsing, this feels like managing a database, not glancing at your kitchen. The category "Dairy (20)" alone requires scrolling. At this density, the pantry stops being a quick-check tool and becomes a chore to review.
 
-**3. Stock Level Picker — Overbuilt for the Task**
+**3. Shopping Lists Header — Bell Placement**
 
-The modal for changing stock level shows: a semicircle gauge visualization, a numeric readout, 5 selectable level buttons (Stocked, Good, Half, Low, Out), Confirm, and Cancel. That's 9 interactive elements for the conceptually simple action of "I used some milk." The swipe gesture is simpler, but the modal is what appears on long-press — the more deliberate interaction.
-
-**4. Shopping Lists Header — Competing Actions**
-
-The header on the Lists screen simultaneously shows: the title ("Shopping Lists"), a notification bell with a red badge, a "Join" button, and a "+ New List" button. Four elements competing in the top 60px of screen. For a new user, the first question is "What do I tap?" — and three options stare back.
+The header shows: title + notification bell + "+ New List" button. "Join a shared list" is an inline card in the list body (good). The bell still adds visual noise — consider whether it earns its header placement or could live elsewhere.
 
 ### Recommendations
 
-- **List Detail:** Collapse the Add Item form behind a single "+ Add" button. Show Budget Tracker as a minimal summary bar (spent / budget) that expands on tap. Surface suggestions only after the user starts typing
-- **Pantry:** Default to showing only items that need attention (Low + Out). "All items" should be a secondary view. This turns the pantry from an inventory into a to-do list
-- **Stock Level Picker:** Consider reducing to 3 levels (Stocked / Getting Low / Out) for the quick modal, with the full 5-level picker as an advanced option. Or just keep swipe-to-adjust as the primary and remove the modal
-- **Lists Header:** Move "Join" into profile or settings (it's infrequent). Notification bell can move to a persistent top-right global icon. Header becomes: title + "+ New List" — two elements
+- [ ] **List Detail:** Surface suggestions only after the user starts typing (currently always visible in add-item section)
+- [x] **Pantry:** Default to "Needs Attention" view (Low + Out). "All items" as secondary. *(Implemented.)*
+- [x] **Stock Level Picker:** Reduced to 3 levels (Stocked / Low / Out). *(Implemented.)*
+- [ ] **Lists Header:** Move notification bell out of header to reduce clutter. Header should be: title + "+ New List" only
 
 ---
 
@@ -105,40 +100,28 @@ Easy to use means **every interaction is either obvious or taught.** Users shoul
 
 - **Swipe left/right on pantry items** for stock adjustment is intuitive once discovered — the physical metaphor of "sliding" a level makes sense
 - **One-tap check-off** on shopping list items is standard and expected
-- **"From Stock" button** bridges pantry to list creation — reduces manual entry
+- **"Add from Pantry" button** bridges pantry to list creation — reduces manual entry
 - **Receipt scan flow** is well-guided: tips for best results, camera, preview with retake option, confirmation with editable items. This is a multi-step flow done right
-- **Budget auto-calculation** removes mental math — the impulse fund auto-sets at 10%
+- **Budget auto-calculation** removes mental math — CircularBudgetDial shows spent vs budget at a glance
 - **Create list modal** has sensible defaults (today's date as name, £50 budget) — reduces decision friction
 
 ### Concerns
 
-**1. Gesture Discovery is Hidden**
+**1. Budget Dial Discoverability**
 
-The hint text "Swipe left/right to adjust stock · Hold to set level" appears as a tiny line below the category filters. On first launch with 100 items visible, a user's eyes go to the items, not to a muted hint line halfway down the screen. The swipe interaction — arguably the most important pantry interaction — relies on the user either reading this small text or accidentally discovering it.
+The `CircularBudgetDial` is tappable to edit the budget, but there's no visible affordance that it's interactive. A subtle edit hint or pencil badge could help discoverability.
 
-**2. "From Stock" vs "Start Shopping" — Unclear Distinction**
-
-On the List Detail screen, two equally-weighted buttons sit side by side. "From Stock" adds items from your pantry. "Start Shopping" enters shopping mode. But a new user doesn't know what "From Stock" means (from stock? to stock? stock what?). And "Start Shopping" sounds like it navigates away from the list. The intent is good but the labels need work.
-
-**3. Budget Tracker Icons — Edit + Lock Purpose**
-
-The Budget Tracker card shows a pencil icon and a lock icon. The pencil presumably edits the budget. The lock presumably... locks the budget? Prevents overspending? These are ambiguous. Iconography without labels on critical financial controls creates hesitation.
-
-**4. Suggestions Origin is Unclear**
+**2. Suggestions Origin is Unclear**
 
 The "Suggestions" section shows chips like "cereal, coffee, tea, sugar, eggs." Where do these come from? Are they AI-generated? Based on history? Popular items? Without context, the user doesn't trust the suggestions — and untrusted suggestions get ignored.
 
-**5. Gauge Indicator Requires Learning**
-
-The semicircle gauge is visually distinctive and adds personality, but it's a non-standard visualization for "stock level." A simple colored bar or fill indicator would communicate the same info faster. The gauge adds visual richness at the cost of instant comprehension. For a first-time user, seeing a semicircle dial on a pantry item is unexpected.
-
 ### Recommendations
 
-- **Gesture onboarding:** On first launch (or first pantry item added), show a one-time interactive tutorial: animate a pantry item swiping left with text "Swipe to adjust stock level." Dismiss after user performs it once. This is 5 seconds that saves weeks of confusion
-- **Button labels:** Rename "From Stock" to "Add Low Items" (clearer intent). Rename "Start Shopping" to "Check Off Mode" or "Go Shopping" (implies in-store use). Or use icons + labels together
-- **Budget icons:** Add text labels below icons: "Edit" and "Lock." Or use a single overflow menu (...) with named options
-- **Suggestions:** Add a one-line context: "Based on your shopping history" or "Popular items you haven't added." Trust requires transparency
-- **Gauge:** Keep it as an optional "personality" view, but consider a simpler default (colored dot or bar) with gauge as an alternate view for users who like the visual richness
+- [ ] **Budget dial:** Add a subtle "tap to edit" hint on first view or a small pencil badge on the dial to signal editability
+- [x] **Gesture onboarding:** Interactive swipe tutorial on first launch. *(Implemented — `SwipeOnboardingOverlay`.)*
+- [x] **Button labels:** "Add from Pantry" and "Go Shopping". *(Implemented.)*
+- [x] **Suggestions context:** Subtitle shown explaining suggestion source. *(Implemented.)*
+- [x] **Gauge:** 3-segment vertical bar with green/amber/red. *(Implemented.)*
 
 ---
 
@@ -169,7 +152,7 @@ Insights stacks: This Week (4 stat cards), Weekly Challenge, Savings Jar (with m
 
 **3. List Detail Screen — Information Density**
 
-As noted above, the list detail screen shows 5 functional zones simultaneously. The cognitive load score (CLS) of this screen is high. Each zone has its own visual hierarchy, its own interactive elements, its own data types (budget = numbers, form = inputs, suggestions = chips, items = list). The user's eye has no single resting point.
+The list detail screen shows 4 functional zones (budget dial, action buttons, add-item form, items list). Progressive disclosure on the add-form helps, but the cognitive load is still high. Each zone has its own visual hierarchy, interactive elements, and data types. The user's eye has no single resting point.
 
 **4. Pantry Category Density**
 
@@ -177,15 +160,15 @@ As noted above, the list detail screen shows 5 functional zones simultaneously. 
 
 **5. Teal Overuse Creates Visual Noise**
 
-Teal (#00D4AA) is used for: primary buttons, active tab indicators, progress bar fills, checkmarks, text highlights, card borders, icon accents, budget healthy state, "Start Shopping" button, add item (+) button, and link text. When the primary accent appears 10+ times per screen, it stops being a signal and becomes wallpaper. The eye can't distinguish "what's the main action here?" because everything glows the same teal.
+Teal (#00D4AA) is used for: primary buttons, active tab indicators, progress bar fills, checkmarks, text highlights, card borders, icon accents, budget healthy state, "Go Shopping" button, add item (+) button, and link text. When the primary accent appears 10+ times per screen, it stops being a signal and becomes wallpaper. The eye can't distinguish "what's the main action here?" because everything glows the same teal.
 
 ### Recommendations
 
-- **Profile:** Reduce to: Account card + one "Quick Stats" summary line ("3 lists this month · £48 saved") + navigation links (Insights, Subscription, Settings). Move detailed stats to the Insights screen where they belong
-- **Insights:** Lead with one emotional headline ("You saved £48 this month") with a single visual. Collapse detailed sections behind expandable cards. Let the user choose what to drill into rather than dumping everything
-- **List Detail:** Progressive disclosure. Default view: budget summary bar + item list. Expand budget detail on tap. Show add-item form on "+" button tap. Show suggestions only when typing. The screen should feel like a shopping list, not a command center
-- **Pantry:** Implement a "Needs Attention" default view (only Low + Out items). Badge the "All Items" view with count. This turns the pantry from inventory management into an actionable checklist
-- **Teal usage:** Reserve teal exclusively for **primary CTAs and active states.** Use the secondary color (indigo #6366F1) or white/gray for secondary interactive elements. Budget healthy state can use green (#10B981) without teal. Checkmarks can be white on teal background (smaller teal surface area). The rule: if you can only tap one thing on screen, THAT thing is teal
+- [ ] **Profile:** Reduce to: Account card + one "Quick Stats" summary line ("3 lists this month · £48 saved") + navigation links (Insights, Subscription, Settings). Move detailed stats to the Insights screen where they belong
+- [ ] **Insights:** Lead with one emotional headline ("You saved £48 this month") with a single visual. Collapse detailed sections behind expandable cards. Let the user choose what to drill into rather than dumping everything
+- [x] **List Detail:** Progressive disclosure — add-item form hidden behind "+ Add Item" button. *(Implemented.)*
+- [x] **Pantry:** "Needs Attention" default view with "All Items" as secondary. *(Implemented.)*
+- [ ] **Teal usage:** Reserve teal exclusively for **primary CTAs and active states.** Use the secondary color (indigo #6366F1) or white/gray for secondary interactive elements. Budget healthy state can use green (#10B981) without teal. Checkmarks can be white on teal background (smaller teal surface area). The rule: if you can only tap one thing on screen, THAT thing is teal
 
 ---
 
@@ -199,7 +182,7 @@ An emotional experience means **the app makes you feel something beyond utility.
 
 - **Trip Summary "Saved £30.15"** — This is the emotional crown jewel. The trophy icon, the large teal number, the "60% under budget" subtitle. This is a genuine moment of pride. The user feels like they won something. This screen alone proves the team understands emotional design. It just needs to happen more
 - **Glass design creates premium feel** — The depth, blur effects, and dark palette feel like a luxury product. Users will feel like they're using something high-end, which creates a baseline of respect and trust
-- **Gauge indicators add personality** — The semicircle stock gauge is more characterful than a plain progress bar. It gives the pantry items a "face" of sorts. Each item feels like it has a status, not just data
+- **Gauge indicators add personality** — The 3-segment vertical bar gauge is a characterful stock visualization. It gives pantry items a "face" — each item feels like it has a status, not just data. The color progression (green → amber → red) communicates urgency at a glance
 - **Empty state messaging** — "Your stock is empty — Add items to keep track of what you have at home" is warm and guiding, not clinical. This is good emotional grounding
 
 ### Concerns — The Emotional Gap is Real
@@ -220,7 +203,7 @@ Checking items off a shopping list is one of the most frequent interactions. The
 
 **4. Budget Tracker is Informational, Not Emotional**
 
-The budget tracker shows: "$2.70 spent, $47.30 left, progress bar at ~5%." This is accounting. What the user actually feels is: "I'm doing great, loads of room left." The emotional version would lead with the feeling: a large green zone indicator, "You're well under budget" in supportive text, with the numbers secondary. The data is correct; the narrative is missing.
+The CircularBudgetDial shows spent vs budget as a visual ring — an improvement over a flat progress bar. But it's still purely numerical. What the user actually feels is: "I'm doing great, loads of room left." The emotional version would add a one-line sentiment below: "Looking good — lots of room left" (green), "Getting close" (amber), "Over budget" (red). The data is correct; the narrative is missing.
 
 **5. Savings Jar at £0.00 Feels Discouraging**
 
@@ -238,11 +221,11 @@ The glass design gives a visual identity. But the voice gives emotional identity
 
 ### Recommendations
 
-- **Add a warm accent color** to the palette — a soft amber or coral (#FFB088 or similar) used sparingly for celebration moments, milestones, and encouraging text. Not replacing teal, but complementing it with warmth
-- **Micro-celebrations on check-off** — When checking off a list item, briefly flash the item row green, show a subtle checkmark burst animation, and update the progress indicator with a smooth fill. The physical equivalent: the satisfying click of a pen checking a box
-- **Budget tracker emotional mode** — Below or instead of the numbers, show a one-line sentiment: "Looking good — lots of room left" (green), "Getting close — stay focused" (amber), "Over budget — time to review" (red). Lead with feeling, support with data
-- **Savings jar warmth** — At £0.00, show an illustration of an empty jar with "Your first savings are just one trip away." At any positive amount, show the jar filling with animated coins/notes. The visual metaphor makes the abstract (savings) feel tangible
-- **Voice audit** — Review all empty states, button labels, and section headers. Replace functional language with warm-but-clear alternatives. The goal: if the app could talk, it would sound like a supportive friend who's good with money, not a financial advisor
+- [ ] **Add a warm accent color** to the palette — a soft amber or coral (#FFB088 or similar) used sparingly for celebration moments, milestones, and encouraging text. Not replacing teal, but complementing it with warmth
+- [ ] **Micro-celebrations on check-off** — When checking off a list item, briefly flash the item row green, show a subtle checkmark burst animation, and update the progress indicator with a smooth fill. The physical equivalent: the satisfying click of a pen checking a box
+- [ ] **Budget tracker emotional mode** — Below or instead of the numbers, show a one-line sentiment: "Looking good — lots of room left" (green), "Getting close — stay focused" (amber), "Over budget — time to review" (red). Lead with feeling, support with data
+- [ ] **Savings jar warmth** — At £0.00, show an illustration of an empty jar with "Your first savings are just one trip away." At any positive amount, show the jar filling with animated coins/notes. The visual metaphor makes the abstract (savings) feel tangible
+- [ ] **Voice audit** — Review all empty states, button labels, and section headers. Replace functional language with warm-but-clear alternatives. The goal: if the app could talk, it would sound like a supportive friend who's good with money, not a financial advisor
 
 ---
 
@@ -282,11 +265,11 @@ Dark themes are excellent for reducing eye strain and battery usage. They're les
 
 ### Recommendations
 
-- **Weekly Insights Narrative:** Instead of raw numbers, generate a 2-3 sentence insight: "This week you made 2 trips and stayed under budget on both. Your dairy spending dropped 15%. You're building a solid streak!" This gives users a reason to check Insights regularly
-- **Price Intelligence:** Show users interesting price data from their history and community: "Milk is 12% cheaper at Aldi this month" or "You pay an average of £2.10 for bread — the best local price is £1.85." This turns a utility into an advisor
-- **New User State:** Replace all zeroes with aspirational messaging and projected milestones: "Most users save £30 in their first month." Show a visual "path" of what's coming: first trip → first receipt → first savings → first streak
-- **Community Contribution Visibility:** After scanning a receipt, show: "Your prices will help X shoppers in [city]." After a few scans: "You've contributed 23 prices — you're helping build the UK's most accurate grocery database." Pride in contribution = reason to scan = reason to return
-- **Warm "Discovery" Zone:** Consider a dedicated content area (maybe within Insights or a fifth tab) that surfaces tips, price trends, seasonal savings advice, or meal planning hints. Content that rewards browsing
+- [ ] **Weekly Insights Narrative:** Instead of raw numbers, generate a 2-3 sentence insight: "This week you made 2 trips and stayed under budget on both. Your dairy spending dropped 15%. You're building a solid streak!" This gives users a reason to check Insights regularly
+- [ ] **Price Intelligence:** Show users interesting price data from their history and community: "Milk is 12% cheaper at Aldi this month" or "You pay an average of £2.10 for bread — the best local price is £1.85." This turns a utility into an advisor
+- [ ] **New User State:** Replace all zeroes with aspirational messaging and projected milestones: "Most users save £30 in their first month." Show a visual "path" of what's coming: first trip → first receipt → first savings → first streak
+- [ ] **Community Contribution Visibility:** After scanning a receipt, show: "Your prices will help X shoppers in [city]." After a few scans: "You've contributed 23 prices — you're helping build the UK's most accurate grocery database." Pride in contribution = reason to scan = reason to return
+- [ ] **Warm "Discovery" Zone:** Consider a dedicated content area (maybe within Insights or a fifth tab) that surfaces tips, price trends, seasonal savings advice, or meal planning hints. Content that rewards browsing
 
 ---
 
@@ -330,17 +313,17 @@ The habit model works best when users invest something that becomes more valuabl
 
 ### Recommendations
 
-- **Smart Push Notifications (Priority 1):** Implement 3 trigger types:
+- [ ] **Smart Push Notifications (Priority 1):** Implement 3 trigger types:
   - *Stock reminder:* "5 items are running low — ready to plan your next shop?" (trigger: N items at Low/Out)
   - *Streak motivation:* "You're on a 3-week streak! Don't break it — shop before Sunday" (trigger: approaching streak deadline)
   - *Weekly digest:* "Your week in review: 2 trips, £34 saved, 12 prices contributed" (trigger: every Monday morning)
-- **First-Week Nurture Sequence:** Even if the user doesn't shop, send helpful nudges:
+- [ ] **First-Week Nurture Sequence:** Even if the user doesn't shop, send helpful nudges:
   - Day 2: "Tip: Long-press any pantry item to set its stock level"
   - Day 3: "Did you know? You can swipe items in your pantry to quickly adjust stock"
   - Day 5: "Weekend coming up — create a shopping list to stay on budget"
-- **Visible Investment:** Show users their data value: "Your pantry: 42 items tracked. Your prices: 67 data points. Your savings: £48 total." This creates switching cost — leaving Oja means losing this history
-- **Milestone Celebrations:** When hitting savings milestones (£10, £25, £50, £100), show a celebration screen similar to the trip summary. Make the milestone feel earned and visible
-- **Social Proof in Empty States:** Instead of "0 trips" for new users, show: "Join 12,000 UK shoppers saving an average of £35/month." Community numbers create FOMO and validation
+- [ ] **Visible Investment:** Show users their data value: "Your pantry: 42 items tracked. Your prices: 67 data points. Your savings: £48 total." This creates switching cost — leaving Oja means losing this history
+- [ ] **Milestone Celebrations:** When hitting savings milestones (£10, £25, £50, £100), show a celebration screen similar to the trip summary. Make the milestone feel earned and visible
+- [ ] **Social Proof in Empty States:** Instead of "0 trips" for new users, show: "Join 12,000 UK shoppers saving an average of £35/month." Community numbers create FOMO and validation
 
 ---
 
@@ -383,10 +366,10 @@ When a single color carries this much weight, it loses its ability to signal pri
 
 ### Recommendations
 
-- **Introduce a warm accent** — A soft amber/coral (#FFB088 or #FF9F6A) for celebration moments, milestone badges, and encouraging text. Not replacing teal, but adding warmth
-- **Reduce teal usage by 50%** — Reserve teal for: primary CTA buttons, active tab indicator, and budget "healthy" state. Everything else (checkmarks, borders, secondary buttons, text links) should use white, gray, or indigo
-- **Tab color personality** — Currently each tab has a semantic color, but it only appears in the tab icon. Consider tinting the header or a subtle accent element on each screen to match its tab color. This creates visual variety across the app without breaking consistency
-- **Dark mode with warmth** — Consider shifting the background gradient very slightly warm: from pure cold navy toward a deep warm navy (#0F1526 → #1A2240). The difference is subtle but the subconscious effect is real
+- [ ] **Introduce a warm accent** — A soft amber/coral (#FFB088 or #FF9F6A) for celebration moments, milestone badges, and encouraging text. Not replacing teal, but adding warmth
+- [ ] **Reduce teal usage by 50%** — Reserve teal for: primary CTA buttons, active tab indicator, and budget "healthy" state. Everything else (checkmarks, borders, secondary buttons, text links) should use white, gray, or indigo
+- [ ] **Tab color personality** — Currently each tab has a semantic color, but it only appears in the tab icon. Consider tinting the header or a subtle accent element on each screen to match its tab color. This creates visual variety across the app without breaking consistency
+- [ ] **Dark mode with warmth** — Consider shifting the background gradient very slightly warm: from pure cold navy toward a deep warm navy (#0F1526 → #1A2240). The difference is subtle but the subconscious effect is real
 
 ---
 
@@ -408,9 +391,9 @@ Budget amounts use the Numbers typography scale (24-36px bold tabular figures). 
 
 ### Recommendations
 
-- **Reduce item name size** from 28px to 20-22px. Increase stock level indicator size or visual weight. The hierarchy should be: stock status (visual/icon) → item name → details. The user's eye should land on "is this item OK?" before "what is this item?"
-- **Budget typography narrative** — On the list detail, consider showing *one* number prominently: the remaining amount or budget percentage. Supporting figures can be smaller. The user's question is "How much can I still spend?" — answer that loudly, explain it quietly
-- **Micro-copy styling** — Helper text, hint text, and tertiary labels (12px, 50% opacity white) are technically readable but practically invisible on the dark background. Consider bumping these to 60-70% opacity for better accessibility without sacrificing hierarchy
+- [ ] **Reduce item name size** from 28px to 20-22px. Increase stock level indicator size or visual weight. The hierarchy should be: stock status (visual/icon) → item name → details. The user's eye should land on "is this item OK?" before "what is this item?"
+- [ ] **Budget typography narrative** — On the list detail, consider showing *one* number prominently: the remaining amount or budget percentage. Supporting figures can be smaller. The user's question is "How much can I still spend?" — answer that loudly, explain it quietly
+- [ ] **Micro-copy styling** — Helper text, hint text, and tertiary labels (12px, 50% opacity white) are technically readable but practically invisible on the dark background. Consider bumping these to 60-70% opacity for better accessibility without sacrificing hierarchy
 
 ---
 
@@ -430,9 +413,9 @@ Several screens require extensive vertical scrolling: Pantry (100 items), List D
 
 ### Recommendations
 
-- **Increase section gaps** between major functional zones from 32px to 48-56px. This creates visual "chapters" that let the user process one zone before encountering the next
-- **Limit visible zones** — No screen should show more than 3 major sections without scrolling. If more exists, use progressive disclosure (collapsed sections, "See more" links)
-- **Fixed action areas** — For screens with a primary action (List Detail: adding items, Pantry: reviewing stock), pin the primary action at the bottom of the screen so it's always accessible without scrolling. The content above can scroll; the action stays fixed
+- [ ] **Increase section gaps** between major functional zones from 32px to 48-56px. This creates visual "chapters" that let the user process one zone before encountering the next
+- [ ] **Limit visible zones** — No screen should show more than 3 major sections without scrolling. If more exists, use progressive disclosure (collapsed sections, "See more" links)
+- [ ] **Fixed action areas** — For screens with a primary action (List Detail: adding items, Pantry: reviewing stock), pin the primary action at the bottom of the screen so it's always accessible without scrolling. The content above can scroll; the action stays fixed
 
 ---
 
@@ -454,9 +437,9 @@ Some flows go 3+ levels deep: Lists → List Detail → Partners, or Profile →
 
 ### Recommendations
 
-- **Journey prompts** — After scanning a receipt, show "Update your stock levels?" to bridge Scan → Stock. When stock items go to "Out," show a banner: "3 items are out — add to your next list?" to bridge Stock → Lists. These gentle prompts narrate the lifecycle without forcing it
-- **Smart tab badges** — Show a badge on the Stock tab when items are Low/Out ("3"). Show a badge on Lists when a list is in "Shopping" mode. These badges act as passive navigation cues: "Something needs your attention here"
-- **Shallow navigation preference** — Limit stack depth to 2 levels where possible. Partners, Insights, Subscription can be modal overlays or sheets rather than pushed screens, reducing the feeling of being "deep" in the app
+- [ ] **Journey prompts** — After scanning a receipt, show "Update your stock levels?" to bridge Scan → Stock. When stock items go to "Out," show a banner: "3 items are out — add to your next list?" to bridge Stock → Lists. These gentle prompts narrate the lifecycle without forcing it
+- [ ] **Smart tab badges** — Show a badge on the Stock tab when items are Low/Out ("3"). Show a badge on Lists when a list is in "Shopping" mode. These badges act as passive navigation cues: "Something needs your attention here"
+- [ ] **Shallow navigation preference** — Limit stack depth to 2 levels where possible. Partners, Insights, Subscription can be modal overlays or sheets rather than pushed screens, reducing the feeling of being "deep" in the app
 
 ---
 
@@ -464,14 +447,14 @@ Some flows go 3+ levels deep: Lists → List Detail → Partners, or Profile →
 
 These elements are working well and should not be changed:
 
-1. **The glass design system** — The visual identity is distinctive, premium, and well-implemented. Don't simplify it away
-2. **Trip Summary screen** — The emotional peak of the app. Protect and enhance it
-3. **4-tab navigation** — Intuitive, standard, well-labeled. Don't add more tabs
-4. **Receipt scan flow** — Multi-step but well-guided. Tips → Camera → Preview → Confirm is solid
-5. **Empty states** — Clean messaging with clear CTAs. Keep the pattern
-6. **Budget auto-calculation + impulse fund** — Smart feature that reduces cognitive load. Keep the 10% default
-7. **Haptic feedback system** — The code shows consistent haptics on all interactions. This is invisible but powerful
-8. **Swipe gestures on pantry** — Intuitive once discovered. The interaction itself is right; the discovery is what needs work
+- [x] **The glass design system** — The visual identity is distinctive, premium, and well-implemented. Don't simplify it away
+- [x] **Trip Summary screen** — The emotional peak of the app. Protect and enhance it
+- [x] **4-tab navigation** — Intuitive, standard, well-labeled. Don't add more tabs
+- [x] **Receipt scan flow** — Multi-step but well-guided. Tips → Camera → Preview → Confirm is solid
+- [x] **Empty states** — Clean messaging with clear CTAs. Keep the pattern
+- [x] **Budget auto-calculation + CircularBudgetDial** — Smart feature that reduces cognitive load. Clean circular dial showing spent vs budget
+- [x] **Haptic feedback system** — The code shows consistent haptics on all interactions. This is invisible but powerful
+- [x] **Swipe gestures on pantry** — Intuitive once discovered. The interaction itself is right; the discovery is what needs work
 
 ---
 
@@ -479,13 +462,13 @@ These elements are working well and should not be changed:
 
 These are the areas that need the most attention:
 
-1. **Information overload on key screens** — List Detail, Profile, Insights, and Pantry-at-scale all show too much simultaneously
-2. **Emotional coldness** — The app looks premium but feels clinical. No warmth, no personality, no moments of delight in daily usage
-3. **Teal saturation** — Primary accent color is overused to the point where it loses signaling power
-4. **No active return triggers** — The app relies on the user remembering it exists. No push notification strategy is visible in the current build
-5. **First-week dead zone** — Between setup and first shopping trip, the app provides zero value or engagement
-6. **Gesture discovery** — The most important pantry interaction (swipe) is taught via tiny text, not interactive onboarding
-7. **Voice and personality** — Copy is functional but lacks the warmth needed to create emotional connection
+- [~] **Information overload on key screens** — Profile and Insights still dense. List Detail and Pantry addressed.
+- [ ] **Emotional coldness** — The app looks premium but feels clinical. No warmth, no personality, no moments of delight in daily usage
+- [ ] **Teal saturation** — Primary accent color is overused to the point where it loses signaling power
+- [ ] **No active return triggers** — The app relies on the user remembering it exists. No push notification strategy
+- [ ] **First-week dead zone** — Between setup and first shopping trip, the app provides zero value or engagement
+- [x] **Gesture discovery** — Fixed with `SwipeOnboardingOverlay`.
+- [ ] **Voice and personality** — Copy is functional but lacks warmth
 
 ---
 
@@ -493,34 +476,885 @@ These are the areas that need the most attention:
 
 ### Tier 1 — High Impact, Aligns With All 6 Criteria
 
-| # | Recommendation | Criteria Served | Effort |
-|---|----------------|-----------------|--------|
-| 1 | **Pantry "Needs Attention" default view** — Show only Low + Out items by default. "All Items" is secondary. | Simple, Not Overwhelming, Easy | Medium |
-| 2 | **List Detail progressive disclosure** — Collapse add-form, minimize budget card, show suggestions only when typing | Simple, Not Overwhelming | Medium |
-| 3 | **Teal reduction** — Reserve for primary CTAs only. Use white/gray/indigo for secondary elements | Not Overwhelming, Simple | Low |
-| 4 | **Micro-celebrations on check-off and stock change** — Brief color flash, subtle animation, satisfying haptic | Emotional, Stay On | Low-Medium |
-| 5 | **Voice audit** — Rewrite all empty states, section headers, and helper text with warm personality | Emotional, Come Back | Low |
+| # | Status | Recommendation | Criteria Served | Effort |
+|---|:---:|----------------|-----------------|--------|
+| 1 | [x] | **Pantry "Needs Attention" default view** — Show only Low + Out items by default. "All Items" is secondary. | Simple, Not Overwhelming, Easy | Medium |
+| 2 | [x] | **List Detail progressive disclosure** — Collapse add-form behind "+ Add Item" button | Simple, Not Overwhelming | Medium |
+| 3 | [ ] | **Teal reduction** — Reserve for primary CTAs only. Use white/gray/indigo for secondary elements | Not Overwhelming, Simple | Low |
+| 4 | [ ] | **Micro-celebrations on check-off and stock change** — Brief color flash, subtle animation, satisfying haptic | Emotional, Stay On | Low-Medium |
+| 5 | [ ] | **Voice audit** — Rewrite all empty states, section headers, and helper text with warm personality | Emotional, Come Back | Low |
 
 ### Tier 2 — Medium Impact, Strong Emotional/Retention Value
 
-| # | Recommendation | Criteria Served | Effort |
-|---|----------------|-----------------|--------|
-| 6 | **Gesture onboarding** — One-time interactive swipe tutorial for pantry items | Easy to Use | Low |
-| 7 | **Smart push notifications** (3 types: stock reminder, streak, weekly digest) | Come Back | High |
-| 8 | **Weekly Insights narrative** — Replace raw numbers with a 2-3 sentence "your week" story | Emotional, Stay On, Come Back | Medium |
-| 9 | **Warm accent color** — Introduce soft amber/coral for celebrations and milestones | Emotional | Low |
-| 10 | **Profile simplification** — Remove stat dashboard, add navigation links to Insights | Not Overwhelming, Simple | Medium |
+| # | Status | Recommendation | Criteria Served | Effort |
+|---|:---:|----------------|-----------------|--------|
+| 6 | [x] | **Gesture onboarding** — One-time interactive swipe tutorial for pantry items | Easy to Use | Low |
+| 7 | [ ] | **Smart push notifications** (3 types: stock reminder, streak, weekly digest) | Come Back | High |
+| 8 | [ ] | **Weekly Insights narrative** — Replace raw numbers with a 2-3 sentence "your week" story | Emotional, Stay On, Come Back | Medium |
+| 9 | [ ] | **Warm accent color** — Introduce soft amber/coral for celebrations and milestones | Emotional | Low |
+| 10 | [ ] | **Profile simplification** — Remove stat dashboard, add navigation links to Insights | Not Overwhelming, Simple | Medium |
 
 ### Tier 3 — Strategic, Longer-Term
 
-| # | Recommendation | Criteria Served | Effort |
-|---|----------------|-----------------|--------|
-| 11 | **First-week nurture sequence** — Daily helpful nudges for new users | Come Back | Medium |
-| 12 | **Price intelligence surface** — Show users interesting price data from their history and community | Stay On, Come Back | High |
-| 13 | **Journey prompts** between tabs (Scan → Stock, Stock → Lists) | Easy to Use, Come Back | Medium |
-| 14 | **Visible investment counter** — Show data value: items tracked, prices contributed, total saved | Come Back | Low |
-| 15 | **Savings milestone celebrations** — Trophy screens at £10, £25, £50, £100 milestones | Emotional, Come Back | Medium |
+| # | Status | Recommendation | Criteria Served | Effort |
+|---|:---:|----------------|-----------------|--------|
+| 11 | [ ] | **First-week nurture sequence** — Daily helpful nudges for new users | Come Back | Medium |
+| 12 | [ ] | **Price intelligence surface** — Show users interesting price data from their history and community | Stay On, Come Back | High |
+| 13 | [ ] | **Journey prompts** between tabs (Scan → Stock, Stock → Lists) | Easy to Use, Come Back | Medium |
+| 14 | [ ] | **Visible investment counter** — Show data value: items tracked, prices contributed, total saved | Come Back | Low |
+| 15 | [ ] | **Savings milestone celebrations** — Trophy screens at £10, £25, £50, £100 milestones | Emotional, Come Back | Medium |
 
 ---
 
 *This analysis is based on planning documentation, full codebase audit of the glass design system and all UI components, and visual review of 20+ screen states captured via E2E testing. It represents the current state as of 31 January 2026.*
+
+---
+
+## Implementation Item: Zero-Blank Price Intelligence — Size-Aware Pricing & Crowdsourced Data
+
+> **Priority:** CRITICAL — This is the core value proposition. Without accurate prices, budget tracking is fiction.
+> **Status:** Partially implemented (schema + variant seeding done; zero-blank guarantee + bracket matcher + AI fallback pending)
+> **Agreed:** 31 January 2026 (Party Mode session with Architect, PM, Developer, Analyst)
+> **Updated:** 1 February 2026 (Party Mode session — added zero-blank guarantee, AI fallback, price-bracket matcher, implementation plan)
+
+### The Core Problem
+
+The app promises "Budget-First Shopping Confidence." But when a user adds "Milk" to a shopping list, the app cannot provide an accurate price because:
+
+1. **"Milk" is not a purchasable item — it's a category.** What you buy is "Whole Milk 2 Pints" (£0.95) or "Semi-Skimmed 4 Pints" (£2.50). A 2.5x price range within one item name.
+2. **The entire price pipeline is size-blind.** Receipt parsing drops item size/unit info. `"Milk 2L at £1.80"` and `"Milk 500ml at £0.95"` both normalize to `"milk"` and overwrite each other in the price database.
+3. **75% of UK receipt items have NO size data.** Morrisons prints virtually zero sizes. Aldi includes size on ~30% of items. Lidl ~15%. The AI can't extract what isn't there.
+4. **Pantry items seeded during onboarding now have AI-estimated prices.** `pantryItems.bulkCreate` writes `lastPrice: item.estimatedPrice` with `priceSource: "ai_estimate"`. Items added *after* onboarding (manually or via auto-restock) may still lack price data until a receipt is scanned — addressed by the Zero-Blank Guarantee (Steps 3a-3c below).
+
+**Impact:** If the budget estimate for a 20-item list is off by £1-2 per item, the total could be wrong by £20-40. The budget dial becomes decoration. The app is useless for its stated purpose.
+
+---
+
+### Receipt Analysis — Real UK Store Patterns
+
+Analysis of 19 real receipts from 7 stores (High Wycombe / Slough area, Oct 2025 – Jan 2026):
+
+| Store | Size Included? | Approximate % | Format Example |
+|-------|---------------|---------------|----------------|
+| **Aldi** | Liquids, weighed goods, multi-packs | ~30-35% | `MILK WHOLE 2PT`, `SWEET POTATOES 1KG`, `QUILTED TP SPLY 4` |
+| **Lidl** | Almost only milk | ~15-20% | `Whole Milk 4 Pints` |
+| **Morrisons** | Virtually never | ~0-5% | `M TABLE SALT`, `COFRESH CARAMEL/NUTS` |
+| **Tesco** | Branded/premium items | ~30% | `Protein Yoghurt 200g`, `Greek Style Pasta Salad 250g` |
+| **Sainsbury's** | Branded items | ~33% | `CHIN CHIN 148G`, `JS VEGETABLE OIL` |
+| **Independent (Ol Sorts)** | Bulk items | ~40% | `SELLA 5KG`, `BLACK EYE BEANS 4KG`, `DUCROS CURRIED OIL 1LTR` |
+
+**Key observations from receipt data:**
+
+1. **Store name is ALWAYS available** — every receipt has it. Per-store price tracking works.
+2. **SKU codes precede items on Aldi** — 6-digit numbers need stripping (e.g., `415772 MILK WHOLE 2PT`).
+3. **VAT codes follow prices** — A/B/D suffixes on Aldi/Lidl need ignoring.
+4. **Discount/promo lines exist** — `Price Crunch -£0.10`, `50p off with Lidl Plus`. Must not be treated as items.
+5. **Multi-buy pricing** — `2 x £2.19` needs parsing as quantity: 2, unitPrice: 2.19.
+6. **Abbreviations are extreme** — `QUILTED TP SPLY 4` = Quilted Toilet Paper 4-pack. `SQUEEZY MALR FR 12PK` = Squeezy Malt 12-pack. AI must expand these.
+7. **Same product, wildly different names across stores** — "Whole Milk 2 Pints" appears as `MILK WHOLE 2PT` (Aldi), `Whole Milk 4 Pints` (Lidl), and just `MILK` or similar (Morrisons). Cross-store matching by name alone is unreliable.
+8. **Non-grocery receipts exist** — Primark, Hobbycraft, Asda non-food. The system must handle or reject non-grocery receipts gracefully.
+
+---
+
+### Architecture: Three-Layer Price Intelligence
+
+```
+LAYER 1: AI Estimates (cold start, lowest confidence)
+  ↓ replaced by ↓
+LAYER 2: Crowdsourced Prices (all users' receipts, by region)
+  ↓ personalized by ↓
+LAYER 3: Personal History (user's own receipts, highest confidence)
+```
+
+Display priority: **Personal > Crowdsourced > AI Estimate.** The user always sees SOMETHING. Never a blank price.
+
+#### The Flywheel
+
+```
+More users → More receipt scans → Better price data
+→ More accurate budgets → Better user experience
+→ More users → ...
+```
+
+Every user who scans a receipt contributes training data. Every new user benefits from everyone who came before. The cold start problem dissolves over time.
+
+#### Data Moat Timeline
+
+- **0-100 users:** AI estimates dominate, prices are approximate
+- **100-1,000 users:** Crowdsourced layer covers major stores in top cities
+- **1,000-10,000 users:** Most common items at most stores have real prices
+- **10,000+ users:** Regional pricing becomes accurate, AI is genuinely trained
+
+---
+
+### Architecture: Smart Variant Resolution
+
+**Problem:** User types "milk." App needs to map this to a purchasable product with an accurate price.
+
+**Solution:** Item Variant system — AI-seeded, receipt-refined.
+
+```
+LAYER 1: Item Name (what user types)
+  "milk"
+    ↓
+LAYER 2: Variant Options (what we know about)
+  ├─ Whole Milk 1 Pint    → £0.95  (Aldi receipt, 3 reports)
+  ├─ Whole Milk 2 Pints   → £1.15  (Tesco receipt, 7 reports) ← "Your usual"
+  ├─ Semi-Skimmed 4 Pints → £2.50  (Sainsbury's receipt, 2 reports)
+  └─ Oat Milk 1L          → £1.80  (AI estimate)
+    ↓
+LAYER 3: Selected Variant (what goes on the list)
+  "Milk" with estimatedPrice: £1.15, variant: "Whole 2pt"
+```
+
+**Variant picker UX (first time adding an item with variants):**
+
+```
+┌─────────────────────────────────┐
+│ 🥛 Milk                         │
+│                                 │
+│ Which one do you usually get?   │
+│                                 │
+│ ○ 1 pint        ~£0.95         │
+│ ● 2 pints       ~£1.15  ★      │  ← ★ = "Your usual" after first pick
+│ ○ 4 pints       ~£1.75         │
+│ ○ 2 litres      ~£1.35         │
+│ ○ Other / not sure              │
+│                                 │
+│         [Add to list]           │
+└─────────────────────────────────┘
+```
+
+After first pick: auto-selects "2 pints" next time with "Change size" link. Shows `Milk (2pt) — £1.15`. One tap to add. No friction.
+
+**"Other / not sure" behavior:** When selected, the item is added with the base-item average price from `currentPrices` (or `pantryItem.lastPrice` if available). No `preferredVariant` is set — the picker will show again next time. The user can also type a custom variant name (e.g., "Oat Milk 1L") which creates a new ad-hoc variant. This ensures zero-blank (a price is always assigned) while not forcing a choice.
+
+**Not all items need variants.** Only items where size materially affects price (~30-40% of grocery items):
+- **Need variants:** Milk, juice, oil, water, rice, pasta, flour, sugar, eggs, toilet paper, meat, bread
+- **Don't need variants:** Bananas (per-item), onions (per-item), butter (standard 250g), salt (one size), tinned beans (standard 400g)
+
+AI determines which items need variants during seeding. Single-size items just show one price — no picker.
+
+#### Resolution Algorithm (when user adds item to list) — ZERO-BLANK GUARANTEED
+
+```
+USER TYPES "milk" ON LIST
+         │
+         ▼
+    ┌─────────────────────────────────────────┐
+    │  1. Check pantryItem.preferredVariant    │
+    │     → Found? Show that variant + price.  │
+    │       Also show "Change size" link.      │
+    │       Price cascade (see below).         │
+    │     → Not found? Step 2.                 │
+    └──────────────────┬──────────────────────┘
+                       ▼
+    ┌─────────────────────────────────────────┐
+    │  2. Query itemVariants for "milk"       │
+    │     → Has variants? Show picker with    │
+    │       prices from 5-layer cascade:      │
+    │                                         │
+    │       For EACH variant:                 │
+    │       a. priceHistory (personal)        │
+    │       b. currentPrices (crowdsourced)   │
+    │       c. variant.estimatedPrice (AI)    │
+    │       d. ← NEVER null. AI always fills. │
+    │                                         │
+    │     → No variants? Step 3.              │
+    └──────────────────┬──────────────────────┘
+                       ▼
+    ┌─────────────────────────────────────────┐
+    │  3. No variants known for this item.    │
+    │     This is a "simple item" OR          │
+    │     a completely unknown item.          │
+    │                                         │
+    │     a. pantryItem.lastPrice exists?     │
+    │        → Use it. Show "~£X.XX"          │
+    │     b. currentPrices has it?            │
+    │        → Use cheapest. Show store name. │
+    │     c. Nothing?                         │
+    │        → REAL-TIME AI ESTIMATE.         │
+    │          Call AI: "What does {item}      │
+    │          cost in a UK supermarket?"      │
+    │          + Does it have size variants?   │
+    │          Cache result in currentPrices   │
+    │          + itemVariants if applicable.   │
+    │          Show "~£X.XX est."              │
+    │          Store for next user lookup.     │
+    └─────────────────────────────────────────┘
+
+EVERY BRANCH TERMINATES WITH A PRICE. NO BRANCH RETURNS NULL.
+```
+
+**Price cascade for each variant/item (ordered by trust):**
+
+```
+1. Personal priceHistory (user's own receipts) → highest trust
+     Label: "£1.15 at Aldi"
+     Query: priceHistory by_user_item for current user + normalizedName
+     NOTE: This layer requires a priceHistory lookup in getWithPrices
+           (currently NOT queried — see Phase 1 Step 1.5 below)
+2. currentPrices for user's region → crowdsourced
+     Label: "~£1.15 avg (3 stores)"
+3. currentPrices any region → fallback crowdsourced
+     Label: "~£1.15 avg"
+4. variant.estimatedPrice (AI-seeded) → baseline
+     Label: "~£1.15 est."
+5. Real-time AI estimate → cold start safety net
+     Label: "~£1.15 est."
+     → Caches to layer 4 for next lookup
+```
+
+**Important implementation note:** Currently `getWithPrices` only queries `currentPrices` (layers 2-3). Layer 1 (personal priceHistory) is NOT queried. To show "£1.15 at Aldi" (personal, highest trust), `getWithPrices` needs a userId param and a `priceHistory` lookup. See Phase 1 Step 1.5.
+
+---
+
+### Schema Changes
+
+#### Status of Schema Changes
+
+Most schema changes from the original plan are **already implemented**. The remaining changes are marked NEW below.
+
+#### `itemVariants` — EXISTS, needs `estimatedPrice`
+
+```typescript
+itemVariants: defineTable({
+  baseItem: v.string(),            // "milk" (normalized) ✅
+  variantName: v.string(),         // "Whole Milk 2 Pints" ✅
+  size: v.string(),                // "2 pints" ✅
+  unit: v.string(),                // "pint" ✅
+  category: v.string(),            // "Dairy" ✅
+  source: v.string(),              // "ai_seeded" | "receipt_discovered" ✅
+  commonality: v.optional(v.number()), // ✅
+  estimatedPrice: v.optional(v.number()), // 🆕 AI-generated price for this variant
+})
+  .index("by_base_item", ["baseItem"])
+```
+
+#### `currentPrices` — EXISTS with all enhanced fields ✅
+
+Already has: `variantName`, `size`, `unit`, `averagePrice`, `minPrice`, `maxPrice`, `confidence`, `region`. No changes needed.
+
+#### `priceHistory` — EXISTS with `size`/`unit` ✅
+
+Already has optional `size` and `unit` fields. No changes needed.
+
+#### `receipts.items[]` — EXISTS with `size`/`unit` ✅
+
+Already has optional `size` and `unit` fields. No changes needed.
+
+#### `pantryItems` — EXISTS, needs `defaultSize`/`defaultUnit`
+
+```typescript
+// Already exists:
+lastPrice: v.optional(v.number()),            // ✅
+priceSource: v.optional(v.string()),          // ✅ "ai_estimate" | "receipt" | "user"
+preferredVariant: v.optional(v.string()),     // ✅ "Whole Milk 2 Pints"
+lastStoreName: v.optional(v.string()),        // ✅ Store name from last receipt price
+
+// NEW — for non-variant items (hasVariants: false):
+defaultSize: v.optional(v.string()),          // 🆕 "250g", "400g", "per item"
+defaultUnit: v.optional(v.string()),          // 🆕 "g", "each", "tin"
+```
+
+Note: `lastPrice` and `unit` fields already exist on pantryItems and are populated via receipt flow.
+
+---
+
+### AI Prompt Changes
+
+#### Receipt Parsing — ✅ ALREADY IMPLEMENTED
+
+The receipt parsing prompt in `convex/ai.ts:parseReceipt` already extracts `size`, `unit`, expands abbreviations, ignores discounts/VAT/SKUs, and handles multi-buy pricing. No changes needed.
+
+#### Onboarding Seeding — ✅ ALREADY IMPLEMENTED
+
+`SeedItem` type and `generateHybridSeedItems` already include `estimatedPrice` and `hasVariants`. No changes needed.
+
+#### Onboarding Seeding — 🆕 ADD `defaultSize`/`defaultUnit` for non-variant items
+
+Update `SeedItem` type:
+
+```typescript
+type SeedItem = {
+  name: string;
+  category: string;
+  stockLevel: string;
+  estimatedPrice: number;        // ✅ exists
+  hasVariants: boolean;           // ✅ exists
+  defaultSize?: string;           // 🆕 for hasVariants=false items: "250g", "per item", "400g tin"
+  defaultUnit?: string;           // 🆕 for hasVariants=false items: "g", "each", "tin"
+};
+```
+
+Prompt addition: *"For items where hasVariants is false, include defaultSize (e.g., '250g', '400g tin', 'per item', 'bunch') and defaultUnit (e.g., 'g', 'tin', 'each'). Every item must have either hasVariants=true OR defaultSize+defaultUnit populated. No item should lack size context."*
+
+#### Variant Seeding — ✅ ALREADY IMPLEMENTED
+
+`generateItemVariants` action already generates variants with `estimatedPrice`. The gap is that `bulkUpsert` in `itemVariants.ts` does not persist `estimatedPrice` — it accepts it but doesn't store it (see Implementation Step 1).
+
+#### 🆕 NEW: Real-Time AI Price Estimation Action (`estimateItemPrice`)
+
+For completely unknown items (not in pantry, no variants, no currentPrices). This is the Step 3c safety net.
+
+```typescript
+type ItemEstimate = {
+  name: string;                   // "Quinoa"
+  estimatedPrice: number;         // 2.50
+  hasVariants: boolean;           // true
+  defaultSize?: string;           // "500g" (if hasVariants=false)
+  defaultUnit?: string;           // "g" (if hasVariants=false)
+  variants?: Array<{              // (if hasVariants=true)
+    variantName: string;          // "Quinoa 500g"
+    size: string;                 // "500g"
+    unit: string;                 // "g"
+    estimatedPrice: number;       // 2.50
+  }>;
+  category: string;               // "Grains & Pasta"
+};
+```
+
+Prompt: *"What does '{item}' cost in a UK supermarket? Return the most common price in GBP. If this item comes in multiple sizes where the size materially affects price, set hasVariants=true and return 3-5 common size variants with prices. If it's a standard single-size item, set hasVariants=false and include defaultSize/defaultUnit."*
+
+**Call pattern in Convex:**
+- This is an `action` (not a `query`), since it calls external AI
+- UI triggers it when `getWithPrices` returns empty AND pantryItem has no lastPrice
+- Convex reactive model: action writes to `currentPrices` + `itemVariants`, original `useQuery` auto-refreshes
+- User sees brief loading state (~300ms), then variants/price appear
+- **This only fires once per unknown item, ever.** First user pays the latency; all subsequent users get instant cached results
+
+### AI Fallback Strategy
+
+**Problem:** Gemini is the sole AI provider. Single point of failure for receipt parsing, seeding, variant generation, and price estimation.
+
+**Solution:** Add OpenAI GPT-4o-mini as a fallback provider with identical prompts.
+
+```
+Primary:   Gemini 2.0 Flash (fast, cheap, already integrated)
+Fallback:  OpenAI GPT-4o-mini (comparable speed/cost, different failure domain)
+```
+
+**Implementation: `withAIFallback` wrapper in `convex/ai.ts`:**
+
+```typescript
+async function withAIFallback<T>(
+  primary: () => Promise<T>,
+  fallback: () => Promise<T>,
+  operationName: string
+): Promise<T> {
+  try {
+    return await primary();          // Gemini
+  } catch (primaryError) {
+    console.warn(`[${operationName}] Primary AI (Gemini) failed, trying fallback (OpenAI):`, primaryError);
+    try {
+      return await fallback();       // OpenAI
+    } catch (fallbackError) {
+      console.error(`[${operationName}] Both AI providers failed:`, { primaryError, fallbackError });
+      throw fallbackError;
+    }
+  }
+}
+```
+
+**Apply to all AI functions:**
+- `parseReceipt` — most critical (user waiting with camera in hand)
+- `generateHybridSeedItems` — onboarding (user waiting)
+- `generateItemVariants` — onboarding (background, less urgent)
+- `estimateItemPrice` (new) — real-time unknown item lookup
+- `generateListSuggestions` — list planning
+
+**Dependencies:**
+- Add `openai` npm package
+- Set `OPENAI_API_KEY` in Convex dashboard environment variables (already spec'd in CLAUDE.md)
+- Prompts are model-agnostic (JSON-in/JSON-out) — same prompt works for both providers
+
+---
+
+### Admin Receipt Scanning Portal (Pre-Launch Seeding)
+
+**Purpose:** Before launch day, admin bulk-scans receipts from major UK stores to pre-populate the crowdsourced price database. New users get real receipt-verified prices on day one, not just AI guesses.
+
+**Implementation:**
+- Reuse the existing receipt scan flow (`app/(app)/(tabs)/scan.tsx` → `receipt/[id]/confirm.tsx`)
+- Add an admin flag: `isAdminSeed: true` on the receipt record
+- Admin-seeded receipts bypass user association — prices flow directly to `currentPrices` pool
+- Target: 50-100 receipts across Aldi, Lidl, Tesco, Morrisons, Sainsbury's covering major product categories
+- Outcome: ~500+ items with real prices and discovered variants before any real user signs up
+
+**Admin access:** Simple flag on user record (`isAdmin: true`) or separate admin route. No need for a full admin dashboard — just the existing scan flow with the admin flag.
+
+---
+
+### Receipt Freshness & Date Handling
+
+**30-day freshness window** — aligns with UK grocery pricing cycles:
+- UK supermarkets typically change promotional prices every 3-6 weeks
+- Base prices change less frequently (quarterly or less)
+- 30 days ensures prices reflect current reality without being too aggressive
+
+**Implementation:**
+- `purchaseDate` from receipt (already stored) is the anchor timestamp
+- `currentPrices.lastSeenDate` tracks when the price was last verified
+- Prices older than 30 days get lower weight in the weighted average but are NOT deleted
+- `priceHistory` keeps everything forever for trend analysis
+- The existing receipt rejection rule (must be within 3 days of scan date) prevents stale receipts from entering the system
+
+**Weighted average formula:**
+
+```
+weight = max(0, 1 - (daysSincePurchase / 30))
+weightedPrice = sum(price * weight) / sum(weight)
+```
+
+Receipts from today have weight 1.0. Receipts from 15 days ago have weight 0.5. Receipts from 30+ days ago have weight ~0.
+
+---
+
+### Data Flow: Complete Pipeline
+
+```
+                    ┌──────────────────────────────┐
+                    │     ADMIN PRE-LAUNCH          │
+                    │  Bulk scan 50-100 receipts    │
+                    │  → Seeds currentPrices pool   │
+                    │  → Discovers real variants    │
+                    └──────────────┬───────────────┘
+                                   │
+┌──────────────────────────────────▼───────────────────────────┐
+│                     RECEIPT SCAN FLOW                         │
+│                                                              │
+│  Photo → Gemini parses → extracts:                           │
+│    storeName, date, items[{name, size, unit, qty, price}]    │
+│                                                              │
+│  User confirms on review screen (can edit items/prices)      │
+│                                                              │
+│  On save, THREE parallel writes:                             │
+│                                                              │
+│  ┌─────────────────┐  ┌──────────────────┐  ┌────────────┐  │
+│  │  priceHistory    │  │  currentPrices   │  │  pantry    │  │
+│  │  (personal log)  │  │  (crowdsourced)  │  │  Items     │  │
+│  │                  │  │                  │  │            │  │
+│  │  userId          │  │  normalizedName  │  │  lastPrice │  │
+│  │  itemName        │  │  variantName     │  │  priceSource│ │
+│  │  size, unit      │  │  size, unit      │  │  ="receipt"│  │
+│  │  unitPrice       │  │  storeName       │  │            │  │
+│  │  storeName       │  │  averagePrice    │  │  (matched  │  │
+│  │  purchaseDate    │  │  reportCount++   │  │   items    │  │
+│  │                  │  │  confidence++    │  │   only)    │  │
+│  └─────────────────┘  └──────────────────┘  └────────────┘  │
+│                                                              │
+│  ALSO: Discover new variants from receipt item names/sizes   │
+│  → Insert into itemVariants if not already known             │
+└──────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│                    LIST PLANNING FLOW                         │
+│                                                              │
+│  User types "milk" → resolve variants:                       │
+│                                                              │
+│  1. Check pantryItem.preferredVariant                        │
+│     → Found? Auto-select, show price. Done.                  │
+│     → Not found? Step 2.                                     │
+│                                                              │
+│  2. Query itemVariants by baseItem                           │
+│     → Has variants? Show picker with prices.                 │
+│     → No variants? Show single estimate. Done.               │
+│                                                              │
+│  3. Price lookup cascade (per variant):                       │
+│     a. priceHistory (personal, by userId) → highest trust    │
+│        → Shows "£1.15 at Aldi" (requires Step 1.5)           │
+│     b. currentPrices (crowdsourced) → good trust             │
+│        → Shows "~£1.15 avg" or "£1.15 at Store"              │
+│     c. variant.estimatedPrice (AI-seeded) → fallback         │
+│        → Shows "~£1.15 est."                                 │
+│                                                              │
+│  4. Save preferredVariant on user's pantry item              │
+│     → Next time: auto-selects, no picker                     │
+└──────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│                    ONBOARDING FLOW                            │
+│                                                              │
+│  AI seeds 200 pantry items with:                             │
+│    name, category, icon, stockLevel,                         │
+│    estimatedPrice ✅, priceSource: "ai_estimate" ✅           │
+│                                                              │
+│  For items with hasVariants=true:                            │
+│    AI generates 3-5 common size variants with prices         │
+│    → Stored in itemVariants table                            │
+│                                                              │
+│  Review screen shows estimated prices per item (NEW)         │
+│  User confirms → bulkCreate includes lastPrice + priceSource │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Edge Cases & Considerations
+
+#### 1. Receipt items with NO size data (~75% of items) — ENHANCED with Price-Bracket Matcher
+
+**Original approach:** Store price against base item name as-is. Do NOT guess.
+
+**Enhanced approach (Price-Bracket Matcher):** For sizeless receipt items, attempt to match the receipt price to the closest variant using AI-seeded estimated prices as reference data.
+
+```
+Receipt: "MILK" at £1.15 from Morrisons (no size on receipt)
+
+Known variants (from itemVariants with estimatedPrice):
+  Whole Milk 1 Pint    → estimatedPrice: £0.65
+  Whole Milk 2 Pints   → estimatedPrice: £1.15  ← closest match (0% diff)
+  Whole Milk 4 Pints   → estimatedPrice: £1.55
+  Whole Milk 2 Litres  → estimatedPrice: £1.35
+
+Match logic:
+  1. Find variant whose estimatedPrice is closest to receipt price
+  2. If within 20% tolerance → associate price with that variant
+  3. If multiple variants within tolerance → DO NOT guess, store as base-item
+  4. If no variants within tolerance → store as base-item price
+```
+
+**Implementation in `currentPrices.ts:upsertFromReceipt`:**
+
+```typescript
+// Existing: if (item.size && item.unit) → exact variant match
+// NEW else branch:
+if (!item.size && !item.unit) {
+  // Price-bracket matcher: find closest variant by estimated price
+  const variants = await ctx.db
+    .query("itemVariants")
+    .withIndex("by_base_item", (q) => q.eq("baseItem", baseItem))
+    .collect();
+
+  const variantsWithPrices = variants.filter((v) => v.estimatedPrice != null);
+  if (variantsWithPrices.length > 0) {
+    const tolerance = 0.20; // 20%
+    const matches = variantsWithPrices.filter((v) => {
+      const diff = Math.abs(v.estimatedPrice! - item.unitPrice) / item.unitPrice;
+      return diff <= tolerance;
+    });
+    if (matches.length === 1) {
+      // Unambiguous match → associate with this variant
+      // Update currentPrices with variantName, size, unit from match
+    }
+    // else: ambiguous or no match → store as base-item price (existing behavior)
+  }
+}
+```
+
+**Validation requirement:** Before shipping, run the bracket matcher against the 19 real receipts in `receipts/`. Take items WITH size data, strip the size, run the matcher, measure accuracy. Target: >80% correct. If <60%, refine tolerance or disable matcher.
+
+- If the user has a `preferredVariant`, that takes priority over the bracket matcher
+- Over time, receipts WITH size data build the variant knowledge; sizeless receipts + bracket matcher contribute more precise price data
+
+#### 2. Same item, different names across stores
+
+- Aldi: `MILK WHOLE 2PT`, Lidl: `Whole Milk 4 Pints`, Morrisons: `MILK`
+- For MVP: Gemini normalizes names during parsing (expand abbreviations)
+- `normalizedName` is lowercase trimmed: `"milk"`, `"whole milk"`, etc.
+- Phase 2: Jina AI embeddings for semantic matching across stores
+
+#### 3. Non-grocery receipts
+
+- Primark, Hobbycraft, Asda non-food sections exist in real receipt data
+- AI parsing prompt should flag non-grocery items
+- User can remove non-grocery items during receipt confirmation
+- Non-grocery items should NOT feed into grocery price intelligence
+
+#### 4. Discount/promo lines on receipts
+
+- `Price Crunch -£0.10`, `50p off with Lidl Plus`, `Clubcard Price`
+- AI prompt explicitly instructs to ignore these
+- Store the pre-discount price (what the item costs without loyalty/promo)
+- Reason: discounts are personal/temporary, base prices are universal
+
+#### 5. Multi-buy pricing
+
+- `2 x £2.19 = £4.38` — parse as quantity: 2, unitPrice: 2.19
+- `3 for £5` — harder, need to infer unitPrice: 1.67
+- AI handles this in parsing; user can correct during confirmation
+
+#### 6. Weighted/loose items
+
+- `YAM £14.93` — price is for a specific weight, not a standard unit
+- `BANANA £2.69` — price for a bunch, varies each time
+- These items should NOT have size variants — price is inherently variable
+- Store as per-purchase price, show as "~£14.93 last time" not "£14.93/kg"
+
+#### 7. AI price estimates becoming stale
+
+- AI-seeded prices are snapshots of training data (may be months old)
+- Once ANY receipt-verified price exists for an item, it takes priority
+- AI estimates should decay in confidence over time (after 90 days, flag as "may be outdated")
+- Phase 2: re-run AI estimation periodically to refresh cold-start data
+
+#### 8. Price confidence display
+
+Display is driven by `reportCount` (returned by `getWithPrices` — see Step 1.5), NOT by a stored `priceSource` field:
+
+- `reportCount: 0` (AI estimate) → `~£1.15 est.` (tilde = approximate)
+- `reportCount: 1-2` (early receipt data) → `£1.15 at Aldi` (store name from source record)
+- `reportCount: 3-9` (growing confidence) → `£1.15 avg` (weighted average across reports)
+- `reportCount: 10+` (high confidence) → `£1.15` (no qualifier — data speaks for itself)
+
+This matches the Confidence Labels table in the Zero-Blank Guarantee section. User should always know WHY the app thinks an item costs what it does.
+
+#### 9. Regional pricing differences
+
+- Same Tesco charges different prices in London vs Manchester
+- For MVP: use global crowdsourced prices (all regions mixed)
+- Phase 2: extract postcode area from store address, filter prices by region
+- Store addresses are on receipts — data is already being captured
+
+#### 10. Price alert threshold
+
+- Existing system alerts on >15% price change
+- With variants, alerts should only compare same variant (don't alert when "2pt milk" and "4pt milk" have different prices)
+- Cross-variant alerts are noise, not signal
+
+---
+
+### The Zero-Blank Guarantee — Product Principle
+
+> **Every item in Oja — in pantry, on lists, during shopping — always shows a price estimate and size context. Never a blank. Never a "?". AI provides the floor. Receipts raise the ceiling.**
+
+This is not just a technical pattern — it's a product promise. The user experience consequence:
+
+| Scenario | Before (blanks possible) | After (zero-blank) |
+|----------|--------------------------|---------------------|
+| New user adds "Milk" to list | "Milk" with no price | "Milk — Which size?" → 4 variants with ~prices |
+| New user adds "Butter" to list | "Butter" with no price | "Butter · 250g · ~£1.85 est." |
+| User adds unknown item "Quinoa" | "Quinoa" with no price | Brief loading → "Quinoa · 500g · ~£2.50 est." |
+| Pantry item after onboarding | "Cheddar Cheese" (no context) | "Cheddar Cheese · ~£2.50 · AI est." |
+| After one receipt scan | "Milk £1.15" (no size) | "Milk (2pt) £1.15 Aldi" |
+
+**Confidence labels (what the user sees):**
+
+| Source | Display | Example |
+|--------|---------|---------|
+| AI estimate | `~£X.XX est.` | ~£1.15 est. |
+| AI estimate + store context | `~£X.XX est.` | ~£1.15 est. |
+| Receipt (1-2 reports) | `£X.XX at Store` | £1.15 at Aldi |
+| Receipt (3-9 reports) | `£X.XX avg` | £1.15 avg |
+| Receipt (10+ reports) | `£X.XX` (no qualifier) | £1.15 |
+
+**The tilde (~) is the user's signal that this is an estimate.** As receipts accumulate, tildes disappear. The user watches their data get more precise over time — this is visible investment.
+
+---
+
+### Files to Modify
+
+| File | Changes | Status |
+|------|---------|--------|
+| `convex/schema.ts` | Add `estimatedPrice` to `itemVariants`. Add `defaultSize`, `defaultUnit` to `pantryItems`. | 🆕 Pending |
+| `convex/ai.ts` | Add `withAIFallback` wrapper. Add `estimateItemPrice` action. Add OpenAI fallback provider. Update seed prompt for `defaultSize`/`defaultUnit`. | 🆕 Pending |
+| `convex/itemVariants.ts` | Persist `estimatedPrice` in `upsert` and `bulkUpsert`. Update `getWithPrices` to fallback to `variant.estimatedPrice`. Add personal `priceHistory` lookup with `userId` param. Return `priceSource` for confidence labels. | 🆕 Pending |
+| `convex/currentPrices.ts` | Add price-bracket matcher in `upsertFromReceipt` for sizeless receipt items. | 🆕 Pending |
+| `convex/pantryItems.ts` | Accept and store `defaultSize`/`defaultUnit` in `bulkCreate`. | 🆕 Pending |
+| `app/(app)/list/[id].tsx` | Enhanced variant picker: confidence labels, "Your usual" star badge, "Change size" link on auto-selected variant, "Other / not sure" option. Trigger `estimateItemPrice` for unknown items. Non-variant item size display. | 🆕 Pending |
+| `app/onboarding/review-items.tsx` | Pass `defaultSize`/`defaultUnit` through to `bulkCreate`. | 🆕 Pending |
+| `package.json` | Add `openai` dependency. | 🆕 Pending |
+
+**Already complete (from v1 implementation):**
+- `convex/schema.ts` — `itemVariants` table, `currentPrices` enhanced fields, `priceHistory` size/unit, `receipts.items[]` size/unit, `pantryItems` lastPrice/priceSource/preferredVariant/lastStoreName ✅
+- `convex/ai.ts` — Receipt parsing with size/unit extraction, seed prompt with estimatedPrice/hasVariants, `generateItemVariants` action ✅
+- `convex/currentPrices.ts` — Weighted average, confidence score, variant discovery from receipts ✅
+- `convex/itemVariants.ts` — CRUD, getByBaseItem, getWithPrices, upsert, bulkUpsert ✅
+- `convex/pantryItems.ts` — lastPrice + priceSource wiring from receipts ✅
+
+---
+
+### Formalized Implementation Plan
+
+> Legend: `[x]` = done, `[ ]` = pending, `[~]` = partially done
+
+#### Phase 1: Foundation — Persist AI Variant Prices (REQUIRED FIRST)
+
+- [ ] **Step 1.1: Schema — Add `estimatedPrice` to `itemVariants`**
+  - File: `convex/schema.ts:280-289`
+  - Change: Add `estimatedPrice: v.optional(v.number())` to `itemVariants` table definition
+  - Risk: None (additive, optional field)
+
+- [ ] **Step 1.2: Persist `estimatedPrice` in variant mutations**
+  - File: `convex/itemVariants.ts`
+  - Change: Update `upsert` (line 103) and `bulkUpsert` (line 152) to accept and store `estimatedPrice`
+  - `generateItemVariants` in `ai.ts:520` already returns `estimatedPrice` — it's being dropped silently in `bulkUpsert`
+  - `review-items.tsx:115` calls `bulkUpsertVariants` with variant data but `estimatedPrice` is stripped
+
+- [ ] **Step 1.3: Fallback to `estimatedPrice` in `getWithPrices`**
+  - File: `convex/itemVariants.ts:80-84`
+  - Current code: `price: bestPrice` (null if no `currentPrices` match)
+  - New code: `price: bestPrice ?? variant.estimatedPrice ?? null`
+
+- [ ] **Step 1.4: Re-run variant seeding for existing users**
+  - One-time migration: for items already in `itemVariants` with `source: "ai_seeded"` and no `estimatedPrice`, re-generate prices via `generateItemVariants`
+  - Or: for new installations only, this happens naturally during onboarding
+
+- [ ] **Step 1.5: Add personal priceHistory lookup to `getWithPrices`**
+  - File: `convex/itemVariants.ts:26-97`
+  - Currently queries `currentPrices` only (crowdsourced, layers 2-3)
+  - Add: accept optional `userId` param. If provided, query `priceHistory` (index `by_user_item`) for personal receipt prices (layer 1)
+  - Personal price takes priority over crowdsourced: `personalPrice ?? crowdsourcedPrice ?? variant.estimatedPrice`
+  - Return alongside `price`: `priceSource` (computed string: `"personal"` | `"crowdsourced"` | `"ai_estimate"` based on which cascade layer provided the price), `reportCount` (from `currentPrices.reportCount`, or `0` for AI estimates), and `storeName` (from the source record)
+  - Note: `priceSource` is NOT a stored DB field — it's computed at query time from which cascade layer returned the price. `currentPrices` has no `priceSource` column.
+  - `reportCount` is essential for the confidence label system: 0 = "~est.", 1-2 = "at Store", 3-9 = "avg", 10+ = no qualifier
+
+#### Phase 2: Zero-Blank for Non-Variant Items
+
+- [ ] **Step 2.1: Schema — Add `defaultSize`/`defaultUnit` to `pantryItems`**
+  - File: `convex/schema.ts:40-74`
+  - Change: Add `defaultSize: v.optional(v.string())` and `defaultUnit: v.optional(v.string())`
+
+- [ ] **Step 2.2: Update AI seeding prompt**
+  - File: `convex/ai.ts`
+  - Change: Update `SeedItem` type and `generateHybridSeedItems` prompt to return `defaultSize`/`defaultUnit` for `hasVariants: false` items
+  - Prompt addition: "For items where hasVariants is false, include defaultSize and defaultUnit. No item should lack size context."
+
+- [ ] **Step 2.3: Wire `defaultSize`/`defaultUnit` through onboarding**
+  - File: `convex/pantryItems.ts:9-24` — accept `defaultSize`/`defaultUnit` in `bulkCreate` args
+  - File: `app/onboarding/review-items.tsx` — pass through from AI response
+
+- [ ] **Step 2.4: Update fallback items**
+  - File: `convex/ai.ts:529-610` — update `getFallbackItems()` to include `defaultSize`/`defaultUnit` on all non-variant items
+
+#### Phase 3: AI Fallback Provider
+
+- [ ] **Step 3.1: Add OpenAI dependency**
+  - Run: `npm install openai`
+  - Set `OPENAI_API_KEY` in Convex dashboard
+
+- [ ] **Step 3.2: Implement `withAIFallback` wrapper**
+  - File: `convex/ai.ts`
+  - Add OpenAI client initialization alongside Gemini
+  - Implement `withAIFallback<T>` helper function
+  - Create OpenAI-equivalent prompt runner for each function
+
+- [ ] **Step 3.3: Wrap all AI functions with fallback**
+  - `parseReceipt` (line 249) — wrap Gemini call, add OpenAI equivalent
+  - `generateHybridSeedItems` (line 22) — wrap Gemini call, add OpenAI equivalent
+  - `generateItemVariants` (line 415) — wrap Gemini call, add OpenAI equivalent
+  - `generateListSuggestions` (line 140) — wrap Gemini call, add OpenAI equivalent
+
+#### Phase 4: Real-Time AI Estimation (Cold Start Safety Net)
+
+- [ ] **Step 4.1: Create `estimateItemPrice` action**
+  - File: `convex/ai.ts`
+  - New action: accepts item name, returns price + variants/defaultSize + category
+  - Uses `withAIFallback` (Gemini primary, OpenAI fallback)
+  - On success: writes results to `currentPrices` (with `storeName: "AI Estimate"`, `confidence: 0.05`, `reportCount: 0`) and `itemVariants` (if variants discovered)
+  - `reportCount: 0` is critical — it distinguishes AI-seeded prices from receipt-verified prices in the confidence label system
+
+- [ ] **Step 4.2: Wire into list-add flow**
+  - File: `app/(app)/list/[id].tsx`
+  - When user adds an item and `getWithPrices` returns empty AND no `pantryItem.lastPrice`:
+    - Show brief loading indicator
+    - Call `estimateItemPrice` action
+    - Convex reactive query auto-refreshes with new data
+    - Variant picker or single price appears
+
+#### Phase 5: Price-Bracket Matcher
+
+- [ ] **Step 5.1: Validate bracket matcher accuracy**
+  - Use 19 receipts in `receipts/` as test corpus
+  - Parse receipts with Gemini, isolate items WITH size data
+  - Strip size, run bracket matcher against `itemVariants.estimatedPrice`
+  - Measure accuracy — target >80%
+  - If <60%, adjust tolerance or defer this phase
+
+- [ ] **Step 5.2: Implement bracket matcher in `upsertFromReceipt`**
+  - File: `convex/currentPrices.ts:62-157`
+  - In `upsertFromReceipt`, when `item.size` and `item.unit` are null:
+    - Query `itemVariants` for matching baseItem
+    - Find variant with closest `estimatedPrice` within 20% tolerance
+    - If exactly one match: associate receipt price with that variant
+    - If ambiguous or no match: store as base-item price (existing behavior)
+  - If user has `preferredVariant`: always prefer that over bracket matching
+
+#### Phase 6: Variant Picker UI
+
+- [x] **Step 6.1: Variant picker in list detail** (basic implementation exists)
+  - File: `app/(app)/list/[id].tsx:916-955`
+  - Queries `itemVariants.getWithPrices` (line 166)
+  - Shows variant chips with name, price, store name
+  - Persists `preferredVariant` on pantry item (line 934-937)
+  - **Missing:** "Your usual" star badge, "Change size" link, confidence labels (tilde for estimates), loading state for unknown items
+
+- [ ] **Step 6.2: Enhanced variant picker with zero-blank UX**
+  - Add tilde (~) prefix for AI-estimated prices vs exact for receipt-verified
+  - Add "Your usual" star badge on `preferredVariant`
+  - Add "est." / "avg" / store name confidence labels (from `priceSource` returned by Step 1.5)
+  - Add "Change size" link when auto-selecting `preferredVariant` (see resolution algorithm Step 1) — tapping opens variant picker with all options
+  - Add "Other / not sure" option at bottom of variant picker — selecting this uses the base-item `averagePrice` from `currentPrices` (or `pantryItem.lastPrice` if available), skips setting `preferredVariant`, and allows the user to type a custom variant name or proceed without variant selection
+  - Trigger `estimateItemPrice` for completely unknown items (depends on Phase 4)
+
+- [ ] **Step 6.3: Non-variant item display with size context**
+  - Show `defaultSize` on non-variant items: "Butter · 250g · ~£1.85 est."
+  - Requires Phase 2 completion
+
+---
+
+### Pre-Existing Infrastructure (already built, verified by codebase audit)
+
+- [x] `itemVariants` table with `baseItem`, `variantName`, `size`, `unit`, `category`, `source`, `commonality` — `convex/schema.ts:279-289`
+- [x] `currentPrices` table with `variantName`, `size`, `unit`, `averagePrice`, `minPrice`, `maxPrice`, `confidence` — `convex/schema.ts:224-247`
+- [x] `priceHistory` table with `size`, `unit` pass-through — `convex/schema.ts:250-277`, `convex/priceHistory.ts:44-46`
+- [x] `receipts.items[]` with `size`, `unit` fields — `convex/schema.ts:186-196`
+- [x] `pantryItems` with `lastPrice`, `priceSource`, `preferredVariant`, `lastStoreName` — `convex/schema.ts:61-64`
+- [x] Receipt parsing extracts `size`/`unit` with abbreviation expansion — `convex/ai.ts:249-408`
+- [x] AI seeding returns `estimatedPrice` and `hasVariants` — `convex/ai.ts:7-130`
+- [x] `generateItemVariants` action generates variants with `estimatedPrice` — `convex/ai.ts:415-527`
+- [x] `itemVariants.getWithPrices` queries variants + `currentPrices` — `convex/itemVariants.ts:26-97`
+- [x] `itemVariants.upsert` and `bulkUpsert` for CRUD — `convex/itemVariants.ts:103-197`
+- [x] `currentPrices.upsertFromReceipt` with weighted average, confidence, variant discovery — `convex/currentPrices.ts:39-162`
+- [x] `pantryItems.autoRestockFromReceipt` writes `lastPrice`, `priceSource: "receipt"`, `lastStoreName` — `convex/pantryItems.ts:451+`
+- [x] `pantryItems.bulkCreate` accepts `estimatedPrice` and `hasVariants`, writes `lastPrice: estimatedPrice` with `priceSource: "ai_estimate"` — `convex/pantryItems.ts:9-24,65-68`
+- [x] Onboarding `review-items.tsx` calls `generateItemVariants` + `bulkUpsertVariants` — `app/onboarding/review-items.tsx:22-23,115`
+- [x] List detail page queries `itemVariants.getWithPrices` and shows basic variant chips — `app/(app)/list/[id].tsx:165-167,916-955`
+- [x] Variant chip selection persists `preferredVariant` on pantry item — `app/(app)/list/[id].tsx:934-937`
+- [x] Receipt-to-pantry price pipeline fully wired — receipts update `priceHistory`, `currentPrices`, and `pantryItems`
+- [x] Weighted 30-day average price computation — `convex/currentPrices.ts:18-31`
+- [x] Confidence score computation — `convex/currentPrices.ts:5-11`
+- [x] Variant discovery from receipt items with size data — `convex/currentPrices.ts:129-157`
+
+---
+
+### Verification Plan
+
+#### Core Functionality
+
+- [ ] 1. **Onboarding zero-blank** — Create new account. Confirm ALL 200 seeded items have both a price AND size context (either variants for `hasVariants=true` or `defaultSize` for `hasVariants=false`). No blanks.
+- [ ] 2. **Variant prices persisted** — Confirm items with `hasVariants: true` have 3-5 variants in `itemVariants` table, each with `estimatedPrice` populated.
+- [ ] 3. **Add item to list (cold start)** — Add "milk" to a shopping list. Confirm variant picker appears with AI-estimated prices and tilde (~) prefix. Select a variant. Confirm `estimatedPrice` is set on the list item.
+- [ ] 4. **Add same item again** — Add "milk" again. Confirm preferred variant is auto-selected with star badge, no picker shown.
+- [ ] 5. **Add unknown item** — Add "quinoa" (not in pantry, no variants). Confirm brief loading state, then AI estimate appears with variants or single price. Confirm data cached in `currentPrices` + `itemVariants`.
+- [ ] 6. **Non-variant item display** — Add "butter" to list. Confirm shows "Butter · 250g · ~£1.85 est." with no variant picker.
+
+#### Receipt Flow
+
+- [x] 7. **Scan receipt with sizes** — Scan an Aldi receipt. Confirm AI extracts size when visible. Confirm prices flow to `priceHistory`, `currentPrices`, and matched `pantryItems.lastPrice`. *(Pipeline exists and is wired. Confidence labels not yet shown in UI.)*
+- [ ] 8. **Scan receipt without sizes (bracket matcher)** — Scan a Morrisons receipt. Confirm bracket matcher attempts to associate prices with variants. Confirm unambiguous matches are stored with variant data. Confirm ambiguous matches fall back to base-item.
+- [ ] 9. **Price cascade verification** — After scanning a receipt, add same item to a new list. Confirm receipt-verified price (no tilde) takes priority over AI estimate (with tilde). Confirm personal priceHistory label shows "£X.XX at Store" (layer 1) when user has receipt data, and crowdsourced label shows "~£X.XX avg" (layer 2) when only other users have data.
+- [ ] 10. **Crowdsourced accumulation** — Simulate multiple receipt scans for same item. Confirm `reportCount` increases. Confirm `averagePrice` is weighted by recency. Confirm confidence label progression.
+
+#### AI Fallback
+
+- [ ] 11. **Gemini failure → OpenAI fallback** — Temporarily break Gemini API key. Scan a receipt. Confirm OpenAI handles parsing successfully. Confirm fallback logged in console.
+- [ ] 12. **Both providers fail** — Break both API keys. Confirm graceful error handling, no crash. Confirm user sees appropriate error message.
+
+#### Edge Cases
+
+- [x] 13. **Discount handling** — Scan receipt with loyalty discounts. Confirm discount lines excluded. *(AI prompt already instructs to ignore discounts/promos.)*
+- [ ] 14. **Non-grocery rejection** — Scan a Primark receipt. Confirm graceful handling.
+- [x] 15. **30-day freshness** — Verify old prices get lower weight. *(Weighted average implemented in `currentPrices.ts:18-31`.)*
+- [ ] 16. **Admin seeding** — Use admin flow to scan receipts. Confirm prices populate `currentPrices`.
+- [ ] 17. **Budget accuracy** — Create 10-item list with variant-selected prices. Confirm budget dial reflects accurate total.
+
+#### Invariant Tests (CI Gate)
+
+- [ ] 18. **Zero-blank invariant** — For every code path returning an item to UI, assert `price !== null && price !== undefined`. Automated test.
+- [ ] 19. **Bracket matcher accuracy** — Run against 19 real receipts. Assert >80% accuracy on items with known sizes.
+- [ ] 20. **All existing tests pass** — Confirm no regressions.
+
+---
+
+*Implementation plan formalized 1 February 2026. Party Mode session with Architect (Winston), PM (John), Analyst (Mary), Developer (Amelia), Test Architect (Murat).*
