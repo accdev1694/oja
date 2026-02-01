@@ -152,9 +152,28 @@ export default function ListsScreen() {
       handleCloseCreateModal();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.push(`/list/${listId}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create list:", error);
-      Alert.alert("Error", "Failed to create shopping list");
+      const msg = error?.message ?? error?.data ?? "";
+      if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        if (Platform.OS === "web") {
+          if (window.confirm("You've reached the 3-list limit on the Free plan.\n\nUpgrade to Premium for unlimited lists?")) {
+            router.push("/(app)/subscription");
+          }
+        } else {
+          Alert.alert(
+            "List Limit Reached",
+            "Free plan allows up to 3 active lists. Upgrade to Premium for unlimited lists.",
+            [
+              { text: "Maybe Later", style: "cancel" },
+              { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
+            ]
+          );
+        }
+      } else {
+        Alert.alert("Error", "Failed to create shopping list");
+      }
     } finally {
       setIsCreating(false);
     }

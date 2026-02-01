@@ -88,8 +88,27 @@ export default function PartnersScreen() {
       });
       setInviteCode(result.code);
       setShowInviteModal(true);
-    } catch (error) {
-      Alert.alert("Error", "Failed to create invite code");
+    } catch (error: any) {
+      const msg = error?.message ?? error?.data ?? "";
+      if (msg.includes("Premium") || msg.includes("partner") || msg.includes("Upgrade")) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        if (Platform.OS === "web") {
+          if (window.confirm("Partner Mode is a Premium feature.\n\nUpgrade to share lists with family and friends?")) {
+            router.push("/(app)/subscription");
+          }
+        } else {
+          Alert.alert(
+            "Premium Feature",
+            "Partner Mode lets you share lists with family and friends. Upgrade to Premium to unlock it.",
+            [
+              { text: "Maybe Later", style: "cancel" },
+              { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
+            ]
+          );
+        }
+      } else {
+        Alert.alert("Error", "Failed to create invite code");
+      }
     }
   }
 

@@ -15,7 +15,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { getIconForItem } from "@/lib/icons/iconMatcher";
@@ -684,7 +684,6 @@ export default function ListDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await startShopping({ id });
-      Alert.alert("Shopping Started", "Good luck with your shopping!");
     } catch (error) {
       console.error("Failed to start shopping:", error);
       Alert.alert("Error", "Failed to start shopping");
@@ -693,23 +692,28 @@ export default function ListDetailScreen() {
 
   async function handleCompleteShopping() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert("Complete Shopping", "Mark this shopping trip as complete?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Complete",
-        onPress: async () => {
-          try {
-            await completeShopping({ id });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            Alert.alert("Shopping Complete", "Shopping trip completed!");
-            router.back();
-          } catch (error) {
-            console.error("Failed to complete shopping:", error);
-            Alert.alert("Error", "Failed to complete shopping");
-          }
-        },
-      },
-    ]);
+
+    const doComplete = async () => {
+      try {
+        await completeShopping({ id });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.back();
+      } catch (error) {
+        console.error("Failed to complete shopping:", error);
+        Alert.alert("Error", "Failed to complete shopping");
+      }
+    };
+
+    if (Platform.OS === "web") {
+      if (window.confirm("Mark this shopping trip as complete?")) {
+        await doComplete();
+      }
+    } else {
+      Alert.alert("Complete Shopping", "Mark this shopping trip as complete?", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Complete", onPress: doComplete },
+      ]);
+    }
   }
 
   function handleAddFromPantry() {
@@ -1623,10 +1627,10 @@ function ShoppingListItem({
   const translateX = useSharedValue(0);
   const scale = useSharedValue(1);
   const checkFlash = useSharedValue(0);
-  const prevCheckedRef = React.useRef(item.isChecked);
+  const prevCheckedRef = useRef(item.isChecked);
 
   // Celebration flash when item gets checked
-  React.useEffect(() => {
+  useEffect(() => {
     if (item.isChecked && !prevCheckedRef.current) {
       checkFlash.value = 1;
       checkFlash.value = withTiming(0, { duration: 600 });
