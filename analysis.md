@@ -322,7 +322,7 @@ The habit model works best when users invest something that becomes more valuabl
   - Day 3: "Did you know? You can swipe items in your pantry to quickly adjust stock"
   - Day 5: "Weekend coming up — create a shopping list to stay on budget"
 - [x] **Visible Investment:** Show users their data value: "Your pantry: 42 items tracked. Your prices: 67 data points. Your savings: £48 total." This creates switching cost — leaving Oja means losing this history ✅ Profile screen shows "items tracked · receipts scanned · trips completed" investment card
-- [ ] **Milestone Celebrations:** When hitting savings milestones (£10, £25, £50, £100), show a celebration screen similar to the trip summary. Make the milestone feel earned and visible
+- [x] **Milestone Celebrations:** When hitting savings milestones (£10, £25, £50, £100), show a celebration screen similar to the trip summary. Make the milestone feel earned and visible ✅ Added onSavingsMilestone to useDelightToast hook (£10/£25/£50/£100/£250/£500 milestones) + wired into trip-summary with 3s delayed toast
 - [x] **Social Proof in Empty States:** Instead of "0 trips" for new users, show: "Join 12,000 UK shoppers saving an average of £35/month." Community numbers create FOMO and validation ✅ Added social proof messaging to EmptyPantry, EmptyLists, and NoReceipts empty states
 
 ---

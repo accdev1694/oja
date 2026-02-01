@@ -30,11 +30,13 @@ export default function TripSummaryScreen() {
   const params = useLocalSearchParams();
   const listId = params.id as string as Id<"shoppingLists">;
   const router = useRouter();
-  const { toast, dismiss, onNewRecord } = useDelightToast();
+  const { toast, dismiss, onNewRecord, onSavingsMilestone } = useDelightToast();
   const recordChecked = useRef(false);
+  const milestoneChecked = useRef(false);
 
   const summary = useQuery(api.shoppingLists.getTripSummary, { id: listId });
   const personalBests = useQuery(api.insights.getPersonalBests);
+  const savingsJar = useQuery(api.insights.getSavingsJar);
 
   // Check for new personal records once both data are loaded
   useEffect(() => {
@@ -50,6 +52,20 @@ export default function TripSummaryScreen() {
       onNewRecord("mostItemsInTrip", `${summary.checkedCount} items`);
     }
   }, [summary, personalBests]);
+
+  // Check for savings milestones (delayed so it doesn't clash with personal bests)
+  useEffect(() => {
+    if (!savingsJar || milestoneChecked.current || !summary) return;
+    milestoneChecked.current = true;
+
+    // Only show milestone if no personal best toast is showing
+    if (recordChecked.current && savingsJar.totalSaved > 0) {
+      const timer = setTimeout(() => {
+        onSavingsMilestone(savingsJar.totalSaved);
+      }, 3000); // Show 3s after load to not compete with personal best toast
+      return () => clearTimeout(timer);
+    }
+  }, [savingsJar, summary]);
 
   if (summary === undefined) {
     return (

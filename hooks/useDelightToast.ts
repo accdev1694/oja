@@ -95,6 +95,28 @@ export function useDelightToast() {
     [showToast]
   );
 
+  /**
+   * Show savings milestone celebration
+   * Milestones: £10, £25, £50, £100, £250, £500
+   */
+  const onSavingsMilestone = useCallback(
+    (totalSaved: number) => {
+      const milestones = [500, 250, 100, 50, 25, 10];
+      for (const m of milestones) {
+        if (totalSaved >= m) {
+          showToast(
+            `Milestone: £${m} saved! ${m >= 100 ? "Incredible!" : m >= 50 ? "Amazing progress!" : "Keep going!"}`,
+            "trophy",
+            "#FFD700"
+          );
+          return true;
+        }
+      }
+      return false;
+    },
+    [showToast]
+  );
+
   return {
     toast,
     dismiss,
@@ -102,5 +124,6 @@ export function useDelightToast() {
     onMundaneAction,
     onAchievementUnlock,
     onNewRecord,
+    onSavingsMilestone,
   };
 }
