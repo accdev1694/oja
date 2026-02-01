@@ -53,13 +53,22 @@ export function CircularBudgetDial({
   const remaining = budget - spent;
   const isOver = spent > budget;
 
-  // Budget state for color
+  // Budget state for color + sentiment
   const getColor = () => {
     if (isOver) return colors.semantic.danger;
     if (spent > budget * 0.8) return colors.semantic.warning;
     return colors.semantic.success;
   };
   const fillColor = getColor();
+
+  const getSentiment = () => {
+    if (budget <= 0) return null;
+    if (isOver) return "Over budget — time to review";
+    if (spent > budget * 0.8) return "Getting close — stay focused";
+    if (spent > budget * 0.5) return "On track — doing well";
+    return "Looking good — lots of room left";
+  };
+  const sentiment = getSentiment();
 
   // Animated fill
   const animatedRatio = useSharedValue(0);
@@ -148,6 +157,9 @@ export function CircularBudgetDial({
           </View>
         )}
       </View>
+      {sentiment && (
+        <Text style={[styles.sentiment, { color: fillColor }]}>{sentiment}</Text>
+      )}
     </Wrapper>
   );
 }
@@ -179,6 +191,11 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     fontSize: 10,
     marginTop: 1,
+  },
+  sentiment: {
+    ...typography.labelSmall,
+    marginTop: 6,
+    opacity: 0.85,
   },
   editBadge: {
     position: "absolute",

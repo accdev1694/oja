@@ -223,9 +223,9 @@ The glass design gives a visual identity. But the voice gives emotional identity
 
 - [ ] **Add a warm accent color** to the palette — a soft amber or coral (#FFB088 or similar) used sparingly for celebration moments, milestones, and encouraging text. Not replacing teal, but complementing it with warmth
 - [ ] **Micro-celebrations on check-off** — When checking off a list item, briefly flash the item row green, show a subtle checkmark burst animation, and update the progress indicator with a smooth fill. The physical equivalent: the satisfying click of a pen checking a box
-- [ ] **Budget tracker emotional mode** — Below or instead of the numbers, show a one-line sentiment: "Looking good — lots of room left" (green), "Getting close — stay focused" (amber), "Over budget — time to review" (red). Lead with feeling, support with data
+- [x] **Budget tracker emotional mode** — Below or instead of the numbers, show a one-line sentiment: "Looking good — lots of room left" (green), "Getting close — stay focused" (amber), "Over budget — time to review" (red). Lead with feeling, support with data ✅ Sentiment line added below dial, color-matched to budget state
 - [ ] **Savings jar warmth** — At £0.00, show an illustration of an empty jar with "Your first savings are just one trip away." At any positive amount, show the jar filling with animated coins/notes. The visual metaphor makes the abstract (savings) feel tangible
-- [ ] **Voice audit** — Review all empty states, button labels, and section headers. Replace functional language with warm-but-clear alternatives. The goal: if the app could talk, it would sound like a supportive friend who's good with money, not a financial advisor
+- [x] **Voice audit** — Review all empty states, button labels, and section headers. Replace functional language with warm-but-clear alternatives. The goal: if the app could talk, it would sound like a supportive friend who's good with money, not a financial advisor ✅ Warmed up all empty state copy across pantry, lists, list detail, receipts
 
 ---
 
@@ -393,7 +393,7 @@ Budget amounts use the Numbers typography scale (24-36px bold tabular figures). 
 
 - [ ] **Reduce item name size** from 28px to 20-22px. Increase stock level indicator size or visual weight. The hierarchy should be: stock status (visual/icon) → item name → details. The user's eye should land on "is this item OK?" before "what is this item?"
 - [ ] **Budget typography narrative** — On the list detail, consider showing *one* number prominently: the remaining amount or budget percentage. Supporting figures can be smaller. The user's question is "How much can I still spend?" — answer that loudly, explain it quietly
-- [ ] **Micro-copy styling** — Helper text, hint text, and tertiary labels (12px, 50% opacity white) are technically readable but practically invisible on the dark background. Consider bumping these to 60-70% opacity for better accessibility without sacrificing hierarchy
+- [x] **Micro-copy styling** — Helper text, hint text, and tertiary labels (12px, 50% opacity white) are technically readable but practically invisible on the dark background. Consider bumping these to 60-70% opacity for better accessibility without sacrificing hierarchy ✅ Bumped to 65% opacity
 
 ---
 
@@ -413,7 +413,7 @@ Several screens require extensive vertical scrolling: Pantry (100 items), List D
 
 ### Recommendations
 
-- [ ] **Increase section gaps** between major functional zones from 32px to 48-56px. This creates visual "chapters" that let the user process one zone before encountering the next
+- [x] **Increase section gaps** between major functional zones from 32px to 48-56px. This creates visual "chapters" that let the user process one zone before encountering the next ✅ Token bumped to 48px (screens to adopt `layout.sectionGap` progressively)
 - [ ] **Limit visible zones** — No screen should show more than 3 major sections without scrolling. If more exists, use progressive disclosure (collapsed sections, "See more" links)
 - [ ] **Fixed action areas** — For screens with a primary action (List Detail: adding items, Pantry: reviewing stock), pin the primary action at the bottom of the screen so it's always accessible without scrolling. The content above can scroll; the action stays fixed
 

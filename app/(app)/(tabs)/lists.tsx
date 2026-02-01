@@ -252,9 +252,9 @@ export default function ListsScreen() {
               size={64}
               color={colors.text.tertiary}
             />
-            <Text style={styles.emptyHistoryTitle}>No Completed Trips</Text>
+            <Text style={styles.emptyHistoryTitle}>No trips yet</Text>
             <Text style={styles.emptyHistorySubtitle}>
-              Your shopping trip history will appear here after you complete and archive a trip.
+              Complete a shopping trip and it'll show up here — great for tracking your spending over time.
             </Text>
           </View>
         </View>

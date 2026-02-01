@@ -70,7 +70,7 @@ export const colors = {
   text: {
     primary: "#FFFFFF",
     secondary: "rgba(255, 255, 255, 0.7)",
-    tertiary: "rgba(255, 255, 255, 0.5)",
+    tertiary: "rgba(255, 255, 255, 0.65)",
     disabled: "rgba(255, 255, 255, 0.3)",
     inverse: "#0B1426",
     link: "#00D4AA",
@@ -284,7 +284,7 @@ export const layout = {
   listItemGap: 12,
 
   // Section spacing
-  sectionGap: 32,
+  sectionGap: 48,
 
   // Safe areas (handled by SafeAreaView, but useful for calculations)
   headerHeight: 56,

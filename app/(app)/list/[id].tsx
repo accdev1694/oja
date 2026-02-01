@@ -1154,8 +1154,8 @@ export default function ListDetailScreen() {
                   color={colors.text.tertiary}
                 />
               </View>
-              <Text style={styles.emptyTitle}>No Items Yet</Text>
-              <Text style={styles.emptySubtitle}>Add items to your shopping list above</Text>
+              <Text style={styles.emptyTitle}>Your list is ready</Text>
+              <Text style={styles.emptySubtitle}>Add items above or pull from your stock</Text>
             </View>
           ) : (
             <View style={styles.itemsContainer}>

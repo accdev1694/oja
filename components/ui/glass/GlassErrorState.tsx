@@ -94,7 +94,7 @@ const ERROR_PRESETS: Record<ErrorType, ErrorPreset> = {
   empty: {
     icon: "inbox-outline",
     title: "Nothing here yet",
-    message: "This section is empty. Start by adding some items.",
+    message: "Let's get started — add your first item!",
     iconColor: colors.text.secondary,
   },
   "not-found": {
@@ -278,8 +278,8 @@ export function EmptyPantry({ title, message, onAction, actionText, style }: Emp
     <GlassErrorState
       type="empty"
       icon="package-variant"
-      title={title ?? "Your stock is empty"}
-      message={message ?? "Add items to keep track of what you have at home"}
+      title={title ?? "Let's fill your pantry"}
+      message={message ?? "What's in the kitchen? Add items to keep track of your stock."}
       onRetry={onAction}
       retryText={actionText ?? "Add First Item"}
       style={style}
@@ -292,8 +292,8 @@ export function EmptyLists({ title, message, onAction, actionText, style }: Empt
     <GlassErrorState
       type="empty"
       icon="clipboard-list-outline"
-      title={title ?? "No shopping lists"}
-      message={message ?? "Create a list to start planning your shopping trip"}
+      title={title ?? "Ready for your first shop?"}
+      message={message ?? "Create a list and set a budget — we'll help you stay on track."}
       onRetry={onAction}
       retryText={actionText ?? "Create List"}
       style={style}
@@ -306,8 +306,8 @@ export function EmptyListItems({ title, message, onAction, actionText, style }: 
     <GlassErrorState
       type="empty"
       icon="cart-outline"
-      title={title ?? "List is empty"}
-      message={message ?? "Add items from your stock or create new ones"}
+      title={title ?? "Your list is ready"}
+      message={message ?? "Add items from your stock or type something new."}
       onRetry={onAction}
       retryText={actionText ?? "Add Items"}
       size="compact"
@@ -339,7 +339,7 @@ export function NoReceipts({ onAction, style }: EmptyStateProps) {
       type="empty"
       icon="receipt"
       title="No receipts yet"
-      message="Scan your shopping receipts to track spending and build price history"
+      message="Scan a receipt after your shop — we'll track prices and help you save next time."
       onRetry={onAction}
       retryText="Scan Receipt"
       style={style}
