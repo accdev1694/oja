@@ -301,3 +301,155 @@ export const resetUserByEmail = mutation({
   },
 });
 
+/**
+ * Reset current user's data and re-trigger onboarding.
+ * Keeps the user doc but wipes all associated data.
+ */
+export const resetMyAccount = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    // Helper to delete all docs in a table by userId index
+    const deleteByUser = async (table: string) => {
+      const docs = await ctx.db
+        .query(table as any)
+        .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+        .collect();
+      for (const doc of docs) {
+        await ctx.db.delete(doc._id);
+      }
+      return docs.length;
+    };
+
+    // Delete list items via their lists (by_list index, not by_user)
+    const shoppingLists = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    let deletedListItems = 0;
+    for (const list of shoppingLists) {
+      const items = await ctx.db
+        .query("listItems")
+        .withIndex("by_list", (q) => q.eq("listId", list._id))
+        .collect();
+      for (const item of items) {
+        await ctx.db.delete(item._id);
+      }
+      deletedListItems += items.length;
+    }
+
+    // Delete from all user-owned tables (must have by_user index on userId)
+    const counts: Record<string, number> = {};
+    const tables = [
+      "pantryItems", "shoppingLists", "receipts", "priceHistory",
+      "listPartners", "itemComments",
+      "notifications", "achievements", "streaks", "weeklyChallenges",
+      "subscriptions", "loyaltyPoints", "pointTransactions",
+      "scanCredits", "scanCreditTransactions",
+    ];
+    for (const table of tables) {
+      counts[table] = await deleteByUser(table);
+    }
+    counts.listItems = deletedListItems;
+
+    // inviteCodes uses createdBy, not userId
+    const inviteCodes = await ctx.db.query("inviteCodes").collect();
+    let deletedInvites = 0;
+    for (const code of inviteCodes) {
+      if (code.createdBy === user._id) {
+        await ctx.db.delete(code._id);
+        deletedInvites++;
+      }
+    }
+    counts.inviteCodes = deletedInvites;
+
+    // Reset user doc
+    await ctx.db.patch(user._id, {
+      onboardingComplete: false,
+      cuisinePreferences: undefined,
+      country: undefined,
+      updatedAt: Date.now(),
+    });
+
+    return { message: "Account reset — you'll see onboarding next login", counts };
+  },
+});
+
+/**
+ * Permanently delete current user and ALL associated data.
+ * After this, the Convex user doc is gone. Clerk account remains (handle separately).
+ */
+export const deleteMyAccount = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    // Helper to delete all docs in a table by userId index
+    const deleteByUser = async (table: string) => {
+      const docs = await ctx.db
+        .query(table as any)
+        .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+        .collect();
+      for (const doc of docs) {
+        await ctx.db.delete(doc._id);
+      }
+      return docs.length;
+    };
+
+    // Delete list items via their lists
+    const shoppingLists = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const list of shoppingLists) {
+      const items = await ctx.db
+        .query("listItems")
+        .withIndex("by_list", (q) => q.eq("listId", list._id))
+        .collect();
+      for (const item of items) {
+        await ctx.db.delete(item._id);
+      }
+    }
+
+    // Delete from all user-owned tables (must have by_user index on userId)
+    const tables = [
+      "pantryItems", "shoppingLists", "receipts", "priceHistory",
+      "listPartners", "itemComments",
+      "notifications", "achievements", "streaks", "weeklyChallenges",
+      "subscriptions", "loyaltyPoints", "pointTransactions",
+      "scanCredits", "scanCreditTransactions",
+    ];
+    for (const table of tables) {
+      await deleteByUser(table);
+    }
+
+    // inviteCodes uses createdBy, not userId
+    const inviteCodes = await ctx.db.query("inviteCodes").collect();
+    for (const code of inviteCodes) {
+      if (code.createdBy === user._id) {
+        await ctx.db.delete(code._id);
+      }
+    }
+
+    // Delete user doc itself
+    await ctx.db.delete(user._id);
+
+    return { message: "Account permanently deleted" };
+  },
+});
+

@@ -1,10 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
+  Alert,
+  Platform,
 } from "react-native";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
@@ -36,6 +38,10 @@ export default function ProfileScreen() {
   const receipts = useQuery(api.receipts.getByUser);
   const activeChallenge = useQuery(api.insights.getActiveChallenge);
   const generateChallenge = useMutation(api.insights.generateChallenge);
+  const resetMyAccount = useMutation(api.users.resetMyAccount);
+  const deleteMyAccount = useMutation(api.users.deleteMyAccount);
+  const [isResetting, setIsResetting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Auto-generate a weekly challenge if none active
   const challengeSeeded = useRef(false);
@@ -51,6 +57,61 @@ export default function ProfileScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await signOut();
     router.replace("/(auth)/sign-in");
+  };
+
+  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
+    if (Platform.OS === "web") {
+      if (window.confirm(`${title}\n\n${message}`)) onConfirm();
+    } else {
+      Alert.alert(title, message, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Confirm", style: "destructive", onPress: onConfirm },
+      ]);
+    }
+  };
+
+  const handleResetAccount = () => {
+    confirmAction(
+      "Reset Account",
+      "This will delete ALL your data (pantry, lists, receipts, etc.) and restart onboarding. Your login stays intact.",
+      async () => {
+        setIsResetting(true);
+        try {
+          await resetMyAccount();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          router.replace("/onboarding/welcome" as any);
+        } catch (e) {
+          console.error("Reset failed:", e);
+          setIsResetting(false);
+        }
+      }
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    confirmAction(
+      "Delete Account",
+      "This permanently deletes EVERYTHING — Convex data AND your Clerk login. You'll need to sign up with a fresh email. Are you sure?",
+      async () => {
+        setIsDeleting(true);
+        try {
+          // 1. Delete all Convex data + user doc
+          await deleteMyAccount();
+          // 2. Delete Clerk account (removes email from auth system)
+          if (user) {
+            await user.delete();
+          }
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          router.replace("/(auth)/sign-in");
+        } catch (e) {
+          console.error("Delete failed:", e);
+          // If Convex succeeded but Clerk failed, still sign out
+          try { await signOut(); } catch {}
+          router.replace("/(auth)/sign-in");
+          setIsDeleting(false);
+        }
+      }
+    );
   };
 
   // Loading state with skeletons
@@ -265,6 +326,30 @@ export default function ProfileScreen() {
           </GlassButton>
         </View>
 
+        {/* Dev Tools — Reset & Delete */}
+        <View style={styles.devToolsSection}>
+          <Text style={styles.devToolsLabel}>Dev Tools</Text>
+          <GlassButton
+            variant="secondary"
+            size="md"
+            icon="refresh"
+            onPress={handleResetAccount}
+            disabled={isResetting}
+          >
+            {isResetting ? "Resetting..." : "Reset Account (re-onboard)"}
+          </GlassButton>
+          <View style={{ height: spacing.sm }} />
+          <GlassButton
+            variant="danger"
+            size="md"
+            icon="delete-forever"
+            onPress={handleDeleteAccount}
+            disabled={isDeleting}
+          >
+            {isDeleting ? "Deleting..." : "Delete Account"}
+          </GlassButton>
+        </View>
+
         {/* Bottom spacing */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -431,5 +516,19 @@ const styles = StyleSheet.create({
   // Sign Out
   signOutSection: {
     marginTop: spacing.lg,
+  },
+
+  // Dev Tools
+  devToolsSection: {
+    marginTop: spacing.xl,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.glass.border,
+  },
+  devToolsLabel: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    marginBottom: spacing.sm,
+    textAlign: "center",
   },
 });
