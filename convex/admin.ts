@@ -278,10 +278,11 @@ export const getUserDetail = query({
       .order("desc")
       .first();
 
-    const loyalty = await ctx.db
-      .query("loyaltyPoints")
+    const scanRewards = await ctx.db
+      .query("scanCredits")
       .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
-      .unique();
+      .order("desc")
+      .first();
 
     const receipts = await ctx.db
       .query("receipts")
@@ -296,7 +297,11 @@ export const getUserDetail = query({
     return {
       ...user,
       subscription: sub,
-      loyalty,
+      scanRewards: scanRewards ? {
+        lifetimeScans: scanRewards.lifetimeScans ?? 0,
+        tier: scanRewards.tier ?? "bronze",
+        creditsEarned: scanRewards.creditsEarned,
+      } : null,
       receiptCount: receipts.length,
       listCount: lists.length,
       totalSpent: Math.round(receipts.reduce((s: number, r: any) => s + r.total, 0) * 100) / 100,

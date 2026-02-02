@@ -275,41 +275,7 @@ export const handleCheckoutCompleted = internalMutation({
       createdAt: now,
     });
 
-    // Award 50 loyalty points for subscribing
-    let loyalty = await ctx.db
-      .query("loyaltyPoints")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
-      .unique();
-
-    const bonusPoints = 50;
-    if (loyalty) {
-      const newLifetime = loyalty.lifetimePoints + bonusPoints;
-      await ctx.db.patch(loyalty._id, {
-        points: loyalty.points + bonusPoints,
-        lifetimePoints: newLifetime,
-        tier: calculateTier(newLifetime),
-        lastEarnedAt: now,
-        updatedAt: now,
-      });
-    } else {
-      await ctx.db.insert("loyaltyPoints", {
-        userId: user._id,
-        points: bonusPoints,
-        lifetimePoints: bonusPoints,
-        tier: "bronze",
-        lastEarnedAt: now,
-        updatedAt: now,
-      });
-    }
-
-    await ctx.db.insert("pointTransactions", {
-      userId: user._id,
-      amount: bonusPoints,
-      type: "earned",
-      source: "subscription",
-      description: "Premium subscription bonus",
-      createdAt: now,
-    });
+    // (Old loyalty points bonus removed — unified scan rewards system)
   },
 });
 
@@ -347,19 +313,49 @@ export const handleSubscriptionUpdated = internalMutation({
       updatedAt: Date.now(),
     });
 
-    // Create fresh scan credits record for new billing period
+    // Create fresh scan credits record for new billing period (tier-aware)
     if (periodChanged && (args.status === "active" || args.status === "trial")) {
       const isAnnual = sub.plan === "premium_annual";
+
+      // Carry forward lifetimeScans and tier from previous record
+      const prevCredit = await ctx.db
+        .query("scanCredits")
+        .withIndex("by_user", (q: any) => q.eq("userId", sub.userId))
+        .order("desc")
+        .first();
+
+      const lifetimeScans = prevCredit?.lifetimeScans ?? 0;
+      const tier = prevCredit?.tier ?? "bronze";
+
+      // Tier-aware caps
+      const tierTable = [
+        { tier: "bronze",   threshold: 0,   creditPerScan: 0.25, maxScans: 4, maxCredits: 1.00 },
+        { tier: "silver",   threshold: 20,  creditPerScan: 0.25, maxScans: 5, maxCredits: 1.25 },
+        { tier: "gold",     threshold: 50,  creditPerScan: 0.30, maxScans: 5, maxCredits: 1.50 },
+        { tier: "platinum", threshold: 100, creditPerScan: 0.30, maxScans: 6, maxCredits: 1.79 },
+      ];
+      let tierConfig = tierTable[0];
+      for (let i = tierTable.length - 1; i >= 0; i--) {
+        if (lifetimeScans >= tierTable[i].threshold) { tierConfig = tierTable[i]; break; }
+      }
+
+      const maxScans = isAnnual ? tierConfig.maxScans * 12 : tierConfig.maxScans;
+      const maxCredits = isAnnual
+        ? parseFloat((tierConfig.maxCredits * 12).toFixed(2))
+        : tierConfig.maxCredits;
+
       await ctx.db.insert("scanCredits", {
         userId: sub.userId,
         periodStart: args.currentPeriodStart,
         periodEnd: args.currentPeriodEnd,
         scansThisPeriod: 0,
         creditsEarned: 0,
-        maxScans: isAnnual ? 48 : 4,
-        maxCredits: isAnnual ? 12.0 : 1.0,
-        creditPerScan: 0.25,
+        maxScans,
+        maxCredits,
+        creditPerScan: tierConfig.creditPerScan,
         appliedToInvoice: false,
+        lifetimeScans,
+        tier: tier as any,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
@@ -429,11 +425,4 @@ async function getStripeClient() {
   });
 }
 
-function calculateTier(
-  lifetimePoints: number
-): "bronze" | "silver" | "gold" | "platinum" {
-  if (lifetimePoints >= 5000) return "platinum";
-  if (lifetimePoints >= 2000) return "gold";
-  if (lifetimePoints >= 500) return "silver";
-  return "bronze";
-}
+// (Old calculateTier removed — tier calculation now in subscriptions.ts)

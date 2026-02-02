@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 
 async function requireUser(ctx: any) {
   const identity = await ctx.auth.getUserIdentity();
@@ -212,203 +212,45 @@ export const hasPremium = query({
 });
 
 // ============================================================================
-// LOYALTY POINTS
+// TIER SYSTEM — Scan-based tiers with credit rates
 // ============================================================================
 
-/**
- * Get loyalty points for current user
- */
-export const getLoyaltyPoints = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
+type TierName = "bronze" | "silver" | "gold" | "platinum";
 
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!user) return null;
+interface TierConfig {
+  tier: TierName;
+  creditPerScan: number;
+  maxScans: number;     // monthly cap
+  maxCredits: number;   // monthly max credit (£)
+  threshold: number;    // lifetime scans to reach
+}
 
-    const loyalty = await ctx.db
-      .query("loyaltyPoints")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
-      .unique();
+const TIER_TABLE: TierConfig[] = [
+  { tier: "bronze",   threshold: 0,   creditPerScan: 0.25, maxScans: 4, maxCredits: 1.00 },
+  { tier: "silver",   threshold: 20,  creditPerScan: 0.25, maxScans: 5, maxCredits: 1.25 },
+  { tier: "gold",     threshold: 50,  creditPerScan: 0.30, maxScans: 5, maxCredits: 1.50 },
+  { tier: "platinum", threshold: 100, creditPerScan: 0.30, maxScans: 6, maxCredits: 1.79 },
+];
 
-    if (!loyalty) {
-      return {
-        points: 0,
-        lifetimePoints: 0,
-        tier: "bronze" as const,
-        nextTier: "silver" as const,
-        pointsToNextTier: 500,
-        discount: 0,
-      };
-    }
+function getTierFromScans(lifetimeScans: number): TierConfig {
+  for (let i = TIER_TABLE.length - 1; i >= 0; i--) {
+    if (lifetimeScans >= TIER_TABLE[i].threshold) return TIER_TABLE[i];
+  }
+  return TIER_TABLE[0];
+}
 
-    const tierInfo = getTierInfo(loyalty.tier, loyalty.lifetimePoints);
-
-    return {
-      ...loyalty,
-      ...tierInfo,
-    };
-  },
-});
-
-function getTierInfo(tier: string, lifetimePoints: number) {
-  const tiers = [
-    { name: "bronze", threshold: 0, discount: 0, nextTier: "silver", nextThreshold: 500 },
-    { name: "silver", threshold: 500, discount: 10, nextTier: "gold", nextThreshold: 2000 },
-    { name: "gold", threshold: 2000, discount: 25, nextTier: "platinum", nextThreshold: 5000 },
-    { name: "platinum", threshold: 5000, discount: 50, nextTier: null, nextThreshold: null },
-  ];
-
-  const currentTier = tiers.find((t) => t.name === tier) || tiers[0];
+function getNextTierInfo(lifetimeScans: number) {
+  const current = getTierFromScans(lifetimeScans);
+  const currentIdx = TIER_TABLE.findIndex((t) => t.tier === current.tier);
+  if (currentIdx >= TIER_TABLE.length - 1) {
+    return { nextTier: null, scansToNextTier: 0 };
+  }
+  const next = TIER_TABLE[currentIdx + 1];
   return {
-    discount: currentTier.discount,
-    nextTier: currentTier.nextTier,
-    pointsToNextTier: currentTier.nextThreshold
-      ? Math.max(0, currentTier.nextThreshold - lifetimePoints)
-      : 0,
+    nextTier: next.tier,
+    scansToNextTier: Math.max(0, next.threshold - lifetimeScans),
   };
 }
-
-/**
- * Earn loyalty points
- */
-export const earnPoints = mutation({
-  args: {
-    amount: v.number(),
-    source: v.string(),
-    description: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const now = Date.now();
-
-    // Get or create loyalty record
-    let loyalty = await ctx.db
-      .query("loyaltyPoints")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
-      .unique();
-
-    if (!loyalty) {
-      const id = await ctx.db.insert("loyaltyPoints", {
-        userId: user._id,
-        points: args.amount,
-        lifetimePoints: args.amount,
-        tier: "bronze",
-        lastEarnedAt: now,
-        updatedAt: now,
-      });
-      loyalty = await ctx.db.get(id);
-    } else {
-      const newPoints = loyalty.points + args.amount;
-      const newLifetime = loyalty.lifetimePoints + args.amount;
-      const newTier = calculateTier(newLifetime);
-
-      await ctx.db.patch(loyalty._id, {
-        points: newPoints,
-        lifetimePoints: newLifetime,
-        tier: newTier,
-        lastEarnedAt: now,
-        updatedAt: now,
-      });
-
-      // Check tier upgrade
-      if (newTier !== loyalty.tier) {
-        await ctx.db.insert("notifications", {
-          userId: user._id,
-          type: "tier_upgrade",
-          title: "Tier Upgrade!",
-          body: `Congratulations! You've reached ${newTier.charAt(0).toUpperCase() + newTier.slice(1)} tier!`,
-          read: false,
-          createdAt: now,
-        });
-      }
-    }
-
-    // Log transaction
-    await ctx.db.insert("pointTransactions", {
-      userId: user._id,
-      amount: args.amount,
-      type: "earned",
-      source: args.source,
-      description: args.description,
-      createdAt: now,
-    });
-
-    return { success: true, amount: args.amount };
-  },
-});
-
-function calculateTier(lifetimePoints: number): "bronze" | "silver" | "gold" | "platinum" {
-  if (lifetimePoints >= 5000) return "platinum";
-  if (lifetimePoints >= 2000) return "gold";
-  if (lifetimePoints >= 500) return "silver";
-  return "bronze";
-}
-
-/**
- * Redeem loyalty points
- */
-export const redeemPoints = mutation({
-  args: {
-    amount: v.number(),
-    description: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-
-    const loyalty = await ctx.db
-      .query("loyaltyPoints")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
-      .unique();
-
-    if (!loyalty || loyalty.points < args.amount) {
-      throw new Error("Insufficient points");
-    }
-
-    await ctx.db.patch(loyalty._id, {
-      points: loyalty.points - args.amount,
-      updatedAt: Date.now(),
-    });
-
-    await ctx.db.insert("pointTransactions", {
-      userId: user._id,
-      amount: -args.amount,
-      type: "redeemed",
-      source: "manual",
-      description: args.description,
-      createdAt: Date.now(),
-    });
-
-    return { success: true, remainingPoints: loyalty.points - args.amount };
-  },
-});
-
-/**
- * Get point transaction history
- */
-export const getPointHistory = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!user) return [];
-
-    return await ctx.db
-      .query("pointTransactions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
-      .order("desc")
-      .take(50);
-  },
-});
 
 /**
  * Check if user has premium, throw if not.
@@ -437,129 +279,7 @@ export const requirePremium = query({
   },
 });
 
-/**
- * Award loyalty points when a receipt is successfully scanned.
- * Includes first-receipt bonus and daily cap enforcement.
- */
-export const earnPointsForReceipt = mutation({
-  args: {
-    receiptId: v.id("receipts"),
-  },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const now = Date.now();
-
-    // Verify receipt belongs to user
-    const receipt = await ctx.db.get(args.receiptId);
-    if (!receipt || receipt.userId !== user._id) throw new Error("Receipt not found");
-
-    // Daily cap: max 5 receipts per day for point earning
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayMs = todayStart.getTime();
-
-    const todayTransactions = await ctx.db
-      .query("pointTransactions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
-      .collect();
-
-    const todayReceiptEarns = todayTransactions.filter(
-      (t) =>
-        t.source === "receipt_scan" &&
-        t.type === "earned" &&
-        t.createdAt >= todayMs
-    );
-
-    if (todayReceiptEarns.length >= 5) {
-      return { success: false, reason: "daily_cap", pointsEarned: 0 };
-    }
-
-    // Check if this is the user's first receipt ever
-    const allReceipts = await ctx.db
-      .query("receipts")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
-      .collect();
-
-    const completedReceipts = allReceipts.filter(
-      (r) => r.processingStatus === "completed"
-    );
-    const isFirstReceipt = completedReceipts.length <= 1;
-
-    // Base points: 10 per receipt scan
-    let pointsToAward = 10;
-    let description = "Receipt scanned";
-
-    // First receipt bonus: +20
-    if (isFirstReceipt) {
-      pointsToAward += 20;
-      description = "First receipt scanned! (+20 bonus)";
-    }
-
-    // Weekly streak bonus: 3+ receipts this week → +10
-    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-    const weekReceipts = completedReceipts.filter(
-      (r) => r.purchaseDate >= weekAgo
-    );
-    if (weekReceipts.length >= 3) {
-      pointsToAward += 10;
-      description += " (+10 weekly streak)";
-    }
-
-    // Get or create loyalty record
-    let loyalty = await ctx.db
-      .query("loyaltyPoints")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
-      .unique();
-
-    if (!loyalty) {
-      const id = await ctx.db.insert("loyaltyPoints", {
-        userId: user._id,
-        points: pointsToAward,
-        lifetimePoints: pointsToAward,
-        tier: "bronze",
-        lastEarnedAt: now,
-        updatedAt: now,
-      });
-      loyalty = await ctx.db.get(id);
-    } else {
-      const newPoints = loyalty.points + pointsToAward;
-      const newLifetime = loyalty.lifetimePoints + pointsToAward;
-      const newTier = calculateTier(newLifetime);
-
-      await ctx.db.patch(loyalty._id, {
-        points: newPoints,
-        lifetimePoints: newLifetime,
-        tier: newTier,
-        lastEarnedAt: now,
-        updatedAt: now,
-      });
-
-      // Check tier upgrade
-      if (newTier !== loyalty.tier) {
-        await ctx.db.insert("notifications", {
-          userId: user._id,
-          type: "tier_upgrade",
-          title: "Tier Upgrade!",
-          body: `Congratulations! You've reached ${newTier.charAt(0).toUpperCase() + newTier.slice(1)} tier!`,
-          read: false,
-          createdAt: now,
-        });
-      }
-    }
-
-    // Log transaction
-    await ctx.db.insert("pointTransactions", {
-      userId: user._id,
-      amount: pointsToAward,
-      type: "earned",
-      source: "receipt_scan",
-      description,
-      createdAt: now,
-    });
-
-    return { success: true, pointsEarned: pointsToAward };
-  },
-});
+// (earnPointsForReceipt removed — replaced by unified earnScanCredit)
 
 /**
  * Get subscription plans available
@@ -592,7 +312,7 @@ export const getPlans = query({
           "Insights & gamification",
           "Export data",
           "Priority support",
-          "Earn up to £1.00/mo back with receipt scans",
+          "Earn up to £1.00–£1.79/mo back (tier-based)",
         ],
       },
       {
@@ -605,7 +325,7 @@ export const getPlans = query({
           "Everything in Monthly",
           "Save £14.89/year",
           "Early access to new features",
-          "Earn up to £12.00/yr back with receipt scans",
+          "Earn up to £12.00–£21.48/yr back (tier-based)",
         ],
       },
     ];
@@ -613,12 +333,13 @@ export const getPlans = query({
 });
 
 // =============================================
-// Scan Credits — Receipt scans reduce subscription price
+// Unified Scan Rewards — Receipt scans earn tier progress + credits
 // =============================================
 
 /**
- * Get current scan credit status for the authenticated user.
- * Returns null for free users or users without a subscription.
+ * Get scan rewards status for the authenticated user.
+ * Returns data for ALL users (free + premium).
+ * Free users see tier progress; premium users also see credit progress.
  */
 export const getScanCredits = query({
   args: {},
@@ -638,57 +359,64 @@ export const getScanCredits = query({
       .order("desc")
       .first();
 
-    // No subscription or free plan → no credits
-    if (!sub || sub.plan === "free" || sub.status === "expired") {
-      return null;
-    }
-
     const now = Date.now();
-    const isAnnual = sub.plan === "premium_annual";
-    const basePrice = isAnnual ? 21.99 : 2.99;
-    const maxScans = isAnnual ? 48 : 4;
-    const maxCredits = isAnnual ? 12.0 : 1.0;
+    const plan = sub?.plan || "free";
+    const isPremium = sub && (sub.status === "active" || sub.status === "trial") && plan !== "free";
+    const isAnnual = plan === "premium_annual";
 
-    // Find credit record for current billing period
+    // Find latest credit record for this user
     const credit = await ctx.db
       .query("scanCredits")
       .withIndex("by_user", (q: any) => q.eq("userId", user._id))
       .order("desc")
       .first();
 
-    if (credit && credit.periodStart <= now && credit.periodEnd > now) {
-      return {
-        scansThisPeriod: credit.scansThisPeriod,
-        creditsEarned: credit.creditsEarned,
-        maxScans: credit.maxScans,
-        maxCredits: credit.maxCredits,
-        creditPerScan: credit.creditPerScan,
-        effectivePrice: parseFloat(Math.max(0, basePrice - credit.creditsEarned).toFixed(2)),
-        basePrice,
-        periodEnd: credit.periodEnd,
-        plan: sub.plan,
-      };
-    }
+    const lifetimeScans = credit?.lifetimeScans ?? 0;
+    const tierConfig = getTierFromScans(lifetimeScans);
+    const nextTier = getNextTierInfo(lifetimeScans);
 
-    // No credit record for current period — return defaults
+    // Tier-aware caps (scale for annual)
+    const maxScans = isAnnual ? tierConfig.maxScans * 12 : tierConfig.maxScans;
+    const maxCredits = isAnnual
+      ? parseFloat((tierConfig.maxCredits * 12).toFixed(2))
+      : tierConfig.maxCredits;
+    const basePrice = isAnnual ? 21.99 : 2.99;
+
+    // Current period credit progress (premium only)
+    const hasCreditRecord = credit && credit.periodStart <= now && credit.periodEnd > now;
+    const scansThisPeriod = hasCreditRecord ? credit.scansThisPeriod : 0;
+    const creditsEarned = hasCreditRecord ? credit.creditsEarned : 0;
+
     return {
-      scansThisPeriod: 0,
-      creditsEarned: 0,
+      lifetimeScans,
+      tier: tierConfig.tier,
+      tierInfo: {
+        nextTier: nextTier.nextTier,
+        scansToNextTier: nextTier.scansToNextTier,
+        creditPerScan: tierConfig.creditPerScan,
+        maxScans: tierConfig.maxScans,
+        maxCredits: tierConfig.maxCredits,
+      },
+      scansThisPeriod,
+      creditsEarned,
       maxScans,
       maxCredits,
-      creditPerScan: 0.25,
-      effectivePrice: basePrice,
+      creditPerScan: tierConfig.creditPerScan,
+      effectivePrice: isPremium
+        ? parseFloat(Math.max(0, basePrice - creditsEarned).toFixed(2))
+        : basePrice,
       basePrice,
-      periodEnd: sub.currentPeriodEnd || null,
-      plan: sub.plan,
+      periodEnd: (hasCreditRecord ? credit.periodEnd : sub?.currentPeriodEnd) || null,
+      plan,
+      isPremium: !!isPremium,
     };
   },
 });
 
 /**
  * Award a scan credit when a receipt is confirmed.
- * Called alongside earnPointsForReceipt.
- * £0.25 per scan, capped at £1.00/month (4 scans) or £12.00/year (48 scans).
+ * Works for ALL users: free users get tier progression, premium users also get credits.
+ * Replaces both earnPointsForReceipt and old earnScanCredit.
  */
 export const earnScanCredit = mutation({
   args: {
@@ -702,43 +430,50 @@ export const earnScanCredit = mutation({
     const receipt = await ctx.db.get(args.receiptId);
     if (!receipt || receipt.userId !== user._id) throw new Error("Receipt not found");
 
-    // Get subscription — must have active premium
-    const sub = await ctx.db
-      .query("subscriptions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
-      .order("desc")
-      .first();
-
-    if (!sub || sub.plan === "free") {
-      return { success: false, reason: "no_premium", creditEarned: 0 };
-    }
-    if (sub.status !== "active" && sub.status !== "trial") {
-      return { success: false, reason: "inactive_subscription", creditEarned: 0 };
-    }
-
     // Deduplicate: check if this receipt already earned a credit
     const existingTx = await ctx.db
       .query("scanCreditTransactions")
       .withIndex("by_receipt", (q: any) => q.eq("receiptId", args.receiptId))
       .first();
     if (existingTx) {
-      return { success: false, reason: "already_credited", creditEarned: 0 };
+      return { success: false, reason: "already_credited", creditEarned: 0, lifetimeScans: 0, tier: "bronze" as TierName };
     }
 
-    const isAnnual = sub.plan === "premium_annual";
-    const maxScans = isAnnual ? 48 : 4;
-    const maxCredits = isAnnual ? 12.0 : 1.0;
-    const creditPerScan = 0.25;
-    const periodStart = sub.currentPeriodStart || now;
-    const periodEnd = sub.currentPeriodEnd || now + 30 * 24 * 60 * 60 * 1000;
+    // Get subscription
+    const sub = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .order("desc")
+      .first();
 
-    // Get or create credit record for current billing period
+    const plan = sub?.plan || "free";
+    const isPremium = sub && (sub.status === "active" || sub.status === "trial") && plan !== "free";
+    const isAnnual = plan === "premium_annual";
+
+    // Get or create credit record
     let credit = await ctx.db
       .query("scanCredits")
       .withIndex("by_user", (q: any) => q.eq("userId", user._id))
       .order("desc")
       .first();
 
+    const periodStart = sub?.currentPeriodStart || now;
+    const periodEnd = sub?.currentPeriodEnd || now + 30 * 24 * 60 * 60 * 1000;
+
+    // Compute new lifetime scans BEFORE creating/updating records
+    const oldLifetimeScans = credit?.lifetimeScans ?? 0;
+    const newLifetimeScans = oldLifetimeScans + 1;
+    const oldTier = getTierFromScans(oldLifetimeScans).tier;
+    const newTierConfig = getTierFromScans(newLifetimeScans);
+    const tierUpgrade = newTierConfig.tier !== oldTier;
+
+    // Tier-aware caps
+    const maxScans = isAnnual ? newTierConfig.maxScans * 12 : newTierConfig.maxScans;
+    const maxCredits = isAnnual
+      ? parseFloat((newTierConfig.maxCredits * 12).toFixed(2))
+      : newTierConfig.maxCredits;
+
+    // Create new period record if needed, or update existing
     if (!credit || credit.periodEnd <= now) {
       const id = await ctx.db.insert("scanCredits", {
         userId: user._id,
@@ -748,47 +483,143 @@ export const earnScanCredit = mutation({
         creditsEarned: 0,
         maxScans,
         maxCredits,
-        creditPerScan,
+        creditPerScan: newTierConfig.creditPerScan,
         appliedToInvoice: false,
+        lifetimeScans: oldLifetimeScans,
+        tier: oldTier,
         createdAt: now,
         updatedAt: now,
       });
       credit = (await ctx.db.get(id))!;
     }
 
-    // Check cap
-    if (credit.scansThisPeriod >= credit.maxScans) {
-      return { success: false, reason: "monthly_cap", creditEarned: 0 };
+    // Determine credit amount: £0 if free user or past cap
+    let creditAmount = 0;
+    const atCap = credit.scansThisPeriod >= maxScans;
+
+    if (isPremium && !atCap) {
+      creditAmount = newTierConfig.creditPerScan;
     }
 
-    // Award credit
-    const newScans = credit.scansThisPeriod + 1;
+    // Update credit record
+    const newScans = credit.scansThisPeriod + (isPremium && !atCap ? 1 : 0);
     const newCredits = parseFloat(
-      Math.min(credit.maxCredits, credit.creditsEarned + creditPerScan).toFixed(2)
+      Math.min(maxCredits, credit.creditsEarned + creditAmount).toFixed(2)
     );
 
     await ctx.db.patch(credit._id, {
       scansThisPeriod: newScans,
       creditsEarned: newCredits,
+      lifetimeScans: newLifetimeScans,
+      tier: newTierConfig.tier,
+      maxScans,
+      maxCredits,
+      creditPerScan: newTierConfig.creditPerScan,
       updatedAt: now,
     });
 
-    // Log transaction
+    // Log transaction (always, even for free users — tracks scan count)
     await ctx.db.insert("scanCreditTransactions", {
       userId: user._id,
       scanCreditId: credit._id,
       receiptId: args.receiptId,
-      creditAmount: creditPerScan,
-      scanNumber: newScans,
+      creditAmount,
+      scanNumber: newLifetimeScans,
       createdAt: now,
     });
 
+    // Fire tier upgrade notification
+    if (tierUpgrade) {
+      const tierLabel = newTierConfig.tier.charAt(0).toUpperCase() + newTierConfig.tier.slice(1);
+      const creditMsg = isPremium
+        ? ` Scans now earn £${newTierConfig.creditPerScan.toFixed(2)} each.`
+        : " Upgrade to Premium to unlock credits!";
+      await ctx.db.insert("notifications", {
+        userId: user._id,
+        type: "tier_upgrade",
+        title: `${tierLabel} Tier Unlocked!`,
+        body: `You've reached ${tierLabel} tier with ${newLifetimeScans} scans.${creditMsg}`,
+        read: false,
+        createdAt: now,
+      });
+    }
+
     return {
       success: true,
-      creditEarned: creditPerScan,
+      creditEarned: creditAmount,
       totalCredits: newCredits,
       scansUsed: newScans,
-      maxScans: credit.maxScans,
+      maxScans,
+      lifetimeScans: newLifetimeScans,
+      tier: newTierConfig.tier,
+      tierUpgrade,
     };
+  },
+});
+
+// =============================================================================
+// DATA MIGRATION — run once after deploy from Convex dashboard
+// =============================================================================
+
+/**
+ * Backfill `lifetimeScans` and `tier` on existing scanCredits records.
+ *
+ * For each user with a scanCredits record:
+ * 1. Count scanCreditTransactions for that user → lifetime scans
+ * 2. Also count pointTransactions where source = "receipt_scan" (pre-credit era)
+ * 3. Deduplicate by receipt (don't double-count)
+ * 4. Set lifetimeScans and compute tier on latest scanCredits record
+ */
+export const migrateToUnifiedRewards = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const allCredits = await ctx.db.query("scanCredits").collect();
+    const userIds = [...new Set(allCredits.map((c: any) => c.userId))];
+
+    let migrated = 0;
+
+    for (const userId of userIds) {
+      // Count scan credit transactions
+      const scanTxns = await ctx.db
+        .query("scanCreditTransactions")
+        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .collect();
+
+      const receiptIds = new Set(scanTxns.map((t: any) => t.receiptId?.toString()).filter(Boolean));
+
+      // Count point transactions from receipt scans (pre-credit era)
+      const pointTxns = await ctx.db
+        .query("pointTransactions")
+        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .collect();
+
+      for (const pt of pointTxns) {
+        if ((pt as any).source === "receipt_scan" && (pt as any).receiptId) {
+          const rid = (pt as any).receiptId.toString();
+          if (!receiptIds.has(rid)) {
+            receiptIds.add(rid);
+          }
+        }
+      }
+
+      const lifetimeScans = receiptIds.size;
+      const tierConfig = getTierFromScans(lifetimeScans);
+
+      // Update latest scanCredits record for this user
+      const latestCredit = allCredits
+        .filter((c: any) => c.userId === userId)
+        .sort((a: any, b: any) => (b._creationTime || 0) - (a._creationTime || 0))[0];
+
+      if (latestCredit) {
+        await ctx.db.patch(latestCredit._id, {
+          lifetimeScans,
+          tier: tierConfig.tier,
+          updatedAt: Date.now(),
+        });
+        migrated++;
+      }
+    }
+
+    return { migrated, totalUsers: userIds.length };
   },
 });

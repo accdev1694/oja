@@ -302,15 +302,17 @@ export const parseReceipt = action({
         throw new Error("Failed to get image URL");
       }
 
-      // Fetch the image as base64 (web-standard, no Node Buffer)
+      // Fetch the image as base64 (chunked to avoid OOM on large images)
       const response = await fetch(imageUrl);
       const arrayBuffer = await response.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
-      let binary = "";
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
+      const CHUNK = 8192;
+      const chunks: string[] = [];
+      for (let i = 0; i < bytes.byteLength; i += CHUNK) {
+        const slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.byteLength));
+        chunks.push(String.fromCharCode(...slice));
       }
-      const base64Image = btoa(binary);
+      const base64Image = btoa(chunks.join(""));
 
       const receiptPrompt = `You are a receipt parser for a UK grocery shopping app. Extract as much data as possible from this receipt image, even if some parts are unclear.
 
@@ -369,6 +371,9 @@ IMPORTANT RULES:
 - Quantities should be integers
 - Date must be in YYYY-MM-DD format
 - Ignore: loyalty discounts, bag charges, VAT codes (A/B/D), SKU numbers, promotional lines ("Price Crunch", "50p off")
+- EXCLUDE non-product lines: "Balance Due", "Amount Tendered", "Change", "Cash", "Card Payment", "Subtotal", "Total", "Charity Donation", "Carrier Bag", "Price Cut", "Savings", "Clubcard", "Nectar", "Meal Deal Saving"
+- EXCLUDE refund/return lines with negative prices or negative quantities — these are not purchased products
+- Only include actual product items that the customer bought and took home
 - Be lenient and helpful - users need their receipts parsed even if quality isn't perfect`;
 
       async function geminiParseReceipt(): Promise<any> {
@@ -400,8 +405,22 @@ IMPORTANT RULES:
 
       // Provide fallback values for missing fields
       const storeName = parsed.storeName || "Unknown Store";
-      const items = Array.isArray(parsed.items) ? parsed.items : [];
+      const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
       const total = typeof parsed.total === "number" ? parsed.total : 0;
+
+      // Post-parse filter: strip non-product lines the AI may have included
+      const NON_PRODUCT_PATTERNS = /^(balance due|amount tendered|change|cash|card payment|subtotal|total|charity donation|carrier bag|price cut|savings|clubcard|nectar|meal deal saving|price crunch|bag charge|vat|receipt|thank you|points)/i;
+      const items = rawItems.filter((item: any) => {
+        // Exclude items matching known non-product patterns
+        if (typeof item.name === "string" && NON_PRODUCT_PATTERNS.test(item.name.trim())) {
+          return false;
+        }
+        // Exclude items with negative prices or quantities (returns/refunds)
+        if (typeof item.totalPrice === "number" && item.totalPrice < 0) return false;
+        if (typeof item.unitPrice === "number" && item.unitPrice < 0) return false;
+        if (typeof item.quantity === "number" && item.quantity < 0) return false;
+        return true;
+      });
 
       // If no items were parsed, try to create at least one generic item from the total
       if (items.length === 0 && total > 0) {

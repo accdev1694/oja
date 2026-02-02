@@ -10,7 +10,6 @@
 
 import type * as admin from "../admin.js";
 import type * as ai from "../ai.js";
-import type * as cronHandlers from "../cronHandlers.js";
 import type * as crons from "../crons.js";
 import type * as currentPrices from "../currentPrices.js";
 import type * as http from "../http.js";
@@ -38,7 +37,6 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   ai: typeof ai;
-  cronHandlers: typeof cronHandlers;
   crons: typeof crons;
   currentPrices: typeof currentPrices;
   http: typeof http;

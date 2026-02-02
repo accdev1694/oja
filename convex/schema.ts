@@ -444,6 +444,11 @@ export default defineSchema({
     creditPerScan: v.number(),
     appliedToInvoice: v.boolean(),
     stripeInvoiceId: v.optional(v.string()),
+
+    // Unified rewards — tier progression based on lifetime scans
+    lifetimeScans: v.optional(v.number()),
+    tier: v.optional(v.union(v.literal("bronze"), v.literal("silver"), v.literal("gold"), v.literal("platinum"))),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
