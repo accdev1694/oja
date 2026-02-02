@@ -89,6 +89,7 @@ export default function PantryScreen() {
   const updateStockLevel = useMutation(api.pantryItems.updateStockLevel);
   const createList = useMutation(api.shoppingLists.create);
   const addListItem = useMutation(api.listItems.create);
+  const addFromPantryOut = useMutation(api.listItems.addFromPantryOut);
   const migrateIcons = useMutation(api.pantryItems.migrateIcons);
   const createPantryItem = useMutation(api.pantryItems.create);
   const removePantryItem = useMutation(api.pantryItems.remove);
@@ -710,9 +711,23 @@ export default function PantryScreen() {
                 {/* Journey prompt: bridge Stock → Lists */}
                 {outCount > 0 && (
                   <Pressable
-                    onPress={() => {
+                    onPress={async () => {
                       impactAsync(ImpactFeedbackStyle.Light);
-                      router.navigate("/(app)/(tabs)/lists" as any);
+                      try {
+                        // Get or create a list, then add all out-of-stock items
+                        let listId;
+                        if (activeLists && activeLists.length > 0) {
+                          listId = activeLists[0]._id;
+                        } else {
+                          const listName = `Shopping List ${new Date().toLocaleDateString()}`;
+                          listId = await createList({ name: listName, budget: 50 });
+                        }
+                        const result = await addFromPantryOut({ listId });
+                        notificationAsync(NotificationFeedbackType.Success);
+                        router.navigate(`/(app)/list/${listId}` as any);
+                      } catch (error) {
+                        console.error("Failed to add out items:", error);
+                      }
                     }}
                   >
                     <GlassCard style={styles.journeyBanner}>

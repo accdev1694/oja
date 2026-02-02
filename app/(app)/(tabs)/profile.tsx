@@ -181,7 +181,7 @@ export default function ProfileScreen() {
           const milestones = [
             { icon: "package-variant" as const, text: "Add items to your stock", done: pantryItems.length > 0 },
             { icon: "clipboard-list-outline" as const, text: "Create your first list", done: allLists.length > 0 },
-            { icon: "camera" as const, text: "Scan a receipt", done: (receipts?.length ?? 0) > 0 },
+            { icon: "camera" as const, text: "Scan a receipt", done: (receipts?.filter((r) => r.processingStatus === "completed").length ?? 0) > 0 },
             { icon: "trophy-outline" as const, text: "Earn your first credit", done: (scanCredits?.creditsEarned ?? 0) > 0 },
           ];
           const allDone = milestones.every((m) => m.done);
@@ -226,7 +226,7 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.quickStatDivider} />
             <View style={styles.quickStat}>
-              <Text style={styles.quickStatValue}>{receipts?.length ?? 0}</Text>
+              <Text style={styles.quickStatValue}>{receipts?.filter((r) => r.processingStatus === "completed").length ?? 0}</Text>
               <Text style={styles.quickStatLabel}>receipts</Text>
             </View>
             <View style={styles.quickStatDivider} />

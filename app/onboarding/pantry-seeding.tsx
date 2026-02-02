@@ -116,7 +116,7 @@ export default function PantrySeedingScreen() {
 
             <Text style={styles.loadingTitle}>Creating your pantry...</Text>
             <Text style={styles.loadingSubtitle}>
-              Generating 200 personalized items based on your location and cuisine preferences
+              Generating personalized items based on your location and cuisine preferences
             </Text>
 
             {/* Progress indicators */}

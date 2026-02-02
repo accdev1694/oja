@@ -152,12 +152,20 @@ ${prompt}`;
       const items: SeedItem[] = JSON.parse(cleaned);
       if (!Array.isArray(items) || items.length === 0) throw new Error("Invalid response format");
 
+      // Deduplicate by normalized name (case-insensitive)
+      const seen = new Set<string>();
       const validItems = items
         .filter((item) =>
           item.name &&
           item.category &&
           ["stocked", "low", "out"].includes(item.stockLevel)
         )
+        .filter((item) => {
+          const key = item.name.toLowerCase().trim();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
         .map((item) => ({
           ...item,
           estimatedPrice: typeof item.estimatedPrice === "number" ? item.estimatedPrice : undefined,

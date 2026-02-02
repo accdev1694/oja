@@ -18,7 +18,6 @@ export const VALIDATED_ICONS = [
   "pig",
   "fish",
   "egg",
-  "bacon",
   "sausage",
   // Dairy
   "cheese",
@@ -186,7 +185,7 @@ const KEYWORD_ICONS: Record<string, ValidIcon> = {
   "mince": "cow",
   "pork": "pig",
   "ham": "pig",
-  "bacon": "bacon",
+  "bacon": "pig",
   "sausage": "sausage",
   "fish": "fish",
   "salmon": "fish",

@@ -358,12 +358,20 @@ export default function ListDetailScreen() {
     return sum;
   }, 0);
 
+  // Blended total for shopping mode: actual for checked items + estimated for unchecked
+  const shoppingTotal = items.reduce((sum, item) => {
+    if (item.isChecked && item.actualPrice) {
+      return sum + item.actualPrice * item.quantity;
+    }
+    return sum + (item.estimatedPrice || 0) * item.quantity;
+  }, 0);
+
   const checkedCount = items.filter((item) => item.isChecked).length;
   const totalCount = items.length;
 
   // Budget status
   const budget = list.budget || 0;
-  const currentTotal = list.status === "shopping" ? actualTotal : estimatedTotal;
+  const currentTotal = list.status === "shopping" ? shoppingTotal : estimatedTotal;
   const remainingBudget = budget - currentTotal;
   const isOverBudget = budget > 0 && currentTotal > budget;
 
@@ -780,10 +788,22 @@ export default function ListDetailScreen() {
     setSuggestions((prev) => prev.filter((s) => s !== suggestionName));
 
     try {
+      // Get a price estimate before adding
+      let price: number | undefined;
+      try {
+        if (list?.userId) {
+          const estimate = await estimateItemPrice({ itemName: suggestionName, userId: list.userId });
+          price = estimate?.estimatedPrice;
+        }
+      } catch {
+        // Price estimation failed — add without price rather than blocking
+      }
+
       await addItem({
         listId: id,
         name: suggestionName,
         quantity: 1,
+        estimatedPrice: price,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {

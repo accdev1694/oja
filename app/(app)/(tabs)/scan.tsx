@@ -41,6 +41,8 @@ export default function ScanScreen() {
   const createReceipt = useMutation(api.receipts.create);
   const parseReceipt = useAction(api.ai.parseReceipt);
   const updateReceipt = useMutation(api.receipts.update);
+  const deleteReceipt = useMutation(api.receipts.remove);
+  const [parseReceiptId, setParseReceiptId] = useState<Id<"receipts"> | null>(null);
 
   const selectedList = shoppingLists?.find((l) => l._id === selectedListId);
 
@@ -136,6 +138,7 @@ export default function ScanScreen() {
 
       setIsUploading(false);
       setIsParsing(true);
+      setParseReceiptId(receiptId);
 
       // Step 3: Parse receipt with AI
       try {
@@ -168,24 +171,21 @@ export default function ScanScreen() {
         console.error("Parse error:", parseError);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
-        // Update receipt status to failed
-        await updateReceipt({
-          id: receiptId,
-          processingStatus: "failed",
-        });
+        // Delete the failed receipt so it doesn't pollute stats/milestones
+        try {
+          await deleteReceipt({ id: receiptId });
+        } catch (deleteErr) {
+          console.warn("Failed to clean up receipt:", deleteErr);
+        }
+
+        // Reset state immediately — don't wait for alert callback
+        setIsParsing(false);
+        setParseReceiptId(null);
+        setSelectedImage(null);
 
         Alert.alert(
           "Couldn't Read Receipt",
-          "Couldn't read this receipt. Please try again with better lighting.",
-          [
-            {
-              text: "Retake",
-              onPress: () => {
-                setSelectedImage(null);
-                setIsParsing(false);
-              },
-            },
-          ]
+          "We couldn't read this receipt. Please try again with better lighting.",
         );
       }
     } catch (error) {
@@ -224,6 +224,29 @@ export default function ScanScreen() {
               You'll be able to review and correct any mistakes in the next step.
             </Text>
           </GlassCard>
+
+          <GlassButton
+            variant="secondary"
+            size="md"
+            icon="close"
+            onPress={async () => {
+              // Clean up the pending receipt
+              if (parseReceiptId) {
+                try {
+                  await deleteReceipt({ id: parseReceiptId });
+                } catch (e) {
+                  console.warn("Failed to clean up receipt:", e);
+                }
+              }
+              setIsParsing(false);
+              setParseReceiptId(null);
+              setSelectedImage(null);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+            style={{ marginTop: spacing.xl }}
+          >
+            Cancel
+          </GlassButton>
         </View>
       </GlassScreen>
     );
