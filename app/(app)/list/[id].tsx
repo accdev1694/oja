@@ -46,6 +46,7 @@ import {
 import { CategoryFilter } from "@/components/ui/CategoryFilter";
 import { usePartnerRole } from "@/hooks/usePartnerRole";
 import { RemoveButton } from "@/components/ui/RemoveButton";
+import { AddToListButton } from "@/components/ui/AddToListButton";
 import {
   ApprovalBadge,
   ApprovalActions,
@@ -164,7 +165,14 @@ export default function ListDetailScreen() {
   const handleApproval = useMutation(api.partners.handleApproval);
   const setPreferredVariant = useMutation(api.pantryItems.setPreferredVariant);
   const commentCounts = useQuery(api.partners.getCommentCounts, items ? { listItemIds: items.map((i) => i._id) } : "skip");
+  const allActiveLists = useQuery(api.shoppingLists.getActive);
 
+  // Add-to-list picker state
+  const [addToListItem, setAddToListItem] = useState<{
+    name: string;
+    estimatedPrice?: number;
+    quantity: number;
+  } | null>(null);
 
   // Notification state
   const [showNotifications, setShowNotifications] = useState(false);
@@ -678,6 +686,49 @@ export default function ListDetailScreen() {
     } catch (error) {
       console.error("Failed to update priority:", error);
     }
+  }
+
+  function handleAddItemToList(item: { name: string; estimatedPrice?: number; quantity: number }) {
+    const otherLists = (allActiveLists ?? []).filter(
+      (l) => l._id !== id && (l.status === "active" || l.status === "shopping")
+    );
+
+    if (otherLists.length === 0) {
+      if (Platform.OS === "web") {
+        window.alert("No other active lists to add this item to.");
+      } else {
+        Alert.alert("No Other Lists", "There are no other active lists to add this item to.");
+      }
+      return;
+    }
+
+    if (otherLists.length === 1) {
+      pickListForItem(otherLists[0]._id, otherLists[0].name, item.name, item.estimatedPrice, item.quantity);
+      return;
+    }
+
+    setAddToListItem(item);
+  }
+
+  async function pickListForItem(
+    listId: Id<"shoppingLists">,
+    listName: string,
+    itemName: string,
+    estimatedPrice?: number,
+    quantity: number = 1
+  ) {
+    try {
+      await addItem({
+        listId,
+        name: itemName,
+        quantity,
+        estimatedPrice,
+      });
+      toast(`${itemName} → ${listName}`);
+    } catch (e) {
+      console.error("Failed to add to list:", e);
+    }
+    setAddToListItem(null);
   }
 
   async function handleStartShopping() {
@@ -1206,6 +1257,11 @@ export default function ListDetailScreen() {
                         onRemove={() => handleRemoveItem(item._id, item.name)}
                         onPriorityChange={(priority) => handlePriorityChange(item._id, priority)}
                         isShopping={list.status === "shopping"}
+                        onAddToList={() => handleAddItemToList({
+                          name: item.name,
+                          estimatedPrice: item.estimatedPrice ?? undefined,
+                          quantity: item.quantity,
+                        })}
                         isOwner={isOwner}
                         canApprove={canApprove}
                         commentCount={commentCounts?.[item._id as string] ?? 0}
@@ -1555,6 +1611,63 @@ export default function ListDetailScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* List Picker Modal */}
+      <Modal
+        visible={addToListItem !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAddToListItem(null)}
+      >
+        <Pressable style={styles.listPickerOverlay} onPress={() => setAddToListItem(null)}>
+          <Pressable style={styles.listPickerModal} onPress={(e) => e.stopPropagation()}>
+            <MaterialCommunityIcons name="playlist-plus" size={36} color={colors.accent.primary} />
+            <Text style={styles.listPickerTitle}>Add to List</Text>
+            <Text style={styles.listPickerSubtitle}>
+              Choose a list for "{addToListItem?.name}"
+            </Text>
+            <View style={styles.listPickerOptions}>
+              {(allActiveLists ?? [])
+                .filter((l) => l._id !== id && (l.status === "active" || l.status === "shopping"))
+                .map((otherList) => (
+                  <Pressable
+                    key={otherList._id}
+                    style={styles.listPickerOption}
+                    onPress={() =>
+                      pickListForItem(
+                        otherList._id,
+                        otherList.name,
+                        addToListItem?.name ?? "",
+                        addToListItem?.estimatedPrice,
+                        addToListItem?.quantity ?? 1
+                      )
+                    }
+                  >
+                    <MaterialCommunityIcons
+                      name="clipboard-list-outline"
+                      size={20}
+                      color={colors.text.secondary}
+                    />
+                    <View style={styles.listPickerOptionInfo}>
+                      <Text style={styles.listPickerOptionName}>{otherList.name}</Text>
+                      <Text style={styles.listPickerOptionMeta}>
+                        {otherList.status === "shopping" ? "Shopping now" : "Active"}
+                      </Text>
+                    </View>
+                    <MaterialCommunityIcons
+                      name="chevron-right"
+                      size={18}
+                      color={colors.text.tertiary}
+                    />
+                  </Pressable>
+                ))}
+            </View>
+            <GlassButton variant="ghost" size="md" onPress={() => setAddToListItem(null)}>
+              Cancel
+            </GlassButton>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Surprise delight toast */}
       <GlassToast
         message={toast.message}
@@ -1602,6 +1715,7 @@ interface ShoppingListItemProps {
   onRemove: () => void;
   onPriorityChange: (priority: "must-have" | "should-have" | "nice-to-have") => void;
   isShopping: boolean;
+  onAddToList?: () => void;
   // Partner mode props
   isOwner?: boolean;
   canApprove?: boolean;
@@ -1617,6 +1731,7 @@ function ShoppingListItem({
   onRemove,
   onPriorityChange,
   isShopping,
+  onAddToList,
   isOwner,
   canApprove,
   commentCount,
@@ -1830,6 +1945,11 @@ function ShoppingListItem({
                       </View>
                     )}
                   </Pressable>
+                )}
+
+                {/* Add to another list button */}
+                {onAddToList && !isShopping && (
+                  <AddToListButton onPress={onAddToList} size="md" />
                 )}
 
                 {/* Remove button */}
@@ -2647,5 +2767,57 @@ const styles = StyleSheet.create({
   },
   editBudgetBtn: {
     flex: 1,
+  },
+
+  // List picker modal
+  listPickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  listPickerModal: {
+    backgroundColor: colors.glass.backgroundStrong,
+    borderRadius: 20,
+    padding: spacing.xl,
+    width: "85%",
+    maxWidth: 360,
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  listPickerTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+  },
+  listPickerSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    textAlign: "center",
+    marginBottom: spacing.sm,
+  },
+  listPickerOptions: {
+    width: "100%",
+    gap: spacing.xs,
+  },
+  listPickerOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: 12,
+    backgroundColor: `${colors.glass.backgroundLight}`,
+  },
+  listPickerOptionInfo: {
+    flex: 1,
+  },
+  listPickerOptionName: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  listPickerOptionMeta: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
   },
 });

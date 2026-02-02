@@ -63,6 +63,7 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 import { RemoveButton } from "@/components/ui/RemoveButton";
+import { AddToListButton } from "@/components/ui/AddToListButton";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -159,6 +160,12 @@ export default function PantryScreen() {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastItemName, setToastItemName] = useState("");
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Add-to-list picker state
+  const [addToListItem, setAddToListItem] = useState<{
+    name: string;
+    lastPrice?: number;
+  } | null>(null);
 
   // Derive unique categories from items
   const categories = useMemo(() => {
@@ -341,6 +348,78 @@ export default function PantryScreen() {
         { text: "Remove", style: "destructive", onPress: doRemove },
       ]);
     }
+  };
+
+  // Add-to-list handler — opens list picker
+  const handleAddToList = (item: { name: string; lastPrice?: number }) => {
+    const planningLists = (activeLists ?? []).filter(
+      (l) => l.status === "active" || l.status === "shopping"
+    );
+
+    if (planningLists.length === 0) {
+      // No active lists — offer to create one
+      const doCreate = async () => {
+        try {
+          const listId = await createList({ name: "Shopping List" });
+          await addListItem({
+            listId: listId as Id<"shoppingLists">,
+            name: item.name,
+            quantity: 1,
+            estimatedPrice: item.lastPrice,
+          });
+          showAddedToast(item.name);
+        } catch (e) {
+          console.error("Failed to create list:", e);
+        }
+      };
+      if (Platform.OS === "web") {
+        if (window.confirm("No active lists. Create a new list and add this item?")) {
+          doCreate();
+        }
+      } else {
+        Alert.alert("No Active Lists", "Create a new list and add this item?", [
+          { text: "Cancel", style: "cancel" },
+          { text: "Create", onPress: doCreate },
+        ]);
+      }
+      return;
+    }
+
+    if (planningLists.length === 1) {
+      // Only one list — add directly
+      handlePickList(planningLists[0]._id, planningLists[0].name, item.name, item.lastPrice);
+      return;
+    }
+
+    // Multiple lists — show picker
+    setAddToListItem(item);
+  };
+
+  const handlePickList = async (
+    listId: Id<"shoppingLists">,
+    listName: string,
+    itemName: string,
+    estimatedPrice?: number
+  ) => {
+    try {
+      await addListItem({
+        listId,
+        name: itemName,
+        quantity: 1,
+        estimatedPrice,
+      });
+      showAddedToast(itemName, listName);
+    } catch (e) {
+      console.error("Failed to add to list:", e);
+    }
+    setAddToListItem(null);
+  };
+
+  const showAddedToast = (itemName: string) => {
+    setToastItemName(itemName);
+    setToastVisible(true);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToastVisible(false), 2000);
   };
 
   // Get next lower stock level
@@ -663,6 +742,7 @@ export default function PantryScreen() {
                     onSwipeIncrease={() => handleSwipeIncrease(item)}
                     onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
                     onRemove={() => handleRemoveItem(item)}
+                    onAddToList={() => handleAddToList(item)}
                     animationDelay={hasInteracted.current ? 0 : index * 50}
                   />
                 ))}
@@ -716,6 +796,7 @@ export default function PantryScreen() {
                           onSwipeIncrease={() => handleSwipeIncrease(item)}
                           onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
                           onRemove={() => handleRemoveItem(item)}
+                          onAddToList={() => handleAddToList(item)}
                           animationDelay={hasInteracted.current ? 0 : index * 50}
                         />
                       ))}
@@ -873,6 +954,62 @@ export default function PantryScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+
+        {/* List Picker Modal */}
+        <Modal
+          visible={addToListItem !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setAddToListItem(null)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setAddToListItem(null)}>
+            <Pressable style={styles.listPickerModal} onPress={(e) => e.stopPropagation()}>
+              <MaterialCommunityIcons name="playlist-plus" size={36} color={colors.accent.primary} />
+              <Text style={styles.addModalTitle}>Add to List</Text>
+              <Text style={styles.listPickerSubtitle}>
+                Choose a list for "{addToListItem?.name}"
+              </Text>
+              <View style={styles.listPickerOptions}>
+                {(activeLists ?? [])
+                  .filter((l) => l.status === "active" || l.status === "shopping")
+                  .map((list) => (
+                    <Pressable
+                      key={list._id}
+                      style={styles.listPickerOption}
+                      onPress={() =>
+                        handlePickList(
+                          list._id,
+                          list.name,
+                          addToListItem?.name ?? "",
+                          addToListItem?.lastPrice
+                        )
+                      }
+                    >
+                      <MaterialCommunityIcons
+                        name="clipboard-list-outline"
+                        size={20}
+                        color={colors.text.secondary}
+                      />
+                      <View style={styles.listPickerOptionInfo}>
+                        <Text style={styles.listPickerOptionName}>{list.name}</Text>
+                        <Text style={styles.listPickerOptionMeta}>
+                          {list.status === "shopping" ? "Shopping now" : "Active"}
+                        </Text>
+                      </View>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={18}
+                        color={colors.text.tertiary}
+                      />
+                    </Pressable>
+                  ))}
+              </View>
+              <GlassButton variant="ghost" size="md" onPress={() => setAddToListItem(null)}>
+                Cancel
+              </GlassButton>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </GestureHandlerRootView>
 
       {/* Gesture Onboarding Overlay */}
@@ -986,6 +1123,7 @@ function PantryItemRow({
   onSwipeIncrease,
   onMeasure,
   onRemove,
+  onAddToList,
   animationDelay = 0,
 }: {
   item: {
@@ -1002,6 +1140,7 @@ function PantryItemRow({
   onSwipeIncrease: () => void;
   onMeasure: (x: number, y: number) => void;
   onRemove: () => void;
+  onAddToList: () => void;
   animationDelay?: number;
 }) {
   const cardRef = useRef<View>(null);
@@ -1061,6 +1200,9 @@ function PantryItemRow({
                   )}
                 </View>
               </View>
+
+              {/* Add to list button */}
+              <AddToListButton onPress={onAddToList} size="sm" />
 
               {/* Remove button */}
               <RemoveButton onPress={onRemove} size="sm" />
@@ -1631,5 +1773,47 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     marginTop: spacing.sm,
+  },
+
+  // List picker modal
+  listPickerModal: {
+    backgroundColor: colors.glass.backgroundStrong,
+    borderRadius: 20,
+    padding: spacing.xl,
+    width: "85%",
+    maxWidth: 360,
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  listPickerSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    textAlign: "center",
+    marginBottom: spacing.sm,
+  },
+  listPickerOptions: {
+    width: "100%",
+    gap: spacing.xs,
+  },
+  listPickerOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: 12,
+    backgroundColor: `${colors.glass.backgroundLight}`,
+  },
+  listPickerOptionInfo: {
+    flex: 1,
+  },
+  listPickerOptionName: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  listPickerOptionMeta: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
   },
 });
