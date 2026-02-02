@@ -963,50 +963,54 @@ export default function PantryScreen() {
           onRequestClose={() => setAddToListItem(null)}
         >
           <Pressable style={styles.modalOverlay} onPress={() => setAddToListItem(null)}>
-            <Pressable style={styles.listPickerModal} onPress={(e) => e.stopPropagation()}>
-              <MaterialCommunityIcons name="playlist-plus" size={36} color={colors.accent.primary} />
-              <Text style={styles.addModalTitle}>Add to List</Text>
-              <Text style={styles.listPickerSubtitle}>
-                Choose a list for "{addToListItem?.name}"
-              </Text>
-              <View style={styles.listPickerOptions}>
-                {(activeLists ?? [])
-                  .filter((l) => l.status === "active" || l.status === "shopping")
-                  .map((list) => (
-                    <Pressable
-                      key={list._id}
-                      style={styles.listPickerOption}
-                      onPress={() =>
-                        handlePickList(
-                          list._id,
-                          list.name,
-                          addToListItem?.name ?? "",
-                          addToListItem?.lastPrice
-                        )
-                      }
-                    >
-                      <MaterialCommunityIcons
-                        name="clipboard-list-outline"
-                        size={20}
-                        color={colors.text.secondary}
-                      />
-                      <View style={styles.listPickerOptionInfo}>
-                        <Text style={styles.listPickerOptionName}>{list.name}</Text>
-                        <Text style={styles.listPickerOptionMeta}>
-                          {list.status === "shopping" ? "Shopping now" : "Active"}
+            <Pressable onPress={(e) => e.stopPropagation()}>
+              <GlassCard variant="elevated" style={styles.listPickerModal}>
+                <MaterialCommunityIcons name="playlist-plus" size={36} color={colors.accent.primary} />
+                <Text style={styles.filterTitle}>Add to List</Text>
+                <Text style={styles.filterSubtitle}>
+                  Choose a list for "{addToListItem?.name}"
+                </Text>
+                <View style={styles.listPickerOptions}>
+                  {(activeLists ?? [])
+                    .filter((l) => l.status === "active" || l.status === "shopping")
+                    .map((list) => (
+                      <Pressable
+                        key={list._id}
+                        style={styles.listPickerOption}
+                        onPress={() =>
+                          handlePickList(
+                            list._id,
+                            list.name,
+                            addToListItem?.name ?? "",
+                            addToListItem?.lastPrice
+                          )
+                        }
+                      >
+                        <MaterialCommunityIcons
+                          name="clipboard-list-outline"
+                          size={20}
+                          color={colors.text.secondary}
+                        />
+                        <Text style={styles.listPickerOptionName} numberOfLines={1}>
+                          {list.name}
                         </Text>
-                      </View>
-                      <MaterialCommunityIcons
-                        name="chevron-right"
-                        size={18}
-                        color={colors.text.tertiary}
-                      />
-                    </Pressable>
-                  ))}
-              </View>
-              <GlassButton variant="ghost" size="md" onPress={() => setAddToListItem(null)}>
-                Cancel
-              </GlassButton>
+                        <Text style={styles.listPickerOptionMeta}>
+                          {list.status === "shopping" ? "Shopping" : "Active"}
+                        </Text>
+                        <MaterialCommunityIcons
+                          name="chevron-right"
+                          size={18}
+                          color={colors.text.tertiary}
+                        />
+                      </Pressable>
+                    ))}
+                </View>
+                <View style={styles.filterActions}>
+                  <GlassButton variant="ghost" size="md" onPress={() => setAddToListItem(null)}>
+                    Cancel
+                  </GlassButton>
+                </View>
+              </GlassCard>
             </Pressable>
           </Pressable>
         </Modal>
@@ -1777,40 +1781,29 @@ const styles = StyleSheet.create({
 
   // List picker modal
   listPickerModal: {
-    backgroundColor: colors.glass.backgroundStrong,
-    borderRadius: 20,
+    width: "100%",
+    maxWidth: 340,
     padding: spacing.xl,
-    width: "85%",
-    maxWidth: 360,
     alignItems: "center",
-    gap: spacing.sm,
-  },
-  listPickerSubtitle: {
-    ...typography.bodySmall,
-    color: colors.text.secondary,
-    textAlign: "center",
-    marginBottom: spacing.sm,
   },
   listPickerOptions: {
     width: "100%",
-    gap: spacing.xs,
+    gap: spacing.md,
   },
   listPickerOption: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 12,
-    backgroundColor: `${colors.glass.backgroundLight}`,
-  },
-  listPickerOptionInfo: {
-    flex: 1,
+    padding: spacing.md,
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: "transparent",
+    gap: spacing.md,
   },
   listPickerOptionName: {
-    ...typography.bodyMedium,
+    ...typography.bodyLarge,
     color: colors.text.primary,
-    fontWeight: "600",
+    flex: 1,
   },
   listPickerOptionMeta: {
     ...typography.bodySmall,
