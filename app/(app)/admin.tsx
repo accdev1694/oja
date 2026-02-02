@@ -326,8 +326,8 @@ function UsersTab() {
                 <Text style={styles.detailLabel}>Spent</Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={styles.detailValue}>{userDetail.loyalty?.points ?? 0}</Text>
-                <Text style={styles.detailLabel}>Points</Text>
+                <Text style={styles.detailValue}>{userDetail.scanRewards?.lifetimeScans ?? 0}</Text>
+                <Text style={styles.detailLabel}>Scans</Text>
               </View>
             </View>
             {userDetail.subscription && (

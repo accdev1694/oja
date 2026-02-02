@@ -31,7 +31,7 @@ export default function ProfileScreen() {
 
   const allLists = useQuery(api.shoppingLists.getByUser);
   const pantryItems = useQuery(api.pantryItems.getByUser);
-  const loyalty = useQuery(api.subscriptions.getLoyaltyPoints);
+  const scanCredits = useQuery(api.subscriptions.getScanCredits);
   const subscription = useQuery(api.subscriptions.getCurrentSubscription);
   const receipts = useQuery(api.receipts.getByUser);
   const activeChallenge = useQuery(api.insights.getActiveChallenge);
@@ -115,36 +115,41 @@ export default function ProfileScreen() {
           </GlassCard>
         </View>
 
-        {/* New user milestone path */}
-        {completedLists.length === 0 && allLists.length === 0 && (
-          <View style={styles.section}>
-            <GlassCard variant="standard" style={styles.milestonePath}>
-              <Text style={styles.milestoneTitle}>Your journey starts here</Text>
-              <Text style={styles.milestoneSubtitle}>
-                Most shoppers save £30+ in their first month. Here's how to get there:
-              </Text>
-              <View style={styles.milestoneSteps}>
-                {[
-                  { icon: "package-variant" as const, text: "Add items to your stock", done: pantryItems.length > 0 },
-                  { icon: "clipboard-list-outline" as const, text: "Create your first list", done: false },
-                  { icon: "camera" as const, text: "Scan a receipt", done: false },
-                  { icon: "trophy-outline" as const, text: "See your first savings", done: false },
-                ].map((step, i) => (
-                  <View key={i} style={styles.milestoneStep}>
-                    <MaterialCommunityIcons
-                      name={step.done ? "check-circle" : step.icon}
-                      size={18}
-                      color={step.done ? colors.accent.primary : colors.text.tertiary}
-                    />
-                    <Text style={[styles.milestoneStepText, step.done && styles.milestoneStepDone]}>
-                      {step.text}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </GlassCard>
-          </View>
-        )}
+        {/* New user milestone path — hide once all steps are done */}
+        {(() => {
+          const milestones = [
+            { icon: "package-variant" as const, text: "Add items to your stock", done: pantryItems.length > 0 },
+            { icon: "clipboard-list-outline" as const, text: "Create your first list", done: allLists.length > 0 },
+            { icon: "camera" as const, text: "Scan a receipt", done: (receipts?.length ?? 0) > 0 },
+            { icon: "trophy-outline" as const, text: "Earn your first credit", done: (scanCredits?.creditsEarned ?? 0) > 0 },
+          ];
+          const allDone = milestones.every((m) => m.done);
+          if (allDone) return null;
+          return (
+            <View style={styles.section}>
+              <GlassCard variant="standard" style={styles.milestonePath}>
+                <Text style={styles.milestoneTitle}>Your journey starts here</Text>
+                <Text style={styles.milestoneSubtitle}>
+                  Most shoppers save £30+ in their first month. Here's how to get there:
+                </Text>
+                <View style={styles.milestoneSteps}>
+                  {milestones.map((step, i) => (
+                    <View key={i} style={styles.milestoneStep}>
+                      <MaterialCommunityIcons
+                        name={step.done ? "check-circle" : step.icon}
+                        size={18}
+                        color={step.done ? colors.accent.primary : colors.text.tertiary}
+                      />
+                      <Text style={[styles.milestoneStepText, step.done && styles.milestoneStepDone]}>
+                        {step.text}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </GlassCard>
+            </View>
+          );
+        })()}
 
         {/* Quick Stats — single condensed row */}
         <GlassCard variant="standard" style={styles.quickStatsCard}>
@@ -166,9 +171,9 @@ export default function ProfileScreen() {
             <View style={styles.quickStatDivider} />
             <View style={styles.quickStat}>
               <Text style={[styles.quickStatValue, { color: colors.accent.primary }]}>
-                {loyalty?.points ?? 0}
+                {scanCredits?.lifetimeScans ?? 0}
               </Text>
-              <Text style={styles.quickStatLabel}>pts</Text>
+              <Text style={styles.quickStatLabel}>scans</Text>
             </View>
           </View>
         </GlassCard>
@@ -198,7 +203,7 @@ export default function ProfileScreen() {
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              // Subscription screen — placeholder navigation
+              router.push("/(app)/subscription" as any);
             }}
           >
             <GlassCard variant="standard" style={styles.navCard}>
@@ -215,7 +220,7 @@ export default function ProfileScreen() {
                     {subscription?.plan === "free" ? "Free Plan" : "Premium"}
                   </Text>
                   <Text style={styles.navSubtitle}>
-                    {loyalty?.points ?? 0} pts · {(loyalty?.tier || "bronze").charAt(0).toUpperCase() + (loyalty?.tier || "bronze").slice(1)} tier
+                    {(scanCredits?.tier || "bronze").charAt(0).toUpperCase() + (scanCredits?.tier || "bronze").slice(1)} tier · {scanCredits?.lifetimeScans ?? 0} scans
                   </Text>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.tertiary} />

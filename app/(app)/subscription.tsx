@@ -45,8 +45,6 @@ export default function SubscriptionScreen() {
   const router = useRouter();
   const subscription = useQuery(api.subscriptions.getCurrentSubscription);
   const plans = useQuery(api.subscriptions.getPlans);
-  const loyalty = useQuery(api.subscriptions.getLoyaltyPoints);
-  const pointHistory = useQuery(api.subscriptions.getPointHistory);
   const scanCredits = useQuery(api.subscriptions.getScanCredits);
 
   const startTrial = useMutation(api.subscriptions.startFreeTrial);
@@ -290,97 +288,155 @@ export default function SubscriptionScreen() {
           </GlassCard>
         </Animated.View>
 
-        {/* Scan Credits — receipt scans reduce subscription price */}
+        {/* Scan Rewards — unified tier + credits */}
         {scanCredits && (
           <Animated.View entering={FadeInDown.duration(400).delay(150)}>
             <GlassCard style={styles.scanCreditsCard}>
+              {/* Tier Header */}
               <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons
-                  name="barcode-scan"
-                  size={24}
-                  color={colors.accent.primary}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.scanCreditsTitle}>Scan Credits</Text>
-                  <Text style={styles.scanCreditsSubtitle}>
-                    Each receipt scan saves you £0.25
-                  </Text>
-                </View>
-              </View>
-
-              {/* Scan progress dots */}
-              <View style={styles.scanDotsRow}>
-                {Array.from({ length: scanCredits.maxScans > 8 ? 4 : scanCredits.maxScans }).map((_, i) => {
-                  const filled = i < (scanCredits.maxScans > 8
-                    ? Math.ceil(scanCredits.scansThisPeriod / (scanCredits.maxScans / 4))
-                    : scanCredits.scansThisPeriod);
-                  return (
-                    <View
-                      key={i}
-                      style={[
-                        styles.scanDot,
-                        filled ? styles.scanDotFilled : styles.scanDotEmpty,
-                      ]}
-                    >
-                      {filled ? (
-                        <MaterialCommunityIcons name="check" size={14} color="#fff" />
-                      ) : (
-                        <MaterialCommunityIcons name="camera-outline" size={14} color={colors.text.tertiary} />
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-
-              {/* Credit progress bar */}
-              <View style={styles.creditProgressContainer}>
-                <View style={styles.creditProgressTrack}>
-                  <View
-                    style={[
-                      styles.creditProgressFill,
-                      { width: `${Math.min(100, (scanCredits.creditsEarned / scanCredits.maxCredits) * 100)}%` },
-                    ]}
+                <View style={[styles.tierIconCircle, { backgroundColor: `${tierColors[scanCredits.tier] || tierColors.bronze}20` }]}>
+                  <MaterialCommunityIcons
+                    name={(tierIcons[scanCredits.tier] || "shield-outline") as any}
+                    size={24}
+                    color={tierColors[scanCredits.tier] || tierColors.bronze}
                   />
                 </View>
-                <View style={styles.creditAmountRow}>
-                  <Text style={styles.creditEarned}>
-                    £{scanCredits.creditsEarned.toFixed(2)} earned
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.scanCreditsTitle}>Scan Rewards</Text>
+                  <Text style={[styles.tierBadge, { color: tierColors[scanCredits.tier] || tierColors.bronze }]}>
+                    {scanCredits.tier.charAt(0).toUpperCase() + scanCredits.tier.slice(1)} Tier
                   </Text>
-                  <Text style={styles.creditMax}>
-                    of £{scanCredits.maxCredits.toFixed(2)}
+                </View>
+                <View style={styles.lifetimeScansChip}>
+                  <MaterialCommunityIcons name="barcode-scan" size={14} color={colors.text.tertiary} />
+                  <Text style={styles.lifetimeScansText}>
+                    {scanCredits.lifetimeScans} scanned
                   </Text>
                 </View>
               </View>
 
-              {/* Effective price */}
-              {scanCredits.creditsEarned > 0 && (
-                <View style={styles.effectivePriceRow}>
-                  <Text style={styles.effectivePriceLabel}>Next renewal:</Text>
-                  <View style={styles.effectivePriceValues}>
-                    <Text style={styles.effectivePriceStrike}>
-                      £{scanCredits.basePrice.toFixed(2)}
-                    </Text>
-                    <Text style={styles.effectivePriceValue}>
-                      £{scanCredits.effectivePrice.toFixed(2)}
-                    </Text>
+              {/* Tier Progress */}
+              {scanCredits.tierInfo.nextTier && scanCredits.tierInfo.scansToNextTier > 0 && (
+                <View style={styles.tierProgress}>
+                  <View style={styles.tierProgressBar}>
+                    <View
+                      style={[
+                        styles.tierProgressFill,
+                        {
+                          width: `${Math.min(100, (scanCredits.lifetimeScans / (scanCredits.lifetimeScans + scanCredits.tierInfo.scansToNextTier)) * 100)}%`,
+                          backgroundColor: tierColors[scanCredits.tier] || tierColors.bronze,
+                        },
+                      ]}
+                    />
                   </View>
+                  <Text style={styles.nextTierText}>
+                    {scanCredits.tierInfo.scansToNextTier} more scan{scanCredits.tierInfo.scansToNextTier !== 1 ? "s" : ""} to{" "}
+                    {scanCredits.tierInfo.nextTier.charAt(0).toUpperCase() + scanCredits.tierInfo.nextTier.slice(1)}
+                  </Text>
+                </View>
+              )}
+              {!scanCredits.tierInfo.nextTier && (
+                <View style={styles.scanMaxedRow}>
+                  <MaterialCommunityIcons name="trophy" size={16} color={tierColors.platinum} />
+                  <Text style={[styles.scanMaxedText, { color: tierColors.platinum }]}>
+                    Maximum tier reached!
+                  </Text>
                 </View>
               )}
 
-              {/* Encouragement */}
-              {scanCredits.scansThisPeriod < scanCredits.maxScans ? (
-                <Text style={styles.scanEncouragement}>
-                  Scan {scanCredits.maxScans - scanCredits.scansThisPeriod} more receipt
-                  {scanCredits.maxScans - scanCredits.scansThisPeriod !== 1 ? "s" : ""} to
-                  save £{(scanCredits.maxCredits - scanCredits.creditsEarned).toFixed(2)} more
-                </Text>
-              ) : (
-                <View style={styles.scanMaxedRow}>
-                  <MaterialCommunityIcons name="check-circle" size={16} color={colors.semantic.success} />
-                  <Text style={styles.scanMaxedText}>
-                    Maximum credits earned this period!
-                  </Text>
-                </View>
+              {/* Credit Progress (premium only) */}
+              {scanCredits.isPremium && (
+                <>
+                  <View style={styles.creditDivider} />
+
+                  {/* Scan progress dots */}
+                  <View style={styles.scanDotsRow}>
+                    {Array.from({ length: scanCredits.maxScans > 8 ? 4 : scanCredits.maxScans }).map((_, i) => {
+                      const filled = i < (scanCredits.maxScans > 8
+                        ? Math.ceil(scanCredits.scansThisPeriod / (scanCredits.maxScans / 4))
+                        : scanCredits.scansThisPeriod);
+                      return (
+                        <View
+                          key={i}
+                          style={[
+                            styles.scanDot,
+                            filled ? styles.scanDotFilled : styles.scanDotEmpty,
+                          ]}
+                        >
+                          {filled ? (
+                            <MaterialCommunityIcons name="check" size={14} color="#fff" />
+                          ) : (
+                            <MaterialCommunityIcons name="camera-outline" size={14} color={colors.text.tertiary} />
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  {/* Credit progress bar */}
+                  <View style={styles.creditProgressContainer}>
+                    <View style={styles.creditProgressTrack}>
+                      <View
+                        style={[
+                          styles.creditProgressFill,
+                          { width: `${Math.min(100, (scanCredits.creditsEarned / scanCredits.maxCredits) * 100)}%` },
+                        ]}
+                      />
+                    </View>
+                    <View style={styles.creditAmountRow}>
+                      <Text style={styles.creditEarned}>
+                        £{scanCredits.creditsEarned.toFixed(2)} earned
+                      </Text>
+                      <Text style={styles.creditMax}>
+                        of £{scanCredits.maxCredits.toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Effective price */}
+                  {scanCredits.creditsEarned > 0 && (
+                    <View style={styles.effectivePriceRow}>
+                      <Text style={styles.effectivePriceLabel}>Next renewal:</Text>
+                      <View style={styles.effectivePriceValues}>
+                        <Text style={styles.effectivePriceStrike}>
+                          £{scanCredits.basePrice.toFixed(2)}
+                        </Text>
+                        <Text style={styles.effectivePriceValue}>
+                          £{scanCredits.effectivePrice.toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Encouragement */}
+                  {scanCredits.scansThisPeriod < scanCredits.maxScans ? (
+                    <Text style={styles.scanEncouragement}>
+                      Scan {scanCredits.maxScans - scanCredits.scansThisPeriod} more receipt
+                      {scanCredits.maxScans - scanCredits.scansThisPeriod !== 1 ? "s" : ""} to
+                      save £{(scanCredits.maxCredits - scanCredits.creditsEarned).toFixed(2)} more
+                    </Text>
+                  ) : (
+                    <View style={styles.scanMaxedRow}>
+                      <MaterialCommunityIcons name="check-circle" size={16} color={colors.semantic.success} />
+                      <Text style={styles.scanMaxedText}>
+                        Maximum credits earned this period!
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* Free user CTA */}
+              {!scanCredits.isPremium && (
+                <>
+                  <View style={styles.creditDivider} />
+                  <View style={styles.freeUserCta}>
+                    <MaterialCommunityIcons name="lock-outline" size={18} color={colors.text.tertiary} />
+                    <Text style={styles.freeUserCtaText}>
+                      Upgrade to Premium to earn up to £{scanCredits.tierInfo.maxCredits.toFixed(2)}/mo back
+                    </Text>
+                  </View>
+                </>
               )}
             </GlassCard>
           </Animated.View>
@@ -490,120 +546,6 @@ export default function SubscriptionScreen() {
           </Animated.View>
         )}
 
-        {/* Loyalty Points */}
-        {loyalty && (
-          <Animated.View entering={FadeInDown.duration(400).delay(400)}>
-            <GlassCard style={styles.loyaltyCard}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons
-                  name={
-                    (tierIcons[loyalty.tier] || "shield-outline") as any
-                  }
-                  size={28}
-                  color={tierColors[loyalty.tier] || colors.accent.primary}
-                />
-                <View>
-                  <Text style={styles.loyaltyTitle}>Loyalty Points</Text>
-                  <Text
-                    style={[
-                      styles.tierBadge,
-                      { color: tierColors[loyalty.tier] },
-                    ]}
-                  >
-                    {loyalty.tier.toUpperCase()} Tier
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.pointsDisplay}>
-                <Text style={styles.pointsNumber}>
-                  {loyalty.points.toLocaleString()}
-                </Text>
-                <Text style={styles.pointsLabel}>points available</Text>
-              </View>
-
-              {loyalty.discount > 0 && (
-                <View style={styles.discountBadge}>
-                  <MaterialCommunityIcons
-                    name="percent"
-                    size={16}
-                    color={colors.semantic.success}
-                  />
-                  <Text style={styles.discountText}>
-                    {loyalty.discount}% discount on premium
-                  </Text>
-                </View>
-              )}
-
-              {loyalty.nextTier && loyalty.pointsToNextTier > 0 && (
-                <View style={styles.tierProgress}>
-                  <View style={styles.tierProgressBar}>
-                    <View
-                      style={[
-                        styles.tierProgressFill,
-                        {
-                          width: `${Math.min(100, ((loyalty.lifetimePoints || 0) / ((loyalty.lifetimePoints || 0) + loyalty.pointsToNextTier)) * 100)}%`,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.nextTierText}>
-                    {loyalty.pointsToNextTier} pts to{" "}
-                    {loyalty.nextTier.charAt(0).toUpperCase() +
-                      loyalty.nextTier.slice(1)}
-                  </Text>
-                </View>
-              )}
-            </GlassCard>
-          </Animated.View>
-        )}
-
-        {/* Point History */}
-        {pointHistory && pointHistory.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(500)}>
-            <GlassCard style={styles.section}>
-              <Text style={styles.sectionTitle}>Recent Points</Text>
-              {pointHistory.slice(0, 10).map((t: any) => (
-                <View key={t._id} style={styles.transRow}>
-                  <View style={styles.transLeft}>
-                    <MaterialCommunityIcons
-                      name={
-                        t.amount > 0
-                          ? "arrow-up-circle"
-                          : "arrow-down-circle"
-                      }
-                      size={20}
-                      color={
-                        t.amount > 0
-                          ? colors.semantic.success
-                          : colors.semantic.danger
-                      }
-                    />
-                    <View>
-                      <Text style={styles.transDesc}>{t.description}</Text>
-                      <Text style={styles.transSource}>{t.source}</Text>
-                    </View>
-                  </View>
-                  <Text
-                    style={[
-                      styles.transAmount,
-                      {
-                        color:
-                          t.amount > 0
-                            ? colors.semantic.success
-                            : colors.semantic.danger,
-                      },
-                    ]}
-                  >
-                    {t.amount > 0 ? "+" : ""}
-                    {t.amount}
-                  </Text>
-                </View>
-              ))}
-            </GlassCard>
-          </Animated.View>
-        )}
-
         <View style={{ height: 140 }} />
       </ScrollView>
 
@@ -624,7 +566,7 @@ export default function SubscriptionScreen() {
             <Text style={styles.modalTitle}>Cancel Subscription?</Text>
             <Text style={styles.modalBody}>
               You'll lose access to premium features at the end of your current
-              billing period. Your loyalty points will be kept.
+              billing period. Your scan rewards tier will be kept.
             </Text>
             <View style={styles.modalActions}>
               <GlassButton
@@ -820,15 +762,64 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Scan Credits
+  // Scan Rewards
   scanCreditsCard: { marginBottom: spacing.md },
   scanCreditsTitle: {
     ...typography.headlineSmall,
     color: colors.text.primary,
   },
-  scanCreditsSubtitle: {
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  tierIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tierBadge: {
+    ...typography.labelSmall,
+    fontWeight: "700",
+  },
+  lifetimeScansChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: `${colors.text.tertiary}15`,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  lifetimeScansText: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+  },
+  tierProgress: { marginBottom: spacing.sm },
+  tierProgressBar: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: `${colors.text.tertiary}30`,
+    overflow: "hidden",
+  },
+  tierProgressFill: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: colors.accent.primary,
+  },
+  nextTierText: {
     ...typography.bodySmall,
     color: colors.text.tertiary,
+    textAlign: "center",
+    marginTop: spacing.xs,
+  },
+  creditDivider: {
+    height: 1,
+    backgroundColor: colors.glass.border,
+    marginVertical: spacing.sm,
   },
   scanDotsRow: {
     flexDirection: "row",
@@ -922,97 +913,17 @@ const styles = StyleSheet.create({
     color: colors.semantic.success,
     fontWeight: "600",
   },
-
-  // Loyalty
-  loyaltyCard: { marginBottom: spacing.md, marginTop: spacing.md },
-  sectionHeader: {
+  freeUserCta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  loyaltyTitle: {
-    ...typography.headlineSmall,
-    color: colors.text.primary,
-  },
-  tierBadge: {
-    ...typography.labelSmall,
-    fontWeight: "700",
-  },
-  pointsDisplay: {
-    alignItems: "center",
-    paddingVertical: spacing.md,
-  },
-  pointsNumber: {
-    fontSize: 48,
-    fontWeight: "800",
-    color: colors.accent.primary,
-  },
-  pointsLabel: {
-    ...typography.bodyMedium,
-    color: colors.text.tertiary,
-  },
-  discountBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
     justifyContent: "center",
-    backgroundColor: `${colors.semantic.success}15`,
-    padding: spacing.sm,
-    borderRadius: 8,
-    marginTop: spacing.sm,
-  },
-  discountText: {
-    ...typography.bodyMedium,
-    color: colors.semantic.success,
-    fontWeight: "600",
-  },
-  tierProgress: { marginTop: spacing.md },
-  tierProgressBar: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: `${colors.text.tertiary}30`,
-    overflow: "hidden",
-  },
-  tierProgressFill: {
-    height: "100%",
-    borderRadius: 3,
-    backgroundColor: colors.accent.primary,
-  },
-  nextTierText: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-    textAlign: "center",
-    marginTop: spacing.xs,
-  },
-
-  // Point History
-  section: { marginBottom: spacing.md },
-  transRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.glass.border,
-  },
-  transLeft: {
-    flexDirection: "row",
-    alignItems: "center",
     gap: spacing.sm,
-    flex: 1,
+    paddingVertical: spacing.sm,
   },
-  transDesc: {
+  freeUserCtaText: {
     ...typography.bodyMedium,
-    color: colors.text.primary,
-  },
-  transSource: {
-    ...typography.bodySmall,
     color: colors.text.tertiary,
-  },
-  transAmount: {
-    ...typography.bodyLarge,
-    fontWeight: "700",
+    fontStyle: "italic",
   },
 
   // Modal

@@ -40,7 +40,7 @@ export default function ReconciliationScreen() {
   const autoRestock = useMutation(api.pantryItems.autoRestockFromReceipt);
   const confirmFuzzyRestock = useMutation(api.pantryItems.confirmFuzzyRestock);
   const addFromReceipt = useMutation(api.pantryItems.addFromReceipt);
-  const earnPoints = useMutation(api.subscriptions.earnPoints);
+  // (Old loyalty earnPoints removed — scan rewards handled at confirm step)
 
   const [isCompleting, setIsCompleting] = useState(false);
   const [restockResult, setRestockResult] = useState<{
@@ -123,20 +123,7 @@ export default function ReconciliationScreen() {
             size="lg"
             icon="check"
             onPress={async () => {
-              // Earn points for standalone receipt too
-              const pts = Math.floor(receipt.total);
-              if (pts > 0) {
-                try {
-                  await earnPoints({
-                    amount: pts,
-                    source: "receipt_scan",
-                    description: `Receipt from ${receipt.storeName} — £${receipt.total.toFixed(2)}`,
-                  });
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                } catch (e) {
-                  console.warn("Failed to earn points:", e);
-                }
-              }
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               router.push("/(app)/(tabs)/" as any);
             }}
           >
@@ -195,27 +182,12 @@ export default function ReconciliationScreen() {
         itemsToAdd: result.itemsToAdd,
       });
 
-      // Step 4: Earn loyalty points (1 point per £1 spent)
-      const pointsToEarn = Math.floor(actualTotal);
-      if (pointsToEarn > 0) {
-        try {
-          await earnPoints({
-            amount: pointsToEarn,
-            source: "shopping_trip",
-            description: `Shopping trip at ${receipt?.storeName ?? "store"} — £${actualTotal.toFixed(2)}`,
-          });
-        } catch (e) {
-          // Points are non-critical, don't block the flow
-          console.warn("Failed to earn points:", e);
-        }
-      }
-
-      // Step 5: Archive the list with trip summary data
+      // Step 4: Archive the list with trip summary data
       await archiveList({
         id: listId,
         receiptId,
         actualTotal,
-        pointsEarned: pointsToEarn,
+        pointsEarned: 0,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -226,15 +198,11 @@ export default function ReconciliationScreen() {
           ? `Pantry updated: ${result.restockedItems.length} item${result.restockedItems.length !== 1 ? "s" : ""} restocked`
           : "";
 
-      const pointsMessage = pointsToEarn > 0
-        ? `+${pointsToEarn} loyalty points earned!`
-        : "";
-
       const savingsMessage = savedMoney
         ? `Great job! You saved £${Math.abs(difference).toFixed(2)}!`
         : "Shopping trip completed successfully";
 
-      const messageParts = [savingsMessage, restockMessage, pointsMessage].filter(Boolean);
+      const messageParts = [savingsMessage, restockMessage].filter(Boolean);
       const fullMessage = messageParts.join("\n\n");
 
       // Navigate to history tab after completion

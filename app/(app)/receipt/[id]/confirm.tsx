@@ -32,6 +32,23 @@ import {
   spacing,
 } from "@/components/ui/glass";
 
+// Tier progress helper for toast messages
+function getTierProgress(lifetimeScans: number, currentTier: string): string | null {
+  const tiers = [
+    { tier: "bronze", threshold: 0 },
+    { tier: "silver", threshold: 20 },
+    { tier: "gold", threshold: 50 },
+    { tier: "platinum", threshold: 100 },
+  ];
+  const idx = tiers.findIndex((t) => t.tier === currentTier);
+  if (idx >= tiers.length - 1) return null; // already platinum
+  const next = tiers[idx + 1];
+  const remaining = next.threshold - lifetimeScans;
+  if (remaining <= 0) return null;
+  const label = next.tier.charAt(0).toUpperCase() + next.tier.slice(1);
+  return `${remaining} to ${label}`;
+}
+
 interface ReceiptItem {
   name: string;
   quantity: number;
@@ -55,7 +72,6 @@ export default function ConfirmReceiptScreen() {
   const upsertCurrentPrices = useMutation(api.currentPrices.upsertFromReceipt);
 
   // Gamification mutations
-  const earnPointsForReceipt = useMutation(api.subscriptions.earnPointsForReceipt);
   const earnScanCredit = useMutation(api.subscriptions.earnScanCredit);
   const updateStreak = useMutation(api.insights.updateStreak);
   const activeChallenge = useQuery(api.insights.getActiveChallenge);
@@ -245,17 +261,13 @@ export default function ConfirmReceiptScreen() {
       // Step 4: Check for price alerts
       const alerts = await checkPriceAlerts({ receiptId });
 
-      // Step 5: Gamification — earn points, update streak, progress challenge
-      let pointsEarned = 0;
+      // Step 5: Gamification — earn scan credit + tier progress, update streak, progress challenge
       let creditEarned = 0;
+      let scanResult: any = null;
       try {
-        const pointsResult = await earnPointsForReceipt({ receiptId });
-        if (pointsResult.success) {
-          pointsEarned = pointsResult.pointsEarned;
-        }
-        const creditResult = await earnScanCredit({ receiptId });
-        if (creditResult.success) {
-          creditEarned = creditResult.creditEarned;
+        scanResult = await earnScanCredit({ receiptId });
+        if (scanResult.success) {
+          creditEarned = scanResult.creditEarned;
         }
         await updateStreak({ type: "receipt_scanner" });
         if (activeChallenge && activeChallenge.type === "scan_receipts" && !activeChallenge.completedAt) {
@@ -297,10 +309,20 @@ export default function ConfirmReceiptScreen() {
           ]);
         }
       } else {
-        const pointsMsg = pointsEarned > 0 ? `+${pointsEarned} pts` : "";
-        const creditMsg = creditEarned > 0 ? `+£${creditEarned.toFixed(2)} credit` : "";
-        const rewardMsg = [pointsMsg, creditMsg].filter(Boolean).join(", ");
-        const suffix = rewardMsg ? ` (${rewardMsg})` : "";
+        // Build reward message from unified scan result
+        let suffix = "";
+        if (scanResult?.success) {
+          const parts: string[] = [];
+          if (creditEarned > 0) parts.push(`+£${creditEarned.toFixed(2)} credit`);
+          if (scanResult.tierUpgrade) {
+            const tierLabel = scanResult.tier.charAt(0).toUpperCase() + scanResult.tier.slice(1);
+            parts.push(`${tierLabel} tier!`);
+          } else if (scanResult.lifetimeScans) {
+            const tierConfig = getTierProgress(scanResult.lifetimeScans, scanResult.tier);
+            if (tierConfig) parts.push(tierConfig);
+          }
+          if (parts.length > 0) suffix = ` (${parts.join(", ")})`;
+        }
         if (Platform.OS === "web") {
           window.alert(`Receipt Saved\n\nYour receipt has been saved successfully${suffix}`);
           navigateAfterSave();
