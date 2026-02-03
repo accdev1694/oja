@@ -74,6 +74,7 @@ export interface SeedItem {
   name: string;
   category: string;
   stockLevel: "stocked" | "low" | "out";
+  source?: "local" | "cultural";  // Whether item is a local staple or cultural ingredient
   estimatedPrice?: number;    // Realistic UK grocery price in GBP
   hasVariants?: boolean;      // true if item has meaningful size variants (milk, rice, eggs)
   defaultSize?: string;       // For hasVariants=false: "250g", "400g tin", "per item"
@@ -125,10 +126,10 @@ STOCK LEVELS (assign realistically — only 3 levels):
 
 Return ONLY valid JSON array:
 [
-  {"name": "Whole Milk", "category": "Dairy", "stockLevel": "stocked", "estimatedPrice": 1.15, "hasVariants": true},
-  {"name": "White Bread", "category": "Bakery", "stockLevel": "low", "estimatedPrice": 1.10, "hasVariants": false, "defaultSize": "800g loaf", "defaultUnit": "loaf"},
-  {"name": "Toilet Paper", "category": "Household", "stockLevel": "low", "estimatedPrice": 3.50, "hasVariants": true},
-  {"name": "Butter", "category": "Dairy", "stockLevel": "stocked", "estimatedPrice": 1.85, "hasVariants": false, "defaultSize": "250g", "defaultUnit": "g"},
+  {"name": "Whole Milk", "category": "Dairy", "stockLevel": "stocked", "source": "local", "estimatedPrice": 1.15, "hasVariants": true},
+  {"name": "White Bread", "category": "Bakery", "stockLevel": "low", "source": "local", "estimatedPrice": 1.10, "hasVariants": false, "defaultSize": "800g loaf", "defaultUnit": "loaf"},
+  {"name": "Egusi Seeds", "category": "Ethnic Ingredients", "stockLevel": "stocked", "source": "cultural", "estimatedPrice": 3.50, "hasVariants": true},
+  {"name": "Butter", "category": "Dairy", "stockLevel": "stocked", "source": "local", "estimatedPrice": 1.85, "hasVariants": false, "defaultSize": "250g", "defaultUnit": "g"},
   ...
 ]
 
@@ -139,6 +140,7 @@ IMPORTANT:
 - Include a realistic current grocery estimated price in GBP for each item (the most common size/variant price)
 - Set hasVariants to true for items where size materially affects price (e.g., milk, rice, eggs, cooking oil, laundry detergent, shampoo) and false for standard-size items (e.g., bananas, butter, tinned beans, single spice jars)
 - For items where hasVariants is false, include defaultSize (e.g., "250g", "400g tin", "per item", "bunch") and defaultUnit (e.g., "g", "tin", "each"). Every non-variant item must have defaultSize and defaultUnit.
+- Every item MUST have "source": "local" (for universal staples) or "source": "cultural" (for cuisine-specific items)
 - No explanations, ONLY the JSON array
 - Exactly ${totalItems} items`;
 
@@ -168,6 +170,7 @@ ${prompt}`;
         })
         .map((item) => ({
           ...item,
+          source: item.source === "cultural" ? "cultural" as const : "local" as const,
           estimatedPrice: typeof item.estimatedPrice === "number" ? item.estimatedPrice : undefined,
           hasVariants: typeof item.hasVariants === "boolean" ? item.hasVariants : undefined,
           defaultSize: typeof item.defaultSize === "string" ? item.defaultSize : undefined,

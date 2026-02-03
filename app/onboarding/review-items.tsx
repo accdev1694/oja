@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  ActivityIndicator,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useMutation, useAction } from "convex/react";
@@ -25,6 +24,44 @@ import {
   borderRadius,
   useGlassAlert,
 } from "@/components/ui/glass";
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+type SourceGroup = "local" | "cultural";
+
+interface GroupedBySource {
+  local: Record<string, SeedItem[]>;
+  cultural: Record<string, SeedItem[]>;
+}
+
+const SOURCE_CONFIG: Record<
+  SourceGroup,
+  {
+    title: string;
+    subtitle: string;
+    icon: keyof typeof MaterialCommunityIcons.glyphMap;
+    accent: string;
+  }
+> = {
+  local: {
+    title: "Local Staples",
+    subtitle: "Everyday essentials common in your area",
+    icon: "home-outline",
+    accent: colors.accent.primary,
+  },
+  cultural: {
+    title: "Cultural Favourites",
+    subtitle: "Ingredients from your chosen cuisines",
+    icon: "earth",
+    accent: "#FFB088",
+  },
+};
+
+// =============================================================================
+// MAIN SCREEN
+// =============================================================================
 
 export default function ReviewItemsScreen() {
   const router = useRouter();
@@ -51,24 +88,31 @@ export default function ReviewItemsScreen() {
 
   const [isSaving, setIsSaving] = useState(false);
 
-  // Group items by category
-  const groupedItems: Record<string, SeedItem[]> = {};
-  items.forEach((item) => {
-    if (!groupedItems[item.category]) {
-      groupedItems[item.category] = [];
+  // Group items by source, then by category within each source
+  const grouped: GroupedBySource = { local: {}, cultural: {} };
+  items.forEach((item, index) => {
+    const source: SourceGroup = item.source === "cultural" ? "cultural" : "local";
+    if (!grouped[source][item.category]) {
+      grouped[source][item.category] = [];
     }
-    groupedItems[item.category].push(item);
+    grouped[source][item.category].push(item);
   });
 
-  // Calculate counts
-  const totalItems = items.length;
+  // Counts
+  const localCount = Object.values(grouped.local).flat().length;
+  const culturalCount = Object.values(grouped.cultural).flat().length;
   const selectedCount = selectedItems.size;
-  const localItemsCount = Math.floor(totalItems * 0.6);
-  const culturalItemsCount = totalItems - localItemsCount;
+
+  // Count selected per source
+  const localSelected = Object.values(grouped.local)
+    .flat()
+    .filter((item) => selectedItems.has(items.indexOf(item))).length;
+  const culturalSelected = Object.values(grouped.cultural)
+    .flat()
+    .filter((item) => selectedItems.has(items.indexOf(item))).length;
 
   function toggleItem(index: number) {
     safeHaptics.light();
-
     setSelectedItems((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(index)) {
@@ -80,16 +124,32 @@ export default function ReviewItemsScreen() {
     });
   }
 
+  function toggleSection(source: SourceGroup) {
+    safeHaptics.medium();
+    const sectionItems = Object.values(grouped[source]).flat();
+    const sectionIndices = sectionItems.map((item) => items.indexOf(item));
+    const allSelected = sectionIndices.every((i) => selectedItems.has(i));
+
+    setSelectedItems((prev) => {
+      const newSet = new Set(prev);
+      sectionIndices.forEach((i) => {
+        if (allSelected) {
+          newSet.delete(i);
+        } else {
+          newSet.add(i);
+        }
+      });
+      return newSet;
+    });
+  }
+
   async function handleSave() {
     if (selectedItems.size === 0) {
       alert(
         "No items selected",
         "You haven't selected any items. Start with an empty pantry?",
         [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
+          { text: "Cancel", style: "cancel" },
           {
             text: "Continue",
             onPress: async () => {
@@ -106,7 +166,6 @@ export default function ReviewItemsScreen() {
     setIsSaving(true);
 
     try {
-      // Get selected items and normalize stock levels to 3-level system
       const stockMap: Record<string, string> = { good: "stocked", half: "low" };
       const itemsToSave = items
         .filter((_, i) => selectedItems.has(i))
@@ -115,15 +174,11 @@ export default function ReviewItemsScreen() {
           stockLevel: stockMap[item.stockLevel] || item.stockLevel,
         }));
 
-      // Save to Convex
       await bulkCreate({ items: itemsToSave as any });
-
-      // Mark onboarding as complete
       await completeOnboarding();
-
       safeHaptics.success();
 
-      // Fire variant seeding in the background (don't block navigation)
+      // Fire variant seeding in the background
       const variantItems = itemsToSave.filter((item) => item.hasVariants);
       if (variantItems.length > 0) {
         generateVariants({
@@ -137,7 +192,6 @@ export default function ReviewItemsScreen() {
           .catch(console.error);
       }
 
-      // Navigate to main app
       router.replace("/(app)/(tabs)");
     } catch (error) {
       console.error("Failed to save pantry items:", error);
@@ -153,83 +207,142 @@ export default function ReviewItemsScreen() {
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <Text style={styles.title}>Review Your Pantry</Text>
         <Text style={styles.subtitle}>
-          Tap items to remove them from your pantry
+          Tap items to deselect, or toggle whole sections
         </Text>
 
-        <GlassCard variant="standard" style={styles.statsCard}>
-          <View style={styles.stats}>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Local Items</Text>
-              <Text style={styles.statValue}>{localItemsCount}</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Cultural Items</Text>
-              <Text style={styles.statValue}>{culturalItemsCount}</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Selected</Text>
-              <Text style={styles.statValue}>{selectedCount}</Text>
-            </View>
+        {/* Summary chips */}
+        <View style={styles.chipRow}>
+          <View style={[styles.chip, { borderColor: SOURCE_CONFIG.local.accent }]}>
+            <MaterialCommunityIcons
+              name={SOURCE_CONFIG.local.icon}
+              size={14}
+              color={SOURCE_CONFIG.local.accent}
+            />
+            <Text style={[styles.chipText, { color: SOURCE_CONFIG.local.accent }]}>
+              {localSelected}/{localCount} local
+            </Text>
           </View>
-        </GlassCard>
+          <View style={[styles.chip, { borderColor: SOURCE_CONFIG.cultural.accent }]}>
+            <MaterialCommunityIcons
+              name={SOURCE_CONFIG.cultural.icon}
+              size={14}
+              color={SOURCE_CONFIG.cultural.accent}
+            />
+            <Text style={[styles.chipText, { color: SOURCE_CONFIG.cultural.accent }]}>
+              {culturalSelected}/{culturalCount} cultural
+            </Text>
+          </View>
+          <View style={[styles.chip, { borderColor: colors.text.secondary }]}>
+            <Text style={[styles.chipText, { color: colors.text.secondary }]}>
+              {selectedCount} selected
+            </Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {Object.entries(groupedItems).map(([category, categoryItems]) => (
-          <View key={category} style={styles.categorySection}>
-            <Text style={styles.categoryTitle}>{category}</Text>
+        {(["local", "cultural"] as SourceGroup[]).map((source) => {
+          const categories = grouped[source];
+          const categoryEntries = Object.entries(categories);
+          if (categoryEntries.length === 0) return null;
 
-            <View style={styles.itemGrid}>
-              {categoryItems.map((item) => {
-                const globalIndex = items.indexOf(item);
-                const isSelected = selectedItems.has(globalIndex);
+          const config = SOURCE_CONFIG[source];
+          const sectionItems = Object.values(categories).flat();
+          const sectionIndices = sectionItems.map((item) => items.indexOf(item));
+          const allSelected = sectionIndices.every((i) => selectedItems.has(i));
 
-                return (
-                  <TouchableOpacity
-                    key={globalIndex}
-                    style={[
-                      styles.itemCard,
-                      !isSelected && styles.itemCardDeselected,
-                    ]}
-                    onPress={() => toggleItem(globalIndex)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.itemContent}>
-                      <Text
-                        style={[
-                          styles.itemName,
-                          !isSelected && styles.itemNameDeselected,
-                        ]}
-                        numberOfLines={2}
-                      >
-                        {item.name}
-                      </Text>
+          return (
+            <View key={source} style={styles.sourceSection}>
+              {/* Source Header */}
+              <TouchableOpacity
+                style={[styles.sourceHeader, { borderLeftColor: config.accent }]}
+                onPress={() => toggleSection(source)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.sourceIconContainer, { backgroundColor: `${config.accent}20` }]}>
+                  <MaterialCommunityIcons
+                    name={config.icon}
+                    size={22}
+                    color={config.accent}
+                  />
+                </View>
+                <View style={styles.sourceHeaderText}>
+                  <Text style={styles.sourceTitle}>{config.title}</Text>
+                  <Text style={styles.sourceSubtitle}>{config.subtitle}</Text>
+                </View>
+                <View style={[styles.selectAllBadge, allSelected && { backgroundColor: config.accent }]}>
+                  {allSelected ? (
+                    <MaterialCommunityIcons name="check-all" size={16} color="#fff" />
+                  ) : (
+                    <MaterialCommunityIcons name="checkbox-blank-outline" size={16} color={colors.text.tertiary} />
+                  )}
+                </View>
+              </TouchableOpacity>
 
-                      {item.estimatedPrice != null && (
-                        <Text
+              {/* Categories within this source */}
+              {categoryEntries.map(([category, categoryItems]) => (
+                <View key={category} style={styles.categorySection}>
+                  <View style={styles.categoryHeader}>
+                    <View style={[styles.categoryDot, { backgroundColor: config.accent }]} />
+                    <Text style={styles.categoryTitle}>{category}</Text>
+                    <Text style={styles.categoryCount}>
+                      {categoryItems.filter((item) => selectedItems.has(items.indexOf(item))).length}/{categoryItems.length}
+                    </Text>
+                  </View>
+
+                  <View style={styles.itemGrid}>
+                    {categoryItems.map((item) => {
+                      const globalIndex = items.indexOf(item);
+                      const isSelected = selectedItems.has(globalIndex);
+
+                      return (
+                        <TouchableOpacity
+                          key={globalIndex}
                           style={[
-                            styles.itemPrice,
-                            !isSelected && styles.itemPriceDeselected,
+                            styles.itemCard,
+                            isSelected && { borderColor: config.accent },
+                            !isSelected && styles.itemCardDeselected,
                           ]}
+                          onPress={() => toggleItem(globalIndex)}
+                          activeOpacity={0.7}
                         >
-                          ~£{item.estimatedPrice.toFixed(2)}
-                        </Text>
-                      )}
+                          <View style={styles.itemContent}>
+                            <Text
+                              style={[
+                                styles.itemName,
+                                !isSelected && styles.itemNameDeselected,
+                              ]}
+                              numberOfLines={2}
+                            >
+                              {item.name}
+                            </Text>
 
-                      {isSelected && (
-                        <View style={styles.checkmark}>
-                          <MaterialCommunityIcons name="check" size={12} color="#fff" />
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+                            {item.estimatedPrice != null && (
+                              <Text
+                                style={[
+                                  styles.itemPrice,
+                                  !isSelected && styles.itemPriceDeselected,
+                                ]}
+                              >
+                                ~£{item.estimatedPrice.toFixed(2)}
+                              </Text>
+                            )}
+
+                            {isSelected && (
+                              <View style={[styles.checkmark, { backgroundColor: config.accent }]}>
+                                <MaterialCommunityIcons name="check" size={12} color="#fff" />
+                              </View>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
             </View>
-          </View>
-        ))}
+          );
+        })}
         <View style={{ height: insets.bottom + 100 }} />
       </ScrollView>
 
@@ -249,6 +362,10 @@ export default function ReviewItemsScreen() {
   );
 }
 
+// =============================================================================
+// STYLES
+// =============================================================================
+
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing.lg,
@@ -264,47 +381,101 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginBottom: spacing.md,
   },
-  statsCard: {
-    padding: 0,
-  },
-  stats: {
+  chipRow: {
     flexDirection: "row",
-    padding: spacing.md,
+    gap: spacing.sm,
+    flexWrap: "wrap",
   },
-  statItem: {
-    flex: 1,
+  chip: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
   },
-  statLabel: {
+  chipText: {
     ...typography.labelSmall,
-    color: colors.text.tertiary,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: colors.accent.primary,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: colors.glass.border,
-    marginHorizontal: 8,
+    fontWeight: "600",
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
   },
-  categorySection: {
-    marginBottom: spacing.lg,
+  // -- Source section (Local / Cultural) --
+  sourceSection: {
+    marginBottom: spacing.xl,
   },
-  categoryTitle: {
+  sourceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderLeftWidth: 3,
+    paddingLeft: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  sourceIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.sm,
+  },
+  sourceHeaderText: {
+    flex: 1,
+  },
+  sourceTitle: {
     ...typography.headlineSmall,
     color: colors.text.primary,
+  },
+  sourceSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginTop: 1,
+  },
+  selectAllBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  // -- Category subsection --
+  categorySection: {
+    marginBottom: spacing.md,
+    marginLeft: spacing.md,
+  },
+  categoryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: spacing.sm,
   },
+  categoryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: spacing.sm,
+  },
+  categoryTitle: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    flex: 1,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  categoryCount: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+  },
+  // -- Item grid --
   itemGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -317,11 +488,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     padding: spacing.sm,
     borderWidth: 2,
-    borderColor: colors.accent.primary,
+    borderColor: colors.glass.border,
   },
   itemCardDeselected: {
     borderColor: colors.glass.border,
-    opacity: 0.5,
+    opacity: 0.4,
   },
   itemContent: {
     position: "relative",
@@ -350,7 +521,6 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.accent.primary,
     alignItems: "center",
     justifyContent: "center",
   },
