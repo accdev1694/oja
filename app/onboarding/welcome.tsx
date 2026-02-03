@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Image } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -26,37 +26,40 @@ export default function WelcomeScreen() {
     <GlassScreen>
       <View style={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
         <View style={styles.content}>
-          {/* Logo/Icon */}
-          <View style={styles.iconContainer}>
-            <MaterialCommunityIcons
-              name="cart"
-              size={64}
-              color={colors.accent.primary}
-            />
-          </View>
+          {/* Logo */}
+          <Image
+            source={require("@/assets/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
 
           {/* Welcome Text */}
           <Text style={styles.title}>Welcome to Oja!</Text>
           <Text style={styles.subtitle}>
-            Your budget-first shopping companion. Take control of your spending before, during, and after every shopping trip.
+            AI-powered shopping that learns what you love and helps you spend smarter.
           </Text>
 
           {/* Feature Cards */}
           <View style={styles.features}>
             <FeatureCard
-              icon="clipboard-list-outline"
-              title="Smart Lists"
-              description="Plan your shopping with budget tracking"
+              icon="brain"
+              title="Learns You"
+              description="AI-powered suggestions based on your favourite foods and habits"
             />
             <FeatureCard
-              icon="fridge-outline"
-              title="Pantry Tracking"
-              description="Know what you have at home"
+              icon="barcode-scan"
+              title="Scan It"
+              description="Snap a product or receipt and we handle the rest"
             />
             <FeatureCard
-              icon="receipt"
-              title="Receipt Scanning"
-              description="Track actual spending vs. budget"
+              icon="microphone-outline"
+              title="Voice Lists"
+              description="Create shopping lists by just speaking naturally"
+            />
+            <FeatureCard
+              icon="chart-timeline-variant-shimmer"
+              title="Personal Insights"
+              description="Spending trends, savings tips, and weekly digests"
             />
           </View>
         </View>
@@ -121,13 +124,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: `${colors.accent.primary}20`,
-    justifyContent: "center",
-    alignItems: "center",
+  logo: {
+    width: 160,
+    height: 112,
     marginBottom: spacing.xl,
   },
   title: {
