@@ -8,11 +8,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  Modal,
   Pressable,
   TextInput,
-  Alert,
-  Platform,
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -57,10 +54,13 @@ import {
   SimpleHeader,
   SkeletonPantryItem,
   EmptyPantry,
+  GlassModal,
+  TrialNudgeBanner,
   colors,
   typography,
   spacing,
   borderRadius,
+  useGlassAlert,
 } from "@/components/ui/glass";
 import { RemoveButton } from "@/components/ui/RemoveButton";
 import { AddToListButton } from "@/components/ui/AddToListButton";
@@ -84,6 +84,7 @@ const STOCK_LEVELS: { level: StockLevel; label: string; color: string }[] = [
 export default function PantryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { alert } = useGlassAlert();
   const items = useQuery(api.pantryItems.getByUser);
   const activeLists = useQuery(api.shoppingLists.getActive);
   const updateStockLevel = useMutation(api.pantryItems.updateStockLevel);
@@ -308,22 +309,16 @@ export default function PantryScreen() {
       const msg = error?.message ?? error?.data ?? "";
       if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
         notificationAsync(NotificationFeedbackType.Warning);
-        if (Platform.OS === "web") {
-          if (window.confirm("You've reached the 50-item limit on the Free plan.\n\nUpgrade to Premium for unlimited pantry items?")) {
-            router.push("/(app)/subscription");
-          }
-        } else {
-          Alert.alert(
-            "Pantry Limit Reached",
-            "Free plan allows up to 50 pantry items. Upgrade to Premium for unlimited items.",
-            [
-              { text: "Maybe Later", style: "cancel" },
-              { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
-            ]
-          );
-        }
+        alert(
+          "Pantry Limit Reached",
+          "Free plan allows up to 50 pantry items. Upgrade to Premium for unlimited items.",
+          [
+            { text: "Maybe Later", style: "cancel" },
+            { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
+          ]
+        );
       } else {
-        Alert.alert("Error", "Failed to add pantry item");
+        alert("Error", "Failed to add pantry item");
       }
     }
   };
@@ -339,16 +334,10 @@ export default function PantryScreen() {
       }
     };
 
-    if (Platform.OS === "web") {
-      if (window.confirm(`Remove "${item.name}" from your stock?`)) {
-        doRemove();
-      }
-    } else {
-      Alert.alert("Remove Item", `Remove "${item.name}" from your stock?`, [
-        { text: "Cancel", style: "cancel" },
-        { text: "Remove", style: "destructive", onPress: doRemove },
-      ]);
-    }
+    alert("Remove Item", `Remove "${item.name}" from your stock?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: doRemove },
+    ]);
   };
 
   // Add-to-list handler — opens list picker
@@ -373,16 +362,10 @@ export default function PantryScreen() {
           console.error("Failed to create list:", e);
         }
       };
-      if (Platform.OS === "web") {
-        if (window.confirm("No active lists. Create a new list and add this item?")) {
-          doCreate();
-        }
-      } else {
-        Alert.alert("No Active Lists", "Create a new list and add this item?", [
-          { text: "Cancel", style: "cancel" },
-          { text: "Create", onPress: doCreate },
-        ]);
-      }
+      alert("No Active Lists", "Create a new list and add this item?", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Create", onPress: doCreate },
+      ]);
       return;
     }
 
@@ -575,7 +558,7 @@ export default function PantryScreen() {
           subtitle={
             viewMode === "attention"
               ? `${attentionCount} item${attentionCount !== 1 ? "s" : ""} need restocking`
-              : `What you have at home · ${filteredItems.length} of ${items.length} items${searchQuery ? ` matching "${searchQuery}"` : ""}`
+              : `${filteredItems.length} of ${items.length} items`
           }
           rightElement={
             <View style={styles.headerButtons}>
@@ -609,6 +592,9 @@ export default function PantryScreen() {
             </View>
           }
         />
+
+        {/* Trial Nudge Banner */}
+        <TrialNudgeBanner />
 
         {/* View Mode Tabs — sliding pill animates between red↔green */}
         <View style={styles.viewModeTabs} onLayout={onTabContainerLayout}>
@@ -680,9 +666,6 @@ export default function PantryScreen() {
               />
             </View>
 
-            <View style={styles.hintRow}>
-              <TypewriterHint text="Swipe left/right to adjust stock level" />
-            </View>
           </>
         )}
 
@@ -708,6 +691,9 @@ export default function PantryScreen() {
               </View>
             ) : (
               <View style={styles.itemList}>
+                <View style={styles.hintRow}>
+                  <TypewriterHint text="Swipe left/right to adjust stock level" />
+                </View>
                 {/* Journey prompt: bridge Stock → Lists */}
                 {outCount > 0 && (
                   <Pressable
@@ -765,7 +751,13 @@ export default function PantryScreen() {
             )
           ) : (
             // All Items mode: grouped by category with collapsible sections
-            Object.entries(groupedItems).map(([category, categoryItems]) => {
+            <>
+            {Object.keys(groupedItems).some((cat) => !collapsedCategories.has(cat)) && (
+              <View style={styles.hintRow}>
+                <TypewriterHint text="Swipe left/right to adjust stock level" />
+              </View>
+            )}
+            {Object.entries(groupedItems).map(([category, categoryItems]) => {
               const isCollapsed = collapsedCategories.has(category);
 
               const toggleCategory = () => {
@@ -819,7 +811,8 @@ export default function PantryScreen() {
                   )}
                 </View>
               );
-            })
+            })}
+            </>
           )}
         </ScrollView>
 
@@ -829,206 +822,193 @@ export default function PantryScreen() {
         )}
 
         {/* Filter Modal */}
-        <Modal
+        <GlassModal
           visible={filterVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setFilterVisible(false)}
+          onClose={() => setFilterVisible(false)}
+          maxWidth={340}
+          contentStyle={styles.filterModal}
         >
-          <Pressable style={styles.modalOverlay} onPress={() => setFilterVisible(false)}>
-            <GlassCard variant="elevated" style={styles.filterModal}>
-              <Text style={styles.filterTitle}>Filter by Stock Level</Text>
-              <Text style={styles.filterSubtitle}>Select which levels to show</Text>
+          <Text style={styles.filterTitle}>Filter by Stock Level</Text>
+          <Text style={styles.filterSubtitle}>Select which levels to show</Text>
 
-              <View style={styles.filterOptions}>
-                {STOCK_LEVELS.map((option) => (
-                  <TouchableOpacity
-                    key={option.level}
-                    style={[
-                      styles.filterOption,
-                      stockFilters.has(option.level) && styles.filterOptionSelected,
-                    ]}
-                    onPress={() => toggleStockFilter(option.level)}
-                    activeOpacity={0.7}
-                  >
-                    <GaugeIndicator level={option.level} size="small" />
-                    <Text style={styles.filterOptionLabel}>{option.label}</Text>
-                    {stockFilters.has(option.level) && (
-                      <MaterialCommunityIcons
-                        name="check-circle"
-                        size={22}
-                        color={colors.accent.primary}
-                      />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
+          <View style={styles.filterOptions}>
+            {STOCK_LEVELS.map((option) => (
+              <TouchableOpacity
+                key={option.level}
+                style={[
+                  styles.filterOption,
+                  stockFilters.has(option.level) && styles.filterOptionSelected,
+                ]}
+                onPress={() => toggleStockFilter(option.level)}
+                activeOpacity={0.7}
+              >
+                <GaugeIndicator level={option.level} size="small" />
+                <Text style={styles.filterOptionLabel}>{option.label}</Text>
+                {stockFilters.has(option.level) && (
+                  <MaterialCommunityIcons
+                    name="check-circle"
+                    size={22}
+                    color={colors.accent.primary}
+                  />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
 
-              <View style={styles.filterActions}>
-                <GlassButton
-                  variant="ghost"
-                  size="md"
-                  onPress={() => {
-                    setStockFilters(new Set<StockLevel>(["stocked", "low", "out"]));
-                    impactAsync(ImpactFeedbackStyle.Light);
-                  }}
-                >
-                  Show All
-                </GlassButton>
-                <GlassButton
-                  variant="primary"
-                  size="md"
-                  onPress={() => setFilterVisible(false)}
-                >
-                  Done
-                </GlassButton>
-              </View>
-            </GlassCard>
-          </Pressable>
-        </Modal>
+          <View style={styles.filterActions}>
+            <GlassButton
+              variant="ghost"
+              size="md"
+              onPress={() => {
+                setStockFilters(new Set<StockLevel>(["stocked", "low", "out"]));
+                impactAsync(ImpactFeedbackStyle.Light);
+              }}
+            >
+              Show All
+            </GlassButton>
+            <GlassButton
+              variant="primary"
+              size="md"
+              onPress={() => setFilterVisible(false)}
+            >
+              Done
+            </GlassButton>
+          </View>
+        </GlassModal>
 
         {/* Add Item Modal */}
-        <Modal
+        <GlassModal
           visible={addModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setAddModalVisible(false)}
+          onClose={() => setAddModalVisible(false)}
+          maxWidth={400}
+          avoidKeyboard
+          contentStyle={styles.addModalContent}
         >
-          <Pressable style={styles.modalOverlay} onPress={() => setAddModalVisible(false)}>
-            <Pressable style={styles.addModal} onPress={(e) => e.stopPropagation()}>
-              <MaterialCommunityIcons name="fridge-outline" size={36} color={colors.accent.primary} />
-              <Text style={styles.addModalTitle}>Add to Stock</Text>
+          <MaterialCommunityIcons name="fridge-outline" size={36} color={colors.accent.primary} />
+          <Text style={styles.addModalTitle}>Add to Stock</Text>
 
-              {/* Name input */}
-              <TextInput
-                style={styles.addInput}
-                placeholder="Item name (e.g. Olive Oil)"
-                placeholderTextColor={colors.text.tertiary}
-                value={newItemName}
-                onChangeText={setNewItemName}
-                autoFocus
-                maxLength={80}
-              />
+          {/* Name input */}
+          <TextInput
+            style={styles.addInput}
+            placeholder="Item name (e.g. Olive Oil)"
+            placeholderTextColor={colors.text.tertiary}
+            value={newItemName}
+            onChangeText={setNewItemName}
+            autoFocus
+            maxLength={80}
+          />
 
-              {/* Category picker */}
-              <Text style={styles.addLabel}>Category</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.addChipsScroll}
-                contentContainerStyle={styles.addChipsContent}
+          {/* Category picker */}
+          <Text style={styles.addLabel}>Category</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.addChipsScroll}
+            contentContainerStyle={styles.addChipsContent}
+          >
+            {STOCK_CATEGORIES.map((cat) => (
+              <Pressable
+                key={cat}
+                style={[styles.addChip, newItemCategory === cat && styles.addChipActive]}
+                onPress={() => setNewItemCategory(cat)}
               >
-                {STOCK_CATEGORIES.map((cat) => (
-                  <Pressable
-                    key={cat}
-                    style={[styles.addChip, newItemCategory === cat && styles.addChipActive]}
-                    onPress={() => setNewItemCategory(cat)}
-                  >
-                    <Text style={[styles.addChipText, newItemCategory === cat && styles.addChipTextActive]}>
-                      {cat}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
+                <Text style={[styles.addChipText, newItemCategory === cat && styles.addChipTextActive]}>
+                  {cat}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
 
-              {/* Stock level picker */}
-              <Text style={styles.addLabel}>Stock Level</Text>
-              <View style={styles.addStockRow}>
-                {STOCK_LEVELS.map((option) => (
-                  <Pressable
-                    key={option.level}
-                    style={[styles.addStockChip, newItemStock === option.level && styles.addStockChipActive]}
-                    onPress={() => setNewItemStock(option.level)}
-                  >
-                    <GaugeIndicator level={option.level} size="small" />
-                    <Text style={[
-                      styles.addStockChipText,
-                      newItemStock === option.level && styles.addStockChipTextActive,
-                    ]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+          {/* Stock level picker */}
+          <Text style={styles.addLabel}>Stock Level</Text>
+          <View style={styles.addStockRow}>
+            {STOCK_LEVELS.map((option) => (
+              <Pressable
+                key={option.level}
+                style={[styles.addStockChip, newItemStock === option.level && styles.addStockChipActive]}
+                onPress={() => setNewItemStock(option.level)}
+              >
+                <GaugeIndicator level={option.level} size="small" />
+                <Text style={[
+                  styles.addStockChipText,
+                  newItemStock === option.level && styles.addStockChipTextActive,
+                ]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
-              {/* Actions */}
-              <View style={styles.addActions}>
-                <GlassButton variant="ghost" size="md" onPress={() => setAddModalVisible(false)}>
-                  Cancel
-                </GlassButton>
-                <GlassButton
-                  variant="primary"
-                  size="md"
-                  icon="plus"
-                  onPress={handleAddItem}
-                  disabled={!newItemName.trim()}
-                >
-                  Add Item
-                </GlassButton>
-              </View>
-            </Pressable>
-          </Pressable>
-        </Modal>
+          {/* Actions */}
+          <View style={styles.addActions}>
+            <GlassButton variant="ghost" size="md" onPress={() => setAddModalVisible(false)}>
+              Cancel
+            </GlassButton>
+            <GlassButton
+              variant="primary"
+              size="md"
+              icon="plus"
+              onPress={handleAddItem}
+              disabled={!newItemName.trim()}
+            >
+              Add Item
+            </GlassButton>
+          </View>
+        </GlassModal>
 
         {/* List Picker Modal */}
-        <Modal
+        <GlassModal
           visible={addToListItem !== null}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setAddToListItem(null)}
+          onClose={() => setAddToListItem(null)}
+          maxWidth={340}
+          contentStyle={styles.listPickerModal}
         >
-          <Pressable style={styles.modalOverlay} onPress={() => setAddToListItem(null)}>
-            <Pressable onPress={(e) => e.stopPropagation()}>
-              <GlassCard variant="elevated" style={styles.listPickerModal}>
-                <MaterialCommunityIcons name="playlist-plus" size={36} color={colors.accent.primary} />
-                <Text style={styles.filterTitle}>Add to List</Text>
-                <Text style={styles.filterSubtitle}>
-                  Choose a list for "{addToListItem?.name}"
-                </Text>
-                <View style={styles.listPickerOptions}>
-                  {(activeLists ?? [])
-                    .filter((l) => l.status === "active" || l.status === "shopping")
-                    .map((list) => (
-                      <Pressable
-                        key={list._id}
-                        style={styles.listPickerOption}
-                        onPress={() =>
-                          handlePickList(
-                            list._id,
-                            list.name,
-                            addToListItem?.name ?? "",
-                            addToListItem?.lastPrice
-                          )
-                        }
-                      >
-                        <MaterialCommunityIcons
-                          name="clipboard-list-outline"
-                          size={20}
-                          color={colors.text.secondary}
-                        />
-                        <Text style={styles.listPickerOptionName} numberOfLines={1}>
-                          {list.name}
-                        </Text>
-                        <Text style={styles.listPickerOptionMeta}>
-                          {list.status === "shopping" ? "Shopping" : "Active"}
-                        </Text>
-                        <MaterialCommunityIcons
-                          name="chevron-right"
-                          size={18}
-                          color={colors.text.tertiary}
-                        />
-                      </Pressable>
-                    ))}
-                </View>
-                <View style={styles.filterActions}>
-                  <GlassButton variant="ghost" size="md" onPress={() => setAddToListItem(null)}>
-                    Cancel
-                  </GlassButton>
-                </View>
-              </GlassCard>
-            </Pressable>
-          </Pressable>
-        </Modal>
+          <MaterialCommunityIcons name="playlist-plus" size={36} color={colors.accent.primary} />
+          <Text style={styles.filterTitle}>Add to List</Text>
+          <Text style={styles.filterSubtitle}>
+            Choose a list for "{addToListItem?.name}"
+          </Text>
+          <View style={styles.listPickerOptions}>
+            {(activeLists ?? [])
+              .filter((l) => l.status === "active" || l.status === "shopping")
+              .map((list) => (
+                <Pressable
+                  key={list._id}
+                  style={styles.listPickerOption}
+                  onPress={() =>
+                    handlePickList(
+                      list._id,
+                      list.name,
+                      addToListItem?.name ?? "",
+                      addToListItem?.lastPrice
+                    )
+                  }
+                >
+                  <MaterialCommunityIcons
+                    name="clipboard-list-outline"
+                    size={20}
+                    color={colors.text.secondary}
+                  />
+                  <Text style={styles.listPickerOptionName} numberOfLines={1}>
+                    {list.name}
+                  </Text>
+                  <Text style={styles.listPickerOptionMeta}>
+                    {list.status === "shopping" ? "Shopping" : "Active"}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={18}
+                    color={colors.text.tertiary}
+                  />
+                </Pressable>
+              ))}
+          </View>
+          <View style={styles.filterActions}>
+            <GlassButton variant="ghost" size="md" onPress={() => setAddToListItem(null)}>
+              Cancel
+            </GlassButton>
+          </View>
+        </GlassModal>
       </GestureHandlerRootView>
 
       {/* Gesture Onboarding Overlay */}
@@ -1154,6 +1134,9 @@ function PantryItemRow({
     lastPrice?: number;
     priceSource?: string;
     lastStoreName?: string;
+    defaultSize?: string;
+    defaultUnit?: string;
+    preferredVariant?: string;
   };
   onSwipeDecrease: () => void;
   onSwipeIncrease: () => void;
@@ -1207,16 +1190,6 @@ function PantryItemRow({
                 </Text>
                 <View style={styles.itemSubRow}>
                   <Text style={styles.stockLevelText}>{stockLabel}</Text>
-                  {item.lastPrice != null && (
-                    <Text style={styles.itemPriceLabel}>
-                      £{item.lastPrice.toFixed(2)}
-                      {item.priceSource === "ai_estimate"
-                        ? " est."
-                        : item.priceSource === "receipt" && item.lastStoreName
-                          ? ` at ${item.lastStoreName}`
-                          : ""}
-                    </Text>
-                  )}
                 </View>
               </View>
 
@@ -1236,7 +1209,6 @@ function PantryItemRow({
 // ── Typewriter hint with glow on current letter ─────────────────────
 const TYPEWRITER_SPEED = 60; // ms per character
 const GLOW_COLOR = colors.accent.primary;
-const DIM_COLOR = colors.text.disabled;
 
 function TypewriterHint({ text }: { text: string }) {
   const [charIndex, setCharIndex] = useState(0);
@@ -1270,11 +1242,11 @@ function TypewriterHint({ text }: { text: string }) {
           <Text
             key={i}
             style={{
-              color: isActive ? GLOW_COLOR : isVisible ? DIM_COLOR : "transparent",
+              color: isVisible ? GLOW_COLOR : "transparent",
               fontWeight: isActive ? "700" : "400",
               textShadowColor: isActive ? GLOW_COLOR : "transparent",
               textShadowOffset: { width: 0, height: 0 },
-              textShadowRadius: isActive ? 6 : 0,
+              textShadowRadius: isActive ? 8 : 0,
             }}
           >
             {char}
@@ -1547,14 +1519,14 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   categorySection: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.sm,
   },
   categoryHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.sm,
   },
   categoryTitleRow: {
     flexDirection: "row",
@@ -1628,17 +1600,8 @@ const styles = StyleSheet.create({
     color: colors.accent.primary,
   },
   // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.xl,
-  },
   filterModal: {
-    width: "100%",
-    maxWidth: 340,
-    padding: spacing.xl,
+    alignItems: "center",
   },
   filterTitle: {
     ...typography.headlineMedium,
@@ -1702,16 +1665,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   // Add item modal
-  addModal: {
-    width: "92%",
-    maxWidth: 400,
-    backgroundColor: colors.background.primary,
-    borderRadius: 20,
-    padding: spacing.xl,
+  addModalContent: {
     alignItems: "center",
     gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.glass.borderFocus,
   },
   addModalTitle: {
     ...typography.headlineMedium,
@@ -1796,9 +1752,6 @@ const styles = StyleSheet.create({
 
   // List picker modal
   listPickerModal: {
-    width: "100%",
-    maxWidth: 340,
-    padding: spacing.xl,
     alignItems: "center",
   },
   listPickerOptions: {

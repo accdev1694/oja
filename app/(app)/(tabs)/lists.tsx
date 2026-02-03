@@ -3,12 +3,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
   Pressable,
-  Modal,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -31,11 +27,14 @@ import {
   SimpleHeader,
   SkeletonCard,
   EmptyLists,
+  GlassModal,
+  TrialNudgeBanner,
   colors,
   typography,
   spacing,
   borderRadius,
   animations,
+  useGlassAlert,
 } from "@/components/ui/glass";
 import { NotificationDropdown } from "@/components/partners";
 
@@ -43,6 +42,7 @@ type TabMode = "active" | "history";
 
 export default function ListsScreen() {
   const router = useRouter();
+  const { alert } = useGlassAlert();
   const [tabMode, setTabMode] = useState<TabMode>("active");
   const lists = useQuery(api.shoppingLists.getActive);
   const history = useQuery(api.shoppingLists.getHistory);
@@ -97,7 +97,7 @@ export default function ListsScreen() {
 
   function handleDeleteList(listId: Id<"shoppingLists">, listName: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert("Delete List", `Are you sure you want to delete "${listName}"?`, [
+    alert("Delete List", `Are you sure you want to delete "${listName}"?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -108,7 +108,7 @@ export default function ListsScreen() {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch (error) {
             console.error("Failed to delete list:", error);
-            Alert.alert("Error", "Failed to delete shopping list");
+            alert("Error", "Failed to delete shopping list");
           }
         },
       },
@@ -131,13 +131,13 @@ export default function ListsScreen() {
 
   async function handleCreateList() {
     if (!newListName.trim()) {
-      Alert.alert("Error", "Please enter a list name");
+      alert("Error", "Please enter a list name");
       return;
     }
 
     const budget = parseFloat(newListBudget) || 0;
     if (budget < 0) {
-      Alert.alert("Error", "Budget cannot be negative");
+      alert("Error", "Budget cannot be negative");
       return;
     }
 
@@ -157,22 +157,16 @@ export default function ListsScreen() {
       const msg = error?.message ?? error?.data ?? "";
       if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        if (Platform.OS === "web") {
-          if (window.confirm("You've reached the 3-list limit on the Free plan.\n\nUpgrade to Premium for unlimited lists?")) {
-            router.push("/(app)/subscription");
-          }
-        } else {
-          Alert.alert(
-            "List Limit Reached",
-            "Free plan allows up to 3 active lists. Upgrade to Premium for unlimited lists.",
-            [
-              { text: "Maybe Later", style: "cancel" },
-              { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
-            ]
-          );
-        }
+        alert(
+          "List Limit Reached",
+          "Free plan allows up to 3 active lists. Upgrade to Premium for unlimited lists.",
+          [
+            { text: "Maybe Later", style: "cancel" },
+            { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
+          ]
+        );
       } else {
-        Alert.alert("Error", "Failed to create shopping list");
+        alert("Error", "Failed to create shopping list");
       }
     } finally {
       setIsCreating(false);
@@ -249,6 +243,9 @@ export default function ListsScreen() {
           )}
         </Pressable>
       </View>
+
+      {/* Trial Nudge Banner */}
+      <TrialNudgeBanner />
 
       {/* Content */}
       {!isLoaded ? (
@@ -369,90 +366,83 @@ export default function ListsScreen() {
       />
 
       {/* Create List Modal */}
-      <Modal
+      <GlassModal
         visible={showCreateModal}
-        transparent
-        animationType="fade"
-        onRequestClose={handleCloseCreateModal}
+        onClose={handleCloseCreateModal}
+        overlayOpacity={0.75}
+        maxWidth={360}
+        avoidKeyboard
       >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <Pressable style={styles.modalBackdrop} onPress={handleCloseCreateModal} />
-          <View style={styles.modalContent}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderLeft}>
-                <MaterialCommunityIcons
-                  name="clipboard-plus-outline"
-                  size={24}
-                  color={colors.accent.primary}
-                />
-                <Text style={styles.modalTitle}>Create New List</Text>
-              </View>
-            </View>
-
-            {/* List Name Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>List Name</Text>
-              <View style={styles.inputContainer}>
-                <MaterialCommunityIcons name="clipboard-list" size={20} color={colors.text.tertiary} />
-                <TextInput
-                  style={styles.textInput}
-                  value={newListName}
-                  onChangeText={setNewListName}
-                  placeholder="e.g., Weekly Shop"
-                  placeholderTextColor={colors.text.tertiary}
-                  autoFocus
-                />
-              </View>
-            </View>
-
-            {/* Budget Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Budget (£)</Text>
-              <View style={styles.inputContainer}>
-                <MaterialCommunityIcons name="wallet-outline" size={20} color={colors.text.tertiary} />
-                <TextInput
-                  style={styles.textInput}
-                  value={newListBudget}
-                  onChangeText={setNewListBudget}
-                  placeholder="50"
-                  placeholderTextColor={colors.text.tertiary}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-              <Text style={styles.inputHint}>
-                Set to 0 for no budget tracking
-              </Text>
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.modalActions}>
-              <GlassButton
-                variant="secondary"
-                size="md"
-                onPress={handleCloseCreateModal}
-                style={styles.modalButton}
-              >
-                Cancel
-              </GlassButton>
-              <GlassButton
-                variant="primary"
-                size="md"
-                icon="plus"
-                onPress={handleCreateList}
-                loading={isCreating}
-                disabled={isCreating}
-                style={styles.modalButton}
-              >
-                Create List
-              </GlassButton>
-            </View>
+        {/* Modal Header */}
+        <View style={styles.modalHeader}>
+          <View style={styles.modalHeaderLeft}>
+            <MaterialCommunityIcons
+              name="clipboard-plus-outline"
+              size={24}
+              color={colors.accent.primary}
+            />
+            <Text style={styles.modalTitle}>Create New List</Text>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        </View>
+
+        {/* List Name Input */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>List Name</Text>
+          <View style={styles.inputContainer}>
+            <MaterialCommunityIcons name="clipboard-list" size={20} color={colors.text.tertiary} />
+            <TextInput
+              style={styles.textInput}
+              value={newListName}
+              onChangeText={setNewListName}
+              placeholder="e.g., Weekly Shop"
+              placeholderTextColor={colors.text.tertiary}
+              autoFocus
+            />
+          </View>
+        </View>
+
+        {/* Budget Input */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Budget (£)</Text>
+          <View style={styles.inputContainer}>
+            <MaterialCommunityIcons name="wallet-outline" size={20} color={colors.text.tertiary} />
+            <TextInput
+              style={styles.textInput}
+              value={newListBudget}
+              onChangeText={setNewListBudget}
+              placeholder="50"
+              placeholderTextColor={colors.text.tertiary}
+              keyboardType="decimal-pad"
+            />
+          </View>
+          <Text style={styles.inputHint}>
+            Set to 0 for no budget tracking
+          </Text>
+        </View>
+
+        {/* Action Buttons */}
+        <View style={styles.modalActions}>
+          <GlassButton
+            variant="secondary"
+            size="md"
+            onPress={handleCloseCreateModal}
+            style={styles.modalButton}
+          >
+            Cancel
+          </GlassButton>
+          <GlassButton
+            variant="primary"
+            size="md"
+            icon="plus"
+            onPress={handleCreateList}
+            loading={isCreating}
+            disabled={isCreating}
+            style={styles.modalButton}
+          >
+            Create List
+          </GlassButton>
+        </View>
+      </GlassModal>
     </GlassScreen>
   );
 }
@@ -1093,29 +1083,6 @@ const styles = StyleSheet.create({
   },
 
   // Modal styles
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
-  },
-  modalContent: {
-    width: "85%",
-    maxWidth: 360,
-    backgroundColor: colors.background.primary,
-    borderRadius: 20,
-    padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.glass.borderFocus,
-    shadowColor: colors.accent.primary,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    elevation: 15,
-  },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",

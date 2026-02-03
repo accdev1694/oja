@@ -186,6 +186,28 @@ export {
 } from "./GlassCollapsible";
 
 // =============================================================================
+// MODAL COMPONENTS
+// =============================================================================
+
+export {
+  GlassModal,
+  type GlassModalProps,
+} from "./GlassModal";
+
+export { TrialNudgeBanner } from "./TrialNudgeBanner";
+
+// =============================================================================
+// ALERT / CONFIRM DIALOG
+// =============================================================================
+
+export {
+  GlassAlertProvider,
+  useGlassAlert,
+  type AlertButton,
+  type AlertConfig,
+} from "./GlassAlert";
+
+// =============================================================================
 // TOAST COMPONENTS
 // =============================================================================
 

@@ -5,8 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Alert,
-  Platform,
 } from "react-native";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
@@ -24,12 +22,14 @@ import {
   colors,
   typography,
   spacing,
+  useGlassAlert,
 } from "@/components/ui/glass";
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
   const { user } = useUser();
   const router = useRouter();
+  const { alert } = useGlassAlert();
 
   const allLists = useQuery(api.shoppingLists.getByUser);
   const pantryItems = useQuery(api.pantryItems.getByUser);
@@ -60,14 +60,10 @@ export default function ProfileScreen() {
   };
 
   const confirmAction = (title: string, message: string, onConfirm: () => void) => {
-    if (Platform.OS === "web") {
-      if (window.confirm(`${title}\n\n${message}`)) onConfirm();
-    } else {
-      Alert.alert(title, message, [
-        { text: "Cancel", style: "cancel" },
-        { text: "Confirm", style: "destructive", onPress: onConfirm },
-      ]);
-    }
+    alert(title, message, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Confirm", style: "destructive", onPress: onConfirm },
+    ]);
   };
 
   const handleResetAccount = () => {
@@ -109,7 +105,7 @@ export default function ProfileScreen() {
                 await user.delete();
               } catch (retryErr) {
                 console.error("Clerk deletion retry failed:", retryErr);
-                Alert.alert(
+                alert(
                   "Partial Deletion",
                   "Your app data was deleted but the login account could not be removed. Please contact support or delete it manually from account settings."
                 );
@@ -287,16 +283,27 @@ export default function ProfileScreen() {
               <View style={styles.navRow}>
                 <View style={[styles.navIcon, { backgroundColor: `${colors.accent.secondary}20` }]}>
                   <MaterialCommunityIcons
-                    name={subscription?.plan === "free" ? "crown-outline" : "crown"}
+                    name={(subscription as any)?.isActive ? "crown" : "crown-outline"}
                     size={20}
-                    color={colors.accent.secondary}
+                    color={subscription?.status === "expired" ? colors.text.tertiary : colors.accent.secondary}
                   />
                 </View>
                 <View style={styles.navInfo}>
                   <Text style={styles.navTitle}>
-                    {subscription?.plan === "free" ? "Free Plan" : "Premium"}
+                    {subscription?.status === "trial"
+                      ? "Premium Trial"
+                      : subscription?.status === "expired"
+                        ? "Free Plan"
+                        : (subscription as any)?.isActive
+                          ? "Premium"
+                          : "Free Plan"}
                   </Text>
                   <Text style={styles.navSubtitle}>
+                    {subscription?.status === "trial" && (subscription as any)?.trialEndsAt
+                      ? `${Math.max(0, Math.ceil(((subscription as any).trialEndsAt - Date.now()) / (1000 * 60 * 60 * 24)))} days left · `
+                      : subscription?.status === "expired"
+                        ? "Trial ended · "
+                        : ""}
                     {(scanCredits?.tier || "bronze").charAt(0).toUpperCase() + (scanCredits?.tier || "bronze").slice(1)} tier · {scanCredits?.lifetimeScans ?? 0} scans
                   </Text>
                 </View>
