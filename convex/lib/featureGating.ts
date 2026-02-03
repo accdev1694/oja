@@ -5,7 +5,7 @@
 
 function getFreeFeatures() {
   return {
-    maxLists: 3,
+    maxLists: 10,
     maxPantryItems: 50,
     receiptScanning: true,
     priceHistory: false,

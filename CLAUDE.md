@@ -4,9 +4,9 @@
 
 ---
 
-## BUILD PROGRESS TRACKER
+## Build Progress Tracker
 
-**📊 Track full build progress:** `_bmad-output/implementation-artifacts/v2-build-progress.md`
+**Full build progress:** `_bmad-output/implementation-artifacts/v2-build-progress.md`
 
 | Phase | Status |
 |-------|--------|
@@ -15,105 +15,36 @@
 | 2. Pantry Tracker | ✅ Complete |
 | 3. Shopping Lists | ✅ Complete |
 | UI. Glass Redesign | ✅ Complete |
-| UX. Emotional Design | ✅ Complete (analysis.md recommendations implemented) |
+| UX. Emotional Design | ✅ Complete (12/15 recommendations implemented) |
 | 4. Partner Mode | 🔄 In Progress (backend done, frontend partial) |
 | 5. Receipt Intelligence | ✅ Complete |
 | 5.5. Zero-Blank Price Intelligence | ✅ Phases 1-4, 6 Complete (Phase 5 bracket matcher pending validation) |
 | 6. Insights & Gamification | 🔄 In Progress (UI + backend done, push notifications pending) |
+| E2E. Bug Sweep | ✅ Complete (10 bugs found and fixed — commit `97907eb`) |
+| E2E. Playwright Tests | 🔄 In Progress (72 passed, 10 failed — see E2E Testing section) |
 | 7. Subscription & Payments | ⏳ Placeholder |
 | 8. Admin Dashboard | ⏳ Placeholder |
 
 **Current Priorities:**
-1. **Push Notifications** - Smart triggers for stock reminders, streak motivation, weekly digest
-2. **Price Bracket Matcher Validation** - Test against real receipts (target >80% accuracy)
-3. **Epic 4 - Partner Mode** - Approval UI, contest UI, comments UI
+1. **Push Notifications** — Stock reminders, streak motivation, weekly digest
+2. **Price Bracket Matcher Validation** — Test against 19 real receipts (target >80% accuracy)
+3. **Epic 4 - Partner Mode** — Approval UI, contest UI, comments UI
+4. **First-Week Nurture Sequence** — Daily helpful nudges for new users (Day 2, 3, 5)
 
 ---
 
-## ARCHITECTURE PIVOT NOTICE
+## Quick Start for New Session
 
-**As of 2026-01-26, Oja has pivoted from Next.js PWA to React Native (Expo) with a completely new backend architecture. v1 code has been deleted.**
-
-### Required Reading Before Implementation
-
-1. **`project-context.md`** - Developer quick reference (START HERE)
-2. **`analysis.md`** - UX/UI Deep Analysis with implementation recommendations ⭐ CRITICAL
-3. **`_bmad-output/implementation-artifacts/v2-build-progress.md`** - Build progress tracker
-4. **`_bmad-output/planning-artifacts/architecture-v2-expo-convex.md`** - Full architecture specification
-5. **`_bmad-output/planning-artifacts/coding-conventions-expo.md`** - Coding patterns and standards
-6. **`_bmad-output/planning-artifacts/security-guidelines-expo.md`** - Security requirements
-7. **`_bmad-output/planning-artifacts/ui-redesign-glass-system.md`** - Glass UI Design System
-8. **`_bmad-output/planning-artifacts/epics/epic-ui-redesign.md`** - UI Redesign Epic & Stories
+1. Read `project-context.md` — developer quick reference
+2. Check current phase: `/bmad:bmm:workflows:workflow-status`
+3. Review `_bmad-output/implementation-artifacts/sprint-status.yaml` for current story
+4. Load the Developer agent: `/bmad:bmm:agents:dev`
 
 **CRITICAL**: All agents MUST read `project-context.md` before writing ANY code.
 
-### Glass UI Design System
-
-The app uses a glassmorphism-inspired design with:
-- **Deep blue gradient backgrounds** (#0B1426 to #1A2744)
-- **Semi-transparent glass cards** with blur effects
-- **Teal accent color** (#00D4AA) for primary actions
-- **Validated MaterialCommunityIcons** only
-
-Import glass components from: `@/components/ui/glass`
-Import design tokens from: `@/lib/design/glassTokens`
-
-### Zero-Blank Price Intelligence
-
-**CRITICAL ARCHITECTURE**: Every item in Oja shows a price estimate. Never blank. Never "?".
-
-**Three-Layer Price Cascade:**
-```
-Layer 1: Personal History (user's own receipts) → highest trust
-Layer 2: Crowdsourced Prices (all users' receipts, by region)
-Layer 3: AI Estimates (Gemini-seeded, OpenAI fallback)
-```
-
-**Key Components:**
-- `convex/itemVariants.ts` - Variant management with `getWithPrices` cascade
-- `convex/currentPrices.ts` - Crowdsourced price aggregation + bracket matcher
-- `convex/ai.ts` - `estimateItemPrice` action with `withAIFallback` wrapper
-
-**Variant Picker UX:**
-- Items with size variants (milk, oil, pasta) show picker on first add
-- User's preferred variant remembered via `pantryItem.preferredVariant`
-- Confidence labels: `~£X.XX est.` (AI) → `£X.XX at Store` (1-2 reports) → `£X.XX` (10+ reports)
-
-**See `analysis.md` → "Implementation Item: Zero-Blank Price Intelligence" for full architecture.**
-
-### Emotional Design System
-
-The app implements emotional design patterns from `analysis.md`:
-
-- **Warm accent color** (#FFB088) for celebrations and milestones
-- **Micro-celebrations** on check-off (green border flash, haptic feedback)
-- **Budget sentiment** ("Looking good — lots of room left")
-- **Savings jar warmth** with milestone encouragement
-- **Weekly narrative** ("This week you made 2 trips and stayed under budget...")
-- **Journey prompts** between tabs (Scan → Stock, Stock → Lists)
-- **Collapsible insights** for progressive disclosure
-
-Import warm tokens from: `glassTokens.colors.accent.warm`
-
 ---
 
-## Project Lead
-
-**John (PM Agent)** leads this project through the BMAD product development lifecycle, orchestrating the right specialist agents at each phase.
-
-To invoke the project lead:
-
-```
-/bmad:bmm:agents:pm
-```
-
-### Critical Instruction for All Agents
-
-**ALWAYS reference the Product Brief** (`_bmad-output/planning-artifacts/product-brief.md`) as the foundational source of truth for this project. All decisions, requirements, and implementations must align with the vision, features, and technical decisions documented there.
-
----
-
-## Tech Stack (v2 - Expo/Convex)
+## Tech Stack
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
@@ -126,22 +57,263 @@ To invoke the project lead:
 | **AI/ML** | Gemini + OpenAI (fallback) + Jina AI | Receipt parsing + Price estimation + Embeddings |
 | **State** | React hooks + Convex | Real-time reactive state |
 | **Animations** | React Native Reanimated | Smooth native animations |
-| **Icons** | Expo Symbols / SF Symbols | Native iOS icons |
 | **Haptics** | Expo Haptics | Tactile feedback |
 | **Payments** | Stripe | Subscription management |
 
-### Previous Stack (v1 - Deprecated)
+---
 
-The following are from the original Next.js PWA implementation and are being replaced:
-- ~~Next.js 14~~ → Expo
-- ~~Supabase~~ → Convex + Clerk
-- ~~Tailwind CSS~~ → StyleSheet + Liquid Glass
-- ~~TanStack Query~~ → Convex useQuery
-- ~~IndexedDB~~ → Convex + local cache
+## Glass UI Design System
+
+The app uses a glassmorphism-inspired design with:
+- **Deep blue gradient backgrounds** (#0D1528 to #1A2744) — shifted slightly warm from original cold navy
+- **Semi-transparent glass cards** with blur effects
+- **Teal accent color** (#00D4AA) reserved for primary CTAs only
+- **Warm accent color** (#FFB088) for celebrations and milestones
+- **Validated MaterialCommunityIcons** only
+
+```
+Import glass components from: @/components/ui/glass
+Import design tokens from:    @/lib/design/glassTokens
+Import warm tokens from:      glassTokens.colors.accent.warm
+```
 
 ---
 
-## Project Structure (v2)
+## Emotional Design System
+
+| Pattern | Implementation |
+|---------|---------------|
+| **Micro-celebrations** | Green border flash (600ms) + haptic on check-off |
+| **Budget sentiment** | One-line mood below dial: "Looking good — lots of room left" / "Getting close" / "Over budget" |
+| **Savings jar warmth** | £0: aspirational copy. Positive: milestone encouragement ("Great start!", "Triple digits!") |
+| **Weekly narrative** | `generateWeeklyNarrative()` — 2-3 sentence story from digest data |
+| **Journey prompts** | Scan → Stock banner, Stock → Lists banner for out-of-stock items |
+| **Collapsible insights** | `GlassCollapsible` wraps 6 insight sections (collapsed by default) |
+| **Social proof** | Empty states show community stats ("Join 12,000 UK shoppers...") |
+| **Warm accent** | #FFB088 for celebrations, milestones, encouraging text |
+| **Teal reduction** | Reserved for primary CTAs; chips/filters/badges use white/indigo |
+
+---
+
+## Zero-Blank Price Intelligence
+
+**CRITICAL ARCHITECTURE**: Every item in Oja shows a price estimate. Never blank. Never "?".
+
+### Three-Layer Price Cascade
+
+```
+Layer 1: Personal History (user's own receipts) → highest trust → "£1.15 at Aldi"
+Layer 2: Crowdsourced Prices (all users' receipts, by region) → "~£1.15 avg"
+Layer 3: AI Estimates (Gemini-seeded, OpenAI fallback) → "~£1.15 est."
+```
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `convex/itemVariants.ts` | Variant management + `getWithPrices` cascade |
+| `convex/currentPrices.ts` | Crowdsourced price aggregation + bracket matcher |
+| `convex/ai.ts` | `estimateItemPrice` action + `withAIFallback` wrapper |
+| `convex/priceHistory.ts` | Personal receipt price log |
+
+### Variant Picker UX
+
+- Items with size variants (milk, oil, pasta) show picker on first add
+- User's preferred variant remembered via `pantryItem.preferredVariant`
+- "Your usual" star badge on previously selected variant
+- "Not sure" option uses base-item average price
+
+### Confidence Labels
+
+| Source | reportCount | Display |
+|--------|:-----------:|---------|
+| AI estimate | 0 | `~£1.15 est.` |
+| Early receipt data | 1-2 | `£1.15 at Aldi` |
+| Growing confidence | 3-9 | `£1.15 avg` |
+| High confidence | 10+ | `£1.15` (no qualifier) |
+
+### Resolution Algorithm (when user adds item to list)
+
+```
+USER TYPES "milk" ON LIST
+  │
+  ▼ 1. Check pantryItem.preferredVariant → auto-select + price cascade
+  ▼ 2. Query itemVariants → show picker with prices per variant
+  ▼ 3. No variants known:
+       a. pantryItem.lastPrice → use it
+       b. currentPrices → use cheapest
+       c. Nothing → REAL-TIME AI ESTIMATE → cache for all users
+  │
+  EVERY BRANCH TERMINATES WITH A PRICE. NO BRANCH RETURNS NULL.
+```
+
+### AI Fallback Strategy
+
+```
+Primary:   Gemini 2.0 Flash (fast, cheap)
+Fallback:  OpenAI GPT-4o-mini (different failure domain)
+Wrapper:   withAIFallback() in convex/ai.ts
+Applied:   parseReceipt, generateHybridSeedItems, generateItemVariants,
+           estimateItemPrice, generateListSuggestions
+```
+
+### Price-Bracket Matcher (Phase 5 — pending validation)
+
+For sizeless receipt items (~75% of UK receipts), matches receipt price to closest variant by `estimatedPrice` within 20% tolerance. Unambiguous match → associate with variant. Ambiguous → store as base-item.
+
+**Validation:** Run against 19 receipts in `receipts/`. Target: >80% accuracy. If <60%, adjust tolerance or disable.
+
+### Data Flywheel
+
+```
+More users → More receipt scans → Better price data
+→ More accurate budgets → Better user experience → More users
+```
+
+- **0-100 users:** AI estimates dominate
+- **100-1,000:** Crowdsourced covers major stores in top cities
+- **1,000-10,000:** Most common items at most stores have real prices
+- **10,000+:** Regional pricing becomes accurate
+
+---
+
+## UX Analysis Summary
+
+**Analysis date:** 31 January 2026 | **Updated:** 2 February 2026
+
+| Criterion | Score | Target | Status |
+|-----------|:-----:|:------:|--------|
+| Simple | 6→8/10 | 9/10 | Pantry default view + progressive disclosure implemented |
+| Easy to Use | 7→8/10 | 9/10 | Swipe onboarding + budget dial hints added |
+| Not Overwhelming | 5→7/10 | 9/10 | Profile simplified, insights collapsible, teal reduced |
+| Emotional Experience | 4→7/10 | 8/10 | Warm palette, micro-celebrations, sentiment, voice audit |
+| Want to Stay On | 3→5/10 | 7/10 | Weekly narrative, discovery tips, community visibility |
+| Keep Coming Back | 5→7/10 | 8/10 | Milestones, streaks, investment counters, journey prompts |
+
+### Recommendation Status (15 items)
+
+| # | Done | Recommendation | Tier |
+|---|:----:|----------------|:----:|
+| 1 | ✅ | Pantry "Needs Attention" default view | 1 |
+| 2 | ✅ | List Detail progressive disclosure | 1 |
+| 3 | ✅ | Teal reduction — reserved for primary CTAs | 1 |
+| 4 | ✅ | Micro-celebrations on check-off | 1 |
+| 5 | ✅ | Voice audit — warm personality in all copy | 1 |
+| 6 | ✅ | Gesture onboarding (SwipeOnboardingOverlay) | 2 |
+| 7 | ❌ | **Smart push notifications** (3 types) | 2 |
+| 8 | ✅ | Weekly Insights narrative | 2 |
+| 9 | ✅ | Warm accent color (#FFB088) | 2 |
+| 10 | ✅ | Profile simplification | 2 |
+| 11 | ❌ | **First-week nurture sequence** | 3 |
+| 12 | ❌ | **Price intelligence surface** | 3 |
+| 13 | ✅ | Journey prompts between tabs | 3 |
+| 14 | ✅ | Visible investment counter | 3 |
+| 15 | ✅ | Savings milestone celebrations | 3 |
+
+**12/15 done. 3 remaining:** push notifications (#7), nurture sequence (#11), price intelligence surface (#12).
+
+---
+
+## E2E Bug Sweep (2026-02-02)
+
+10 bugs found and fixed in commit `97907eb`:
+
+| # | Severity | Bug | Fix |
+|---|----------|-----|-----|
+| 1 | Low | Onboarding said "200 items" but AI generates ~101 | Removed hardcoded number |
+| 2 | Low | AI seeding produced duplicate items | Dedup by normalized name in `parseSeedResponse` |
+| 3 | Medium | Out-of-stock banner didn't add items to list | Wired to `addFromPantryOut` mutation + navigate |
+| 4 | Medium | Suggestion items added with no price | Calls `estimateItemPrice` before adding |
+| 5 | Low | Invalid "bacon" icon crashed rendering | Replaced with "pig" in client + server icon maps |
+| 6 | High | Pantry items added to list had no budget impact | Passes `lastPrice` as `estimatedPrice` |
+| 7 | High | Budget reset to £0 in shopping mode | Blended total (actual for checked + estimated for unchecked) |
+| 8 | Critical | Receipt parse failure → infinite spinner | Reset `isParsing` immediately, delete failed receipt, cancel button |
+| 9 | High | Failed receipts counted in milestones | Filter by `processingStatus === "completed"` |
+| 10 | High | Failed receipts counted in stats | Same filter applied |
+
+---
+
+## E2E Playwright Testing (2026-02-03)
+
+**87 tests implemented** across 13 spec files. **72 passed, 10 failed, 5 skipped** on last run (25m 30s).
+
+### Setup
+
+```bash
+# Prerequisites: Convex dev server running, Expo Web at localhost:8081
+# Auth state saved in e2e/.auth/user.json (Clerk cookies)
+
+npx playwright test                    # Run all E2E tests (headless)
+npx playwright test --ui               # Playwright UI mode
+npx playwright test e2e/tests/03-pantry.spec.ts  # Single spec
+```
+
+Test plan: `testing.md` (398 planned test cases, 87 implemented).
+
+### React Native Web + Playwright Gotchas
+
+| Issue | Impact | Workaround |
+|-------|--------|------------|
+| **`AnimatedPressable` click** | Playwright `.click()` on text inside RNW `Pressable` does NOT trigger `onPress` | Use `page.evaluate()` JS click — walk up DOM to `cursor: pointer` ancestor (see `ListsPage.createList()`) |
+| **`Alert.alert` is a no-op** | Delete confirmations, any `Alert.alert()` calls silently do nothing on web | Use `window.confirm()` for web, or skip delete tests |
+| **`networkidle` never fires** | Convex WebSocket keeps connection alive | Use `waitForConvex(page)` helper instead of `waitForLoadState("networkidle")` |
+| **Controlled inputs** | `fill()` works but `pressSequentially()` more reliable for React state sync | Use `press("Control+A") → press("Backspace") → pressSequentially(text, { delay: 30 })` |
+| **Feature gating** | Free plan limits block E2E (e.g., 3 list cap) | `featureGating.ts` `maxLists` raised to 10 for testing. Run `npx convex dev --once` after changes. |
+
+### 10 Remaining Failures & Recommended Fixes
+
+| # | Test | Root Cause | Fix |
+|---|------|-----------|-----|
+| 1 | **3.15** Pantry add item | `GlassButton` click not triggering `onPress` | Create `clickPressable(page, text)` helper; apply to "Add Item" button |
+| 2 | **4.7** List card → detail | `openList()` uses `networkidle` (never resolves with Convex) | Replace with `waitForConvex(page)` |
+| 3 | **5.0** Create test list | `createList` navigated but assertion fired too early (false failure) | Remove `waitForURL` catch fallback; use explicit URL wait |
+| 4 | **6.3** Receipt upload | "Use Photo" visible but assertion timeout | Increase timeout from 5s → 10s |
+| 5 | **7.0** Create budget list | Same as 5.0 — false failure, list created successfully | Same fix as 5.0 |
+| 6 | **8.3** Insights screen | `openInsights()` can't find link on profile page | Add scroll before click; verify selector |
+| 7 | **9.0** Create shared list | Same as 5.0/7.0 | Same fix as 5.0 |
+| 8 | **10.2** Profile identity | CSS class selectors don't work on RNW (hashed classes) | Use text content selectors for email/name |
+| 9 | **13.13** White backgrounds | `/scan` tab timeout in headless (camera permissions) | Skip Scan tab in cross-cutting tests |
+| 10 | **13.18** JS errors check | Same `/scan` timeout | Skip Scan tab |
+
+### Systemic Patterns
+
+1. **`clickPressable` helper needed** — Extract JS evaluate click into `e2e/fixtures/base.ts`. All `GlassButton` interactions require it.
+2. **`createList` post-nav timing** — Fixing 5.0/7.0/9.0 unblocks ~18 cascade-skipped tests (serial `describe` blocks).
+3. **Scan tab** requires camera — skip in headless cross-cutting tests.
+
+### Estimated Fix Impact
+
+Fixing these 10 failures (mostly low effort) would recover **~35-40 tests** (from cascade skips), bringing the pass count from 72 to **~95-105+**.
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `e2e/fixtures/base.ts` | Shared helpers: `navigateToTab()`, `waitForConvex()` |
+| `e2e/fixtures/auth.setup.ts` | Clerk auth setup (saves cookies) |
+| `e2e/pages/*.ts` | Page Object Models (ListsPage, PantryPage, ScanPage, etc.) |
+| `e2e/tests/01-13*.spec.ts` | Test specs (serial describe blocks) |
+| `playwright.config.ts` | Playwright config (Chromium, localhost:8081) |
+| `convex/lib/featureGating.ts` | Free plan limits (raised for E2E) |
+
+---
+
+## Critical Rules for All Agents
+
+1. **Read `project-context.md` first** — Before ANY implementation
+2. **Verify authentication** — Every mutation must check user ownership
+3. **Use indexes** — Never scan full tables
+4. **Optimistic updates** — For instant UX feedback
+5. **Haptic feedback** — On all user interactions
+6. **Handle all states** — Loading, error, empty, success
+7. **Zero-Blank Prices** — Every item must show a price estimate (cascade: personal → crowdsourced → AI)
+8. **Warm Tone in Copy** — Friendly, supportive language (not clinical/functional)
+9. **Progressive Disclosure** — Collapsible sections, don't show everything at once
+10. **Teal for CTAs only** — Reserve teal for primary actions; secondary elements use white/gray/indigo
+
+---
+
+## Project Structure
 
 ```
 oja/
@@ -180,6 +352,8 @@ oja/
 │   └── useOptimisticUpdates.ts
 │
 ├── lib/                          # Utilities
+│   ├── design/glassTokens.ts   # Glass design tokens
+│   ├── icons/iconMatcher.ts    # Client-side icon mapping
 │   ├── utils/
 │   └── constants/
 │
@@ -191,20 +365,25 @@ oja/
 │   ├── shoppingLists.ts         # List functions
 │   ├── listItems.ts             # List item functions
 │   ├── receipts.ts              # Receipt functions
+│   ├── itemVariants.ts          # Size variant management
+│   ├── currentPrices.ts         # Crowdsourced prices
+│   ├── priceHistory.ts          # Personal price log
 │   ├── files.ts                 # File storage
-│   ├── ai.ts                    # AI/Gemini functions
+│   ├── ai.ts                    # AI functions (Gemini + OpenAI fallback)
+│   ├── iconMapping.ts           # Server-side icon mapping
 │   └── lib/                     # Backend utilities
 │
 ├── project-context.md            # Developer reference (READ FIRST)
-├── guidelines.md                 # Source tutorial transcript
+├── CLAUDE.md                     # This file
 │
 └── _bmad-output/                 # BMAD artifacts
     ├── planning-artifacts/
     │   ├── product-brief.md
     │   ├── prd.md
-    │   ├── architecture-v2-expo-convex.md  # NEW
-    │   ├── coding-conventions-expo.md      # NEW
-    │   ├── security-guidelines-expo.md     # NEW
+    │   ├── architecture-v2-expo-convex.md
+    │   ├── coding-conventions-expo.md
+    │   ├── security-guidelines-expo.md
+    │   ├── ui-redesign-glass-system.md
     │   └── epics/
     └── implementation-artifacts/
         ├── sprint-status.yaml
@@ -213,7 +392,7 @@ oja/
 
 ---
 
-## Key Commands (v2)
+## Key Commands
 
 ```bash
 # Development
@@ -239,23 +418,6 @@ npm run test:watch                # Watch mode
 npm run lint                      # ESLint
 npm run format                    # Prettier
 ```
-
----
-
-## BMAD Workflow Phases
-
-| Phase | Agent | Command | Status |
-|-------|-------|---------|--------|
-| 1. Product Brief | PM + Analyst | `/bmad:bmm:workflows:create-product-brief` | COMPLETE |
-| 2. PRD | PM | `/bmad:bmm:workflows:prd` | COMPLETE |
-| 3. Architecture | Architect | `/bmad:bmm:workflows:create-architecture` | **NEEDS UPDATE (v2)** |
-| 4. UX Design | UX Designer | `/bmad:bmm:workflows:create-ux-design` | COMPLETE |
-| 5. Epics & Stories | Scrum Master | `/bmad:bmm:workflows:create-epics-and-stories` | **NEEDS UPDATE** |
-| 6. Test Strategy | Test Architect | `/bmad:bmm:workflows:testarch-test-design` | Pending |
-| 7. Sprint Planning | Scrum Master | `/bmad:bmm:workflows:sprint-planning` | Pending |
-| 8. Story Development | Developer | `/bmad:bmm:workflows:dev-story` | Pending |
-| 9. Code Review | Developer | `/bmad:bmm:workflows:code-review` | Pending |
-| 10. Test Automation | Test Architect | `/bmad:bmm:workflows:testarch-automate` | Pending |
 
 ---
 
@@ -297,26 +459,10 @@ export const create = mutation({
 export const generateEmbedding = action({
   args: { text: v.string() },
   handler: async (ctx, args) => {
-    // Call Jina AI for embeddings
     return await jinaAI.embeddings.create({ ... });
   },
 });
 ```
-
----
-
-## Critical Rules for All Agents
-
-1. **Read `project-context.md` first** - Before ANY implementation
-2. **Consult `analysis.md`** - For UX/UI decisions and price intelligence architecture
-3. **Verify authentication** - Every mutation must check user ownership
-4. **Use indexes** - Never scan full tables
-5. **Optimistic updates** - For instant UX feedback
-6. **Haptic feedback** - On all user interactions
-7. **Handle all states** - Loading, error, empty, success
-8. **Zero-Blank Prices** - Every item must show a price estimate (use cascade: personal → crowdsourced → AI)
-9. **Warm Tone in Copy** - Use friendly, supportive language (not clinical/functional)
-10. **Progressive Disclosure** - Don't show everything at once; use collapsible sections
 
 ---
 
@@ -341,142 +487,165 @@ JINA_API_KEY=...                # Embeddings for semantic search
 
 ---
 
-## MCP Servers
+## Remaining Work
 
-**Model Context Protocol (MCP)** servers enable AI agents to interact with external services. The following MCP servers are configured for this project:
+### High Priority — Retention & Engagement
 
-### Configured MCP Servers
+| Item | Description | Effort |
+|------|-------------|--------|
+| **Push Notifications** | 3 types: stock reminder, streak motivation, weekly digest | High |
+| **First-Week Nurture Sequence** | Day 2/3/5 helpful nudges for new users | Medium |
+| **Price Intelligence Surface** | "Milk is 12% cheaper at Aldi this month" | High |
 
-| Service | Type | Description |
-|---------|------|-------------|
-| **Clerk** | URL | Authentication SDK snippets and user management |
-| **Convex** | CLI | Backend deployment queries, table schemas, function metadata |
-| **Stripe** | URL | Payment processing - customers, products, invoices, subscriptions |
-| **GitHub** | CLI | Repository management - repos, PRs, issues |
+### Validation — Price Intelligence
 
-### Configuration Location
+| Item | Description | Status |
+|------|-------------|--------|
+| **Bracket Matcher Accuracy** | Test against 19 receipts in `receipts/` | Target: >80% |
+| **Admin Receipt Seeding Portal** | Bulk scan 50-100 receipts before launch | Not started |
 
-MCP servers are configured in:
-```
-C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.json
-```
+### In Progress
 
-### Configuration File
+| Item | Description | Status |
+|------|-------------|--------|
+| **Partner Mode Frontend** | Approval UI, contest UI, comments UI | Backend done |
+| **Subscription & Payments** | Stripe integration | Placeholder |
+| **Admin Dashboard** | User management, receipt seeding | Placeholder |
 
-```json
-{
-  "mcpServers": {
-    "clerk": {
-      "url": "https://mcp.clerk.com/mcp",
-      "description": "Clerk authentication - SDK snippets and user management"
-    },
-    "convex": {
-      "command": "npx",
-      "args": ["-y", "convex", "mcp", "start"],
-      "description": "Convex backend - deployment queries, table schemas, function metadata"
-    },
-    "stripe": {
-      "url": "https://mcp.stripe.com",
-      "description": "Stripe payments - customers, products, invoices, subscriptions"
-    },
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": ""
-      },
-      "description": "GitHub - repos, PRs, issues (requires GITHUB_PERSONAL_ACCESS_TOKEN)"
-    }
-  }
-}
-```
+### Verification Plan (20 test cases)
 
-### Activation
+**Core Functionality:**
+- [ ] 1. Onboarding zero-blank — all seeded items have price + size context
+- [ ] 2. Variant prices persisted — `hasVariants: true` items have 3-5 variants with `estimatedPrice`
+- [ ] 3. Add "milk" to list — variant picker with AI prices + tilde prefix
+- [ ] 4. Add "milk" again — preferred variant auto-selected, no picker
+- [ ] 5. Add "quinoa" (unknown) — loading state → AI estimate → cached
+- [ ] 6. Non-variant "butter" — shows "Butter · 250g · ~£1.85 est."
 
-**IMPORTANT:** After modifying the MCP configuration file, restart Claude Desktop for the changes to take effect.
+**Receipt Flow:**
+- [x] 7. Scan receipt with sizes — prices flow to priceHistory + currentPrices + pantryItems
+- [ ] 8. Scan sizeless receipt — bracket matcher attempts variant association
+- [ ] 9. Price cascade — receipt-verified > crowdsourced > AI estimate
+- [ ] 10. Crowdsourced accumulation — reportCount increases, weighted average
 
-### Usage
+**AI Fallback:**
+- [ ] 11. Gemini failure → OpenAI handles parsing
+- [ ] 12. Both fail → graceful error, no crash
 
-- **Clerk MCP**: Query authentication patterns, get SDK code snippets, manage users
-- **Convex MCP**: Query deployment status, inspect schemas, get function signatures
-- **Stripe MCP**: Manage subscriptions, view customer data, handle billing
-- **GitHub MCP**: Create PRs, manage issues, review code (requires personal access token)
+**Edge Cases:**
+- [x] 13. Discount lines excluded from receipt parsing
+- [ ] 14. Non-grocery receipt (Primark) — graceful handling
+- [x] 15. 30-day freshness weighting implemented
+- [ ] 16. Admin seeding — prices populate `currentPrices`
+- [ ] 17. Budget accuracy — 10-item list with variant prices
+
+**Invariant Tests:**
+- [ ] 18. Zero-blank invariant — assert `price !== null` for all UI paths
+- [ ] 19. Bracket matcher accuracy >80% against 19 receipts
+- [ ] 20. No test regressions
 
 ---
 
-## BMAD Artifacts Location
+## Receipt Analysis — Real UK Store Patterns
+
+19 real receipts from 7 stores (High Wycombe / Slough area, Oct 2025 – Jan 2026):
+
+| Store | Size Included? | ~% | Format Example |
+|-------|:-:|:--:|----------------|
+| Aldi | Liquids, weighed, multi-packs | 30-35% | `MILK WHOLE 2PT`, `SWEET POTATOES 1KG` |
+| Lidl | Almost only milk | 15-20% | `Whole Milk 4 Pints` |
+| Morrisons | Virtually never | 0-5% | `M TABLE SALT` |
+| Tesco | Branded/premium | 30% | `Protein Yoghurt 200g` |
+| Sainsbury's | Branded items | 33% | `CHIN CHIN 148G` |
+| Independent | Bulk items | 40% | `SELLA 5KG`, `BLACK EYE BEANS 4KG` |
+
+**Key patterns:** Store name always available. SKU codes on Aldi (strip). VAT codes on Aldi/Lidl (ignore). Discount lines exist (ignore). Multi-buy pricing needs unit price extraction. Abbreviations are extreme (AI expands). Same product has wildly different names across stores.
+
+---
+
+## Schema: Price Intelligence Tables
+
+```typescript
+// Item size variants (AI-seeded + receipt-discovered)
+itemVariants: { baseItem, variantName, size, unit, category, source, estimatedPrice }
+  .index("by_base_item", ["baseItem"])
+
+// Crowdsourced prices (weighted 30-day average)
+currentPrices: { normalizedName, variantName, size, unit, storeName, averagePrice,
+                 minPrice, maxPrice, confidence, reportCount, region }
+
+// Personal price log (from user's own receipts)
+priceHistory: { userId, itemName, size, unit, unitPrice, storeName, purchaseDate }
+
+// Pantry items (with price + variant tracking)
+pantryItems: { ..., lastPrice, priceSource, preferredVariant, lastStoreName,
+               defaultSize, defaultUnit }
+```
+
+---
+
+## Implementation Plan Status — Zero-Blank Price Intelligence
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1. Foundation | Persist AI variant prices, 3-layer cascade in `getWithPrices` | ✅ Done |
+| 2. Non-Variant Items | `defaultSize`/`defaultUnit` on pantry items, AI prompt update | ✅ Done |
+| 3. AI Fallback | `withAIFallback` wrapper, OpenAI as fallback provider | ✅ Done |
+| 4. Real-Time Estimation | `estimateItemPrice` action for unknown items | ✅ Done |
+| 5. Bracket Matcher | Validate accuracy against real receipts | ❌ Pending validation |
+| 6. Variant Picker UI | Enhanced picker with confidence labels, "Your usual" badge | ✅ Done |
+
+---
+
+## BMAD Workflow & Artifacts
+
+### Project Lead
+
+**John (PM Agent)** — invoke with `/bmad:bmm:agents:pm`
+
+**ALWAYS reference the Product Brief** (`_bmad-output/planning-artifacts/product-brief.md`) as the foundational source of truth.
+
+### Workflow Phases
+
+| Phase | Agent | Command | Status |
+|-------|-------|---------|--------|
+| 1. Product Brief | PM + Analyst | `/bmad:bmm:workflows:create-product-brief` | COMPLETE |
+| 2. PRD | PM | `/bmad:bmm:workflows:prd` | COMPLETE |
+| 3. Architecture | Architect | `/bmad:bmm:workflows:create-architecture` | NEEDS UPDATE (v2) |
+| 4. UX Design | UX Designer | `/bmad:bmm:workflows:create-ux-design` | COMPLETE |
+| 5. Epics & Stories | Scrum Master | `/bmad:bmm:workflows:create-epics-and-stories` | NEEDS UPDATE |
+| 6. Test Strategy | Test Architect | `/bmad:bmm:workflows:testarch-test-design` | Pending |
+| 7-10. Sprint/Dev/Review/Test | Various | Various | Pending |
+
+### Artifact Locations
 
 | Artifact | Path |
 |----------|------|
-| **UX/UI Analysis** | `analysis.md` ⭐ CRITICAL - Implementation recommendations |
 | Product Brief | `_bmad-output/planning-artifacts/product-brief.md` |
 | PRD | `_bmad-output/planning-artifacts/prd.md` |
 | Architecture v2 | `_bmad-output/planning-artifacts/architecture-v2-expo-convex.md` |
 | Coding Conventions | `_bmad-output/planning-artifacts/coding-conventions-expo.md` |
 | Security Guidelines | `_bmad-output/planning-artifacts/security-guidelines-expo.md` |
 | Glass UI Design | `_bmad-output/planning-artifacts/ui-redesign-glass-system.md` |
-| UI Redesign Epic | `_bmad-output/planning-artifacts/epics/epic-ui-redesign.md` |
 | Epics & Stories | `_bmad-output/planning-artifacts/epics/` |
 | Sprint Status | `_bmad-output/implementation-artifacts/sprint-status.yaml` |
-| Story Files | `_bmad-output/implementation-artifacts/stories/` |
 | Developer Reference | `project-context.md` |
 | Glass Tokens | `lib/design/glassTokens.ts` |
 | Glass Components | `components/ui/glass/` |
-| **Real Receipts** | `receipts/` - 19 receipts for bracket matcher validation |
+| Real Receipts | `receipts/` — 19 receipts for bracket matcher validation |
 
 ---
 
-## Quick Start for New Session
+## MCP Servers
 
-1. **Read the developer reference:**
-   ```
-   Read project-context.md
-   ```
+| Service | Type | Description |
+|---------|------|-------------|
+| **Clerk** | URL | Authentication SDK snippets and user management |
+| **Convex** | CLI | Backend deployment queries, table schemas, function metadata |
+| **Stripe** | URL | Payment processing — customers, products, invoices, subscriptions |
+| **GitHub** | CLI | Repository management — repos, PRs, issues |
 
-2. **Check current phase:**
-   ```
-   /bmad:bmm:workflows:workflow-status
-   ```
-
-3. **Continue implementation:**
-   - Review sprint-status.yaml for current story
-   - Load the Developer agent: `/bmad:bmm:agents:dev`
-
----
-
-## Pending Work (from analysis.md)
-
-### High Priority - Retention & Engagement
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| **Push Notifications** | 3 trigger types: stock reminder, streak motivation, weekly digest | High |
-| **First-Week Nurture Sequence** | Daily helpful nudges for new users (Day 2, 3, 5) | Medium |
-| **Price Intelligence Surface** | Show users interesting price data from history + community | High |
-
-### Medium Priority - UX Improvements
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| **Teal Reduction** | Reserve teal for primary CTAs only (partially done) | Low |
-| **Fixed Action Areas** | Pin primary actions at bottom of screens | Medium |
-| **Savings Milestone Celebrations** | Trophy screens at £10, £25, £50, £100 | Medium |
-
-### Price Intelligence - Pending Validation
-
-| Item | Description | Status |
-|------|-------------|--------|
-| **Bracket Matcher Accuracy** | Test against 19 receipts in `receipts/` folder | Target: >80% |
-| **Admin Receipt Seeding Portal** | Bulk scan 50-100 receipts before launch | Not started |
-
-### Verification Plan (from analysis.md)
-
-See `analysis.md` → "Verification Plan" for 20 test cases covering:
-- Onboarding zero-blank guarantee
-- Variant price persistence
-- Receipt flow with/without sizes
-- AI fallback testing
-- Budget accuracy validation
+Config location: `C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.json`
 
 ---
 
@@ -485,41 +654,8 @@ See `analysis.md` → "Verification Plan" for 20 test cases covering:
 - **Primary:** United Kingdom
 - **Architecture:** Location-agnostic (global ready)
 - **Currency:** Auto-detect based on location
-- **Stores:** UK supermarkets (Tesco, Sainsbury's, Asda, Aldi, etc.)
+- **Stores:** UK supermarkets (Tesco, Sainsbury's, Asda, Aldi, Lidl, Morrisons, etc.)
 
 ---
 
-## Architecture Pivot Summary
-
-**Date:** 2026-01-26
-
-### What Changed
-
-| Aspect | v1 (PWA) | v2 (Native) |
-|--------|----------|-------------|
-| Platform | Web (PWA) | iOS/Android (React Native) |
-| Framework | Next.js 14 | Expo SDK 55+ |
-| Auth | Supabase Auth | Clerk |
-| Database | Supabase Postgres | Convex (document) |
-| Backend | Supabase Edge Functions | Convex Functions |
-| Styling | Tailwind CSS | Liquid Glass + StyleSheet |
-| AI | Gemini 1.5 Flash | Gemini 1.5 Flash (pantry seeding, receipt parsing) |
-| Embeddings | N/A | Jina AI (semantic search, 1M tokens/mo free) |
-| Offline | IndexedDB + Service Workers | Convex + optimistic updates |
-
-### What Stays the Same
-
-- Product vision and requirements
-- User flows and features
-- Epic/Story structure (implementation details update)
-- Business logic concepts
-
-### Migration Status
-
-- **v1 code**: Will be archived/deleted
-- **v2 code**: Fresh implementation following new architecture
-- **Planning docs**: Product Brief, PRD, UX Design remain valid
-
----
-
-_This file configures Claude Code for the Oja project. Updated 2026-02-01 to align with analysis.md (UX/UI deep analysis + Zero-Blank Price Intelligence)._
+_Updated 2026-02-03. Added E2E Playwright testing results (72/87 passing, 10 failures documented with fixes)._

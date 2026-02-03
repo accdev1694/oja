@@ -188,19 +188,42 @@ export const completeOnboarding = mutation({
 export const clearAllData = mutation({
   args: {},
   handler: async (ctx) => {
-    // Delete all users
-    const users = await ctx.db.query("users").collect();
-    for (const user of users) {
-      await ctx.db.delete(user._id);
+    const tables = [
+      "users",
+      "pantryItems",
+      "shoppingLists",
+      "listItems",
+      "receipts",
+      "currentPrices",
+      "priceHistory",
+      "itemVariants",
+      "listPartners",
+      "inviteCodes",
+      "itemComments",
+      "notifications",
+      "achievements",
+      "streaks",
+      "weeklyChallenges",
+      "subscriptions",
+      "loyaltyPoints",
+      "pointTransactions",
+      "scanCredits",
+      "scanCreditTransactions",
+      "adminLogs",
+      "featureFlags",
+      "announcements",
+    ] as const;
+
+    const counts: Record<string, number> = {};
+    for (const table of tables) {
+      const rows = await ctx.db.query(table as any).collect();
+      for (const row of rows) {
+        await ctx.db.delete(row._id);
+      }
+      counts[table] = rows.length;
     }
 
-    // Delete all pantry items
-    const pantryItems = await ctx.db.query("pantryItems").collect();
-    for (const item of pantryItems) {
-      await ctx.db.delete(item._id);
-    }
-
-    return { deletedUsers: users.length, deletedPantryItems: pantryItems.length };
+    return counts;
   },
 });
 

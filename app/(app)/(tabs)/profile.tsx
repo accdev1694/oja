@@ -97,15 +97,31 @@ export default function ProfileScreen() {
         try {
           // 1. Delete all Convex data + user doc
           await deleteMyAccount();
+
           // 2. Delete Clerk account (removes email from auth system)
           if (user) {
-            await user.delete();
+            try {
+              await user.delete();
+            } catch (clerkErr) {
+              console.error("Clerk account deletion failed:", clerkErr);
+              // Retry once
+              try {
+                await user.delete();
+              } catch (retryErr) {
+                console.error("Clerk deletion retry failed:", retryErr);
+                Alert.alert(
+                  "Partial Deletion",
+                  "Your app data was deleted but the login account could not be removed. Please contact support or delete it manually from account settings."
+                );
+              }
+            }
           }
+
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          try { await signOut(); } catch {}
           router.replace("/(auth)/sign-in");
         } catch (e) {
           console.error("Delete failed:", e);
-          // If Convex succeeded but Clerk failed, still sign out
           try { await signOut(); } catch {}
           router.replace("/(auth)/sign-in");
           setIsDeleting(false);
