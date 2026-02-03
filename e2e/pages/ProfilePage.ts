@@ -1,11 +1,22 @@
 import { Page, expect } from "@playwright/test";
-import { navigateToTab, waitForConvex } from "../fixtures/base";
+import { navigateToTab, waitForConvex, scrollDown } from "../fixtures/base";
 
 export class ProfilePage {
   constructor(private page: Page) {}
 
+  // NOTE: CSS class selectors don't work on React Native Web (hashed classes)
+  // Use text content patterns instead for user identity
   get userName() {
-    return this.page.locator("[class*='name'], [class*='title']").first();
+    // Look for email pattern (@) or common name patterns
+    return this.page.getByText(/@/).first().or(
+      this.page.getByText(".com", { exact: false }).first()
+    );
+  }
+
+  // Alternative: get the display name shown on profile (usually above the email)
+  get userDisplayName() {
+    // Profile shows name + email, look for text that's not "Profile" header
+    return this.page.locator('text=/^[A-Z][a-z]+ [A-Z][a-z]+$/').first();
   }
   get signOutButton() {
     return this.page.getByText("Sign Out", { exact: false }).or(
@@ -85,8 +96,20 @@ export class ProfilePage {
   }
 
   async openInsights() {
+    // Scroll down to ensure Insights card is visible (may be below fold on Profile)
+    await scrollDown(this.page, 2);
+    await this.page.waitForTimeout(500);
+
+    // Try to find and click the Insights card
+    const insightsVisible = await this.insightsCard.isVisible({ timeout: 5_000 }).catch(() => false);
+    if (!insightsVisible) {
+      // Try scrolling more or look for alternative selector
+      await scrollDown(this.page, 2);
+    }
+
     await this.insightsCard.click();
-    await this.page.waitForLoadState("networkidle");
+    // NOTE: Don't use networkidle — Convex WebSocket keeps connection alive forever
+    await waitForConvex(this.page);
   }
 
   async expectMilestoneVisible() {

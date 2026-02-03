@@ -1,5 +1,5 @@
 import { Page, expect } from "@playwright/test";
-import { navigateToTab, waitForConvex, scrollDown } from "../fixtures/base";
+import { navigateToTab, waitForConvex, scrollDown, clickPressable } from "../fixtures/base";
 
 export class PantryPage {
   constructor(private page: Page) {}
@@ -36,6 +36,44 @@ export class PantryPage {
 
   async goto() {
     await navigateToTab(this.page, "Pantry");
+    await waitForConvex(this.page);
+  }
+
+  /**
+   * Open the Add Item modal using clickPressable.
+   * Regular Playwright click doesn't trigger RNW Pressable onPress.
+   */
+  async openAddItemModal() {
+    // The "Add Item" button text may be "Add Item" or just "Add"
+    // Try "Add Item" first, fall back to "Add"
+    try {
+      await clickPressable(this.page, "Add Item", { timeout: 5_000 });
+    } catch {
+      await clickPressable(this.page, "Add", { timeout: 5_000 });
+    }
+    await this.page.waitForTimeout(500);
+  }
+
+  /**
+   * Add a new pantry item via the Add Item modal.
+   */
+  async addItem(name: string) {
+    await this.openAddItemModal();
+
+    // Wait for modal to appear
+    await this.itemNameInput.waitFor({ state: "visible", timeout: 5_000 });
+
+    // Enter item name
+    await this.itemNameInput.click();
+    await this.itemNameInput.fill(name);
+    await this.page.waitForTimeout(300);
+
+    // Click the Save/Add button in the modal
+    await clickPressable(this.page, "Save", { timeout: 5_000 }).catch(async () => {
+      // Try "Add" if "Save" not found
+      await clickPressable(this.page, "Add", { timeout: 5_000 });
+    });
+
     await waitForConvex(this.page);
   }
 

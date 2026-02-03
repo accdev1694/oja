@@ -1,5 +1,5 @@
 import { Page, expect } from "@playwright/test";
-import { navigateToTab, waitForConvex } from "../fixtures/base";
+import { navigateToTab, waitForConvex, clickPressable } from "../fixtures/base";
 
 export class ListsPage {
   constructor(private page: Page) {}
@@ -74,36 +74,16 @@ export class ListsPage {
 
     await this.page.waitForTimeout(500);
 
-    // Click Create List button using JS evaluate — Playwright's native .click() does NOT
+    // Click Create List button using shared helper — Playwright's native .click() does NOT
     // trigger React Native Web's Pressable onPress handler reliably.
-    // We walk up from the "Create List" text to find the cursor:pointer ancestor.
-    await this.page.evaluate(() => {
-      const allEls = document.querySelectorAll('*');
-      for (const el of allEls) {
-        if (el.textContent?.trim() === 'Create List' && el.childElementCount <= 1) {
-          let target: Element | null = el;
-          while (target) {
-            if (target instanceof HTMLElement && getComputedStyle(target).cursor === 'pointer') {
-              target.click();
-              return;
-            }
-            target = target.parentElement;
-          }
-        }
-      }
-    });
+    await clickPressable(this.page, "Create List");
 
-    // Wait for navigation to list detail page or dialog to close
-    await this.page.waitForURL(/\/list\//, { timeout: 30_000 }).catch(async () => {
-      // If no navigation, wait for dialog to close
-      await this.page.waitForFunction(
-        () => !document.body.innerText.includes("Create New List"),
-        { timeout: 10_000 }
-      ).catch(() => {});
-    });
+    // Wait for navigation to list detail page — don't silently swallow failures
+    // This is a critical assertion that determines if the list was created
+    await this.page.waitForURL(/\/list\//, { timeout: 30_000 });
 
-    // Wait for Convex + navigation to settle
-    await waitForConvex(this.page, 3000);
+    // Wait for Convex data to settle after navigation
+    await waitForConvex(this.page, 2000);
   }
 
   /**
@@ -115,7 +95,8 @@ export class ListsPage {
 
   async openList(name: string) {
     await this.page.getByText(name).first().click();
-    await this.page.waitForLoadState("networkidle");
+    // NOTE: Don't use networkidle — Convex WebSocket keeps connection alive forever
+    await waitForConvex(this.page);
   }
 
   async deleteList(name: string) {

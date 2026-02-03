@@ -540,8 +540,17 @@ export const autoRestockFromReceipt = mutation({
       pantryItemName: string;
       pantryItemId: string;
       similarity: number;
+      price?: number;
+      size?: string;
+      unit?: string;
     }> = [];
-    const itemsToAdd: Array<{ name: string; category?: string }> = [];
+    const itemsToAdd: Array<{
+      name: string;
+      category?: string;
+      price?: number;
+      size?: string;
+      unit?: string;
+    }> = [];
 
     const now = Date.now();
 
@@ -554,14 +563,39 @@ export const autoRestockFromReceipt = mutation({
       );
 
       if (exactMatch) {
-        // Exact match - auto-restock + update price from receipt
-        await ctx.db.patch(exactMatch._id, {
+        // Exact match - auto-restock + update price and size from receipt
+        const patchData: Record<string, unknown> = {
           stockLevel: "stocked",
           lastPrice: receiptItem.unitPrice,
           priceSource: "receipt",
           lastStoreName: receipt.storeName,
+          // Update size/unit from receipt if available (improves over time)
+          ...(receiptItem.size && { defaultSize: receiptItem.size }),
+          ...(receiptItem.unit && { defaultUnit: receiptItem.unit }),
           updatedAt: now,
-        });
+        };
+
+        // Auto-infer preferredVariant from receipt size/unit
+        if (receiptItem.size && !exactMatch.preferredVariant) {
+          const baseItem = exactMatch.name.toLowerCase().trim();
+          const variants = await ctx.db
+            .query("itemVariants")
+            .withIndex("by_base_item", (q) => q.eq("baseItem", baseItem))
+            .collect();
+
+          if (variants.length > 0) {
+            // Match by size string (case-insensitive)
+            const receiptSize = receiptItem.size.toLowerCase().trim();
+            const matched = variants.find(
+              (v) => v.size.toLowerCase().trim() === receiptSize
+            );
+            if (matched) {
+              patchData.preferredVariant = matched.variantName;
+            }
+          }
+        }
+
+        await ctx.db.patch(exactMatch._id, patchData);
         restockedItems.push({
           pantryItemId: exactMatch._id,
           name: exactMatch.name,
@@ -581,18 +615,24 @@ export const autoRestockFromReceipt = mutation({
       }
 
       if (bestMatch) {
-        // Fuzzy match - requires confirmation
+        // Fuzzy match - requires confirmation (include size/unit for later use)
         fuzzyMatches.push({
           receiptItemName: receiptItem.name,
           pantryItemName: bestMatch.item.name,
           pantryItemId: bestMatch.item._id,
           similarity: bestMatch.similarity,
+          price: receiptItem.unitPrice,
+          size: receiptItem.size ?? undefined,
+          unit: receiptItem.unit ?? undefined,
         });
       } else {
-        // No match - suggest adding to pantry
+        // No match - suggest adding to pantry (include all receipt data)
         itemsToAdd.push({
           name: receiptItem.name,
           category: receiptItem.category,
+          price: receiptItem.unitPrice,
+          size: receiptItem.size ?? undefined,
+          unit: receiptItem.unit ?? undefined,
         });
       }
     }
@@ -612,6 +652,9 @@ export const confirmFuzzyRestock = mutation({
   args: {
     pantryItemId: v.id("pantryItems"),
     price: v.optional(v.number()),
+    size: v.optional(v.string()),
+    unit: v.optional(v.string()),
+    storeName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -634,14 +677,39 @@ export const confirmFuzzyRestock = mutation({
       throw new Error("Unauthorized");
     }
 
-    await ctx.db.patch(args.pantryItemId, {
+    const patchData: Record<string, unknown> = {
       stockLevel: "stocked",
       ...(args.price !== undefined && {
         lastPrice: args.price,
         priceSource: "receipt",
       }),
+      ...(args.storeName && { lastStoreName: args.storeName }),
+      // Update size/unit from receipt if available
+      ...(args.size && { defaultSize: args.size }),
+      ...(args.unit && { defaultUnit: args.unit }),
       updatedAt: Date.now(),
-    });
+    };
+
+    // Auto-infer preferredVariant from receipt size if not already set
+    if (args.size && !pantryItem.preferredVariant) {
+      const baseItem = pantryItem.name.toLowerCase().trim();
+      const variants = await ctx.db
+        .query("itemVariants")
+        .withIndex("by_base_item", (q) => q.eq("baseItem", baseItem))
+        .collect();
+
+      if (variants.length > 0) {
+        const receiptSize = args.size.toLowerCase().trim();
+        const matched = variants.find(
+          (v) => v.size.toLowerCase().trim() === receiptSize
+        );
+        if (matched) {
+          patchData.preferredVariant = matched.variantName;
+        }
+      }
+    }
+
+    await ctx.db.patch(args.pantryItemId, patchData);
 
     return { success: true };
   },
@@ -656,6 +724,8 @@ export const addFromReceipt = mutation({
     category: v.optional(v.string()),
     price: v.optional(v.number()),
     storeName: v.optional(v.string()),
+    size: v.optional(v.string()),
+    unit: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -685,6 +755,9 @@ export const addFromReceipt = mutation({
         priceSource: "receipt" as const,
         ...(args.storeName && { lastStoreName: args.storeName }),
       }),
+      // Store size/unit from receipt for future price displays
+      ...(args.size && { defaultSize: args.size }),
+      ...(args.unit && { defaultUnit: args.unit }),
       autoAddToList: false,
       createdAt: now,
       updatedAt: now,

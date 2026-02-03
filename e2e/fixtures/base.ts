@@ -24,7 +24,8 @@ export const test = base.extend<{
   appPage: async ({ page }, use) => {
     // Ensure we're on the app
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    // NOTE: Don't use networkidle — Convex WebSocket keeps connection alive forever
+    await waitForConvex(page);
     await dismissOverlays(page);
     await use(page);
   },
@@ -47,6 +48,66 @@ export async function waitForConvex(page: Page, ms = 2000) {
   await page.waitForTimeout(ms);
 }
 
+/**
+ * Click a React Native Web Pressable/TouchableOpacity by text content.
+ *
+ * Playwright's native .click() on text inside RNW Pressable does NOT reliably
+ * trigger the onPress handler. This helper walks up from the text element to
+ * find the clickable ancestor (cursor: pointer) and triggers a real click.
+ *
+ * @param page - Playwright page
+ * @param text - Exact text content to find
+ * @param options - Optional: exact match (default true), timeout
+ */
+export async function clickPressable(
+  page: Page,
+  text: string,
+  options?: { exact?: boolean; timeout?: number }
+): Promise<void> {
+  const exact = options?.exact ?? true;
+  const timeout = options?.timeout ?? 10_000;
+
+  // Wait for the text to be visible first
+  const textLocator = exact
+    ? page.getByText(text, { exact: true })
+    : page.getByText(text, { exact: false });
+  await textLocator.first().waitFor({ state: "visible", timeout });
+
+  // Use JS evaluate to find and click the pressable ancestor
+  const clicked = await page.evaluate(
+    ({ searchText, exactMatch }) => {
+      const allEls = document.querySelectorAll("*");
+      for (const el of allEls) {
+        const elText = el.textContent?.trim();
+        const matches = exactMatch
+          ? elText === searchText
+          : elText?.includes(searchText);
+
+        if (matches && el.childElementCount <= 1) {
+          let target: Element | null = el;
+          while (target) {
+            if (
+              target instanceof HTMLElement &&
+              getComputedStyle(target).cursor === "pointer"
+            ) {
+              target.click();
+              return true;
+            }
+            target = target.parentElement;
+          }
+        }
+      }
+      return false;
+    },
+    { searchText: text, exactMatch: exact }
+  );
+
+  if (!clicked) {
+    // Fallback: try native click
+    await textLocator.first().click();
+  }
+}
+
 /** Ensure the app is loaded and ready (handles blank page / slow init) */
 export async function ensureAppLoaded(page: Page) {
   // Wait for content to appear
@@ -56,8 +117,8 @@ export async function ensureAppLoaded(page: Page) {
 
   if (!hasContent) {
     await page.reload();
-    await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(3000);
+    // NOTE: Don't use networkidle — Convex WebSocket keeps connection alive forever
+    await waitForConvex(page, 3000);
   }
 
   // Dismiss any overlays
@@ -79,8 +140,8 @@ export async function navigateToTab(
 
   // Navigate directly via URL — more reliable than clicking tab labels
   await page.goto(tabRoutes[tab]);
-  await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(1500);
+  // NOTE: Don't use networkidle — Convex WebSocket keeps connection alive forever
+  await waitForConvex(page, 1500);
 
   // Dismiss overlays that might intercept clicks
   await dismissOverlays(page);
@@ -105,8 +166,8 @@ export async function navigateToTab(
     const tabLabel = page.getByText(tabMap[tab], { exact: true }).last();
     await tabLabel.waitFor({ state: "visible", timeout: 10_000 }).catch(() => {});
     await tabLabel.click();
-    await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(1000);
+    // NOTE: Don't use networkidle — Convex WebSocket keeps connection alive forever
+    await waitForConvex(page, 1000);
   }
 
   // Dismiss any overlays that appear on the new tab
@@ -233,7 +294,8 @@ export async function uploadAndParseReceipt(
 
   // Click "Use Photo" to start the upload+parse flow
   const usePhotoBtn = page.getByText("Use Photo", { exact: true });
-  if (await usePhotoBtn.isVisible({ timeout: 5_000 })) {
+  // Increased timeout from 5s to 10s for slower headless rendering
+  if (await usePhotoBtn.isVisible({ timeout: 10_000 })) {
     await usePhotoBtn.click();
   }
 

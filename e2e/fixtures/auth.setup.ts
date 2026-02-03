@@ -105,8 +105,8 @@ setup("authenticate", async ({ page }) => {
   console.log("Authenticated! URL:", page.url());
 
   // ── Step 2: Complete onboarding if needed ──
-  await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(2000);
+  // NOTE: Don't use networkidle — Convex WebSocket keeps connection alive forever
+  await page.waitForTimeout(3000);
 
   const isOnboarding =
     page.url().includes("onboarding") ||
@@ -155,8 +155,8 @@ setup("authenticate", async ({ page }) => {
       { timeout: 180_000 }
     );
     console.log("Seeding complete! URL:", page.url());
-    await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(2000);
+    // NOTE: Don't use networkidle — Convex WebSocket keeps connection alive forever
+    await page.waitForTimeout(3000);
 
     // If on review screen, confirm items
     if (page.url().includes("review-items")) {
@@ -178,12 +178,12 @@ setup("authenticate", async ({ page }) => {
     }
 
     // Wait for the main app to stabilize
-    await page.waitForLoadState("networkidle");
+    // NOTE: Don't use networkidle — Convex WebSocket keeps connection alive forever
     await page.waitForTimeout(3000);
   }
 
   console.log("Final URL:", page.url());
-  await page.waitForLoadState("networkidle");
+  // NOTE: Don't use networkidle — Convex WebSocket keeps connection alive forever
   await page.waitForTimeout(3000);
 
   // ── Step 3: Dismiss any onboarding overlays ──
