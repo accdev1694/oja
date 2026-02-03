@@ -4,12 +4,10 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
   TextInput,
   Pressable,
   KeyboardAvoidingView,
   Platform,
-  Modal,
   LayoutAnimation,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -37,11 +35,13 @@ import {
   GlassInput,
   GlassCircularCheckbox,
   CircularBudgetDial,
+  GlassModal,
   colors,
   typography,
   spacing,
   animations,
   borderRadius,
+  useGlassAlert,
 } from "@/components/ui/glass";
 import { CategoryFilter } from "@/components/ui/CategoryFilter";
 import { usePartnerRole } from "@/hooks/usePartnerRole";
@@ -144,6 +144,7 @@ export default function ListDetailScreen() {
   const params = useLocalSearchParams();
   const id = params.id as string as Id<"shoppingLists">;
   const router = useRouter();
+  const { alert } = useGlassAlert();
   const { toast, dismiss, onMundaneAction } = useDelightToast();
 
   const list = useQuery(api.shoppingLists.getById, { id });
@@ -390,7 +391,7 @@ export default function ListDetailScreen() {
   async function handleSaveBudget() {
     const budgetNum = parseFloat(editBudgetValue) || 0;
     if (budgetNum < 0) {
-      Alert.alert("Error", "Budget cannot be negative");
+      alert("Error", "Budget cannot be negative");
       return;
     }
 
@@ -405,7 +406,7 @@ export default function ListDetailScreen() {
       handleCloseEditBudget();
     } catch (error) {
       console.error("Failed to update budget:", error);
-      Alert.alert("Error", "Failed to update budget");
+      alert("Error", "Failed to update budget");
     } finally {
       setIsSavingBudget(false);
     }
@@ -435,7 +436,7 @@ export default function ListDetailScreen() {
       onMundaneAction(); // Surprise delight on check-off
     } catch (error) {
       console.error("Failed to toggle item:", error);
-      Alert.alert("Error", "Failed to update item");
+      alert("Error", "Failed to update item");
     }
   }
 
@@ -472,7 +473,7 @@ export default function ListDetailScreen() {
       closeActualPriceModal();
     } catch (error) {
       console.error("Failed to check off item:", error);
-      Alert.alert("Error", "Failed to check off item");
+      alert("Error", "Failed to check off item");
     } finally {
       setIsSavingActualPrice(false);
     }
@@ -490,7 +491,7 @@ export default function ListDetailScreen() {
       closeActualPriceModal();
     } catch (error) {
       console.error("Failed to check off item:", error);
-      Alert.alert("Error", "Failed to check off item");
+      alert("Error", "Failed to check off item");
     }
   }
 
@@ -522,7 +523,7 @@ export default function ListDetailScreen() {
       setNewItemPrice("");
     } catch (error) {
       console.error("Failed to add item:", error);
-      Alert.alert("Error", "Failed to add item");
+      alert("Error", "Failed to add item");
     }
   }
 
@@ -537,20 +538,20 @@ export default function ListDetailScreen() {
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Quantity Updated", `"${existingItem.name}" quantity increased to ${newQuantity}`);
+      alert("Quantity Updated", `"${existingItem.name}" quantity increased to ${newQuantity}`);
 
       setNewItemName("");
       setNewItemQuantity("1");
       setNewItemPrice("");
     } catch (error) {
       console.error("Failed to update item:", error);
-      Alert.alert("Error", "Failed to update item quantity");
+      alert("Error", "Failed to update item quantity");
     }
   }
 
   async function handleAddItem() {
     if (!newItemName.trim()) {
-      Alert.alert("Error", "Please enter an item name");
+      alert("Error", "Please enter an item name");
       return;
     }
 
@@ -559,7 +560,7 @@ export default function ListDetailScreen() {
     if (similarItem) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      Alert.alert(
+      alert(
         "Similar Item Found",
         `"${similarItem.name}" is already in your list (Qty: ${similarItem.quantity}).\n\nWhat would you like to do?`,
         [
@@ -639,9 +640,9 @@ export default function ListDetailScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       if (source === "add") {
-        Alert.alert("Added to List", `"${midShopItemName}" added to your list`);
+        alert("Added to List", `"${midShopItemName}" added to your list`);
       } else {
-        Alert.alert("Saved for Later", `"${midShopItemName}" added to stock for next trip`);
+        alert("Saved for Later", `"${midShopItemName}" added to stock for next trip`);
       }
 
       setNewItemName("");
@@ -650,7 +651,7 @@ export default function ListDetailScreen() {
       closeMidShopModal();
     } catch (error: unknown) {
       console.error("Failed to add mid-shop item:", error);
-      Alert.alert("Error", "Failed to add item");
+      alert("Error", "Failed to add item");
     } finally {
       setIsAddingMidShop(false);
     }
@@ -664,24 +665,14 @@ export default function ListDetailScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (error) {
         console.error("Failed to remove item:", error);
-        if (Platform.OS === "web") {
-          window.alert("Failed to remove item");
-        } else {
-          Alert.alert("Error", "Failed to remove item");
-        }
+        alert("Error", "Failed to remove item");
       }
     };
 
-    if (Platform.OS === "web") {
-      if (window.confirm(`Remove "${itemName}" from list?`)) {
-        await doRemove();
-      }
-    } else {
-      Alert.alert("Remove Item", `Remove "${itemName}" from list?`, [
-        { text: "Cancel", style: "cancel" },
-        { text: "Remove", style: "destructive", onPress: doRemove },
-      ]);
-    }
+    alert("Remove Item", `Remove "${itemName}" from list?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: doRemove },
+    ]);
   }
 
   async function handlePriorityChange(
@@ -702,11 +693,7 @@ export default function ListDetailScreen() {
     );
 
     if (otherLists.length === 0) {
-      if (Platform.OS === "web") {
-        window.alert("No other active lists to add this item to.");
-      } else {
-        Alert.alert("No Other Lists", "There are no other active lists to add this item to.");
-      }
+      alert("No Other Lists", "There are no other active lists to add this item to.");
       return;
     }
 
@@ -745,7 +732,7 @@ export default function ListDetailScreen() {
       await startShopping({ id });
     } catch (error) {
       console.error("Failed to start shopping:", error);
-      Alert.alert("Error", "Failed to start shopping");
+      alert("Error", "Failed to start shopping");
     }
   }
 
@@ -759,20 +746,14 @@ export default function ListDetailScreen() {
         router.back();
       } catch (error) {
         console.error("Failed to complete shopping:", error);
-        Alert.alert("Error", "Failed to complete shopping");
+        alert("Error", "Failed to complete shopping");
       }
     };
 
-    if (Platform.OS === "web") {
-      if (window.confirm("Mark this shopping trip as complete?")) {
-        await doComplete();
-      }
-    } else {
-      Alert.alert("Complete Shopping", "Mark this shopping trip as complete?", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Complete", onPress: doComplete },
-      ]);
-    }
+    alert("Complete Shopping", "Mark this shopping trip as complete?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Complete", onPress: doComplete },
+    ]);
   }
 
   function handleAddFromPantry() {
@@ -810,7 +791,7 @@ export default function ListDetailScreen() {
       console.error("Failed to add suggestion:", error);
       // Add back to suggestions if failed
       setSuggestions((prev) => [...prev, suggestionName]);
-      Alert.alert("Error", "Failed to add item");
+      alert("Error", "Failed to add item");
     }
   }
 
@@ -849,7 +830,7 @@ export default function ListDetailScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Failed to approve item:", error);
-      Alert.alert("Error", "Failed to approve item");
+      alert("Error", "Failed to approve item");
     }
   }
 
@@ -860,7 +841,7 @@ export default function ListDetailScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Failed to reject item:", error);
-      Alert.alert("Error", "Failed to reject item");
+      alert("Error", "Failed to reject item");
     }
   }
 
@@ -1302,196 +1283,185 @@ export default function ListDetailScreen() {
       </KeyboardAvoidingView>
 
       {/* Edit Budget Modal */}
-      <Modal
+      <GlassModal
         visible={showEditBudgetModal}
-        transparent
-        animationType="fade"
-        onRequestClose={handleCloseEditBudget}
+        onClose={handleCloseEditBudget}
+        overlayOpacity={0.75}
+        maxWidth={360}
+        avoidKeyboard
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-        >
-          <Pressable style={styles.modalBackdrop} onPress={handleCloseEditBudget} />
-          <View style={styles.editBudgetModalContent}>
-            <View style={styles.editBudgetHeader}>
+        <View style={styles.editBudgetHeader}>
+          <MaterialCommunityIcons
+            name="wallet-outline"
+            size={24}
+            color={colors.accent.primary}
+          />
+          <Text style={styles.editBudgetTitle}>
+            {budget > 0 ? "Edit Budget" : "Set Budget"}
+          </Text>
+        </View>
+
+        <View style={styles.editBudgetInputGroup}>
+          <Text style={styles.editBudgetInputLabel}>Budget Amount</Text>
+          <View style={styles.editBudgetInputContainer}>
+            <Text style={styles.editBudgetCurrency}>£</Text>
+            <TextInput
+              style={styles.editBudgetInput}
+              value={editBudgetValue}
+              onChangeText={setEditBudgetValue}
+              keyboardType="decimal-pad"
+              placeholder="50.00"
+              placeholderTextColor={colors.text.tertiary}
+              autoFocus
+            />
+          </View>
+        </View>
+
+        <View style={styles.editBudgetActions}>
+          <GlassButton
+            variant="secondary"
+            onPress={handleCloseEditBudget}
+            style={styles.editBudgetBtn}
+          >
+            Cancel
+          </GlassButton>
+          <GlassButton
+            variant="primary"
+            onPress={handleSaveBudget}
+            loading={isSavingBudget}
+            disabled={isSavingBudget}
+            style={styles.editBudgetBtn}
+          >
+            {budget > 0 ? "Update" : "Set Budget"}
+          </GlassButton>
+        </View>
+      </GlassModal>
+
+      {/* Mid-Shop Add Flow Modal */}
+      <GlassModal
+        visible={showMidShopModal}
+        onClose={closeMidShopModal}
+        animationType="slide"
+        maxWidth={400}
+        overlayOpacity={0.75}
+      >
+        {/* Header */}
+        <View style={styles.midShopHeader}>
+          <View style={styles.midShopIconContainer}>
+            <MaterialCommunityIcons
+              name="cart-plus"
+              size={28}
+              color={colors.accent.primary}
+            />
+          </View>
+          <View style={styles.midShopHeaderText}>
+            <Text style={styles.midShopTitle}>Add "{midShopItemName}"?</Text>
+            <Text style={styles.midShopSubtitle}>
+              {midShopItemPrice > 0
+                ? `Est. £${(midShopItemPrice * midShopItemQuantity).toFixed(2)}`
+                : "No price set"}
+              {midShopItemQuantity > 1 && ` (×${midShopItemQuantity})`}
+            </Text>
+          </View>
+        </View>
+
+        {/* Budget Status */}
+        <View style={styles.midShopBudgetStatus}>
+          <View style={styles.midShopBudgetRow}>
+            <Text style={styles.midShopBudgetLabel}>Current Total</Text>
+            <Text style={styles.midShopBudgetValue}>£{currentTotal.toFixed(2)}</Text>
+          </View>
+          <View style={styles.midShopBudgetRow}>
+            <Text style={styles.midShopBudgetLabel}>Budget</Text>
+            <Text style={styles.midShopBudgetValue}>£{budget.toFixed(2)}</Text>
+          </View>
+          <View style={styles.midShopBudgetRow}>
+            <Text style={styles.midShopBudgetLabel}>Remaining</Text>
+            <Text style={[
+              styles.midShopBudgetValue,
+              remainingBudget < 0 && styles.midShopBudgetNegative
+            ]}>
+              £{remainingBudget.toFixed(2)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Option Cards */}
+        <View style={styles.midShopOptions}>
+          {/* Option 1: Add to List */}
+          <Pressable
+            style={[
+              styles.midShopOptionCard,
+              isAddingMidShop && styles.midShopOptionDisabled,
+            ]}
+            onPress={() => handleMidShopAdd("add")}
+            disabled={isAddingMidShop}
+          >
+            <View style={[styles.midShopOptionIcon, { backgroundColor: `${colors.accent.primary}15` }]}>
               <MaterialCommunityIcons
-                name="wallet-outline"
+                name="cart-plus"
                 size={24}
                 color={colors.accent.primary}
               />
-              <Text style={styles.editBudgetTitle}>
-                {budget > 0 ? "Edit Budget" : "Set Budget"}
+            </View>
+            <View style={styles.midShopOptionText}>
+              <Text style={styles.midShopOptionTitle}>Add to List</Text>
+              <Text style={styles.midShopOptionDesc}>
+                Add item to your shopping list
               </Text>
             </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={24}
+              color={colors.text.tertiary}
+            />
+          </Pressable>
 
-            <View style={styles.editBudgetInputGroup}>
-              <Text style={styles.editBudgetInputLabel}>Budget Amount</Text>
-              <View style={styles.editBudgetInputContainer}>
-                <Text style={styles.editBudgetCurrency}>£</Text>
-                <TextInput
-                  style={styles.editBudgetInput}
-                  value={editBudgetValue}
-                  onChangeText={setEditBudgetValue}
-                  keyboardType="decimal-pad"
-                  placeholder="50.00"
-                  placeholderTextColor={colors.text.tertiary}
-                  autoFocus
-                />
-              </View>
+          {/* Option 2: Save for Next Trip */}
+          <Pressable
+            style={[
+              styles.midShopOptionCard,
+              isAddingMidShop && styles.midShopOptionDisabled,
+            ]}
+            onPress={() => handleMidShopAdd("next_trip")}
+            disabled={isAddingMidShop}
+          >
+            <View style={[styles.midShopOptionIcon, { backgroundColor: `${colors.text.tertiary}15` }]}>
+              <MaterialCommunityIcons
+                name="clock-outline"
+                size={24}
+                color={colors.text.secondary}
+              />
             </View>
-
-            <View style={styles.editBudgetActions}>
-              <GlassButton
-                variant="secondary"
-                onPress={handleCloseEditBudget}
-                style={styles.editBudgetBtn}
-              >
-                Cancel
-              </GlassButton>
-              <GlassButton
-                variant="primary"
-                onPress={handleSaveBudget}
-                loading={isSavingBudget}
-                disabled={isSavingBudget}
-                style={styles.editBudgetBtn}
-              >
-                {budget > 0 ? "Update" : "Set Budget"}
-              </GlassButton>
+            <View style={styles.midShopOptionText}>
+              <Text style={styles.midShopOptionTitle}>Save for Next Trip</Text>
+              <Text style={styles.midShopOptionDesc}>
+                Save to stock for later
+              </Text>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Mid-Shop Add Flow Modal */}
-      <Modal
-        visible={showMidShopModal}
-        transparent
-        animationType="slide"
-        onRequestClose={closeMidShopModal}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={closeMidShopModal} />
-          <View style={styles.midShopModalContent}>
-            {/* Header */}
-            <View style={styles.midShopHeader}>
-              <View style={styles.midShopIconContainer}>
-                <MaterialCommunityIcons
-                  name="cart-plus"
-                  size={28}
-                  color={colors.accent.primary}
-                />
-              </View>
-              <View style={styles.midShopHeaderText}>
-                <Text style={styles.midShopTitle}>Add "{midShopItemName}"?</Text>
-                <Text style={styles.midShopSubtitle}>
-                  {midShopItemPrice > 0
-                    ? `Est. £${(midShopItemPrice * midShopItemQuantity).toFixed(2)}`
-                    : "No price set"}
-                  {midShopItemQuantity > 1 && ` (×${midShopItemQuantity})`}
-                </Text>
-              </View>
-            </View>
-
-            {/* Budget Status */}
-            <View style={styles.midShopBudgetStatus}>
-              <View style={styles.midShopBudgetRow}>
-                <Text style={styles.midShopBudgetLabel}>Current Total</Text>
-                <Text style={styles.midShopBudgetValue}>£{currentTotal.toFixed(2)}</Text>
-              </View>
-              <View style={styles.midShopBudgetRow}>
-                <Text style={styles.midShopBudgetLabel}>Budget</Text>
-                <Text style={styles.midShopBudgetValue}>£{budget.toFixed(2)}</Text>
-              </View>
-              <View style={styles.midShopBudgetRow}>
-                <Text style={styles.midShopBudgetLabel}>Remaining</Text>
-                <Text style={[
-                  styles.midShopBudgetValue,
-                  remainingBudget < 0 && styles.midShopBudgetNegative
-                ]}>
-                  £{remainingBudget.toFixed(2)}
-                </Text>
-              </View>
-            </View>
-
-            {/* Option Cards */}
-            <View style={styles.midShopOptions}>
-              {/* Option 1: Add to List */}
-              <Pressable
-                style={[
-                  styles.midShopOptionCard,
-                  isAddingMidShop && styles.midShopOptionDisabled,
-                ]}
-                onPress={() => handleMidShopAdd("add")}
-                disabled={isAddingMidShop}
-              >
-                <View style={[styles.midShopOptionIcon, { backgroundColor: `${colors.accent.primary}15` }]}>
-                  <MaterialCommunityIcons
-                    name="cart-plus"
-                    size={24}
-                    color={colors.accent.primary}
-                  />
-                </View>
-                <View style={styles.midShopOptionText}>
-                  <Text style={styles.midShopOptionTitle}>Add to List</Text>
-                  <Text style={styles.midShopOptionDesc}>
-                    Add item to your shopping list
-                  </Text>
-                </View>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={24}
-                  color={colors.text.tertiary}
-                />
-              </Pressable>
-
-              {/* Option 2: Save for Next Trip */}
-              <Pressable
-                style={[
-                  styles.midShopOptionCard,
-                  isAddingMidShop && styles.midShopOptionDisabled,
-                ]}
-                onPress={() => handleMidShopAdd("next_trip")}
-                disabled={isAddingMidShop}
-              >
-                <View style={[styles.midShopOptionIcon, { backgroundColor: `${colors.text.tertiary}15` }]}>
-                  <MaterialCommunityIcons
-                    name="clock-outline"
-                    size={24}
-                    color={colors.text.secondary}
-                  />
-                </View>
-                <View style={styles.midShopOptionText}>
-                  <Text style={styles.midShopOptionTitle}>Save for Next Trip</Text>
-                  <Text style={styles.midShopOptionDesc}>
-                    Save to stock for later
-                  </Text>
-                </View>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={24}
-                  color={colors.text.tertiary}
-                />
-              </Pressable>
-            </View>
-
-            {/* Cancel Button */}
-            <GlassButton
-              variant="secondary"
-              onPress={closeMidShopModal}
-              style={styles.midShopCancelButton}
-            >
-              Cancel
-            </GlassButton>
-
-            {isAddingMidShop && (
-              <View style={styles.midShopLoadingOverlay}>
-                <ActivityIndicator size="large" color={colors.accent.primary} />
-              </View>
-            )}
-          </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={24}
+              color={colors.text.tertiary}
+            />
+          </Pressable>
         </View>
-      </Modal>
+
+        {/* Cancel Button */}
+        <GlassButton
+          variant="secondary"
+          onPress={closeMidShopModal}
+          style={styles.midShopCancelButton}
+        >
+          Cancel
+        </GlassButton>
+
+        {isAddingMidShop && (
+          <View style={styles.midShopLoadingOverlay}>
+            <ActivityIndicator size="large" color={colors.accent.primary} />
+          </View>
+        )}
+      </GlassModal>
 
       {/* Notifications Dropdown */}
       <NotificationDropdown
@@ -1512,185 +1482,172 @@ export default function ListDetailScreen() {
       />
 
       {/* Actual Price Modal (Story 3.8) */}
-      <Modal
+      <GlassModal
         visible={showActualPriceModal}
-        transparent
-        animationType="fade"
-        onRequestClose={closeActualPriceModal}
+        onClose={closeActualPriceModal}
+        overlayOpacity={0.75}
+        maxWidth={360}
+        avoidKeyboard
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-        >
-          <Pressable style={styles.modalBackdrop} onPress={closeActualPriceModal} />
-          <View style={styles.actualPriceModalContent}>
-            {/* Header */}
-            <View style={styles.actualPriceHeader}>
-              <View style={styles.actualPriceIconContainer}>
-                <MaterialCommunityIcons
-                  name="check-circle-outline"
-                  size={28}
-                  color={colors.semantic.success}
-                />
-              </View>
-              <View style={styles.actualPriceHeaderText}>
-                <Text style={styles.actualPriceTitle}>Check Off Item</Text>
-                <Text style={styles.actualPriceItemName} numberOfLines={1}>
-                  {checkingItemName}
-                  {checkingItemQuantity > 1 && ` (×${checkingItemQuantity})`}
-                </Text>
-              </View>
-            </View>
-
-            {/* Estimated Price Info */}
-            {checkingItemEstPrice > 0 && (
-              <View style={styles.estimatedPriceInfo}>
-                <Text style={styles.estimatedPriceLabel}>Estimated price:</Text>
-                <Text style={styles.estimatedPriceValue}>
-                  £{(checkingItemEstPrice * checkingItemQuantity).toFixed(2)}
-                </Text>
-              </View>
-            )}
-
-            {/* Actual Price Input */}
-            <View style={styles.actualPriceInputGroup}>
-              <Text style={styles.actualPriceInputLabel}>Actual Price (per item)</Text>
-              <View style={styles.actualPriceInputContainer}>
-                <Text style={styles.actualPriceCurrency}>£</Text>
-                <TextInput
-                  style={styles.actualPriceInput}
-                  value={actualPriceValue}
-                  onChangeText={setActualPriceValue}
-                  keyboardType="decimal-pad"
-                  placeholder="0.00"
-                  placeholderTextColor={colors.text.tertiary}
-                  autoFocus
-                />
-              </View>
-              {checkingItemQuantity > 1 && actualPriceValue && (
-                <Text style={styles.actualPriceTotalHint}>
-                  Total: £{((parseFloat(actualPriceValue) || 0) * checkingItemQuantity).toFixed(2)}
-                </Text>
-              )}
-            </View>
-
-            {/* Price Difference */}
-            {checkingItemEstPrice > 0 && actualPriceValue && (
-              <View style={styles.priceDifferenceContainer}>
-                {(() => {
-                  const actualPrice = parseFloat(actualPriceValue) || 0;
-                  const diff = (actualPrice - checkingItemEstPrice) * checkingItemQuantity;
-                  const isMore = diff > 0;
-                  const isLess = diff < 0;
-
-                  if (Math.abs(diff) < 0.01) return null;
-
-                  return (
-                    <View style={[
-                      styles.priceDifferenceBadge,
-                      isMore ? styles.priceDifferenceMore : styles.priceDifferenceLess
-                    ]}>
-                      <MaterialCommunityIcons
-                        name={isMore ? "arrow-up" : "arrow-down"}
-                        size={16}
-                        color={isMore ? colors.semantic.danger : colors.semantic.success}
-                      />
-                      <Text style={[
-                        styles.priceDifferenceText,
-                        isMore ? styles.priceDifferenceMoreText : styles.priceDifferenceLessText
-                      ]}>
-                        £{Math.abs(diff).toFixed(2)} {isMore ? "more" : "less"} than estimated
-                      </Text>
-                    </View>
-                  );
-                })()}
-              </View>
-            )}
-
-            {/* Action Buttons */}
-            <View style={styles.actualPriceActions}>
-              <GlassButton
-                variant="secondary"
-                onPress={handleSkipActualPrice}
-                style={styles.actualPriceButton}
-                disabled={isSavingActualPrice}
-              >
-                Skip Price
-              </GlassButton>
-              <GlassButton
-                variant="primary"
-                onPress={handleConfirmActualPrice}
-                loading={isSavingActualPrice}
-                disabled={isSavingActualPrice}
-                style={styles.actualPriceButton}
-              >
-                Check Off
-              </GlassButton>
-            </View>
+        {/* Header */}
+        <View style={styles.actualPriceHeader}>
+          <View style={styles.actualPriceIconContainer}>
+            <MaterialCommunityIcons
+              name="check-circle-outline"
+              size={28}
+              color={colors.semantic.success}
+            />
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          <View style={styles.actualPriceHeaderText}>
+            <Text style={styles.actualPriceTitle}>Check Off Item</Text>
+            <Text style={styles.actualPriceItemName} numberOfLines={1}>
+              {checkingItemName}
+              {checkingItemQuantity > 1 && ` (×${checkingItemQuantity})`}
+            </Text>
+          </View>
+        </View>
+
+        {/* Estimated Price Info */}
+        {checkingItemEstPrice > 0 && (
+          <View style={styles.estimatedPriceInfo}>
+            <Text style={styles.estimatedPriceLabel}>Estimated price:</Text>
+            <Text style={styles.estimatedPriceValue}>
+              £{(checkingItemEstPrice * checkingItemQuantity).toFixed(2)}
+            </Text>
+          </View>
+        )}
+
+        {/* Actual Price Input */}
+        <View style={styles.actualPriceInputGroup}>
+          <Text style={styles.actualPriceInputLabel}>Actual Price (per item)</Text>
+          <View style={styles.actualPriceInputContainer}>
+            <Text style={styles.actualPriceCurrency}>£</Text>
+            <TextInput
+              style={styles.actualPriceInput}
+              value={actualPriceValue}
+              onChangeText={setActualPriceValue}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.text.tertiary}
+              autoFocus
+            />
+          </View>
+          {checkingItemQuantity > 1 && actualPriceValue && (
+            <Text style={styles.actualPriceTotalHint}>
+              Total: £{((parseFloat(actualPriceValue) || 0) * checkingItemQuantity).toFixed(2)}
+            </Text>
+          )}
+        </View>
+
+        {/* Price Difference */}
+        {checkingItemEstPrice > 0 && actualPriceValue && (
+          <View style={styles.priceDifferenceContainer}>
+            {(() => {
+              const actualPrice = parseFloat(actualPriceValue) || 0;
+              const diff = (actualPrice - checkingItemEstPrice) * checkingItemQuantity;
+              const isMore = diff > 0;
+              const isLess = diff < 0;
+
+              if (Math.abs(diff) < 0.01) return null;
+
+              return (
+                <View style={[
+                  styles.priceDifferenceBadge,
+                  isMore ? styles.priceDifferenceMore : styles.priceDifferenceLess
+                ]}>
+                  <MaterialCommunityIcons
+                    name={isMore ? "arrow-up" : "arrow-down"}
+                    size={16}
+                    color={isMore ? colors.semantic.danger : colors.semantic.success}
+                  />
+                  <Text style={[
+                    styles.priceDifferenceText,
+                    isMore ? styles.priceDifferenceMoreText : styles.priceDifferenceLessText
+                  ]}>
+                    £{Math.abs(diff).toFixed(2)} {isMore ? "more" : "less"} than estimated
+                  </Text>
+                </View>
+              );
+            })()}
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        <View style={styles.actualPriceActions}>
+          <GlassButton
+            variant="secondary"
+            onPress={handleSkipActualPrice}
+            style={styles.actualPriceButton}
+            disabled={isSavingActualPrice}
+          >
+            Skip Price
+          </GlassButton>
+          <GlassButton
+            variant="primary"
+            onPress={handleConfirmActualPrice}
+            loading={isSavingActualPrice}
+            disabled={isSavingActualPrice}
+            style={styles.actualPriceButton}
+          >
+            Check Off
+          </GlassButton>
+        </View>
+      </GlassModal>
 
       {/* List Picker Modal */}
-      <Modal
+      <GlassModal
         visible={addToListItem !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAddToListItem(null)}
+        onClose={() => setAddToListItem(null)}
+        maxWidth={340}
+        contentStyle={styles.listPickerModal}
       >
-        <Pressable style={styles.listPickerOverlay} onPress={() => setAddToListItem(null)}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <GlassCard variant="elevated" style={styles.listPickerModal}>
-              <MaterialCommunityIcons name="playlist-plus" size={36} color={colors.accent.primary} />
-              <Text style={styles.listPickerTitle}>Add to List</Text>
-              <Text style={styles.listPickerSubtitle}>
-                Choose a list for "{addToListItem?.name}"
-              </Text>
-              <View style={styles.listPickerOptions}>
-                {(allActiveLists ?? [])
-                  .filter((l) => l._id !== id && (l.status === "active" || l.status === "shopping"))
-                  .map((otherList) => (
-                    <Pressable
-                      key={otherList._id}
-                      style={styles.listPickerOption}
-                      onPress={() =>
-                        pickListForItem(
-                          otherList._id,
-                          otherList.name,
-                          addToListItem?.name ?? "",
-                          addToListItem?.estimatedPrice,
-                          addToListItem?.quantity ?? 1
-                        )
-                      }
-                    >
-                      <MaterialCommunityIcons
-                        name="clipboard-list-outline"
-                        size={20}
-                        color={colors.text.secondary}
-                      />
-                      <Text style={styles.listPickerOptionName} numberOfLines={1}>
-                        {otherList.name}
-                      </Text>
-                      <Text style={styles.listPickerOptionMeta}>
-                        {otherList.status === "shopping" ? "Shopping" : "Active"}
-                      </Text>
-                      <MaterialCommunityIcons
-                        name="chevron-right"
-                        size={18}
-                        color={colors.text.tertiary}
-                      />
-                    </Pressable>
-                  ))}
-              </View>
-              <View style={styles.listPickerActions}>
-                <GlassButton variant="ghost" size="md" onPress={() => setAddToListItem(null)}>
-                  Cancel
-                </GlassButton>
-              </View>
-            </GlassCard>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        <MaterialCommunityIcons name="playlist-plus" size={36} color={colors.accent.primary} />
+        <Text style={styles.listPickerTitle}>Add to List</Text>
+        <Text style={styles.listPickerSubtitle}>
+          Choose a list for "{addToListItem?.name}"
+        </Text>
+        <View style={styles.listPickerOptions}>
+          {(allActiveLists ?? [])
+            .filter((l) => l._id !== id && (l.status === "active" || l.status === "shopping"))
+            .map((otherList) => (
+              <Pressable
+                key={otherList._id}
+                style={styles.listPickerOption}
+                onPress={() =>
+                  pickListForItem(
+                    otherList._id,
+                    otherList.name,
+                    addToListItem?.name ?? "",
+                    addToListItem?.estimatedPrice,
+                    addToListItem?.quantity ?? 1
+                  )
+                }
+              >
+                <MaterialCommunityIcons
+                  name="clipboard-list-outline"
+                  size={20}
+                  color={colors.text.secondary}
+                />
+                <Text style={styles.listPickerOptionName} numberOfLines={1}>
+                  {otherList.name}
+                </Text>
+                <Text style={styles.listPickerOptionMeta}>
+                  {otherList.status === "shopping" ? "Shopping" : "Active"}
+                </Text>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={18}
+                  color={colors.text.tertiary}
+                />
+              </Pressable>
+            ))}
+        </View>
+        <View style={styles.listPickerActions}>
+          <GlassButton variant="ghost" size="md" onPress={() => setAddToListItem(null)}>
+            Cancel
+          </GlassButton>
+        </View>
+      </GlassModal>
 
       {/* Surprise delight toast */}
       <GlassToast
@@ -2331,28 +2288,6 @@ const styles = StyleSheet.create({
   },
 
   // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
-  },
-  // Mid-Shop Modal Styles
-  midShopModalContent: {
-    width: "90%",
-    maxWidth: 400,
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-  },
   midShopHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -2446,25 +2381,13 @@ const styles = StyleSheet.create({
   },
   midShopLoadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    backgroundColor: "rgba(13, 21, 40, 0.8)",
     justifyContent: "center",
     alignItems: "center",
     borderRadius: borderRadius.xl,
   },
 
   // Actual Price Modal Styles (Story 3.8)
-  actualPriceModalContent: {
-    width: "85%",
-    maxWidth: 360,
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-  },
   actualPriceHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -2738,15 +2661,6 @@ const styles = StyleSheet.create({
   },
 
   // Edit budget modal styles
-  editBudgetModalContent: {
-    width: "85%",
-    maxWidth: 360,
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.glass.borderFocus,
-  },
   editBudgetHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -2794,17 +2708,7 @@ const styles = StyleSheet.create({
   },
 
   // List picker modal
-  listPickerOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.xl,
-  },
   listPickerModal: {
-    width: "100%",
-    maxWidth: 340,
-    padding: spacing.xl,
     alignItems: "center",
   },
   listPickerTitle: {

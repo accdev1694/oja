@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TextInput, Alert, Platform } from "react-native";
+import { View, Text, StyleSheet, TextInput } from "react-native";
 import { useRouter } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -13,17 +13,19 @@ import {
   colors,
   typography,
   spacing,
+  useGlassAlert,
 } from "@/components/ui/glass";
 
 export default function JoinListScreen() {
   const router = useRouter();
+  const { alert } = useGlassAlert();
   const acceptInvite = useMutation(api.partners.acceptInvite);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleJoin() {
     if (!code.trim()) {
-      Alert.alert("Error", "Please enter an invite code");
+      alert("Error", "Please enter an invite code");
       return;
     }
 
@@ -34,17 +36,12 @@ export default function JoinListScreen() {
       const result = await acceptInvite({ code: code.trim().toUpperCase() });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      if (Platform.OS === "web") {
-        window.alert("Joined! You've successfully joined the shared list.");
-        router.push(`/list/${result.listId}`);
-      } else {
-        Alert.alert("Joined!", "You've successfully joined the shared list.", [
-          { text: "View List", onPress: () => router.push(`/list/${result.listId}`) },
-        ]);
-      }
+      alert("Joined!", "You've successfully joined the shared list.", [
+        { text: "View List", onPress: () => router.push(`/list/${result.listId}`) },
+      ]);
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Error", error?.message || "Invalid or expired invite code");
+      alert("Error", error?.message || "Invalid or expired invite code");
     } finally {
       setLoading(false);
     }

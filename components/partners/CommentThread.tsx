@@ -2,13 +2,10 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
-  Modal,
   Pressable,
   TextInput,
   FlatList,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useQuery, useMutation } from "convex/react";
@@ -16,6 +13,7 @@ import * as Haptics from "expo-haptics";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, typography } from "@/lib/design/glassTokens";
+import { GlassModal } from "@/components/ui/glass";
 
 interface CommentThreadProps {
   visible: boolean;
@@ -89,125 +87,113 @@ export function CommentThread({
   const sortedComments = comments ? [...comments].reverse() : [];
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.keyboardView}
-        >
-          <Pressable style={styles.modal} onPress={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                <MaterialCommunityIcons
-                  name="comment-text-outline"
-                  size={20}
-                  color={colors.accent.primary}
-                />
-                <Text style={styles.title} numberOfLines={1}>
-                  {itemName}
+    <GlassModal
+      visible={visible}
+      onClose={onClose}
+      animationType="slide"
+      position="bottom"
+      avoidKeyboard
+      maxWidth="full"
+      contentStyle={styles.modal}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <MaterialCommunityIcons
+            name="comment-text-outline"
+            size={20}
+            color={colors.accent.primary}
+          />
+          <Text style={styles.title} numberOfLines={1}>
+            {itemName}
+          </Text>
+        </View>
+        <Pressable onPress={onClose} hitSlop={12}>
+          <MaterialCommunityIcons
+            name="close"
+            size={22}
+            color={colors.text.secondary}
+          />
+        </Pressable>
+      </View>
+
+      {/* Comments */}
+      <FlatList
+        ref={flatListRef}
+        data={sortedComments}
+        keyExtractor={(item) => item._id}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <MaterialCommunityIcons
+              name="comment-outline"
+              size={32}
+              color={colors.text.tertiary}
+            />
+            <Text style={styles.emptyText}>No comments yet</Text>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <View style={styles.comment}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(item.userName || "?")[0].toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.commentBody}>
+              <View style={styles.commentHeader}>
+                <Text style={styles.userName}>{item.userName}</Text>
+                <Text style={styles.time}>
+                  {timeAgo(item.createdAt)}
                 </Text>
               </View>
-              <Pressable onPress={onClose} hitSlop={12}>
-                <MaterialCommunityIcons
-                  name="close"
-                  size={22}
-                  color={colors.text.secondary}
-                />
-              </Pressable>
+              <Text style={styles.commentText}>{item.text}</Text>
             </View>
+          </View>
+        )}
+      />
 
-            {/* Comments */}
-            <FlatList
-              ref={flatListRef}
-              data={sortedComments}
-              keyExtractor={(item) => item._id}
-              style={styles.list}
-              contentContainerStyle={styles.listContent}
-              ListEmptyComponent={
-                <View style={styles.empty}>
-                  <MaterialCommunityIcons
-                    name="comment-outline"
-                    size={32}
-                    color={colors.text.tertiary}
-                  />
-                  <Text style={styles.emptyText}>No comments yet</Text>
-                </View>
-              }
-              renderItem={({ item }) => (
-                <View style={styles.comment}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                      {(item.userName || "?")[0].toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={styles.commentBody}>
-                    <View style={styles.commentHeader}>
-                      <Text style={styles.userName}>{item.userName}</Text>
-                      <Text style={styles.time}>
-                        {timeAgo(item.createdAt)}
-                      </Text>
-                    </View>
-                    <Text style={styles.commentText}>{item.text}</Text>
-                  </View>
-                </View>
-              )}
-            />
-
-            {/* Input */}
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.input}
-                placeholder="Add a comment..."
-                placeholderTextColor={colors.text.tertiary}
-                value={text}
-                onChangeText={setText}
-                maxLength={500}
-                returnKeyType="send"
-                onSubmitEditing={handleSend}
-              />
-              <Pressable
-                style={[
-                  styles.sendButton,
-                  (!text.trim() || sending) && styles.sendDisabled,
-                ]}
-                onPress={handleSend}
-                disabled={!text.trim() || sending}
-              >
-                <MaterialCommunityIcons
-                  name="send"
-                  size={20}
-                  color={
-                    text.trim() ? colors.accent.primary : colors.text.disabled
-                  }
-                />
-              </Pressable>
-            </View>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Pressable>
-    </Modal>
+      {/* Input */}
+      <View style={styles.inputRow}>
+        <TextInput
+          style={styles.input}
+          placeholder="Add a comment..."
+          placeholderTextColor={colors.text.tertiary}
+          value={text}
+          onChangeText={setText}
+          maxLength={500}
+          returnKeyType="send"
+          onSubmitEditing={handleSend}
+        />
+        <Pressable
+          style={[
+            styles.sendButton,
+            (!text.trim() || sending) && styles.sendDisabled,
+          ]}
+          onPress={handleSend}
+          disabled={!text.trim() || sending}
+        >
+          <MaterialCommunityIcons
+            name="send"
+            size={20}
+            color={
+              text.trim() ? colors.accent.primary : colors.text.disabled
+            }
+          />
+        </Pressable>
+      </View>
+    </GlassModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "flex-end",
-  },
-  keyboardView: {
-    justifyContent: "flex-end",
-  },
   modal: {
     backgroundColor: colors.background.secondary,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
     maxHeight: "70%",
     minHeight: 300,
-    borderWidth: 1,
     borderBottomWidth: 0,
-    borderColor: colors.glass.border,
+    padding: 0,
   },
   header: {
     flexDirection: "row",

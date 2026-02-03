@@ -5,6 +5,7 @@ import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { ConvexReactClient, useMutation, useQuery } from "convex/react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { GlassAlertProvider } from "@/components/ui/glass";
 import { api } from "@/convex/_generated/api";
 
 const convex = new ConvexReactClient(
@@ -85,7 +86,9 @@ export default function RootLayout() {
       <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
         <ClerkLoaded>
           <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-            <InitialLayout />
+            <GlassAlertProvider>
+              <InitialLayout />
+            </GlassAlertProvider>
           </ConvexProviderWithClerk>
         </ClerkLoaded>
       </ClerkProvider>

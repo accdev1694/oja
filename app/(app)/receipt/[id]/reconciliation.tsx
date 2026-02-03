@@ -3,8 +3,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
-  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -23,6 +21,7 @@ import {
   colors,
   typography,
   spacing,
+  useGlassAlert,
 } from "@/components/ui/glass";
 
 export default function ReconciliationScreen() {
@@ -30,6 +29,7 @@ export default function ReconciliationScreen() {
   const receiptId = params.id as string as Id<"receipts">;
   const listId = (params.listId as string) as Id<"shoppingLists"> | undefined;
   const router = useRouter();
+  const { alert } = useGlassAlert();
 
   const receipt = useQuery(api.receipts.getById, { id: receiptId });
   const list = listId ? useQuery(api.shoppingLists.getById, { id: listId }) : null;
@@ -209,15 +209,8 @@ export default function ReconciliationScreen() {
       const navigateToHistory = () => router.push("/(app)/(tabs)/lists" as any);
 
       // Handle fuzzy matches and items to add
-      if (Platform.OS === "web") {
-        window.alert("Trip Archived!\n\n" + fullMessage);
-        if (result.fuzzyMatches.length > 0 || result.itemsToAdd.length > 0) {
-          handleFuzzyMatchesAndNewItems();
-        } else {
-          navigateToHistory();
-        }
-      } else if (result.fuzzyMatches.length > 0 || result.itemsToAdd.length > 0) {
-        Alert.alert("Trip Archived!", fullMessage, [
+      if (result.fuzzyMatches.length > 0 || result.itemsToAdd.length > 0) {
+        alert("Trip Archived!", fullMessage, [
           {
             text: "Review Pantry Updates",
             onPress: () => handleFuzzyMatchesAndNewItems(),
@@ -228,7 +221,7 @@ export default function ReconciliationScreen() {
           },
         ]);
       } else {
-        Alert.alert("Trip Archived!", fullMessage, [
+        alert("Trip Archived!", fullMessage, [
           {
             text: "View History",
             onPress: navigateToHistory,
@@ -237,7 +230,7 @@ export default function ReconciliationScreen() {
       }
     } catch (error) {
       console.error("Failed to complete trip:", error);
-      Alert.alert("Error", "Failed to complete shopping trip");
+      alert("Error", "Failed to complete shopping trip");
     } finally {
       setIsCompleting(false);
     }
@@ -252,7 +245,7 @@ export default function ReconciliationScreen() {
     // Handle fuzzy matches first
     for (const match of fuzzyMatches) {
       await new Promise<void>((resolve) => {
-        Alert.alert(
+        alert(
           "Restock Item?",
           `Receipt has "${match.receiptItemName}"\nRestock "${match.pantryItemName}" (${match.similarity.toFixed(0)}% match)?`,
           [
@@ -281,7 +274,7 @@ export default function ReconciliationScreen() {
     // Handle items to add
     for (const item of itemsToAdd) {
       await new Promise<void>((resolve) => {
-        Alert.alert("Add to Pantry?", `Add "${item.name}" to your pantry?`, [
+        alert("Add to Pantry?", `Add "${item.name}" to your pantry?`, [
           {
             text: "Skip",
             style: "cancel",

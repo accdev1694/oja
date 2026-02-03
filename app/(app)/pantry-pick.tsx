@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { useLocalSearchParams, router } from "expo-router";
@@ -32,6 +31,7 @@ import {
   typography,
   spacing,
   borderRadius,
+  useGlassAlert,
 } from "@/components/ui/glass";
 import { CategoryFilter } from "@/components/ui/CategoryFilter";
 
@@ -51,6 +51,7 @@ const STOCK_SORT_ORDER: Record<string, number> = {
 export default function PantryPickScreen() {
   const { listId } = useLocalSearchParams<{ listId: string }>();
   const insets = useSafeAreaInsets();
+  const { alert } = useGlassAlert();
   const items = useQuery(api.pantryItems.getByUser);
   const addFromPantrySelected = useMutation(api.listItems.addFromPantrySelected);
 
@@ -161,7 +162,7 @@ export default function PantryPickScreen() {
       router.back();
     } catch (error) {
       console.error("Failed to add items:", error);
-      Alert.alert("Error", "Failed to add items to list");
+      alert("Error", "Failed to add items to list");
     } finally {
       setIsAdding(false);
     }

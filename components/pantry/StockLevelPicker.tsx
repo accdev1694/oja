@@ -4,12 +4,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal,
-  Pressable,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { type StockLevel } from "./GaugeIndicator";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { GlassModal } from "@/components/ui/glass";
 
 interface StockLevelPickerProps {
   visible: boolean;
@@ -47,103 +46,80 @@ export function StockLevelPicker({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.modal} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.itemName}>{itemName}</Text>
-          <Text style={styles.subtitle}>Set stock level</Text>
+    <GlassModal visible={visible} onClose={onClose} maxWidth={320}>
+      <Text style={styles.itemName}>{itemName}</Text>
+      <Text style={styles.subtitle}>Set stock level</Text>
 
-          {/* 3 level buttons — tap to apply immediately */}
-          <View style={styles.levelsColumn}>
-            {SIMPLE_LEVELS.map((level) => {
-              const isActive = activeKey === level.key;
-              return (
-                <TouchableOpacity
-                  key={level.key}
-                  style={[
-                    styles.levelRow,
-                    isActive && { borderColor: level.color, backgroundColor: `${level.color}15` },
-                  ]}
-                  onPress={() => handleSelect(level.key)}
-                  activeOpacity={0.7}
-                >
-                  <MaterialCommunityIcons
-                    name={level.icon}
-                    size={22}
-                    color={isActive ? level.color : "rgba(255, 255, 255, 0.4)"}
-                  />
-                  <Text
-                    style={[
-                      styles.levelLabel,
-                      isActive && { color: level.color, fontWeight: "700" },
-                    ]}
-                  >
-                    {level.label}
-                  </Text>
-                  {isActive && (
-                    <View style={styles.currentBadge}>
-                      <Text style={styles.currentBadgeText}>current</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Remove button */}
-          {onRemove && (
-            <TouchableOpacity style={styles.removeButton} onPress={onRemove}>
+      {/* 3 level buttons — tap to apply immediately */}
+      <View style={styles.levelsColumn}>
+        {SIMPLE_LEVELS.map((level) => {
+          const isActive = activeKey === level.key;
+          return (
+            <TouchableOpacity
+              key={level.key}
+              style={[
+                styles.levelRow,
+                isActive && { borderColor: level.color, backgroundColor: `${level.color}15` },
+              ]}
+              onPress={() => handleSelect(level.key)}
+              activeOpacity={0.7}
+            >
               <MaterialCommunityIcons
-                name="delete-outline"
-                size={16}
-                color="#EF4444"
+                name={level.icon}
+                size={22}
+                color={isActive ? level.color : "rgba(255, 255, 255, 0.4)"}
               />
-              <Text style={styles.removeButtonText}>Remove from Stock</Text>
+              <Text
+                style={[
+                  styles.levelLabel,
+                  isActive && { color: level.color, fontWeight: "700" },
+                ]}
+              >
+                {level.label}
+              </Text>
+              {isActive && (
+                <View style={styles.currentBadge}>
+                  <Text style={styles.currentBadgeText}>current</Text>
+                </View>
+              )}
             </TouchableOpacity>
-          )}
+          );
+        })}
+      </View>
 
-          {/* Cancel */}
-          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-        </Pressable>
-      </Pressable>
-    </Modal>
+      {/* Remove button */}
+      {onRemove && (
+        <TouchableOpacity style={styles.removeButton} onPress={onRemove}>
+          <MaterialCommunityIcons
+            name="delete-outline"
+            size={16}
+            color="#EF4444"
+          />
+          <Text style={styles.removeButtonText}>Remove from Stock</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Cancel */}
+      <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+        <Text style={styles.cancelButtonText}>Cancel</Text>
+      </TouchableOpacity>
+    </GlassModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modal: {
-    backgroundColor: "#0F1A2E",
-    borderRadius: 20,
-    padding: 20,
-    width: "80%",
-    maxWidth: 320,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-  },
   itemName: {
     fontSize: 18,
     fontWeight: "700",
     color: "#FFFFFF",
     marginBottom: 2,
+    textAlign: "center",
   },
   subtitle: {
     fontSize: 14,
     color: "rgba(255, 255, 255, 0.5)",
     marginBottom: 16,
+    textAlign: "center",
   },
   levelsColumn: {
     width: "100%",
@@ -198,5 +174,6 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: "rgba(255, 255, 255, 0.5)",
     fontSize: 14,
+    textAlign: "center",
   },
 });

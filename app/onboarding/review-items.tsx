@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useMutation, useAction } from "convex/react";
@@ -24,10 +23,12 @@ import {
   typography,
   spacing,
   borderRadius,
+  useGlassAlert,
 } from "@/components/ui/glass";
 
 export default function ReviewItemsScreen() {
   const router = useRouter();
+  const { alert } = useGlassAlert();
   const params = useLocalSearchParams<{ items?: string }>();
   const insets = useSafeAreaInsets();
 
@@ -81,7 +82,7 @@ export default function ReviewItemsScreen() {
 
   async function handleSave() {
     if (selectedItems.size === 0) {
-      Alert.alert(
+      alert(
         "No items selected",
         "You haven't selected any items. Start with an empty pantry?",
         [
@@ -141,7 +142,7 @@ export default function ReviewItemsScreen() {
     } catch (error) {
       console.error("Failed to save pantry items:", error);
       safeHaptics.error();
-      Alert.alert("Error", "Failed to save items. Please try again.");
+      alert("Error", "Failed to save items. Please try again.");
     } finally {
       setIsSaving(false);
     }

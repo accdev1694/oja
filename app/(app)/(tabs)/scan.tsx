@@ -2,7 +2,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   ActivityIndicator,
   Image,
   TouchableOpacity,
@@ -26,10 +25,12 @@ import {
   typography,
   spacing,
   borderRadius,
+  useGlassAlert,
 } from "@/components/ui/glass";
 
 export default function ScanScreen() {
   const router = useRouter();
+  const { alert } = useGlassAlert();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -52,7 +53,7 @@ export default function ScanScreen() {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
       if (status !== "granted") {
-        Alert.alert("Permission Required", "Camera access is needed to scan receipts");
+        alert("Permission Required", "Camera access is needed to scan receipts");
         return;
       }
 
@@ -69,7 +70,7 @@ export default function ScanScreen() {
       }
     } catch (error) {
       console.error("Camera error:", error);
-      Alert.alert("Error", "Failed to open camera");
+      alert("Error", "Failed to open camera");
     }
   }
 
@@ -79,7 +80,7 @@ export default function ScanScreen() {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (status !== "granted") {
-        Alert.alert("Permission Required", "Photo library access is needed to select receipts");
+        alert("Permission Required", "Photo library access is needed to select receipts");
         return;
       }
 
@@ -96,13 +97,13 @@ export default function ScanScreen() {
       }
     } catch (error) {
       console.error("Image picker error:", error);
-      Alert.alert("Error", "Failed to select image");
+      alert("Error", "Failed to select image");
     }
   }
 
   async function handleUploadReceipt() {
     if (!selectedImage) {
-      Alert.alert("Error", "No image selected");
+      alert("Error", "No image selected");
       return;
     }
 
@@ -183,7 +184,7 @@ export default function ScanScreen() {
         setParseReceiptId(null);
         setSelectedImage(null);
 
-        Alert.alert(
+        alert(
           "Couldn't Read Receipt",
           "We couldn't read this receipt. Please try again with better lighting.",
         );
@@ -191,7 +192,7 @@ export default function ScanScreen() {
     } catch (error) {
       console.error("Upload error:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Error", "Failed to upload receipt");
+      alert("Error", "Failed to upload receipt");
       setIsUploading(false);
       setIsParsing(false);
     }

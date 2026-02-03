@@ -3,12 +3,9 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
   TextInput,
-  Modal,
   TouchableOpacity,
   Animated,
-  Platform,
 } from "react-native";
 import { useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -27,9 +24,11 @@ import {
   SimpleHeader,
   GlassErrorState,
   GlassSkeleton,
+  GlassModal,
   colors,
   typography,
   spacing,
+  useGlassAlert,
 } from "@/components/ui/glass";
 
 // Tier progress helper for toast messages
@@ -60,6 +59,7 @@ interface ReceiptItem {
 
 export default function ConfirmReceiptScreen() {
   const router = useRouter();
+  const { alert } = useGlassAlert();
   const { id } = useLocalSearchParams();
   const receiptId = id as Id<"receipts">;
 
@@ -199,7 +199,7 @@ export default function ConfirmReceiptScreen() {
     const quantity = parseInt(newItemQuantity);
 
     if (!name || isNaN(price) || price <= 0 || isNaN(quantity) || quantity <= 0) {
-      Alert.alert("Invalid Input", "Please enter valid name, price, and quantity");
+      alert("Invalid Input", "Please enter valid name, price, and quantity");
       return;
     }
 
@@ -299,15 +299,9 @@ export default function ConfirmReceiptScreen() {
           }
         });
 
-        if (Platform.OS === "web") {
-          // On web, window.alert is synchronous and doesn't support callbacks
-          window.alert("Price Alerts\n\n" + alertMessages.join("\n\n"));
-          navigateAfterSave();
-        } else {
-          Alert.alert("Price Alerts", alertMessages.join("\n\n"), [
-            { text: "OK", onPress: navigateAfterSave },
-          ]);
-        }
+        alert("Price Alerts", alertMessages.join("\n\n"), [
+          { text: "OK", onPress: navigateAfterSave },
+        ]);
       } else {
         // Build reward message from unified scan result
         let suffix = "";
@@ -323,19 +317,14 @@ export default function ConfirmReceiptScreen() {
           }
           if (parts.length > 0) suffix = ` (${parts.join(", ")})`;
         }
-        if (Platform.OS === "web") {
-          window.alert(`Receipt Saved\n\nYour receipt has been saved successfully${suffix}`);
-          navigateAfterSave();
-        } else {
-          Alert.alert("Receipt Saved", `Your receipt has been saved successfully${suffix}`, [
-            { text: "OK", onPress: navigateAfterSave },
-          ]);
-        }
+        alert("Receipt Saved", `Your receipt has been saved successfully${suffix}`, [
+          { text: "OK", onPress: navigateAfterSave },
+        ]);
       }
     } catch (error) {
       console.error("Save error:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Error", "Failed to save receipt");
+      alert("Error", "Failed to save receipt");
     }
   }
 
@@ -498,179 +487,166 @@ export default function ConfirmReceiptScreen() {
       </ScrollView>
 
       {/* Edit Modal */}
-      <Modal
+      <GlassModal
         visible={editingItemIndex !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={closeEditModal}
+        onClose={closeEditModal}
+        maxWidth={400}
+        avoidKeyboard
       >
-        <View style={styles.modalOverlay}>
-          <GlassCard variant="bordered" style={styles.modal}>
-            <Text style={styles.modalTitle}>
-              Edit {editingField === "name" ? "Item Name" : "Price"}
-            </Text>
+        <Text style={styles.modalTitle}>
+          Edit {editingField === "name" ? "Item Name" : "Price"}
+        </Text>
 
-            <GlassInput
-              value={editValue}
-              onChangeText={setEditValue}
-              placeholder={editingField === "name" ? "Item name" : "0.00"}
-              keyboardType={editingField === "price" ? "decimal-pad" : "default"}
-              autoFocus
-              style={styles.modalInput}
-            />
+        <GlassInput
+          value={editValue}
+          onChangeText={setEditValue}
+          placeholder={editingField === "name" ? "Item name" : "0.00"}
+          keyboardType={editingField === "price" ? "decimal-pad" : "default"}
+          autoFocus
+          style={styles.modalInput}
+        />
 
-            {/* Pantry Suggestions */}
-            {editingField === "name" && pantrySuggestions.length > 0 && (
-              <View style={styles.suggestions}>
-                {pantrySuggestions.map((suggestion: string, idx: number) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={styles.suggestionChip}
-                    onPress={() => setEditValue(suggestion)}
-                  >
-                    <Text style={styles.suggestionText}>{suggestion}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            <View style={styles.modalActions}>
-              <GlassButton
-                variant="secondary"
-                size="md"
-                onPress={closeEditModal}
-                style={styles.modalButton}
+        {/* Pantry Suggestions */}
+        {editingField === "name" && pantrySuggestions.length > 0 && (
+          <View style={styles.suggestions}>
+            {pantrySuggestions.map((suggestion: string, idx: number) => (
+              <TouchableOpacity
+                key={idx}
+                style={styles.suggestionChip}
+                onPress={() => setEditValue(suggestion)}
               >
-                Cancel
-              </GlassButton>
+                <Text style={styles.suggestionText}>{suggestion}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
-              <GlassButton
-                variant="primary"
-                size="md"
-                onPress={saveEdit}
-                style={styles.modalButton}
-              >
-                Save
-              </GlassButton>
-            </View>
-          </GlassCard>
+        <View style={styles.modalActions}>
+          <GlassButton
+            variant="secondary"
+            size="md"
+            onPress={closeEditModal}
+            style={styles.modalButton}
+          >
+            Cancel
+          </GlassButton>
+
+          <GlassButton
+            variant="primary"
+            size="md"
+            onPress={saveEdit}
+            style={styles.modalButton}
+          >
+            Save
+          </GlassButton>
         </View>
-      </Modal>
+      </GlassModal>
 
       {/* Duplicate Receipt Modal */}
-      <Modal
+      <GlassModal
         visible={showDuplicateModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDuplicateModal(false)}
+        onClose={() => setShowDuplicateModal(false)}
+        maxWidth={400}
       >
-        <View style={styles.modalOverlay}>
-          <GlassCard variant="bordered" accentColor={colors.semantic.warning} style={styles.modal}>
-            <View style={styles.duplicateHeader}>
-              <MaterialCommunityIcons
-                name="receipt"
-                size={32}
-                color={colors.semantic.warning}
-              />
-              <Text style={styles.duplicateTitle}>Duplicate Receipt</Text>
-            </View>
-            <Text style={styles.duplicateText}>
-              This receipt appears to have already been scanned.
-            </Text>
-            {duplicateInfo && (
-              <View style={styles.duplicateDetails}>
-                <Text style={styles.duplicateDetailText}>
-                  {duplicateInfo.storeName} — £{duplicateInfo.total.toFixed(2)}
-                </Text>
-                <Text style={styles.duplicateDetailDate}>
-                  {new Date(duplicateInfo.date).toLocaleDateString()}
-                </Text>
-              </View>
-            )}
-            <View style={styles.modalActions}>
-              <GlassButton
-                variant="secondary"
-                size="md"
-                onPress={() => {
-                  setShowDuplicateModal(false);
-                  router.back();
-                }}
-                style={styles.modalButton}
-              >
-                Discard
-              </GlassButton>
-              <GlassButton
-                variant="primary"
-                size="md"
-                onPress={() => setShowDuplicateModal(false)}
-                style={styles.modalButton}
-              >
-                Review
-              </GlassButton>
-            </View>
-          </GlassCard>
+        <View style={styles.duplicateHeader}>
+          <MaterialCommunityIcons
+            name="receipt"
+            size={32}
+            color={colors.semantic.warning}
+          />
+          <Text style={styles.duplicateTitle}>Duplicate Receipt</Text>
         </View>
-      </Modal>
+        <Text style={styles.duplicateText}>
+          This receipt appears to have already been scanned.
+        </Text>
+        {duplicateInfo && (
+          <View style={styles.duplicateDetails}>
+            <Text style={styles.duplicateDetailText}>
+              {duplicateInfo.storeName} — £{duplicateInfo.total.toFixed(2)}
+            </Text>
+            <Text style={styles.duplicateDetailDate}>
+              {new Date(duplicateInfo.date).toLocaleDateString()}
+            </Text>
+          </View>
+        )}
+        <View style={styles.modalActions}>
+          <GlassButton
+            variant="secondary"
+            size="md"
+            onPress={() => {
+              setShowDuplicateModal(false);
+              router.back();
+            }}
+            style={styles.modalButton}
+          >
+            Discard
+          </GlassButton>
+          <GlassButton
+            variant="primary"
+            size="md"
+            onPress={() => setShowDuplicateModal(false)}
+            style={styles.modalButton}
+          >
+            Review
+          </GlassButton>
+        </View>
+      </GlassModal>
 
       {/* Add Item Modal */}
-      <Modal
+      <GlassModal
         visible={showAddModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowAddModal(false)}
+        onClose={() => setShowAddModal(false)}
+        maxWidth={400}
+        avoidKeyboard
       >
-        <View style={styles.modalOverlay}>
-          <GlassCard variant="bordered" style={styles.modal}>
-            <Text style={styles.modalTitle}>Add Missing Item</Text>
+        <Text style={styles.modalTitle}>Add Missing Item</Text>
 
-            <GlassInput
-              value={newItemName}
-              onChangeText={setNewItemName}
-              placeholder="Item name"
-              autoFocus
-              style={styles.modalInput}
-            />
+        <GlassInput
+          value={newItemName}
+          onChangeText={setNewItemName}
+          placeholder="Item name"
+          autoFocus
+          style={styles.modalInput}
+        />
 
-            <View style={styles.row}>
-              <GlassInput
-                value={newItemQuantity}
-                onChangeText={setNewItemQuantity}
-                placeholder="Qty"
-                keyboardType="number-pad"
-                style={[styles.modalInput, styles.halfWidth]}
-              />
+        <View style={styles.row}>
+          <GlassInput
+            value={newItemQuantity}
+            onChangeText={setNewItemQuantity}
+            placeholder="Qty"
+            keyboardType="number-pad"
+            style={[styles.modalInput, styles.halfWidth]}
+          />
 
-              <GlassInput
-                value={newItemPrice}
-                onChangeText={setNewItemPrice}
-                placeholder="Total price"
-                keyboardType="decimal-pad"
-                style={[styles.modalInput, styles.halfWidth]}
-              />
-            </View>
-
-            <View style={styles.modalActions}>
-              <GlassButton
-                variant="secondary"
-                size="md"
-                onPress={() => setShowAddModal(false)}
-                style={styles.modalButton}
-              >
-                Cancel
-              </GlassButton>
-
-              <GlassButton
-                variant="primary"
-                size="md"
-                onPress={saveNewItem}
-                style={styles.modalButton}
-              >
-                Add Item
-              </GlassButton>
-            </View>
-          </GlassCard>
+          <GlassInput
+            value={newItemPrice}
+            onChangeText={setNewItemPrice}
+            placeholder="Total price"
+            keyboardType="decimal-pad"
+            style={[styles.modalInput, styles.halfWidth]}
+          />
         </View>
-      </Modal>
+
+        <View style={styles.modalActions}>
+          <GlassButton
+            variant="secondary"
+            size="md"
+            onPress={() => setShowAddModal(false)}
+            style={styles.modalButton}
+          >
+            Cancel
+          </GlassButton>
+
+          <GlassButton
+            variant="primary"
+            size="md"
+            onPress={saveNewItem}
+            style={styles.modalButton}
+          >
+            Add Item
+          </GlassButton>
+        </View>
+      </GlassModal>
     </GlassScreen>
   );
 }
@@ -907,17 +883,6 @@ const styles = StyleSheet.create({
   },
 
   // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.lg,
-  },
-  modal: {
-    width: "100%",
-    maxWidth: 400,
-  },
   modalTitle: {
     ...typography.headlineSmall,
     color: colors.text.primary,

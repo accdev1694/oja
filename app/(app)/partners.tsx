@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Alert, Platform, Share, TextInput, Modal, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Share, TextInput, Pressable } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -18,16 +18,19 @@ import {
   GlassCard,
   GlassButton,
   GlassHeader,
+  GlassModal,
   colors,
   typography,
   spacing,
   borderRadius,
+  useGlassAlert,
 } from "@/components/ui/glass";
 import { usePartnerRole } from "@/hooks/usePartnerRole";
 
 export default function PartnersScreen() {
   const { listId } = useLocalSearchParams<{ listId: string }>();
   const router = useRouter();
+  const { alert } = useGlassAlert();
   const partners = useQuery(api.partners.getByList, listId ? { listId: listId as Id<"shoppingLists"> } : "skip");
   const createInvite = useMutation(api.partners.createInviteCode);
   const updateRole = useMutation(api.partners.updateRole);
@@ -92,22 +95,16 @@ export default function PartnersScreen() {
       const msg = error?.message ?? error?.data ?? "";
       if (msg.includes("Premium") || msg.includes("partner") || msg.includes("Upgrade")) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        if (Platform.OS === "web") {
-          if (window.confirm("Partner Mode is a Premium feature.\n\nUpgrade to share lists with family and friends?")) {
-            router.push("/(app)/subscription");
-          }
-        } else {
-          Alert.alert(
-            "Premium Feature",
-            "Partner Mode lets you share lists with family and friends. Upgrade to Premium to unlock it.",
-            [
-              { text: "Maybe Later", style: "cancel" },
-              { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
-            ]
-          );
-        }
+        alert(
+          "Premium Feature",
+          "Partner Mode lets you share lists with family and friends. Upgrade to Premium to unlock it.",
+          [
+            { text: "Maybe Later", style: "cancel" },
+            { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
+          ]
+        );
       } else {
-        Alert.alert("Error", "Failed to create invite code");
+        alert("Error", "Failed to create invite code");
       }
     }
   }
@@ -125,29 +122,19 @@ export default function PartnersScreen() {
   async function handleCopyCode() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Clipboard.setStringAsync(inviteCode);
-    if (Platform.OS === "web") {
-      window.alert("Code copied!");
-    } else {
-      Alert.alert("Copied!", "Invite code copied to clipboard");
-    }
+    alert("Copied!", "Invite code copied to clipboard");
   }
 
   async function handleRemovePartner(partnerId: Id<"listPartners">, name: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (Platform.OS === "web") {
-      if (window.confirm(`Remove ${name} from this list?`)) {
-        await removePartner({ partnerId });
-      }
-    } else {
-      Alert.alert("Remove Partner", `Remove ${name} from this list?`, [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => removePartner({ partnerId }),
-        },
-      ]);
-    }
+    alert("Remove Partner", `Remove ${name} from this list?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => removePartner({ partnerId }),
+      },
+    ]);
   }
 
   function openRoleChange(partnerId: Id<"listPartners">, name: string, currentRole: string) {
@@ -167,14 +154,14 @@ export default function PartnersScreen() {
       setShowRoleModal(false);
     } catch (error) {
       console.error("Failed to update role:", error);
-      Alert.alert("Error", "Failed to update role");
+      alert("Error", "Failed to update role");
     }
   }
 
   async function handleLeaveList() {
     if (!listId) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
+    alert(
       "Leave List",
       "Are you sure you want to leave this shared list?",
       [
@@ -189,7 +176,7 @@ export default function PartnersScreen() {
               router.back();
             } catch (error) {
               console.error("Failed to leave list:", error);
-              Alert.alert("Error", "Failed to leave list");
+              alert("Error", "Failed to leave list");
             }
           },
         },
@@ -331,84 +318,89 @@ export default function PartnersScreen() {
       </ScrollView>
 
       {/* Invite Code Modal */}
-      <Modal visible={showInviteModal} transparent animationType="fade" onRequestClose={() => setShowInviteModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowInviteModal(false)}>
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>Invite Code</Text>
-            <Text style={styles.codeText}>{inviteCode}</Text>
-            <Text style={styles.modalSubtitle}>Share this code with your partner</Text>
-            <View style={styles.inviteActions}>
-              <Pressable style={styles.inviteActionBtn} onPress={handleCopyCode}>
-                <View style={styles.inviteIconCircle}>
-                  <MaterialCommunityIcons name="content-copy" size={24} color={colors.text.primary} />
-                </View>
-                <Text style={styles.inviteActionLabel}>Copy</Text>
-              </Pressable>
-              <Pressable style={styles.inviteActionBtn} onPress={handleShareCode}>
-                <View style={styles.inviteIconCircle}>
-                  <MaterialCommunityIcons name="share-variant" size={24} color={colors.text.primary} />
-                </View>
-                <Text style={styles.inviteActionLabel}>Share</Text>
-              </Pressable>
-              <Pressable style={styles.inviteActionBtn} onPress={() => setShowInviteModal(false)}>
-                <View style={[styles.inviteIconCircle, styles.inviteDoneCircle]}>
-                  <MaterialCommunityIcons name="check-bold" size={28} color={colors.text.primary} />
-                </View>
-                <Text style={[styles.inviteActionLabel, styles.inviteDoneLabel]}>Done</Text>
-              </Pressable>
+      <GlassModal
+        visible={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        overlayOpacity={0.75}
+        maxWidth={320}
+        contentStyle={styles.modalContentStyle}
+      >
+        <Text style={styles.modalTitle}>Invite Code</Text>
+        <Text style={styles.codeText}>{inviteCode}</Text>
+        <Text style={styles.modalSubtitle}>Share this code with your partner</Text>
+        <View style={styles.inviteActions}>
+          <Pressable style={styles.inviteActionBtn} onPress={handleCopyCode}>
+            <View style={styles.inviteIconCircle}>
+              <MaterialCommunityIcons name="content-copy" size={24} color={colors.text.primary} />
             </View>
+            <Text style={styles.inviteActionLabel}>Copy</Text>
           </Pressable>
-        </Pressable>
-      </Modal>
+          <Pressable style={styles.inviteActionBtn} onPress={handleShareCode}>
+            <View style={styles.inviteIconCircle}>
+              <MaterialCommunityIcons name="share-variant" size={24} color={colors.text.primary} />
+            </View>
+            <Text style={styles.inviteActionLabel}>Share</Text>
+          </Pressable>
+          <Pressable style={styles.inviteActionBtn} onPress={() => setShowInviteModal(false)}>
+            <View style={[styles.inviteIconCircle, styles.inviteDoneCircle]}>
+              <MaterialCommunityIcons name="check-bold" size={28} color={colors.text.primary} />
+            </View>
+            <Text style={[styles.inviteActionLabel, styles.inviteDoneLabel]}>Done</Text>
+          </Pressable>
+        </View>
+      </GlassModal>
+
       {/* Role Change Modal */}
-      <Modal visible={showRoleModal} transparent animationType="fade" onRequestClose={() => setShowRoleModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowRoleModal(false)}>
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <MaterialCommunityIcons name="account-edit-outline" size={32} color={colors.accent.primary} />
-            <Text style={styles.modalTitle}>Change Role</Text>
-            <Text style={styles.modalSubtitle}>
-              Update {changingPartnerName}'s role
-            </Text>
-            <View style={styles.roleChangeOptions}>
-              {(["viewer", "editor", "approver"] as const).map((role) => (
-                <Pressable
-                  key={role}
-                  style={[
-                    styles.roleChangeOption,
-                    changingPartnerRole === role && styles.roleChangeOptionActive,
-                  ]}
-                  onPress={() => handleRoleChange(role)}
-                >
-                  <MaterialCommunityIcons
-                    name={roleIcons[role]}
-                    size={20}
-                    color={changingPartnerRole === role ? colors.accent.primary : colors.text.secondary}
-                  />
-                  <View style={styles.roleChangeOptionText}>
-                    <Text style={[
-                      styles.roleChangeOptionTitle,
-                      changingPartnerRole === role && styles.roleChangeOptionTitleActive,
-                    ]}>
-                      {role.charAt(0).toUpperCase() + role.slice(1)}
-                    </Text>
-                    <Text style={styles.roleChangeOptionDesc}>
-                      {role === "viewer" ? "Can view items only" :
-                       role === "editor" ? "Can add and edit items" :
-                       "Can add items and approve/reject"}
-                    </Text>
-                  </View>
-                  {changingPartnerRole === role && (
-                    <MaterialCommunityIcons name="check" size={20} color={colors.accent.primary} />
-                  )}
-                </Pressable>
-              ))}
-            </View>
-            <GlassButton variant="secondary" size="md" onPress={() => setShowRoleModal(false)}>
-              Cancel
-            </GlassButton>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <GlassModal
+        visible={showRoleModal}
+        onClose={() => setShowRoleModal(false)}
+        overlayOpacity={0.75}
+        maxWidth={320}
+        contentStyle={styles.modalContentStyle}
+      >
+        <MaterialCommunityIcons name="account-edit-outline" size={32} color={colors.accent.primary} />
+        <Text style={styles.modalTitle}>Change Role</Text>
+        <Text style={styles.modalSubtitle}>
+          Update {changingPartnerName}'s role
+        </Text>
+        <View style={styles.roleChangeOptions}>
+          {(["viewer", "editor", "approver"] as const).map((role) => (
+            <Pressable
+              key={role}
+              style={[
+                styles.roleChangeOption,
+                changingPartnerRole === role && styles.roleChangeOptionActive,
+              ]}
+              onPress={() => handleRoleChange(role)}
+            >
+              <MaterialCommunityIcons
+                name={roleIcons[role]}
+                size={20}
+                color={changingPartnerRole === role ? colors.accent.primary : colors.text.secondary}
+              />
+              <View style={styles.roleChangeOptionText}>
+                <Text style={[
+                  styles.roleChangeOptionTitle,
+                  changingPartnerRole === role && styles.roleChangeOptionTitleActive,
+                ]}>
+                  {role.charAt(0).toUpperCase() + role.slice(1)}
+                </Text>
+                <Text style={styles.roleChangeOptionDesc}>
+                  {role === "viewer" ? "Can view items only" :
+                   role === "editor" ? "Can add and edit items" :
+                   "Can add items and approve/reject"}
+                </Text>
+              </View>
+              {changingPartnerRole === role && (
+                <MaterialCommunityIcons name="check" size={20} color={colors.accent.primary} />
+              )}
+            </Pressable>
+          ))}
+        </View>
+        <GlassButton variant="secondary" size="md" onPress={() => setShowRoleModal(false)}>
+          Cancel
+        </GlassButton>
+      </GlassModal>
     </GlassScreen>
   );
 }
@@ -464,22 +456,9 @@ const styles = StyleSheet.create({
   roleBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
   roleText: { ...typography.bodySmall, textTransform: "capitalize" },
   removeBtn: { padding: spacing.sm, borderRadius: 8, backgroundColor: `${colors.semantic.danger}15` },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.75)",
-  },
-  modalContent: {
-    width: "80%",
-    maxWidth: 320,
-    backgroundColor: colors.background.primary,
-    borderRadius: 20,
-    padding: spacing.xl,
+  modalContentStyle: {
     alignItems: "center",
     gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.glass.borderFocus,
   },
   modalTitle: { ...typography.headlineMedium, color: colors.text.primary },
   codeText: {

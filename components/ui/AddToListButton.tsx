@@ -15,7 +15,7 @@ interface AddToListButtonProps {
  */
 export function AddToListButton({ onPress, size = "md" }: AddToListButtonProps) {
   const dim = size === "sm" ? 28 : 32;
-  const iconSize = size === "sm" ? 15 : 17;
+  const iconSize = size === "sm" ? 18 : 20;
 
   return (
     <Pressable
