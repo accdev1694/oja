@@ -78,7 +78,18 @@
       "Bash(npx expo export:*)",
       "mcp__playwright__browser_handle_dialog",
       "mcp__playwright__browser_console_messages",
-      "mcp__playwright__browser_file_upload"
+      "mcp__playwright__browser_file_upload",
+      "Bash(npx jest:*)",
+      "Bash(wc:*)",
+      "mcp__playwright__browser_evaluate",
+      "Bash(npm ls:*)",
+      "mcp__playwright__browser_press_key",
+      "mcp__playwright__browser_fill_form",
+      "Bash(npx playwright test:*)",
+      "WebFetch(domain:clerk.com)",
+      "Bash(npm i:*)",
+      "Bash(python3:*)",
+      "Bash(python -m json.tool:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

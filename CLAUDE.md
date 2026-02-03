@@ -301,15 +301,16 @@ Fixing these 10 failures (mostly low effort) would recover **~35-40 tests** (fro
 ## Critical Rules for All Agents
 
 1. **Read `project-context.md` first** — Before ANY implementation
-2. **Verify authentication** — Every mutation must check user ownership
-3. **Use indexes** — Never scan full tables
-4. **Optimistic updates** — For instant UX feedback
-5. **Haptic feedback** — On all user interactions
-6. **Handle all states** — Loading, error, empty, success
-7. **Zero-Blank Prices** — Every item must show a price estimate (cascade: personal → crowdsourced → AI)
-8. **Warm Tone in Copy** — Friendly, supportive language (not clinical/functional)
-9. **Progressive Disclosure** — Collapsible sections, don't show everything at once
-10. **Teal for CTAs only** — Reserve teal for primary actions; secondary elements use white/gray/indigo
+2. **Standard practices only** — Never recommend or implement a process, pattern, or method that is not industry-standard. Always use standard methodologies and best coding practices. If a shortcut exists but is non-standard, use the proper approach instead. When multiple approaches exist, choose the one most widely adopted in production systems.
+3. **Verify authentication** — Every mutation must check user ownership
+4. **Use indexes** — Never scan full tables
+5. **Optimistic updates** — For instant UX feedback
+6. **Haptic feedback** — On all user interactions
+7. **Handle all states** — Loading, error, empty, success
+8. **Zero-Blank Prices** — Every item must show a price estimate (cascade: personal → crowdsourced → AI)
+9. **Warm Tone in Copy** — Friendly, supportive language (not clinical/functional)
+10. **Progressive Disclosure** — Collapsible sections, don't show everything at once
+11. **Teal for CTAs only** — Reserve teal for primary actions; secondary elements use white/gray/indigo
 
 ---
 
