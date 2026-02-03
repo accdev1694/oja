@@ -89,9 +89,14 @@ export default function ReviewItemsScreen() {
   const [isSaving, setIsSaving] = useState(false);
 
   // Group items by source, then by category within each source
+  // If source field exists (new prompt), use it directly.
+  // If missing (old prompt), infer from position: first 60% = local, rest = cultural.
+  const localCutoff = Math.floor(items.length * 0.6);
   const grouped: GroupedBySource = { local: {}, cultural: {} };
   items.forEach((item, index) => {
-    const source: SourceGroup = item.source === "cultural" ? "cultural" : "local";
+    const source: SourceGroup = item.source
+      ? item.source
+      : index < localCutoff ? "local" : "cultural";
     if (!grouped[source][item.category]) {
       grouped[source][item.category] = [];
     }
