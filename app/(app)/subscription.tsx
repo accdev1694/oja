@@ -3,9 +3,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
-  Platform,
-  Modal,
   Pressable,
   Linking,
 } from "react-native";
@@ -21,10 +18,12 @@ import {
   GlassCard,
   GlassButton,
   GlassHeader,
+  GlassModal,
   SkeletonCard,
   colors,
   typography,
   spacing,
+  useGlassAlert,
 } from "@/components/ui/glass";
 
 const tierColors: Record<string, string> = {
@@ -43,16 +42,15 @@ const tierIcons: Record<string, string> = {
 
 export default function SubscriptionScreen() {
   const router = useRouter();
+  const { alert } = useGlassAlert();
   const subscription = useQuery(api.subscriptions.getCurrentSubscription);
   const plans = useQuery(api.subscriptions.getPlans);
   const scanCredits = useQuery(api.subscriptions.getScanCredits);
 
-  const startTrial = useMutation(api.subscriptions.startFreeTrial);
   const cancelSub = useMutation(api.subscriptions.cancelSubscription);
   const createCheckout = useAction(api.stripe.createCheckoutSession);
   const createPortal = useAction(api.stripe.createPortalSession);
 
-  const [trialLoading, setTrialLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
@@ -97,7 +95,7 @@ export default function SubscriptionScreen() {
           await Linking.openURL(result.url);
         }
       } catch (error: any) {
-        Alert.alert("Error", error?.message || "Failed to start checkout");
+        alert("Error", error?.message || "Failed to start checkout");
       } finally {
         setCheckoutLoading(null);
       }
@@ -115,29 +113,11 @@ export default function SubscriptionScreen() {
         await Linking.openURL(result.url);
       }
     } catch (error: any) {
-      Alert.alert("Error", error?.message || "Failed to open portal");
+      alert("Error", error?.message || "Failed to open portal");
     } finally {
       setPortalLoading(false);
     }
   }, [createPortal]);
-
-  // Handle start trial
-  const handleStartTrial = useCallback(async () => {
-    setTrialLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      await startTrial();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        "Trial Started!",
-        "Enjoy 7 days of premium features for free!"
-      );
-    } catch (error: any) {
-      Alert.alert("Error", error?.message || "Failed to start trial");
-    } finally {
-      setTrialLoading(false);
-    }
-  }, [startTrial]);
 
   // Handle cancel subscription
   const handleCancelSubscription = useCallback(async () => {
@@ -147,12 +127,12 @@ export default function SubscriptionScreen() {
       await cancelSub();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       setShowCancelModal(false);
-      Alert.alert(
+      alert(
         "Subscription Cancelled",
         "You'll keep access until the end of your billing period."
       );
     } catch (error: any) {
-      Alert.alert("Error", error?.message || "Failed to cancel");
+      alert("Error", error?.message || "Failed to cancel");
     } finally {
       setCancelLoading(false);
     }
@@ -219,7 +199,7 @@ export default function SubscriptionScreen() {
                   Your trial has ended
                 </Text>
                 <Text style={styles.trialBannerSub}>
-                  Subscribe to unlock all premium features
+                  You still have all features — upgrade for unlimited lists & pantry
                 </Text>
               </View>
             </GlassCard>
@@ -252,7 +232,7 @@ export default function SubscriptionScreen() {
                       ? "Cancels at period end"
                       : isPremium
                         ? "Active"
-                        : "Upgrade for more features"}
+                        : "Upgrade for unlimited lists & pantry"}
                 </Text>
                 {isPremium && periodEnd && (
                   <Text style={styles.periodEnd}>
@@ -431,9 +411,9 @@ export default function SubscriptionScreen() {
                 <>
                   <View style={styles.creditDivider} />
                   <View style={styles.freeUserCta}>
-                    <MaterialCommunityIcons name="lock-outline" size={18} color={colors.text.tertiary} />
+                    <MaterialCommunityIcons name="cash-multiple" size={18} color={colors.accent.primary} />
                     <Text style={styles.freeUserCtaText}>
-                      Upgrade to Premium to earn up to £{scanCredits.tierInfo.maxCredits.toFixed(2)}/mo back
+                      Upgrade to earn up to £{scanCredits.tierInfo.maxCredits.toFixed(2)}/mo back from your scans
                     </Text>
                   </View>
                 </>
@@ -442,29 +422,19 @@ export default function SubscriptionScreen() {
           </Animated.View>
         )}
 
-        {/* Free Trial CTA — only for free users who haven't had a subscription */}
-        {!isPremium && !isExpired && subscription?.plan === "free" && (
+        {/* Free user value prop — remind them what they have */}
+        {!isPremium && !isTrial && (
           <Animated.View entering={FadeInDown.duration(400).delay(200)}>
             <GlassCard style={styles.trialCta}>
               <MaterialCommunityIcons
-                name="star-shooting"
+                name="gift-outline"
                 size={40}
                 color={colors.accent.secondary}
               />
-              <Text style={styles.trialCtaTitle}>Try Premium Free</Text>
+              <Text style={styles.trialCtaTitle}>All Features Included</Text>
               <Text style={styles.trialCtaSubtext}>
-                7 days of all premium features, no credit card needed
+                You have full access to every feature — insights, price history, partner mode, and more. Upgrade to remove limits on lists and pantry items.
               </Text>
-              <GlassButton
-                variant="primary"
-                size="lg"
-                icon="rocket-launch"
-                onPress={handleStartTrial}
-                loading={trialLoading}
-                style={styles.trialCtaButton}
-              >
-                Start Free Trial
-              </GlassButton>
             </GlassCard>
           </Animated.View>
         )}
@@ -550,46 +520,42 @@ export default function SubscriptionScreen() {
       </ScrollView>
 
       {/* Cancel Confirmation Modal */}
-      <Modal
+      <GlassModal
         visible={showCancelModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowCancelModal(false)}
+        onClose={() => setShowCancelModal(false)}
+        overlayOpacity={0.7}
+        contentStyle={styles.modalContent}
       >
-        <View style={styles.modalOverlay}>
-          <GlassCard style={styles.modalContent}>
-            <MaterialCommunityIcons
-              name="alert-circle-outline"
-              size={48}
-              color={colors.semantic.warning}
-            />
-            <Text style={styles.modalTitle}>Cancel Subscription?</Text>
-            <Text style={styles.modalBody}>
-              You'll lose access to premium features at the end of your current
-              billing period. Your scan rewards tier will be kept.
-            </Text>
-            <View style={styles.modalActions}>
-              <GlassButton
-                variant="secondary"
-                size="md"
-                onPress={() => setShowCancelModal(false)}
-                style={styles.modalButton}
-              >
-                Keep Subscription
-              </GlassButton>
-              <GlassButton
-                variant="danger"
-                size="md"
-                onPress={handleCancelSubscription}
-                loading={cancelLoading}
-                style={styles.modalButton}
-              >
-                Cancel
-              </GlassButton>
-            </View>
-          </GlassCard>
+        <MaterialCommunityIcons
+          name="alert-circle-outline"
+          size={48}
+          color={colors.semantic.warning}
+        />
+        <Text style={styles.modalTitle}>Cancel Subscription?</Text>
+        <Text style={styles.modalBody}>
+          You'll keep all features but go back to 3 lists and 50 pantry items.
+          Your scan rewards tier will be kept.
+        </Text>
+        <View style={styles.modalActions}>
+          <GlassButton
+            variant="secondary"
+            size="md"
+            onPress={() => setShowCancelModal(false)}
+            style={styles.modalButton}
+          >
+            Keep Subscription
+          </GlassButton>
+          <GlassButton
+            variant="danger"
+            size="md"
+            onPress={handleCancelSubscription}
+            loading={cancelLoading}
+            style={styles.modalButton}
+          >
+            Cancel
+          </GlassButton>
         </View>
-      </Modal>
+      </GlassModal>
     </GlassScreen>
   );
 }
@@ -694,8 +660,6 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     textAlign: "center",
   },
-  trialCtaButton: { width: "100%", marginTop: spacing.sm },
-
   // Section
   sectionTitle: {
     ...typography.headlineSmall,
@@ -927,18 +891,9 @@ const styles = StyleSheet.create({
   },
 
   // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-  },
   modalContent: {
     alignItems: "center",
     gap: spacing.md,
-    padding: spacing.xl,
-    width: "100%",
   },
   modalTitle: {
     ...typography.headlineMedium,

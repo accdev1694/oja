@@ -13,6 +13,25 @@ async function requireUser(ctx: any) {
 }
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+/** Read-time guard: treat expired trials as expired even if the cron hasn't run yet. */
+function isTrialExpired(sub: any): boolean {
+  return sub.status === "trial" && sub.trialEndsAt != null && sub.trialEndsAt <= Date.now();
+}
+
+function effectiveStatus(sub: any): string {
+  if (isTrialExpired(sub)) return "expired";
+  return sub.status;
+}
+
+function isEffectivelyPremium(sub: any): boolean {
+  const status = effectiveStatus(sub);
+  return status === "active" || status === "trial";
+}
+
+// ============================================================================
 // SUBSCRIPTION MANAGEMENT
 // ============================================================================
 
@@ -45,10 +64,14 @@ export const getCurrentSubscription = query({
       };
     }
 
+    const status = effectiveStatus(sub);
+    const isPrem = isEffectivelyPremium(sub);
+
     return {
       ...sub,
-      features: getPlanFeatures(sub.plan),
-      isActive: sub.status === "active" || sub.status === "trial",
+      status,
+      features: isPrem ? getPlanFeatures(sub.plan) : getFreeFeatures(),
+      isActive: isPrem,
     };
   },
 });
@@ -58,10 +81,10 @@ function getFreeFeatures() {
     maxLists: 3,
     maxPantryItems: 50,
     receiptScanning: true,
-    priceHistory: false,
-    partnerMode: false,
-    insights: false,
-    exportData: false,
+    priceHistory: true,
+    partnerMode: true,
+    insights: true,
+    exportData: true,
   };
 }
 
@@ -207,7 +230,7 @@ export const hasPremium = query({
       .first();
 
     if (!sub) return false;
-    return sub.status === "active" || sub.status === "trial";
+    return isEffectivelyPremium(sub);
   },
 });
 
@@ -274,8 +297,8 @@ export const requirePremium = query({
       .order("desc")
       .first();
 
-    const isPremium = sub && (sub.status === "active" || sub.status === "trial");
-    return { isPremium: !!isPremium, plan: sub?.plan || "free", status: sub?.status || "active" };
+    const isPremium = sub ? isEffectivelyPremium(sub) : false;
+    return { isPremium, plan: sub?.plan || "free", status: sub ? effectiveStatus(sub) : "active" };
   },
 });
 
@@ -294,10 +317,13 @@ export const getPlans = query({
         price: 0,
         period: null,
         features: [
+          "All features included",
           "3 shopping lists",
           "50 pantry items",
           "Receipt scanning",
-          "Basic budget tracking",
+          "Price history & insights",
+          "Partner mode",
+          "7-day unlimited trial on signup",
         ],
       },
       {
@@ -307,12 +333,8 @@ export const getPlans = query({
         period: "month",
         features: [
           "Unlimited lists & pantry items",
-          "Price history & trends",
-          "Partner mode (shared lists)",
-          "Insights & gamification",
-          "Export data",
           "Priority support",
-          "Earn up to £1.00–£1.79/mo back (tier-based)",
+          "Earn up to £1.00–£1.79/mo back from scans",
         ],
       },
       {
@@ -325,7 +347,7 @@ export const getPlans = query({
           "Everything in Monthly",
           "Save £14.89/year",
           "Early access to new features",
-          "Earn up to £12.00–£21.48/yr back (tier-based)",
+          "Earn up to £12.00–£21.48/yr back from scans",
         ],
       },
     ];
@@ -361,7 +383,7 @@ export const getScanCredits = query({
 
     const now = Date.now();
     const plan = sub?.plan || "free";
-    const isPremium = sub && (sub.status === "active" || sub.status === "trial") && plan !== "free";
+    const isPremium = sub ? isEffectivelyPremium(sub) && plan !== "free" : false;
     const isAnnual = plan === "premium_annual";
 
     // Find latest credit record for this user
@@ -447,7 +469,7 @@ export const earnScanCredit = mutation({
       .first();
 
     const plan = sub?.plan || "free";
-    const isPremium = sub && (sub.status === "active" || sub.status === "trial") && plan !== "free";
+    const isPremium = sub ? isEffectivelyPremium(sub) && plan !== "free" : false;
     const isAnnual = plan === "premium_annual";
 
     // Get or create credit record
@@ -554,6 +576,38 @@ export const earnScanCredit = mutation({
       tier: newTierConfig.tier,
       tierUpgrade,
     };
+  },
+});
+
+// =============================================================================
+// CRON: Expire stale trials — runs daily, flips trial → expired
+// =============================================================================
+
+export const expireTrials = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+
+    const trialSubs = await ctx.db
+      .query("subscriptions")
+      .collect();
+
+    let expired = 0;
+    for (const sub of trialSubs) {
+      if (
+        sub.status === "trial" &&
+        sub.trialEndsAt &&
+        sub.trialEndsAt <= now
+      ) {
+        await ctx.db.patch(sub._id, {
+          status: "expired",
+          updatedAt: now,
+        });
+        expired++;
+      }
+    }
+
+    return { expired };
   },
 });
 

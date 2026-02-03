@@ -5,13 +5,13 @@
 
 function getFreeFeatures() {
   return {
-    maxLists: 10,
+    maxLists: 3,
     maxPantryItems: 50,
     receiptScanning: true,
-    priceHistory: false,
-    partnerMode: false,
-    insights: false,
-    exportData: false,
+    priceHistory: true,
+    partnerMode: true,
+    insights: true,
+    exportData: true,
   };
 }
 
@@ -28,6 +28,14 @@ function getPlanFeatures(plan: string) {
   };
 }
 
+/** Read-time guard: treat expired trials as expired even if the cron hasn't run yet. */
+function isEffectivelyPremium(sub: any): boolean {
+  if (sub.status === "trial" && sub.trialEndsAt != null && sub.trialEndsAt <= Date.now()) {
+    return false;
+  }
+  return sub.status === "active" || sub.status === "trial";
+}
+
 /**
  * Check feature access for a user.
  * Returns plan features and whether the user has premium.
@@ -39,12 +47,10 @@ export async function checkFeatureAccess(ctx: any, userId: any) {
     .order("desc")
     .first();
 
-  const isPremium = sub
-    ? sub.status === "active" || sub.status === "trial"
-    : false;
+  const isPremium = sub ? isEffectivelyPremium(sub) : false;
 
   const plan = sub?.plan ?? "free";
-  const features = getPlanFeatures(plan);
+  const features = isPremium ? getPlanFeatures(plan) : getFreeFeatures();
 
   return { isPremium, plan, features };
 }

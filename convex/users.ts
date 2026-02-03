@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action } from "./_generated/server";
 
 /**
  * Get the current user from the database
@@ -173,10 +173,40 @@ export const completeOnboarding = mutation({
       throw new Error("User not found");
     }
 
+    const now = Date.now();
     await ctx.db.patch(user._id, {
       onboardingComplete: true,
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
+
+    // Auto-start 7-day premium trial for new users
+    const existingSub = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .first();
+
+    if (!existingSub) {
+      const trialEndsAt = now + 7 * 24 * 60 * 60 * 1000;
+      await ctx.db.insert("subscriptions", {
+        userId: user._id,
+        plan: "premium_monthly",
+        status: "trial",
+        trialEndsAt,
+        currentPeriodStart: now,
+        currentPeriodEnd: trialEndsAt,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await ctx.db.insert("notifications", {
+        userId: user._id,
+        type: "trial_started",
+        title: "Welcome to Oja Premium!",
+        body: "You have 7 days of full access to all features — explore everything!",
+        read: false,
+        createdAt: now,
+      });
+    }
 
     return true;
   },
@@ -473,6 +503,57 @@ export const deleteMyAccount = mutation({
     await ctx.db.delete(user._id);
 
     return { message: "Account permanently deleted" };
+  },
+});
+
+/**
+ * Delete ALL users from Clerk (dev/admin only).
+ * Uses Clerk Backend API to remove users completely.
+ */
+export const deleteAllClerkUsers = action({
+  args: {},
+  handler: async () => {
+    const clerkSecretKey = process.env.CLERK_SECRET_KEY;
+    if (!clerkSecretKey) {
+      throw new Error("CLERK_SECRET_KEY not configured");
+    }
+
+    // List all users from Clerk
+    const listResponse = await fetch("https://api.clerk.com/v1/users?limit=100", {
+      headers: {
+        Authorization: `Bearer ${clerkSecretKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!listResponse.ok) {
+      const error = await listResponse.text();
+      throw new Error(`Failed to list Clerk users: ${error}`);
+    }
+
+    const users = await listResponse.json();
+    const deletedUsers: string[] = [];
+
+    // Delete each user
+    for (const user of users) {
+      const deleteResponse = await fetch(`https://api.clerk.com/v1/users/${user.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${clerkSecretKey}`,
+        },
+      });
+
+      if (deleteResponse.ok) {
+        deletedUsers.push(user.email_addresses?.[0]?.email_address || user.id);
+      } else {
+        console.error(`Failed to delete Clerk user ${user.id}`);
+      }
+    }
+
+    return {
+      message: `Deleted ${deletedUsers.length} users from Clerk`,
+      deletedUsers,
+    };
   },
 });
 
