@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
+  Image,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
@@ -40,6 +41,7 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState("");
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -179,9 +181,11 @@ export default function SignUpScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.iconContainer}>
-            <MaterialCommunityIcons name="cart-plus" size={48} color={colors.accent.primary} />
-          </View>
+          <Image
+            source={require("@/assets/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>Create account</Text>
           <Text style={styles.subtitle}>Start your budget-first shopping journey</Text>
 
@@ -207,9 +211,11 @@ export default function SignUpScreen() {
             placeholder="Password"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+            secureTextEntry={!showPassword}
             autoComplete="password-new"
             iconLeft="lock-outline"
+            iconRight={showPassword ? "eye-off-outline" : "eye-outline"}
+            onPressIconRight={() => setShowPassword(!showPassword)}
           />
 
           <View style={styles.spacer} />
@@ -285,6 +291,12 @@ const styles = StyleSheet.create({
     backgroundColor: `${colors.accent.primary}20`,
     justifyContent: "center",
     alignItems: "center",
+    alignSelf: "center",
+    marginBottom: spacing.lg,
+  },
+  logo: {
+    width: 140,
+    height: 97,
     alignSelf: "center",
     marginBottom: spacing.lg,
   },

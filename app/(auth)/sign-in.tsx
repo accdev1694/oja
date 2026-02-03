@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
+  Image,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
@@ -40,6 +41,7 @@ export default function SignInScreen() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState("");
 
@@ -200,9 +202,11 @@ export default function SignInScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.iconContainer}>
-            <MaterialCommunityIcons name="shopping-outline" size={48} color={colors.accent.primary} />
-          </View>
+          <Image
+            source={require("@/assets/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>Welcome back</Text>
           <Text style={styles.subtitle}>Sign in to continue to Oja</Text>
 
@@ -228,10 +232,20 @@ export default function SignInScreen() {
             placeholder="Password"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+            secureTextEntry={!showPassword}
             autoComplete="password"
             iconLeft="lock-outline"
+            iconRight={showPassword ? "eye-off-outline" : "eye-outline"}
+            onPressIconRight={() => setShowPassword(!showPassword)}
           />
+
+          {/* Forgot Password */}
+          <Pressable
+            style={styles.forgotPassword}
+            onPress={() => router.push("/(auth)/forgot-password")}
+          >
+            <Text style={styles.linkText}>Forgot password?</Text>
+          </Pressable>
 
           <View style={styles.spacer} />
 
@@ -309,6 +323,12 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginBottom: spacing.lg,
   },
+  logo: {
+    width: 140,
+    height: 97,
+    alignSelf: "center",
+    marginBottom: spacing.lg,
+  },
   title: {
     ...typography.displaySmall,
     color: colors.text.primary,
@@ -327,6 +347,10 @@ const styles = StyleSheet.create({
   errorText: {
     ...typography.bodySmall,
     color: colors.accent.error,
+  },
+  forgotPassword: {
+    alignSelf: "flex-end",
+    marginTop: spacing.sm,
   },
   spacer: {
     height: spacing.lg,

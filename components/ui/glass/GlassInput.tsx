@@ -54,6 +54,8 @@ export interface GlassInputProps extends Omit<TextInputProps, "style"> {
   iconLeft?: keyof typeof MaterialCommunityIcons.glyphMap;
   /** Trailing icon name */
   iconRight?: keyof typeof MaterialCommunityIcons.glyphMap;
+  /** Callback when trailing icon is pressed (makes it tappable) */
+  onPressIconRight?: () => void;
   /** Show clear button when has value */
   clearable?: boolean;
   /** Callback when clear button pressed */
@@ -109,6 +111,7 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
       error,
       iconLeft,
       iconRight,
+      onPressIconRight,
       clearable = false,
       onClear,
       onFocus,
@@ -249,18 +252,34 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
 
           {/* Right Icon */}
           {iconRight && (
-            <MaterialCommunityIcons
-              name={iconRight}
-              size={sStyles.iconSize}
-              color={
-                hasError
-                  ? colors.accent.error
-                  : isFocused
-                    ? colors.accent.primary
-                    : colors.text.tertiary
-              }
-              style={styles.iconRight}
-            />
+            onPressIconRight ? (
+              <Pressable onPress={onPressIconRight} style={styles.clearButton} hitSlop={8}>
+                <MaterialCommunityIcons
+                  name={iconRight}
+                  size={sStyles.iconSize}
+                  color={
+                    hasError
+                      ? colors.accent.error
+                      : isFocused
+                        ? colors.accent.primary
+                        : colors.text.tertiary
+                  }
+                />
+              </Pressable>
+            ) : (
+              <MaterialCommunityIcons
+                name={iconRight}
+                size={sStyles.iconSize}
+                color={
+                  hasError
+                    ? colors.accent.error
+                    : isFocused
+                      ? colors.accent.primary
+                      : colors.text.tertiary
+                }
+                style={styles.iconRight}
+              />
+            )
           )}
         </AnimatedView>
 
