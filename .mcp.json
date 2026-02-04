@@ -23,6 +23,14 @@
     "vercel": {
       "type": "http",
       "url": "https://mcp.vercel.com"
+    },
+    "expo": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "expo-mcp-server"],
+      "env": {
+        "EXPO_TOKEN": "Ewzv9_Leb7YZbhm9NHCdatMs3SukN4clo-LRU02G"
+      }
     }
   }
 }

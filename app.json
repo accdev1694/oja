@@ -30,7 +30,14 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.oja.app",
-      "permissions": ["CAMERA", "VIBRATE", "RECEIVE_BOOT_COMPLETED", "RECORD_AUDIO"]
+      "permissions": [
+        "CAMERA",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -69,6 +76,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9814435d-ea39-4f8a-bd9e-3055f6dbeb23"
+      }
     }
   }
 }

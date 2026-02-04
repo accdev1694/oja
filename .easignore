@@ -1,0 +1,43 @@
+# BMAD artifacts
+_bmad-output/
+_bmad/
+
+# Claude Code
+.claude/
+
+# Playwright
+.playwright-mcp/
+e2e/
+test-results/
+playwright-report/
+playwright.config.ts
+
+# Testing
+__tests__/
+testing.md
+
+# Development files
+receipts/
+moodboard/
+nul
+_result.json
+oja.png
+
+# Docs (not needed for build)
+CLAUDE.md
+project-context.md
+
+# Git
+.git/
+.gitignore
+
+# Environment
+.env*.local
+.env.e2e
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
