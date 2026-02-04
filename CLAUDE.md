@@ -24,13 +24,14 @@
 | E2E. Playwright Tests | 🔄 In Progress (72 passed, 10 failed — see E2E Testing section) |
 | 7. Subscription & Payments | ✅ Complete (Stripe integration, webhooks, free trial) |
 | 8. Admin Dashboard | 🔄 In Progress (backend done in `convex/admin.ts`) |
-| 9. Voice Recognition | 📋 Planned (Native STT + Gemini NLU — see implementation plan below) |
+| 9. Voice Assistant | ✅ Complete (Gemini 2.5 Flash function-calling + expo-speech-recognition) |
 
 **Current Priorities:**
-1. **Push Notification Integration** — Expo Notifications wiring (backend + UI components already built)
-2. **Price Bracket Matcher Validation** — Test against 19 real receipts (target >80% accuracy)
-3. **First-Week Nurture Sequence** — Daily helpful nudges for new users (Day 2, 3, 5)
-4. **E2E Test Fixes** — 10 failures blocking ~35 cascade-skipped tests
+1. **Dev Build + Voice QA** — Test voice assistant on iOS/Android dev builds (requires native modules)
+2. **Push Notification Integration** — Expo Notifications wiring (backend + UI components already built)
+3. **Price Bracket Matcher Validation** — Test against 19 real receipts (target >80% accuracy)
+4. **First-Week Nurture Sequence** — Daily helpful nudges for new users (Day 2, 3, 5)
+5. **E2E Test Fixes** — 10 failures blocking ~35 cascade-skipped tests
 
 ---
 
@@ -55,7 +56,9 @@
 | **UI Design** | Glass Design System | Glassmorphism with deep blue gradients |
 | **Authentication** | Clerk | Managed auth with social providers |
 | **Backend** | Convex | Real-time database + serverless functions |
-| **AI/ML** | Gemini 2.0 Flash + OpenAI GPT-4o-mini (fallback) | Receipt parsing + Price estimation |
+| **AI/ML** | Gemini 2.5 Flash + OpenAI GPT-4o-mini (fallback) | Receipt parsing + Price estimation + Voice assistant |
+| **Voice STT** | expo-speech-recognition | On-device speech-to-text (free, native engines) |
+| **Voice TTS** | expo-speech | Text-to-speech for assistant responses |
 | **State** | React hooks + Convex | Real-time reactive state |
 | **Animations** | React Native Reanimated | Smooth native animations |
 | **Haptics** | Expo Haptics | Tactile feedback |
@@ -366,6 +369,10 @@ oja/
 │   │   ├── CategoryFilter.tsx
 │   │   └── RemoveButton.tsx
 │   ├── pantry/                  # Pantry components
+│   ├── voice/                   # Voice assistant components
+│   │   ├── VoiceFAB.tsx         # Floating mic button (global, above tab bar)
+│   │   ├── VoiceSheet.tsx       # Conversation bottom sheet
+│   │   └── MessageBubble.tsx    # Chat bubble component
 │   └── partners/                # Partner mode components
 │       ├── ApprovalActions.tsx
 │       ├── ApprovalBadge.tsx
@@ -378,6 +385,7 @@ oja/
 │   ├── useDeviceCapabilities.ts
 │   ├── usePartnerRole.ts
 │   ├── useNotifications.ts
+│   ├── useVoiceAssistant.ts     # Voice assistant lifecycle (STT, API, TTS, rate limiting)
 │   └── useDelightToast.ts
 │
 ├── lib/                          # Utilities
@@ -386,6 +394,7 @@ oja/
 │   ├── icons/iconMatcher.ts    # Client-side icon mapping
 │   ├── capabilities/deviceTier.ts  # Device capability tiers
 │   ├── haptics/safeHaptics.ts  # Haptic feedback utilities
+│   ├── voice/voiceTypes.ts    # Voice assistant shared TypeScript types
 │   └── location/detectLocation.ts  # Location detection
 │
 ├── convex/                       # Convex backend
@@ -412,7 +421,8 @@ oja/
 │   ├── http.ts                  # HTTP endpoints
 │   ├── auth.config.ts           # Clerk auth config
 │   └── lib/                     # Backend utilities
-│       └── featureGating.ts     # Feature gates + plan limits
+│       ├── featureGating.ts     # Feature gates + plan limits
+│       └── voiceTools.ts        # Voice assistant: 17 Gemini function declarations + dispatcher
 │
 ├── e2e/                          # E2E Playwright tests
 │   ├── fixtures/                # Test helpers (base.ts, auth.setup.ts)
@@ -562,6 +572,7 @@ CLERK_SECRET_KEY=sk_...
 
 | Item | Description | Status |
 |------|-------------|--------|
+| **Voice Assistant QA** | Test on dev builds with real speech, diverse accents | Implementation done |
 | **Partner Mode** | Push notification integration remaining | Backend + UI done |
 | **Admin Dashboard** | Frontend UI needed | Backend done (`convex/admin.ts`) |
 | **E2E Test Fixes** | 10 failures blocking ~35 cascade-skipped tests | See E2E section |
@@ -718,229 +729,90 @@ Config location: `C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.js
 
 ---
 
----
+## Voice Assistant — Context-Aware Conversational AI
 
-## Voice Recognition Feature — Implementation Plan
-
-**Status:** Planning Complete | **Priority:** High — Retention & Engagement
-**Decided:** 2026-02-04 (Party Mode brainstorm with full BMAD team)
+**Status:** ✅ Implemented | **Built:** 2026-02-04
+**Approach:** Gemini 2.5 Flash function-calling (not simple NLU — full conversational AI)
 
 ### Architecture
 
 ```
-Native STT + Gemini NLU (Hybrid Approach)
-
-┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────┐
-│ Tap FAB     │────▶│ Native STT       │────▶│ Gemini NLU      │────▶│ Execute      │
-│ (any screen)│     │ @react-native-   │     │ parseVoiceCmd   │     │ Convex       │
-└─────────────┘     │ voice/voice      │     │ in convex/ai.ts │     │ mutations    │
-                    │                  │     │                 │     │              │
-                    │ Streaming partial│     │ Returns JSON:   │     │ createList() │
-                    │ results (free,   │     │ {action, name,  │     │ addItems()   │
-                    │ on-device)       │     │  items[], ctx}  │     │ navigate()   │
-                    └──────────────────┘     │                 │     └──────────────┘
-                                            │ withAIFallback: │
-                                            │ Gemini → OpenAI │
-                                            └─────────────────┘
+User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognition)
+  → transcript → Convex `voiceAssistant` action
+    → Gemini 2.5 Flash with 17 function declarations
+    → Gemini returns functionCall → action runs ctx.runQuery(...)
+    → results sent back as functionResponse → Gemini composes answer
+    → (loop max 3 function calls per turn)
+  → response displayed in sheet + optional TTS (expo-speech, free)
 ```
 
-**Why this approach:**
-- **Native STT is FREE** — uses Apple Speech (iOS) / Google Speech (Android), zero API cost
-- **Streaming feedback** — real-time transcription as user speaks (no loading spinner)
-- **Gemini 2.0 Flash free tier** — 15 RPM, more than enough for voice commands
-- **`withAIFallback` reuse** — OpenAI GPT-4o-mini fallback already wired in `convex/ai.ts`
-- **Dev build compatible** — already using dev builds for `expo-camera` and Stripe
+**Write operations** (create list, add items, update stock) return a `pendingAction` — client shows confirm/cancel. Never auto-execute.
 
-### MVP Scope
+**Multi-turn**: Conversation history kept on client (max 6 turns = 12 messages), sent with each request.
 
-**Two intents only:**
-1. **Create list + add items** — "Create a grocery list with milk, bread, and eggs"
-2. **Add items to existing list** — "Add chicken and rice to my weekly shop"
+**Fallback**: On Gemini failure → degraded OpenAI prompt (no function calling, just context-based answer).
 
-**Explicitly NOT in MVP:**
-- Voice editing/deleting items
-- Voice navigation ("go to my pantry")
-- Continuous listening mode
-- Offline voice (requires on-device model)
-- Multi-language STT (English first)
+### What the Assistant Can Do
 
-### UX Flow
+**READ (12 tools):** `get_pantry_items` (with stock filter), `get_active_lists`, `get_list_items`, `get_list_by_name`, `get_price_estimate`, `get_price_stats`, `get_price_trend`, `get_weekly_digest`, `get_savings_jar`, `get_streaks`, `get_achievements`, `get_item_variants`
 
-```
-1. User taps glass FAB (mic icon, bottom-right, all screens)
-2. Bottom sheet (40% height) slides up with pulsing teal ring
-3. Real-time transcription appears as user speaks
-4. Silence detection (1.5s) OR "Done" tap → auto-stop
-5. Processing state: "Understanding your request..."
-6. Confirmation sheet shows parsed result:
-   ┌─────────────────────────────────┐
-   │ 🎤 Voice Command                │
-   │                                 │
-   │ Creating "Dinner List"          │
-   │                                 │
-   │ ☐ Chicken thighs  ~£3.50 est.  │
-   │ ☐ Garlic           ~£0.45 est. │
-   │ ☐ Coconut milk     ~£1.65 est. │
-   │                                 │
-   │ [✓ Add All]        [✎ Edit]     │
-   └─────────────────────────────────┘
-7. "Add All" → success haptic + celebration (first use: confetti!)
-8. Navigate to created/updated list
-```
+**WRITE (5 tools, confirmation required):** `create_shopping_list`, `add_items_to_list`, `update_stock_level`, `check_off_item`, `add_pantry_item`
 
-### Context-Aware Command Resolution
+### Example Conversations
 
-The voice parser receives context to resolve ambiguous commands:
+| User says | What happens |
+|-----------|-------------|
+| "What am I running low on?" | Calls `get_pantry_items` with stockFilter → lists low/out items |
+| "How much is milk?" | Calls `get_price_estimate` → shows price with confidence label |
+| "Create a list called Aldi Shop" | Returns `confirm_action` → user confirms → creates list |
+| "Add eggs and bread to my weekly list" | Returns `confirm_action` with items → user confirms → adds |
+| "How much did I spend this week?" | Calls `get_weekly_digest` → summarises spending |
+| "What are my streaks?" | Calls `get_streaks` → shows active streaks |
 
-| User says | Current screen | Resolution |
-|-----------|---------------|------------|
-| "Add milk" | List detail (id: X) | Add to list X |
-| "Add milk" | Lists tab | Add to most recent list |
-| "Add milk" | Pantry / Profile / Scan | Add to most recent list |
-| "Add milk" | No lists exist | Create "Shopping List" + add milk |
-| "Add to weekly shop" | Any screen | Fuzzy match list name → "Weekly Shop" |
-| "Create party supplies list" | Any screen | Create new list named "Party Supplies" |
+### Key Files
 
-### Files to Create/Modify
+| File | Lines | Role |
+|------|-------|------|
+| `convex/lib/voiceTools.ts` | 550 | 17 function declarations, system prompt builder, tool dispatcher |
+| `convex/ai.ts` (voiceAssistant) | +150 | Gemini function-call loop (max 3), OpenAI fallback |
+| `convex/ai.ts` (executeVoiceAction) | +110 | Confirmed write operation executor |
+| `lib/voice/voiceTypes.ts` | 44 | Shared TypeScript types |
+| `hooks/useVoiceAssistant.ts` | 317 | STT lifecycle, API calls, TTS, rate limiting, conversation history |
+| `components/voice/VoiceFAB.tsx` | 146 | Floating mic button with pulse animation |
+| `components/voice/VoiceSheet.tsx` | 377 | Bottom sheet: conversation bubbles, status, action confirmation |
+| `components/voice/MessageBubble.tsx` | 85 | Glass-styled chat bubbles (user right, assistant left) |
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `components/ui/glass/VoiceFAB.tsx` | **CREATE** | Global floating mic button (glass style, animated states) |
-| `components/ui/glass/VoiceSheet.tsx` | **CREATE** | Bottom sheet: transcription, confirmation, error states |
-| `hooks/useVoiceRecognition.ts` | **CREATE** | Hook wrapping `@react-native-voice/voice` (states, streaming) |
-| `convex/ai.ts` | **MODIFY** | Add `parseVoiceCommand` action with `withAIFallback` |
-| `app/(app)/_layout.tsx` | **MODIFY** | Mount `<VoiceFAB />` globally above tab navigator |
-| `lib/voice/voicePrompt.ts` | **CREATE** | Gemini prompt template for NLU intent parsing |
-| `app.json` | **MODIFY** | Add `@react-native-voice/voice` plugin + mic permissions |
+### Rate Limiting
 
-### Gemini NLU Prompt Design
+- **Per-request throttle**: 1 request per 6 seconds (client-side)
+- **Daily cap**: 200 requests/day (via AsyncStorage)
+- **Friendly error messages**: "Give me a moment" / "I'll be back tomorrow"
 
-The `parseVoiceCommand` action sends:
+### Personality
 
-```
-Input: { transcript: string, context: { currentScreen, activeListId?, activeListName?, recentLists[] } }
+- Warm, British, concise (like a knowledgeable market friend)
+- Uses £ formatting, celebrates wins
+- Never shows raw data — always summarises conversationally
+- Empathetic about budget struggles
 
-Output JSON: {
-  action: "create_list" | "add_to_list" | "unsupported",
-  listName?: string,           // For create_list or fuzzy-matched existing
-  matchedListId?: string,      // If adding to existing list
-  items: string[],             // Parsed item names
-  confidence: number,          // 0-1 parse confidence
-  rawTranscript: string,       // Original text for display
-  error?: string               // If action is unsupported
-}
-```
+### Requirements
 
-### Challenges & Mitigations
+- **Dev build required** — `expo-speech-recognition` uses native modules (not Expo Go compatible)
+- **Microphone permission** — requested on first use with friendly error if denied
+- **Gemini API key** — set in Convex dashboard as `GEMINI_API_KEY`
 
-| Challenge | Risk | Mitigation |
-|-----------|------|------------|
-| **Dev build requirement** | Low | Already on dev builds (camera, Stripe). No migration needed. |
-| **Accent diversity** (UK, Nigerian, Caribbean, etc.) | Medium | Native STT engines handle diverse accents well. Gemini NLU is accent-agnostic (text-based). Test with diverse speakers. |
-| **Ambiguous commands** ("add milk" — to which list?) | High | Context object sent to Gemini. Smart defaults: list detail → that list; no lists → create new; otherwise → most recent. Confirmation sheet catches errors. |
-| **Gemini rate limits** | Low | Free tier: 15 RPM. Voice commands are infrequent. Monitor with usage counter. |
-| **NLU prompt misparses** | High | 30+ test case matrix. Confirmation sheet before execution (never blind-execute). "chicken thighs" must parse as ONE item, not two. |
-| **Microphone permissions denied** | Low | Standard OS permission flow. GlassAlert explaining benefit + settings deeplink. |
-| **Battery drain** | Low | On-demand only (tap to activate). Not continuous listening. |
-| **Scan tab camera conflict** | Low | Reduce FAB opacity on Scan tab. Still tappable but not occluding. |
-| **Expo Go incompatibility** | Low | Dev builds required. Add clear error message if running in Expo Go. |
-| **Items need prices** | Low | After parse, run existing `estimateItemPrice` per item. Zero-blank cascade already handles this. |
+### Next Steps — Voice Assistant
 
-### Testing Strategy
-
-**Unit Tests (Jest):**
-- `useVoiceRecognition` hook — mock `@react-native-voice/voice`, test state transitions (idle → listening → processing → result → error)
-- `parseVoiceCommand` — mock Gemini, test 30+ command variations
-- `VoiceFAB` — render states, tap handling
-- `VoiceSheet` — confirmation display, edit flow, error states
-
-**NLU Prompt Test Matrix (minimum 30 cases):**
-
-| # | Command | Expected Action | Expected Items |
-|---|---------|----------------|----------------|
-| 1 | "Create grocery list with milk and bread" | create_list("Grocery List") | milk, bread |
-| 2 | "Add eggs to weekly shop" | add_to_list("Weekly Shop") | eggs |
-| 3 | "Put chicken rice and beans on the list" | add_to_list(recent) | chicken, rice, beans |
-| 4 | "Make a new list called birthday party" | create_list("Birthday Party") | [] |
-| 5 | "Banana" | add_to_list(recent) | banana |
-| 6 | "Add 2 pints of milk and a loaf of bread" | add_to_list(recent) | milk (2 pints), bread |
-| 7 | "Create dinner list with chicken thighs garlic and coconut milk" | create_list("Dinner List") | chicken thighs, garlic, coconut milk |
-| 8 | "Add semi-skimmed milk to Aldi list" | add_to_list("Aldi List") | semi-skimmed milk |
-| 9 | "" (empty/silence) | error | - |
-| 10 | "Delete everything" | unsupported | - |
-| 11 | "What's on my list?" | unsupported | - |
-| 12 | "Plantain, yam, scotch bonnet, and palm oil" | add_to_list(recent) | plantain, yam, scotch bonnet, palm oil |
-| 13 | "New list for Sunday cook up rice chicken stew and jollof" | create_list("Sunday Cook Up") | rice, chicken stew, jollof |
-| 14 | "Add toiletries shower gel toothpaste and deodorant" | add_to_list(recent) | shower gel, toothpaste, deodorant |
-| 15 | "Weetabix" | add_to_list(recent) | Weetabix |
-
-*(Expand to 30+ before shipping — include edge cases: numbers, units, UK-specific brands, African/Caribbean ingredients, compound items)*
-
-**E2E (Playwright):**
-- Skip voice-specific tests (no mic in headless browser)
-- Test VoiceFAB visibility across all tabs (DOM presence check)
-- Test VoiceSheet render with mocked data
-
-### Implementation Checklist
-
-#### Phase 1: Foundation
-- [ ] 1.1 Install `@react-native-voice/voice` + config plugin in `app.json`
-- [ ] 1.2 Add microphone + speech recognition permissions (iOS `Info.plist`, Android manifest)
-- [ ] 1.3 Create `hooks/useVoiceRecognition.ts` — wrap native module with states (idle, listening, processing, result, error)
-- [ ] 1.4 Write unit tests for `useVoiceRecognition` hook (mock native module, test all state transitions)
-- [ ] 1.5 Verify dev build compiles with new native dependency
-
-#### Phase 2: Gemini NLU
-- [ ] 2.1 Create `lib/voice/voicePrompt.ts` — prompt template for intent parsing
-- [ ] 2.2 Add `parseVoiceCommand` action in `convex/ai.ts` with `withAIFallback`
-- [ ] 2.3 Implement context-aware resolution (current screen, active list, recent lists)
-- [ ] 2.4 Write unit tests for `parseVoiceCommand` — minimum 30 test cases from matrix
-- [ ] 2.5 Test with real Gemini API — verify JSON output structure and edge cases
-
-#### Phase 3: UI Components
-- [ ] 3.1 Create `components/ui/glass/VoiceFAB.tsx` — glass-styled mic button with animated states
-- [ ] 3.2 Implement FAB states: idle (glass mic), listening (pulsing teal ring), processing (spinner)
-- [ ] 3.3 Create `components/ui/glass/VoiceSheet.tsx` — bottom sheet with transcription + confirmation
-- [ ] 3.4 Implement confirmation view: parsed list name, items with prices, "Add All" / "Edit" buttons
-- [ ] 3.5 Implement error states: no permission, empty result, parse failure, offline
-- [ ] 3.6 Add haptic feedback on all interactions (tap, success, error)
-- [ ] 3.7 Add first-use micro-celebration (confetti + toast)
-- [ ] 3.8 Write unit tests for VoiceFAB and VoiceSheet components
-
-#### Phase 4: Integration
-- [ ] 4.1 Mount `<VoiceFAB />` in `app/(app)/_layout.tsx` — global, above tab bar
-- [ ] 4.2 Wire voice flow end-to-end: FAB tap → STT → NLU → confirmation → mutations
-- [ ] 4.3 Integrate zero-blank price cascade — call `estimateItemPrice` for each parsed item
-- [ ] 4.4 Implement navigation: after confirmation, navigate to created/updated list
-- [ ] 4.5 Handle Scan tab: reduce FAB opacity when camera is active
-- [ ] 4.6 Add context provider for current screen + active list tracking
-
-#### Phase 5: Polish & QA
-- [ ] 5.1 Silence detection (1.5s auto-stop) + manual "Done" button
-- [ ] 5.2 Test with diverse accents (UK English, Nigerian English, Caribbean English)
-- [ ] 5.3 Test edge cases: very long commands, single word, nonsense input, background noise
-- [ ] 5.4 Verify Expo Go shows graceful error (not crash) if voice module unavailable
-- [ ] 5.5 Performance check: measure latency from stop-speaking to confirmation display
-- [ ] 5.6 Run full existing test suite — no regressions
-- [ ] 5.7 Manual QA on iOS + Android devices
-- [ ] 5.8 Update project-context.md with voice feature patterns
-
-#### Phase 6: Documentation
-- [ ] 6.1 Update CLAUDE.md project structure with new files
-- [ ] 6.2 Add voice feature to Build Progress tracker
-- [ ] 6.3 Document voice NLU prompt patterns for future maintenance
-
-### Success Metrics
-
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| **Adoption** | 20%+ of active users try voice in first week | Track FAB tap events |
-| **NLU accuracy** | >90% correct parses on test matrix | Unit test pass rate |
-| **STT accuracy** | >95% word accuracy (native engines) | Manual QA with diverse speakers |
-| **Latency** | <3s from stop-speaking to confirmation | Performance instrumentation |
-| **Error rate** | <5% of voice sessions end in error | Error tracking |
-| **Repeat usage** | 30%+ of first-time users use voice again | Analytics |
+| Item | Description | Priority |
+|------|-------------|----------|
+| **Dev build QA** | Test on iOS/Android dev builds with real speech | High |
+| **TTS toggle** | Add toggle in VoiceSheet header to disable TTS | Medium |
+| **Navigation actions** | "Go to my pantry" → navigate to screen | Medium |
+| **Continuous listening** | Hold-to-talk or continuous mode | Low |
+| **Voice-initiated receipt scan** | "Scan my receipt" → open camera | Low |
+| **Unit tests** | Mock Gemini, test 30+ command variations | Medium |
+| **Multi-language** | Support for non-English STT | Low |
 
 ---
 
-_Updated 2026-02-04. Added Voice Recognition feature implementation plan (Party Mode brainstorm). Full audit: fixed Expo version (54 not 55), removed Jina AI (never integrated), updated Stripe/Partner Mode status, rewrote project structure to match reality, updated schema docs, corrected gradient colors._
+_Updated 2026-02-04. Voice assistant fully implemented (Gemini 2.5 Flash function-calling, 17 tools, conversational AI). Replaced original 2-intent parseVoiceCommand plan with full context-aware assistant._

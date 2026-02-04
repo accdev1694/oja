@@ -3,6 +3,11 @@ import { api } from "./_generated/api";
 import { v } from "convex/values";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
+import {
+  voiceFunctionDeclarations,
+  buildSystemPrompt,
+  executeVoiceTool,
+} from "./lib/voiceTools";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
@@ -48,7 +53,7 @@ async function openaiGenerate(prompt: string, options?: { temperature?: number; 
  */
 async function geminiGenerate(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     generationConfig: {
       temperature: options?.temperature ?? 0.7,
       maxOutputTokens: options?.maxTokens ?? 4000,
@@ -708,6 +713,438 @@ RULES:
     } catch (error) {
       console.error("estimateItemPrice failed:", error);
       return null;
+    }
+  },
+});
+
+/**
+ * Parse a voice command transcript into a structured shopping intent.
+ *
+ * Uses Gemini (primary) + OpenAI (fallback) to understand natural language
+ * commands like "Create a grocery list with milk and bread" or
+ * "Add chicken and rice to my weekly shop".
+ *
+ * Returns structured JSON with action, list name, items, and confidence.
+ */
+export const parseVoiceCommand = action({
+  args: {
+    transcript: v.string(),
+    currentScreen: v.string(),
+    activeListId: v.optional(v.id("shoppingLists")),
+    activeListName: v.optional(v.string()),
+    recentLists: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    if (!args.transcript.trim()) {
+      return {
+        action: "unsupported" as const,
+        listName: null,
+        matchedListId: null,
+        items: [],
+        confidence: 0,
+        rawTranscript: args.transcript,
+        error: "Empty transcript",
+      };
+    }
+
+    const recentListsBlock =
+      args.recentLists.length > 0
+        ? args.recentLists
+            .map((l) => `  - id: "${l.id}", name: "${l.name}"`)
+            .join("\n")
+        : "  (none)";
+
+    const prompt = `You are a shopping list voice command parser for a UK grocery app called Oja.
+
+Parse the user's spoken command into a structured JSON response.
+
+## Rules
+1. Identify the ACTION:
+   - "create_list": user wants to make a NEW list (keywords: "create", "make", "new list", "start a list")
+   - "add_to_list": user wants to add items to an EXISTING list (keywords: "add", "put", "get", or just item names)
+   - "unsupported": any other intent (editing, deleting, navigating, questions)
+
+2. Extract LIST NAME:
+   - For "create_list": extract the list name from the command. If none given, use "Shopping List".
+   - For "add_to_list": fuzzy-match against existing lists below. If user says a list name, match it.
+     If no list name mentioned, use context rules:
+     - If user is on a list detail screen, use that list's ID.
+     - Otherwise use the most recently created list.
+     - If no lists exist, switch action to "create_list" with name "Shopping List".
+
+3. Extract ITEMS as an array:
+   - Each item must have: name (string), quantity (number, default 1), unit (optional string)
+   - "2 pints of milk" → { "name": "milk", "quantity": 2, "unit": "pint" }
+   - "chicken thighs" → { "name": "chicken thighs", "quantity": 1 } (compound noun = ONE item)
+   - "rice, chicken, and beans" → THREE separate items, each quantity 1
+   - "a dozen eggs" → { "name": "eggs", "quantity": 12, "unit": "each" }
+   - "half a kilo of mince" → { "name": "mince", "quantity": 0.5, "unit": "kg" }
+   - UK grocery context: recognise brands (Weetabix, PG Tips, Warburtons) and cultural items (plantain, yam, scotch bonnet, jollof spice mix)
+
+4. Set CONFIDENCE (0-1):
+   - 1.0: clear intent, clear items
+   - 0.7-0.9: intent clear but some ambiguity in items
+   - 0.3-0.6: unclear intent or garbled speech
+   - Below 0.3: likely nonsense or unrelated speech
+
+## User Context
+- Current screen: ${args.currentScreen}
+- Active list: ${args.activeListId ? `id="${args.activeListId}", name="${args.activeListName}"` : "none"}
+- Recent lists:
+${recentListsBlock}
+
+## User's spoken command
+"${args.transcript}"
+
+## Response Format
+Respond with ONLY valid JSON, no markdown, no explanation:
+{
+  "action": "create_list" | "add_to_list" | "unsupported",
+  "listName": "string or null",
+  "matchedListId": "string or null",
+  "items": [{ "name": "string", "quantity": number, "unit": "string or null" }],
+  "confidence": number,
+  "rawTranscript": "${args.transcript.replace(/"/g, '\\"')}",
+  "error": "string or null"
+}`;
+
+    const parseResponse = (raw: string) => {
+      const cleaned = stripCodeBlocks(raw);
+      try {
+        const parsed = JSON.parse(cleaned);
+        // Validate required fields
+        if (
+          !parsed.action ||
+          !["create_list", "add_to_list", "unsupported"].includes(
+            parsed.action
+          )
+        ) {
+          parsed.action = "unsupported";
+          parsed.error = "Could not determine intent";
+          parsed.confidence = 0.1;
+        }
+        // Ensure items is always an array
+        if (!Array.isArray(parsed.items)) {
+          parsed.items = [];
+        }
+        // Normalize items
+        parsed.items = parsed.items.map(
+          (item: { name?: string; quantity?: number; unit?: string | null }) => ({
+            name: item.name || "unknown item",
+            quantity:
+              typeof item.quantity === "number" && item.quantity > 0
+                ? item.quantity
+                : 1,
+            unit: item.unit || null,
+          })
+        );
+        parsed.rawTranscript = args.transcript;
+        return parsed;
+      } catch {
+        return {
+          action: "unsupported",
+          listName: null,
+          matchedListId: null,
+          items: [],
+          confidence: 0.1,
+          rawTranscript: args.transcript,
+          error: "Failed to parse AI response",
+        };
+      }
+    };
+
+    return await withAIFallback(
+      async () => {
+        const raw = await geminiGenerate(prompt, {
+          temperature: 0.2,
+          maxTokens: 1000,
+        });
+        return parseResponse(raw);
+      },
+      async () => {
+        const raw = await openaiGenerate(prompt, {
+          temperature: 0.2,
+          maxTokens: 1000,
+        });
+        return parseResponse(raw);
+      },
+      "parseVoiceCommand"
+    );
+  },
+});
+
+// ─── Voice Assistant (Function-Calling) ────────────────────────────────
+
+/**
+ * Context-aware voice assistant using Gemini function calling.
+ *
+ * Accepts a transcript and conversation history, lets Gemini decide which
+ * Convex queries to call, feeds the results back, and returns a natural
+ * language response. Write operations return a pendingAction for client
+ * confirmation — they are never auto-executed.
+ */
+export const voiceAssistant = action({
+  args: {
+    transcript: v.string(),
+    currentScreen: v.string(),
+    activeListId: v.optional(v.id("shoppingLists")),
+    activeListName: v.optional(v.string()),
+    userName: v.optional(v.string()),
+    conversationHistory: v.optional(
+      v.array(
+        v.object({
+          role: v.union(v.literal("user"), v.literal("model")),
+          text: v.string(),
+        })
+      )
+    ),
+  },
+  handler: async (ctx, args) => {
+    // Empty transcript guard
+    if (!args.transcript.trim()) {
+      return {
+        type: "error" as const,
+        text: "I didn't catch that. Try again?",
+        pendingAction: null,
+      };
+    }
+
+    const systemPrompt = buildSystemPrompt({
+      currentScreen: args.currentScreen,
+      activeListId: args.activeListId,
+      activeListName: args.activeListName,
+      userName: args.userName,
+    });
+
+    try {
+      // Build Gemini model with function declarations
+      const model = genAI.getGenerativeModel({
+        model: "gemini-2.5-flash",
+        systemInstruction: systemPrompt,
+        tools: [{ functionDeclarations: voiceFunctionDeclarations }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 500,
+        },
+      });
+
+      // Build conversation history for multi-turn
+      const history = (args.conversationHistory || []).map((msg) => ({
+        role: msg.role as "user" | "model",
+        parts: [{ text: msg.text }],
+      }));
+
+      const chat = model.startChat({ history });
+      let response = await chat.sendMessage(args.transcript);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let pendingAction: {
+        action: string;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        params: Record<string, any>;
+        confirmLabel: string;
+      } | null = null;
+
+      // Function-call loop (max 3 iterations to prevent runaway)
+      for (let i = 0; i < 3; i++) {
+        const candidate = response.response.candidates?.[0];
+        const functionCallPart = candidate?.content?.parts?.find(
+          (p) => p.functionCall
+        );
+
+        if (!functionCallPart?.functionCall) break;
+
+        const { name, args: fnArgs } = functionCallPart.functionCall;
+        console.log(`[voiceAssistant] Tool call ${i + 1}: ${name}`, fnArgs);
+
+        const toolResult = await executeVoiceTool(
+          ctx,
+          name,
+          (fnArgs as Record<string, unknown>) || {}
+        );
+
+        if (toolResult.type === "confirm") {
+          pendingAction = {
+            action: toolResult.result.action,
+            params: toolResult.result.params,
+            confirmLabel: toolResult.result.description,
+          };
+        }
+
+        // Send function response back to Gemini
+        response = await chat.sendMessage([
+          {
+            functionResponse: {
+              name,
+              response: toolResult.result,
+            },
+          },
+        ]);
+      }
+
+      const finalText =
+        response.response.text() || "Sorry, I couldn't process that.";
+
+      return {
+        type: pendingAction ? ("confirm_action" as const) : ("answer" as const),
+        text: finalText,
+        pendingAction,
+      };
+    } catch (error) {
+      console.error("[voiceAssistant] Gemini failed, trying OpenAI fallback:", error);
+
+      // Degraded fallback: simple prompt without function calling
+      try {
+        const fallbackPrompt = `${buildSystemPrompt({
+          currentScreen: args.currentScreen,
+          activeListId: args.activeListId,
+          activeListName: args.activeListName,
+          userName: args.userName,
+        })}
+
+The user said: "${args.transcript}"
+
+You cannot look up any data right now. If they asked a question about their data, apologise and suggest they check the app directly. If they want to create a list or add items, let them know you can't do that right now. Be warm and helpful.`;
+
+        const fallbackResponse = await openaiGenerate(fallbackPrompt, {
+          temperature: 0.3,
+          maxTokens: 300,
+        });
+
+        return {
+          type: "answer" as const,
+          text: fallbackResponse || "I'm having a bit of trouble. Try again in a moment?",
+          pendingAction: null,
+        };
+      } catch {
+        return {
+          type: "error" as const,
+          text: "I'm having trouble right now. You can still use the app normally!",
+          pendingAction: null,
+        };
+      }
+    }
+  },
+});
+
+/**
+ * Execute a confirmed voice action (write operation).
+ *
+ * Called by the client after the user confirms a pendingAction
+ * returned by voiceAssistant.
+ */
+export const executeVoiceAction = action({
+  args: {
+    actionName: v.string(),
+    params: v.any(),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean; message: string; listId?: string }> => {
+    console.log(`[executeVoiceAction] ${args.actionName}`, args.params);
+
+    switch (args.actionName) {
+      case "create_shopping_list": {
+        const listId = await ctx.runMutation(api.shoppingLists.create, {
+          name: args.params.name,
+          budget: args.params.budget,
+          storeName: args.params.storeName,
+        });
+        return { success: true, listId, message: `Created "${args.params.name}"` };
+      }
+
+      case "add_items_to_list": {
+        const items = args.params.items || [];
+        const listId = args.params.listId;
+
+        // If no listId, try to find by name
+        let targetListId = listId;
+        if (!targetListId && args.params.listName) {
+          const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+          const match = lists.find(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (l: any) =>
+              l.name.toLowerCase().includes(args.params.listName.toLowerCase())
+          );
+          if (match) targetListId = match._id;
+        }
+
+        if (!targetListId) {
+          // Fall back to most recent active list
+          const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+          if (lists.length > 0) targetListId = lists[0]._id;
+        }
+
+        if (!targetListId) {
+          return { success: false, message: "No shopping list found to add items to." };
+        }
+
+        for (const item of items) {
+          await ctx.runMutation(api.listItems.create, {
+            listId: targetListId,
+            name: item.name,
+            quantity: item.quantity || 1,
+            unit: item.unit,
+            priority: "should-have",
+          });
+        }
+
+        return { success: true, message: `Added ${items.length} item(s)` };
+      }
+
+      case "update_stock_level": {
+        // Find pantry item by name
+        const pantryItems = await ctx.runQuery(api.pantryItems.getByUser, {});
+        const match = pantryItems.find(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (p: any) =>
+            p.name.toLowerCase().includes(args.params.itemName.toLowerCase())
+        );
+        if (!match) {
+          return { success: false, message: `Couldn't find "${args.params.itemName}" in your pantry.` };
+        }
+        await ctx.runMutation(api.pantryItems.updateStockLevel, {
+          id: match._id,
+          stockLevel: args.params.stockLevel,
+        });
+        return { success: true, message: `Marked ${match.name} as ${args.params.stockLevel}` };
+      }
+
+      case "check_off_item": {
+        // Find list item by name
+        const listId = args.params.listId;
+        if (!listId) {
+          return { success: false, message: "No list specified to check off from." };
+        }
+        const listItems = await ctx.runQuery(api.listItems.getByList, {
+          listId,
+        });
+        const match = listItems.find(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (i: any) =>
+            i.name.toLowerCase().includes(args.params.itemName.toLowerCase())
+        );
+        if (!match) {
+          return { success: false, message: `Couldn't find "${args.params.itemName}" on this list.` };
+        }
+        await ctx.runMutation(api.listItems.toggleChecked, { id: match._id });
+        return { success: true, message: `Checked off ${match.name}` };
+      }
+
+      case "add_pantry_item": {
+        await ctx.runMutation(api.pantryItems.create, {
+          name: args.params.name,
+          category: args.params.category || "Other",
+          stockLevel: args.params.stockLevel || "stocked",
+        });
+        return { success: true, message: `Added ${args.params.name} to pantry` };
+      }
+
+      default:
+        return { success: false, message: `Unknown action: ${args.actionName}` };
     }
   },
 });

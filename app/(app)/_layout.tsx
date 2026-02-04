@@ -15,6 +15,7 @@ import React from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { VoiceFAB } from "@/components/voice/VoiceFAB";
 
 import {
   TAB_CONFIG,
@@ -253,6 +254,7 @@ export default function AppLayout() {
         <Stack.Screen name="admin" />
       </Stack>
       <PersistentTabBar />
+      <VoiceFAB />
     </View>
   );
 }

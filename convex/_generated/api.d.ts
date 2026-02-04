@@ -17,6 +17,8 @@ import type * as iconMapping from "../iconMapping.js";
 import type * as insights from "../insights.js";
 import type * as itemVariants from "../itemVariants.js";
 import type * as lib_featureGating from "../lib/featureGating.js";
+import type * as lib_voiceParser from "../lib/voiceParser.js";
+import type * as lib_voiceTools from "../lib/voiceTools.js";
 import type * as listItems from "../listItems.js";
 import type * as notifications from "../notifications.js";
 import type * as pantryItems from "../pantryItems.js";
@@ -44,6 +46,8 @@ declare const fullApi: ApiFromModules<{
   insights: typeof insights;
   itemVariants: typeof itemVariants;
   "lib/featureGating": typeof lib_featureGating;
+  "lib/voiceParser": typeof lib_voiceParser;
+  "lib/voiceTools": typeof lib_voiceTools;
   listItems: typeof listItems;
   notifications: typeof notifications;
   pantryItems: typeof pantryItems;
