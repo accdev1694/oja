@@ -16,20 +16,20 @@
 | 3. Shopping Lists | ✅ Complete |
 | UI. Glass Redesign | ✅ Complete |
 | UX. Emotional Design | ✅ Complete (12/15 recommendations implemented) |
-| 4. Partner Mode | 🔄 In Progress (backend done, frontend partial) |
+| 4. Partner Mode | 🔄 In Progress (backend + UI done, push notification integration pending) |
 | 5. Receipt Intelligence | ✅ Complete |
 | 5.5. Zero-Blank Price Intelligence | ✅ Phases 1-4, 6 Complete (Phase 5 bracket matcher pending validation) |
 | 6. Insights & Gamification | 🔄 In Progress (UI + backend done, push notifications pending) |
 | E2E. Bug Sweep | ✅ Complete (10 bugs found and fixed — commit `97907eb`) |
 | E2E. Playwright Tests | 🔄 In Progress (72 passed, 10 failed — see E2E Testing section) |
-| 7. Subscription & Payments | ⏳ Placeholder |
-| 8. Admin Dashboard | ⏳ Placeholder |
+| 7. Subscription & Payments | ✅ Complete (Stripe integration, webhooks, free trial) |
+| 8. Admin Dashboard | 🔄 In Progress (backend done in `convex/admin.ts`) |
 
 **Current Priorities:**
-1. **Push Notifications** — Stock reminders, streak motivation, weekly digest
+1. **Push Notification Integration** — Expo Notifications wiring (backend + UI components already built)
 2. **Price Bracket Matcher Validation** — Test against 19 real receipts (target >80% accuracy)
-3. **Epic 4 - Partner Mode** — Approval UI, contest UI, comments UI
-4. **First-Week Nurture Sequence** — Daily helpful nudges for new users (Day 2, 3, 5)
+3. **First-Week Nurture Sequence** — Daily helpful nudges for new users (Day 2, 3, 5)
+4. **E2E Test Fixes** — 10 failures blocking ~35 cascade-skipped tests
 
 ---
 
@@ -48,24 +48,28 @@
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| **Framework** | Expo SDK 55+ | React Native with native capabilities |
+| **Framework** | Expo SDK 54 | React Native with native capabilities |
 | **Language** | TypeScript (strict) | Type-safe development |
 | **Routing** | Expo Router | File-based native navigation |
 | **UI Design** | Glass Design System | Glassmorphism with deep blue gradients |
 | **Authentication** | Clerk | Managed auth with social providers |
 | **Backend** | Convex | Real-time database + serverless functions |
-| **AI/ML** | Gemini + OpenAI (fallback) + Jina AI | Receipt parsing + Price estimation + Embeddings |
+| **AI/ML** | Gemini 2.0 Flash + OpenAI GPT-4o-mini (fallback) | Receipt parsing + Price estimation |
 | **State** | React hooks + Convex | Real-time reactive state |
 | **Animations** | React Native Reanimated | Smooth native animations |
 | **Haptics** | Expo Haptics | Tactile feedback |
 | **Payments** | Stripe | Subscription management |
+| **Charting** | react-native-chart-kit | Budget visualization + Insights graphs |
+| **Celebrations** | react-native-confetti-cannon | Milestone animations |
+| **Notifications** | Expo Notifications | Push notification infrastructure |
+| **Camera** | Expo Camera | Receipt scanning |
 
 ---
 
 ## Glass UI Design System
 
 The app uses a glassmorphism-inspired design with:
-- **Deep blue gradient backgrounds** (#0D1528 to #1A2744) — shifted slightly warm from original cold navy
+- **Deep blue gradient backgrounds** (#0D1528 → #1B2845 → #101A2B) — 3-color gradient, shifted slightly warm from original cold navy
 - **Semi-transparent glass cards** with blur effects
 - **Teal accent color** (#00D4AA) reserved for primary CTAs only
 - **Warm accent color** (#FFB088) for celebrations and milestones
@@ -83,8 +87,8 @@ Import warm tokens from:      glassTokens.colors.accent.warm
 
 | Pattern | Implementation |
 |---------|---------------|
-| **Micro-celebrations** | Green border flash (600ms) + haptic on check-off |
-| **Budget sentiment** | One-line mood below dial: "Looking good — lots of room left" / "Getting close" / "Over budget" |
+| **Micro-celebrations** | Teal success check (600ms) + haptic on check-off (`SuccessCheck` in `GlassAnimations.tsx`) |
+| **Budget sentiment** | One-line mood below dial: "Looking good — lots of room left" / "On track — doing well" / "Getting close — stay focused" / "Over budget — time to review" |
 | **Savings jar warmth** | £0: aspirational copy. Positive: milestone encouragement ("Great start!", "Triple digits!") |
 | **Weekly narrative** | `generateWeeklyNarrative()` — 2-3 sentence story from digest data |
 | **Journey prompts** | Scan → Stock banner, Stock → Lists banner for out-of-stock items |
@@ -320,6 +324,7 @@ Fixing these 10 failures (mostly low effort) would recover **~35-40 tests** (fro
 oja/
 ├── app/                          # Expo Router (file-based routing)
 │   ├── _layout.tsx              # Root layout (providers)
+│   ├── index.tsx                # Entry redirect
 │   ├── (app)/                   # Authenticated routes
 │   │   ├── _layout.tsx          # Protected layout
 │   │   ├── (tabs)/              # Tab navigator
@@ -328,35 +333,59 @@ oja/
 │   │   │   ├── lists.tsx        # Shopping lists
 │   │   │   ├── scan.tsx         # Receipt scanner
 │   │   │   └── profile.tsx      # User profile
-│   │   ├── list/[id].tsx        # List detail
-│   │   ├── item/[id].tsx        # Item detail
-│   │   └── edit-profile.tsx     # Edit profile
+│   │   ├── list/[id].tsx        # List detail (+ partner approval UI)
+│   │   ├── admin.tsx            # Admin dashboard
+│   │   ├── partners.tsx         # Partner management
+│   │   ├── insights.tsx         # Insights & gamification
+│   │   ├── notifications.tsx    # Notifications
+│   │   ├── subscription.tsx     # Subscription management
+│   │   ├── join-list.tsx        # Accept partner invite
+│   │   ├── pantry-pick.tsx      # Pantry item picker
+│   │   ├── trip-summary.tsx     # Post-shopping summary
+│   │   ├── price-history/[itemName].tsx  # Price history detail
+│   │   └── receipt/[id]/        # Receipt flow
+│   │       ├── confirm.tsx      # Receipt confirmation
+│   │       └── reconciliation.tsx # Receipt reconciliation
 │   ├── (auth)/                   # Auth routes
 │   │   ├── sign-in.tsx
-│   │   └── sign-up.tsx
+│   │   ├── sign-up.tsx
+│   │   └── forgot-password.tsx
 │   └── onboarding/               # Onboarding flow
 │       ├── _layout.tsx
-│       ├── name.tsx
-│       ├── budget.tsx
-│       └── complete.tsx
+│       ├── welcome.tsx          # Welcome screen
+│       ├── cuisine-selection.tsx # Cuisine preferences
+│       ├── pantry-seeding.tsx   # AI pantry seeding
+│       └── review-items.tsx     # Review seeded items
 │
 ├── components/                   # Reusable components
-│   ├── ui/                      # Design system (Glass components)
+│   ├── ui/                      # Design system
+│   │   ├── glass/               # Glass components (19 files)
+│   │   ├── AdaptiveCard.tsx
+│   │   ├── AddToListButton.tsx
+│   │   ├── CategoryFilter.tsx
+│   │   └── RemoveButton.tsx
 │   ├── pantry/                  # Pantry components
-│   ├── lists/                   # Shopping list components
-│   ├── receipt/                 # Receipt scanning
-│   └── onboarding/              # Onboarding components
+│   └── partners/                # Partner mode components
+│       ├── ApprovalActions.tsx
+│       ├── ApprovalBadge.tsx
+│       ├── CommentThread.tsx
+│       ├── NotificationBell.tsx
+│       └── NotificationDropdown.tsx
 │
 ├── hooks/                        # Custom React hooks
 │   ├── useCurrentUser.ts
-│   ├── usePhotoPicker.ts
-│   └── useOptimisticUpdates.ts
+│   ├── useDeviceCapabilities.ts
+│   ├── usePartnerRole.ts
+│   ├── useNotifications.ts
+│   └── useDelightToast.ts
 │
 ├── lib/                          # Utilities
 │   ├── design/glassTokens.ts   # Glass design tokens
+│   ├── design/tokens.ts        # Additional design tokens
 │   ├── icons/iconMatcher.ts    # Client-side icon mapping
-│   ├── utils/
-│   └── constants/
+│   ├── capabilities/deviceTier.ts  # Device capability tiers
+│   ├── haptics/safeHaptics.ts  # Haptic feedback utilities
+│   └── location/detectLocation.ts  # Location detection
 │
 ├── convex/                       # Convex backend
 │   ├── _generated/              # Auto-generated (don't edit)
@@ -369,13 +398,33 @@ oja/
 │   ├── itemVariants.ts          # Size variant management
 │   ├── currentPrices.ts         # Crowdsourced prices
 │   ├── priceHistory.ts          # Personal price log
-│   ├── files.ts                 # File storage
 │   ├── ai.ts                    # AI functions (Gemini + OpenAI fallback)
 │   ├── iconMapping.ts           # Server-side icon mapping
+│   ├── admin.ts                 # Admin dashboard backend
+│   ├── insights.ts              # Weekly digest + gamification
+│   ├── partners.ts              # Partner mode backend
+│   ├── notifications.ts         # Notification management
+│   ├── stripe.ts                # Stripe integration
+│   ├── subscriptions.ts         # Subscription lifecycle
+│   ├── crons.ts                 # Scheduled jobs
+│   ├── cronHandlers.ts          # Cron job handlers
+│   ├── http.ts                  # HTTP endpoints
+│   ├── auth.config.ts           # Clerk auth config
 │   └── lib/                     # Backend utilities
+│       └── featureGating.ts     # Feature gates + plan limits
+│
+├── e2e/                          # E2E Playwright tests
+│   ├── fixtures/                # Test helpers (base.ts, auth.setup.ts)
+│   ├── pages/                   # Page Object Models
+│   └── tests/                   # 13 spec files (01-13*.spec.ts)
+│
+├── __tests__/                    # Unit tests (Jest)
+├── receipts/                     # 19 real UK store receipts for validation
 │
 ├── project-context.md            # Developer reference (READ FIRST)
 ├── CLAUDE.md                     # This file
+├── testing.md                    # E2E test plan (398 cases)
+├── playwright.config.ts          # Playwright configuration
 │
 └── _bmad-output/                 # BMAD artifacts
     ├── planning-artifacts/
@@ -457,10 +506,14 @@ export const create = mutation({
 ### Action (External API)
 
 ```typescript
-export const generateEmbedding = action({
-  args: { text: v.string() },
+export const estimateItemPrice = action({
+  args: { itemName: v.string(), region: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    return await jinaAI.embeddings.create({ ... });
+    return await withAIFallback(
+      () => geminiEstimate(args.itemName),
+      () => openaiEstimate(args.itemName),
+      "estimateItemPrice"
+    );
   },
 });
 ```
@@ -483,7 +536,6 @@ GEMINI_API_KEY=...              # Primary AI (receipt parsing, seeding, suggesti
 OPENAI_API_KEY=sk_...           # Fallback AI (when Gemini fails)
 STRIPE_SECRET_KEY=sk_...
 CLERK_SECRET_KEY=sk_...
-JINA_API_KEY=...                # Embeddings for semantic search
 ```
 
 ---
@@ -509,9 +561,9 @@ JINA_API_KEY=...                # Embeddings for semantic search
 
 | Item | Description | Status |
 |------|-------------|--------|
-| **Partner Mode Frontend** | Approval UI, contest UI, comments UI | Backend done |
-| **Subscription & Payments** | Stripe integration | Placeholder |
-| **Admin Dashboard** | User management, receipt seeding | Placeholder |
+| **Partner Mode** | Push notification integration remaining | Backend + UI done |
+| **Admin Dashboard** | Frontend UI needed | Backend done (`convex/admin.ts`) |
+| **E2E Test Fixes** | 10 failures blocking ~35 cascade-skipped tests | See E2E section |
 
 ### Verification Plan (20 test cases)
 
@@ -568,15 +620,21 @@ JINA_API_KEY=...                # Embeddings for semantic search
 
 ```typescript
 // Item size variants (AI-seeded + receipt-discovered)
-itemVariants: { baseItem, variantName, size, unit, category, source, estimatedPrice }
+itemVariants: { baseItem, variantName, size, unit, category, source,
+                estimatedPrice, commonality }
   .index("by_base_item", ["baseItem"])
 
 // Crowdsourced prices (weighted 30-day average)
-currentPrices: { normalizedName, variantName, size, unit, storeName, averagePrice,
-                 minPrice, maxPrice, confidence, reportCount, region }
+currentPrices: { normalizedName, itemName, variantName, size, unit, storeName,
+                 unitPrice, averagePrice, minPrice, maxPrice, confidence,
+                 reportCount, region, lastSeenDate, lastReportedBy, updatedAt }
+  .index("by_item"), .index("by_item_store"), .index("by_store")
 
 // Personal price log (from user's own receipts)
-priceHistory: { userId, itemName, size, unit, unitPrice, storeName, purchaseDate }
+priceHistory: { userId, receiptId, itemName, normalizedName, size, unit,
+                price, quantity, unitPrice, storeName, storeAddress,
+                purchaseDate, createdAt }
+  .index("by_user"), .index("by_user_item"), .index("by_user_item_date"), .index("by_receipt")
 
 // Pantry items (with price + variant tracking)
 pantryItems: { ..., lastPrice, priceSource, preferredVariant, lastStoreName,
@@ -659,4 +717,4 @@ Config location: `C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.js
 
 ---
 
-_Updated 2026-02-03. Added E2E Playwright testing results (72/87 passing, 10 failures documented with fixes)._
+_Updated 2026-02-04. Full audit: fixed Expo version (54 not 55), removed Jina AI (never integrated), updated Stripe/Partner Mode status, rewrote project structure to match reality (90+ unlisted files added), updated schema docs (15 missing fields added), corrected gradient colors and micro-celebration description._
