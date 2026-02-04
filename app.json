@@ -18,7 +18,9 @@
       "bundleIdentifier": "com.oja.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Oja needs camera access to scan receipts",
-        "NSPhotoLibraryUsageDescription": "Oja needs photo access to select receipt images"
+        "NSPhotoLibraryUsageDescription": "Oja needs photo access to select receipt images",
+        "NSSpeechRecognitionUsageDescription": "Oja uses speech recognition for the voice assistant",
+        "NSMicrophoneUsageDescription": "Oja needs microphone access for the voice assistant"
       }
     },
     "android": {
@@ -28,7 +30,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.oja.app",
-      "permissions": ["CAMERA", "VIBRATE", "RECEIVE_BOOT_COMPLETED"]
+      "permissions": ["CAMERA", "VIBRATE", "RECEIVE_BOOT_COMPLETED", "RECORD_AUDIO"]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -42,6 +44,13 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#EA5B62"
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Oja needs microphone access for the voice assistant",
+          "speechRecognitionPermission": "Oja uses speech recognition for the voice assistant"
         }
       ],
       [
