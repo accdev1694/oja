@@ -8,13 +8,11 @@
  * - TTS via expo-speech
  * - Action confirmation flow
  * - Rate limiting (1 req / 6s, 200/day)
+ *
+ * Gracefully degrades in Expo Go (native module unavailable).
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent,
-} from "expo-speech-recognition";
 import * as Speech from "expo-speech";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -24,9 +22,28 @@ import type {
   ConversationMessage,
   PendingAction,
   VoiceAssistantState,
-  INITIAL_VOICE_STATE,
 } from "@/lib/voice/voiceTypes";
 import type { Id } from "@/convex/_generated/dataModel";
+
+// ── Safe dynamic import of expo-speech-recognition ──────────────────
+// The native module crashes in Expo Go, so we try/catch the require.
+
+let SpeechRecognitionModule: any = null;
+let useSpeechRecognitionEvent: any = null;
+
+try {
+  const mod = require("expo-speech-recognition");
+  SpeechRecognitionModule = mod.ExpoSpeechRecognitionModule;
+  useSpeechRecognitionEvent = mod.useSpeechRecognitionEvent;
+} catch {
+  // Native module not available (Expo Go) — voice will be disabled
+}
+
+const STT_AVAILABLE = SpeechRecognitionModule != null;
+
+// Noop hook when native module isn't available
+const noopEventHook = (_event: string, _cb: (...args: any[]) => void) => {};
+const useSpeechEvent = useSpeechRecognitionEvent ?? noopEventHook;
 
 const MAX_HISTORY = 12; // 6 turns (user + model each)
 const RATE_LIMIT_MS = 6000; // 1 request per 6 seconds
@@ -63,27 +80,27 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
 
   // ── Speech Recognition Events ──────────────────────────────────────
 
-  useSpeechRecognitionEvent("start", () => {
-    setState((s) => ({ ...s, isListening: true, error: null }));
+  useSpeechEvent("start", () => {
+    setState((s: VoiceAssistantState) => ({ ...s, isListening: true, error: null }));
   });
 
-  useSpeechRecognitionEvent("end", () => {
-    setState((s) => ({ ...s, isListening: false }));
+  useSpeechEvent("end", () => {
+    setState((s: VoiceAssistantState) => ({ ...s, isListening: false }));
   });
 
-  useSpeechRecognitionEvent("result", (event) => {
+  useSpeechEvent("result", (event: any) => {
     const transcript = event.results[0]?.transcript || "";
     if (event.isFinal) {
-      setState((s) => ({ ...s, transcript, partialTranscript: "" }));
+      setState((s: VoiceAssistantState) => ({ ...s, transcript, partialTranscript: "" }));
       processTranscript(transcript);
     } else {
-      setState((s) => ({ ...s, partialTranscript: transcript }));
+      setState((s: VoiceAssistantState) => ({ ...s, partialTranscript: transcript }));
     }
   });
 
-  useSpeechRecognitionEvent("error", (event) => {
+  useSpeechEvent("error", (event: any) => {
     console.warn("[useVoiceAssistant] STT error:", event.error, event.message);
-    setState((s) => ({
+    setState((s: VoiceAssistantState) => ({
       ...s,
       isListening: false,
       error: "Couldn't hear you clearly. Tap the mic and try again?",
@@ -139,10 +156,18 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
   // ── Core Actions ───────────────────────────────────────────────────
 
   const startListening = useCallback(async () => {
+    if (!STT_AVAILABLE) {
+      setState((s) => ({
+        ...s,
+        error: "Voice requires a dev build. Not available in Expo Go.",
+      }));
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     const permResult =
-      await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      await SpeechRecognitionModule.requestPermissionsAsync();
     if (!permResult.granted) {
       setState((s) => ({
         ...s,
@@ -159,7 +184,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
       error: null,
     }));
 
-    ExpoSpeechRecognitionModule.start({
+    SpeechRecognitionModule.start({
       lang: "en-GB",
       interimResults: true,
       continuous: false,
@@ -167,7 +192,9 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
   }, []);
 
   const stopListening = useCallback(() => {
-    ExpoSpeechRecognitionModule.stop();
+    if (STT_AVAILABLE) {
+      SpeechRecognitionModule.stop();
+    }
     setState((s) => ({ ...s, isListening: false }));
   }, []);
 
@@ -279,7 +306,9 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
 
   const closeSheet = useCallback(() => {
     Speech.stop();
-    ExpoSpeechRecognitionModule.stop();
+    if (STT_AVAILABLE) {
+      SpeechRecognitionModule.stop();
+    }
     setState((s) => ({ ...s, isSheetOpen: false, isListening: false }));
   }, []);
 
@@ -300,12 +329,15 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
   useEffect(() => {
     return () => {
       Speech.stop();
-      ExpoSpeechRecognitionModule.stop();
+      if (STT_AVAILABLE) {
+        SpeechRecognitionModule.stop();
+      }
     };
   }, []);
 
   return {
     ...state,
+    isAvailable: STT_AVAILABLE,
     startListening,
     stopListening,
     confirmAction,

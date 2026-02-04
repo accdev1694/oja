@@ -74,7 +74,7 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
     "/onboarding",
   ];
   const shouldHide = hiddenRoutes.some((r) => currentScreen.includes(r));
-  if (shouldHide) return null;
+  if (shouldHide || !voice.isAvailable) return null;
 
   return (
     <>
