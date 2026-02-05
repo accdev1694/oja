@@ -263,7 +263,11 @@ export default function ListsScreen() {
           <SkeletonCard />
         </View>
       ) : tabMode === "active" && !hasAnyActiveLists ? (
-        <View style={styles.emptyContainer}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.emptyScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <EmptyLists
             onAction={handleOpenCreateModal}
             actionText="Create Your First List"
@@ -292,7 +296,8 @@ export default function ListsScreen() {
               </View>
             </GlassCard>
           </Pressable>
-        </View>
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
       ) : tabMode === "history" && displayList.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyHistoryContainer}>
@@ -930,6 +935,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: spacing.xl,
+  },
+  emptyScrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
   },
   scrollView: {
     flex: 1,
