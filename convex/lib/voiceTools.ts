@@ -184,14 +184,14 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
   {
     name: "create_shopping_list",
     description:
-      "Create a new shopping list. ONLY call this when you have the list name. " +
-      "If user says 'create a list' without a name, ASK them what to call it first — don't call this function.",
+      "Create a new shopping list. Name is OPTIONAL — if user doesn't specify a name, " +
+      "just create it as 'Shopping List'. Don't ask for a name — the footer date+time differentiates lists.",
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
         name: {
           type: SchemaType.STRING,
-          description: "List name, e.g. 'Aldi Shop', 'Weekly Groceries'",
+          description: "Optional list name. If not provided, defaults to 'Shopping List'",
         },
         budget: {
           type: SchemaType.NUMBER,
@@ -202,7 +202,7 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
           description: "Optional store name, e.g. 'Aldi', 'Tesco'",
         },
       },
-      required: ["name"],
+      required: [],
     },
   },
 
@@ -333,13 +333,14 @@ export function buildSystemPrompt(context: {
     ? `"${context.activeListName}" (id: ${context.activeListId})`
     : "none";
 
-  return `You are Oja, a friendly voice assistant for a UK grocery shopping app.
+  return `You are Tobi, the friendly voice assistant for Oja, a UK grocery shopping app.
 
 PERSONALITY:
-- Warm, supportive, encouraging — like a helpful friend who's great at budgeting
-- Use British English (£, "brilliant", "lovely")
+- Your name is Tobi — use it when introducing yourself or when relevant
+- Warm, supportive, encouraging — like a helpful British-Nigerian friend who's great at budgeting
+- Use British English (£, "brilliant", "lovely", "mate")
 - Keep responses concise (2-3 sentences max — this is spoken aloud)
-- ${context.userName ? `The user's name is ${context.userName}.` : ""}
+- ${context.userName ? `The user's name is ${context.userName}. Use it occasionally to be friendly.` : ""}
 - Celebrate wins ("Nice one! You've saved £23 this week!")
 - Be empathetic about overspending ("No worries, happens to everyone")
 
@@ -528,8 +529,11 @@ async function executeWriteTool(
 ): Promise<ToolResult> {
   switch (functionName) {
     case "create_shopping_list": {
+      // Default to "Shopping List" if no name provided — footer date+time differentiates
+      const listName = args.name || "Shopping List";
+
       const listId = await ctx.runMutation(api.shoppingLists.create, {
-        name: args.name,
+        name: listName,
         budget: args.budget,
         storeName: args.storeName,
       });
@@ -538,7 +542,7 @@ async function executeWriteTool(
         result: {
           success: true,
           listId,
-          message: `Created list "${args.name}"${args.budget ? ` with £${args.budget} budget` : ""}`,
+          message: `Created your shopping list${args.budget ? ` with £${args.budget} budget` : ""}`,
         },
       };
     }
@@ -583,13 +587,26 @@ async function executeWriteTool(
         }
       }
 
-      // Add each item
+      // Add each item with price estimate (Zero-Blank rule)
       const addedItems: string[] = [];
       for (const item of args.items || []) {
+        // Get price estimate for the item
+        let estimatedPrice: number | undefined;
+        try {
+          const priceResult = await ctx.runAction(api.ai.estimateItemPrice, {
+            itemName: item.name,
+          });
+          estimatedPrice = priceResult.price;
+        } catch {
+          // If price estimation fails, continue without price
+          console.warn(`[Voice] Could not estimate price for "${item.name}"`);
+        }
+
         await ctx.runMutation(api.listItems.create, {
           listId: targetListId,
           name: item.name,
           quantity: item.quantity || 1,
+          estimatedPrice,
         });
         addedItems.push(item.name);
       }
@@ -679,10 +696,23 @@ async function executeWriteTool(
     }
 
     case "add_pantry_item": {
+      // Get price estimate for the item (Zero-Blank rule)
+      let lastPrice: number | undefined;
+      try {
+        const priceResult = await ctx.runAction(api.ai.estimateItemPrice, {
+          itemName: args.name,
+        });
+        lastPrice = priceResult.price;
+      } catch {
+        console.warn(`[Voice] Could not estimate price for pantry item "${args.name}"`);
+      }
+
       await ctx.runMutation(api.pantryItems.create, {
         name: args.name,
         category: args.category || "Other",
         stockLevel: args.stockLevel || "stocked",
+        lastPrice,
+        priceSource: lastPrice ? "ai_estimate" : undefined,
       });
 
       return {

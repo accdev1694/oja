@@ -31,7 +31,7 @@ interface Props {
 
 export function VoiceFAB({ activeListId, activeListName }: Props) {
   const pathname = usePathname();
-  const { user } = useCurrentUser();
+  const { firstName } = useCurrentUser();
 
   // Determine current screen from pathname
   const currentScreen = pathname || "unknown";
@@ -40,7 +40,7 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
     currentScreen,
     activeListId,
     activeListName,
-    userName: user?.name,
+    userName: firstName,
   });
 
   // Pulse animation when listening

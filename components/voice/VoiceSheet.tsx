@@ -97,7 +97,7 @@ export function VoiceSheet({
             size={20}
             color={colors.accent.primary}
           />
-          <Text style={styles.headerTitle}>Ask Oja</Text>
+          <Text style={styles.headerTitle}>Ask Tobi</Text>
         </View>
         <Pressable onPress={onClose} hitSlop={8}>
           <MaterialCommunityIcons
@@ -123,7 +123,7 @@ export function VoiceSheet({
               color={colors.text.disabled}
             />
             <Text style={styles.emptyText}>
-              Tap the mic and ask me anything about your pantry, lists, prices,
+              Tap the mic and ask Tobi anything about your pantry, lists, prices,
               or spending.
             </Text>
           </View>
