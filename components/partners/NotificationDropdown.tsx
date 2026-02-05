@@ -24,9 +24,11 @@ const typeIcons: Record<string, { icon: string; color: string }> = {
   approval_requested: { icon: "clock-outline", color: colors.accent.warning },
   item_approved: { icon: "check-circle", color: colors.accent.success },
   item_rejected: { icon: "close-circle", color: colors.accent.error },
-  item_contested: { icon: "alert-circle", color: "#FF8C00" },
-  contest_resolved: { icon: "gavel", color: colors.accent.info },
   comment_added: { icon: "comment-text", color: colors.accent.primary },
+  list_approval_requested: { icon: "clipboard-check-outline", color: colors.accent.warning },
+  list_approved: { icon: "clipboard-check", color: colors.accent.success },
+  list_rejected: { icon: "clipboard-remove", color: colors.accent.error },
+  list_message: { icon: "chat", color: colors.accent.primary },
 };
 
 function timeAgo(timestamp: number): string {

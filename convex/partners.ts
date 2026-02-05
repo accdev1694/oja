@@ -514,3 +514,225 @@ export const getComments = query({
     return enriched;
   },
 });
+
+// ============================================================
+// List-Level Approval
+// ============================================================
+
+/**
+ * Submit a list for approval by partner approvers.
+ * Only the list owner can submit.
+ */
+export const submitListForApproval = mutation({
+  args: { listId: v.id("shoppingLists") },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const list = await ctx.db.get(args.listId);
+    if (!list) throw new Error("List not found");
+    if (list.userId !== user._id) throw new Error("Only the list owner can submit for approval");
+
+    const now = Date.now();
+    await ctx.db.patch(args.listId, {
+      approvalStatus: "pending_approval",
+      approvalRequestedAt: now,
+      approvalRequestedBy: user._id,
+      approvalRespondedAt: undefined,
+      approvalRespondedBy: undefined,
+      approvalNote: undefined,
+      updatedAt: now,
+    });
+
+    // Notify all accepted approver partners
+    const partners = await ctx.db
+      .query("listPartners")
+      .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+      .collect();
+
+    for (const p of partners) {
+      if (p.status === "accepted" && p.role === "approver") {
+        await ctx.db.insert("notifications", {
+          userId: p.userId,
+          type: "list_approval_requested",
+          title: "Approval Needed",
+          body: `${user.name} submitted "${list.name}" for your approval`,
+          data: { listId: args.listId },
+          read: false,
+          createdAt: now,
+        });
+      }
+    }
+
+    // System message in list chat
+    await ctx.db.insert("listMessages", {
+      listId: args.listId,
+      userId: user._id,
+      text: `${user.name} submitted this list for approval`,
+      isSystem: true,
+      createdAt: now,
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Approve, reject, or request changes on a list.
+ * Only users with canApprove permission can respond.
+ */
+export const handleListApproval = mutation({
+  args: {
+    listId: v.id("shoppingLists"),
+    decision: v.union(
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("changes_requested")
+    ),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const list = await ctx.db.get(args.listId);
+    if (!list) throw new Error("List not found");
+
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canApprove) throw new Error("You don't have permission to approve this list");
+
+    const now = Date.now();
+    await ctx.db.patch(args.listId, {
+      approvalStatus: args.decision,
+      approvalRespondedAt: now,
+      approvalRespondedBy: user._id,
+      approvalNote: args.note,
+      updatedAt: now,
+    });
+
+    // Notify list owner
+    const decisionLabel =
+      args.decision === "approved" ? "approved" :
+      args.decision === "rejected" ? "rejected" : "requested changes on";
+    const notifType = args.decision === "approved" ? "list_approved" : "list_rejected";
+
+    await ctx.db.insert("notifications", {
+      userId: list.userId,
+      type: notifType,
+      title: args.decision === "approved" ? "List Approved" : "Changes Requested",
+      body: `${user.name} ${decisionLabel} "${list.name}"${args.note ? `: ${args.note}` : ""}`,
+      data: { listId: args.listId },
+      read: false,
+      createdAt: now,
+    });
+
+    // System message in list chat
+    const systemText = args.note
+      ? `${user.name} ${decisionLabel} this list: "${args.note}"`
+      : `${user.name} ${decisionLabel} this list`;
+    await ctx.db.insert("listMessages", {
+      listId: args.listId,
+      userId: user._id,
+      text: systemText,
+      isSystem: true,
+      createdAt: now,
+    });
+
+    return { success: true };
+  },
+});
+
+// ============================================================
+// List-Level Chat
+// ============================================================
+
+/**
+ * Send a message in the list chat.
+ * Any list member (owner or accepted partner) can send messages.
+ */
+export const addListMessage = mutation({
+  args: {
+    listId: v.id("shoppingLists"),
+    text: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const list = await ctx.db.get(args.listId);
+    if (!list) throw new Error("List not found");
+
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canView) throw new Error("You don't have access to this list");
+
+    const now = Date.now();
+    const messageId = await ctx.db.insert("listMessages", {
+      listId: args.listId,
+      userId: user._id,
+      text: args.text,
+      createdAt: now,
+    });
+
+    // Notify owner + all accepted partners (except sender)
+    const notifyUserIds: Set<string> = new Set();
+
+    if (list.userId.toString() !== user._id.toString()) {
+      notifyUserIds.add(list.userId.toString());
+    }
+
+    const partners = await ctx.db
+      .query("listPartners")
+      .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+      .collect();
+    for (const p of partners) {
+      if (p.status === "accepted" && p.userId.toString() !== user._id.toString()) {
+        notifyUserIds.add(p.userId.toString());
+      }
+    }
+
+    for (const uid of notifyUserIds) {
+      await ctx.db.insert("notifications", {
+        userId: uid as any,
+        type: "list_message",
+        title: "New Message",
+        body: `${user.name} in "${list.name}": ${args.text.substring(0, 80)}`,
+        data: { listId: args.listId },
+        read: false,
+        createdAt: now,
+      });
+    }
+
+    return messageId;
+  },
+});
+
+/**
+ * Get all messages for a list chat (enriched with user info).
+ */
+export const getListMessages = query({
+  args: { listId: v.id("shoppingLists") },
+  handler: async (ctx, args) => {
+    const messages = await ctx.db
+      .query("listMessages")
+      .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+      .order("asc")
+      .collect();
+
+    const enriched = await Promise.all(
+      messages.map(async (m) => {
+        const user = await ctx.db.get(m.userId);
+        return { ...m, userName: user?.name ?? "Unknown", avatarUrl: user?.avatarUrl };
+      })
+    );
+
+    return enriched;
+  },
+});
+
+/**
+ * Get message count for a list (for badge display).
+ */
+export const getListMessageCount = query({
+  args: { listId: v.id("shoppingLists") },
+  handler: async (ctx, args) => {
+    const messages = await ctx.db
+      .query("listMessages")
+      .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+      .collect();
+    return messages.length;
+  },
+});

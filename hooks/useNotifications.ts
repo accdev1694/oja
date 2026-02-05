@@ -33,9 +33,11 @@ export function useNotifications() {
       case "approval_requested":
       case "item_approved":
       case "item_rejected":
-      case "item_contested":
-      case "contest_resolved":
       case "comment_added":
+      case "list_approval_requested":
+      case "list_approved":
+      case "list_rejected":
+      case "list_message":
         return data.listId ? `/list/${data.listId}` : null;
       default:
         return null;

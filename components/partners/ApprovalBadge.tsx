@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, typography } from "@/lib/design/glassTokens";
 
-type ApprovalStatus = "pending" | "approved" | "rejected" | "contested" | null | undefined;
+type ApprovalStatus = "pending" | "approved" | "rejected" | null | undefined;
 
 interface ApprovalBadgeProps {
   status: ApprovalStatus;
@@ -31,12 +31,6 @@ const statusConfig: Record<
     label: "Rejected",
     color: colors.accent.error,
     bg: "rgba(239, 68, 68, 0.15)",
-  },
-  contested: {
-    icon: "alert-circle-outline",
-    label: "Contested",
-    color: "#FF8C00",
-    bg: "rgba(255, 140, 0, 0.15)",
   },
 };
 

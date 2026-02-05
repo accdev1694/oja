@@ -54,6 +54,8 @@ import {
   NotificationBell,
   NotificationDropdown,
 } from "@/components/partners";
+import { ListApprovalBanner } from "@/components/partners/ListApprovalBanner";
+import { ListChatThread } from "@/components/partners/ListChatThread";
 import { GlassToast } from "@/components/ui/glass/GlassToast";
 import { useDelightToast } from "@/hooks/useDelightToast";
 
@@ -137,7 +139,7 @@ type ListItem = {
   isChecked: boolean;
   autoAdded?: boolean;
   priority?: "must-have" | "should-have" | "nice-to-have";
-  approvalStatus?: "pending" | "approved" | "rejected" | "contested";
+  approvalStatus?: "pending" | "approved" | "rejected";
 };
 
 export default function ListDetailScreen() {
@@ -182,6 +184,22 @@ export default function ListDetailScreen() {
   const [showCommentThread, setShowCommentThread] = useState(false);
   const [commentItemId, setCommentItemId] = useState<Id<"listItems"> | null>(null);
   const [commentItemName, setCommentItemName] = useState("");
+
+  // List chat state
+  const [showListChat, setShowListChat] = useState(false);
+
+  // Partner data for approval banner
+  const listPartners = useQuery(api.partners.getByList, { listId: id });
+  const hasApprovers = (listPartners ?? []).some(
+    (p: any) => p.status === "accepted" && p.role === "approver"
+  );
+  const hasPartners = (listPartners ?? []).some((p: any) => p.status === "accepted");
+  const listMessageCount = useQuery(api.partners.getListMessageCount, hasPartners ? { listId: id } : "skip");
+
+  // Resolve approver name for banner
+  const approverName = list?.approvalRespondedBy
+    ? (listPartners ?? []).find((p: any) => p.userId === list.approvalRespondedBy)?.userName
+    : undefined;
 
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState("");
@@ -873,6 +891,29 @@ export default function ListDetailScreen() {
           showBack
           rightElement={
             <View style={styles.headerRightRow}>
+              {hasPartners && (
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowListChat(true);
+                  }}
+                  hitSlop={8}
+                  style={styles.headerIconButton}
+                >
+                  <MaterialCommunityIcons
+                    name="chat-outline"
+                    size={22}
+                    color={colors.text.secondary}
+                  />
+                  {(listMessageCount ?? 0) > 0 && (
+                    <View style={styles.chatCountBadge}>
+                      <Text style={styles.chatCountText}>
+                        {listMessageCount! > 99 ? "99+" : listMessageCount}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              )}
               <NotificationBell onPress={() => setShowNotifications(true)} />
               <Pressable
                 onPress={() => {
@@ -911,6 +952,19 @@ export default function ListDetailScreen() {
               spent={currentTotal}
               budget={budget}
               onPress={handleOpenEditBudget}
+            />
+          )}
+
+          {/* List-Level Approval Banner */}
+          {hasPartners && (
+            <ListApprovalBanner
+              listId={id}
+              approvalStatus={list.approvalStatus}
+              approvalNote={list.approvalNote}
+              approverName={approverName}
+              isOwner={isOwner}
+              canApprove={canApprove}
+              hasApprovers={hasApprovers}
             />
           )}
 
@@ -1479,6 +1533,14 @@ export default function ListDetailScreen() {
           setCommentItemId(null);
           setCommentItemName("");
         }}
+      />
+
+      {/* List Chat Thread (Partner Mode) */}
+      <ListChatThread
+        visible={showListChat}
+        listId={id}
+        listName={list.name}
+        onClose={() => setShowListChat(false)}
       />
 
       {/* Actual Price Modal (Story 3.8) */}
@@ -2632,6 +2694,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  chatCountBadge: {
+    position: "absolute" as const,
+    top: -2,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.accent.primary,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingHorizontal: 3,
+  },
+  chatCountText: {
+    fontSize: 9,
+    color: colors.text.primary,
+    fontWeight: "800" as const,
+  },
   commentButton: {
     position: "relative" as const,
     width: 32,

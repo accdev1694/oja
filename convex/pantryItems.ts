@@ -177,6 +177,8 @@ export const create = mutation({
       v.literal("out")
     ),
     autoAddToList: v.optional(v.boolean()),
+    lastPrice: v.optional(v.number()),
+    priceSource: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -208,6 +210,8 @@ export const create = mutation({
       icon: getIconForItem(args.name, args.category),
       stockLevel: args.stockLevel,
       autoAddToList: args.autoAddToList ?? false,
+      lastPrice: args.lastPrice,
+      priceSource: args.priceSource,
       createdAt: now,
       updatedAt: now,
     });

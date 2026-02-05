@@ -107,6 +107,20 @@ export default defineSchema({
     actualTotal: v.optional(v.number()),
     pointsEarned: v.optional(v.number()),
 
+    // List-level approval (Epic 4 - Partner Mode)
+    approvalStatus: v.optional(v.union(
+      v.literal("draft"),
+      v.literal("pending_approval"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("changes_requested")
+    )),
+    approvalRequestedAt: v.optional(v.number()),
+    approvalRequestedBy: v.optional(v.id("users")),
+    approvalRespondedAt: v.optional(v.number()),
+    approvalRespondedBy: v.optional(v.id("users")),
+    approvalNote: v.optional(v.string()),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -150,16 +164,9 @@ export default defineSchema({
     approvalStatus: v.optional(v.union(
       v.literal("pending"),
       v.literal("approved"),
-      v.literal("rejected"),
-      v.literal("contested")
+      v.literal("rejected")
     )),
     approvalNote: v.optional(v.string()),
-
-    // Contest workflow (Epic 4)
-    contestedBy: v.optional(v.id("users")),
-    contestedAt: v.optional(v.number()),
-    contestReason: v.optional(v.string()),
-    contestNote: v.optional(v.string()),
 
     // Notes
     notes: v.optional(v.string()),
@@ -322,6 +329,17 @@ export default defineSchema({
   })
     .index("by_code", ["code"])
     .index("by_list", ["listId"]),
+
+  // List-level chat messages (Epic 4 - Partner Mode)
+  listMessages: defineTable({
+    listId: v.id("shoppingLists"),
+    userId: v.id("users"),
+    text: v.string(),
+    isSystem: v.optional(v.boolean()),
+    createdAt: v.number(),
+  })
+    .index("by_list", ["listId"])
+    .index("by_user", ["userId"]),
 
   // Comments on list items
   itemComments: defineTable({
