@@ -44,6 +44,8 @@ export interface GlassModalProps {
   maxWidth?: number | "full";
   /** Additional styles applied to the content card View */
   contentStyle?: StyleProp<ViewStyle>;
+  /** Bottom offset in px — lifts the sheet above tab bars or nav bars */
+  bottomOffset?: number;
   /** Modal content */
   children: React.ReactNode;
 }
@@ -60,6 +62,7 @@ export function GlassModal({
   overlayOpacity = 0.6,
   maxWidth = 340,
   contentStyle,
+  bottomOffset = 0,
   children,
 }: GlassModalProps) {
   const isBottom = position === "bottom";
@@ -110,6 +113,11 @@ export function GlassModal({
     </Pressable>
   );
 
+  const bottomSpacer =
+    isBottom && bottomOffset > 0 ? (
+      <View style={{ height: bottomOffset }} />
+    ) : null;
+
   // ── Rendered tree ──────────────────────────────────────────────────
 
   const inner = avoidKeyboard ? (
@@ -120,10 +128,12 @@ export function GlassModal({
       {/* Backdrop behind KAV content */}
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       {contentNode}
+      {bottomSpacer}
     </KeyboardAvoidingView>
   ) : (
     <Pressable style={overlayStyle} onPress={onClose}>
       {contentNode}
+      {bottomSpacer}
     </Pressable>
   );
 

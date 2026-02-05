@@ -729,10 +729,11 @@ Config location: `C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.js
 
 ---
 
-## Voice Assistant — Context-Aware Conversational AI
+## Voice Assistant — Tobi (Context-Aware Conversational AI)
 
 **Status:** ✅ Implemented | **Built:** 2026-02-04 | **Updated:** 2026-02-05
 **Approach:** Gemini 2.5 Flash function-calling (not simple NLU — full conversational AI)
+**Name:** Tobi — warm British-Nigerian personality, male voice
 
 ### Architecture
 
@@ -759,8 +760,8 @@ User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognit
 ### TTS Cascade (Neural Voices)
 
 ```
-1. Google Cloud TTS (Neural2-C, en-GB female) — best quality
-2. Azure Speech Services (SoniaNeural, en-GB) — fallback
+1. Azure Speech Services (RyanNeural, en-GB male) — British accent, warm tone
+2. Google Cloud TTS (Neural2-D, en-GB male) — fallback
 3. expo-speech (device TTS, enhanced British voice) — final fallback
 ```
 
@@ -805,10 +806,11 @@ User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognit
 - **Daily cap**: 200 requests/day (via AsyncStorage)
 - **Friendly error messages**: "Give me a moment" / "I'll be back tomorrow"
 
-### Personality
+### Personality (Tobi)
 
-- Warm, British, concise (like a knowledgeable market friend)
-- Uses £ formatting, celebrates wins
+- Name is **Tobi** — uses it when introducing himself
+- Warm, British-Nigerian, concise (like a knowledgeable market friend raised in London)
+- Uses £ formatting, celebrates wins ("Nice one, mate!")
 - Never shows raw data — always summarises conversationally
 - Empathetic about budget struggles
 

@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#EA5B62"
+      "backgroundColor": "#0D1528"
     },
     "ios": {
       "supportsTablet": true,
@@ -26,7 +26,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#EA5B62"
+        "backgroundColor": "#0D1528"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.oja.app",

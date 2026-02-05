@@ -57,7 +57,7 @@ export default function SignInScreen() {
       if (createdSessionId) {
         await setActiveSession!({ session: createdSessionId });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.replace("/(app)/(tabs)");
+        // Navigation handled by _layout.tsx useEffect
       }
     } catch (err: any) {
       const message = err?.errors?.[0]?.message || `${provider} sign in failed`;
@@ -82,7 +82,7 @@ export default function SignInScreen() {
 
       if (signInAttempt.status === "complete") {
         await setActive({ session: signInAttempt.createdSessionId });
-        router.replace("/(app)/(tabs)");
+        // Navigation handled by _layout.tsx useEffect
       } else if (signInAttempt.status === "needs_first_factor") {
         const emailFactor = signInAttempt.supportedFirstFactors?.find(
           (factor) => factor.strategy === "email_code"
@@ -98,7 +98,8 @@ export default function SignInScreen() {
           setError("Email verification required. Please check your email.");
         }
       } else {
-        setError("Sign in incomplete. Please try again.");
+        console.log("[SignIn] Unexpected status:", signInAttempt.status);
+        setError(`Sign in incomplete (${signInAttempt.status}). Please try again.`);
       }
     } catch (err: any) {
       const message = err?.errors?.[0]?.message || "Sign in failed";
@@ -123,7 +124,7 @@ export default function SignInScreen() {
       if (signInAttempt.status === "complete") {
         await setActive({ session: signInAttempt.createdSessionId });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.replace("/(app)/(tabs)");
+        // Navigation handled by _layout.tsx useEffect
       } else {
         setError("Verification incomplete. Please try again.");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

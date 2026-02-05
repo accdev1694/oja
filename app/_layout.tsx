@@ -61,9 +61,9 @@ function InitialLayout() {
     }
 
     if (isSignedIn && inAuthGroup) {
-      // Just signed in — redirect away from auth; getOrCreate runs via
-      // the other effect once getCurrent resolves to null
-      router.replace("/");
+      // Just signed in — redirect to app; onboarding check happens below
+      // once currentUser loads
+      router.replace("/(app)/(tabs)");
       return;
     }
 
