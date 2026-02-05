@@ -37,12 +37,14 @@ import {
   useGlassAlert,
 } from "@/components/ui/glass";
 import { NotificationDropdown } from "@/components/partners";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 type TabMode = "active" | "history";
 
 export default function ListsScreen() {
   const router = useRouter();
   const { alert } = useGlassAlert();
+  const { firstName } = useCurrentUser();
   const [tabMode, setTabMode] = useState<TabMode>("active");
   const lists = useQuery(api.shoppingLists.getActive);
   const history = useQuery(api.shoppingLists.getHistory);
@@ -89,10 +91,16 @@ export default function ListsScreen() {
 
   function formatDateTime(timestamp: number) {
     const date = new Date(timestamp);
-    return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {
+    const dateStr = date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    const timeStr = date.toLocaleTimeString("en-GB", {
       hour: "2-digit",
       minute: "2-digit",
-    })}`;
+    });
+    return `${dateStr} at ${timeStr}`;
   }
 
   function handleDeleteList(listId: Id<"shoppingLists">, listName: string) {
@@ -117,8 +125,8 @@ export default function ListsScreen() {
 
   function handleOpenCreateModal() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Set default name based on date
-    setNewListName(`Shopping List ${new Date().toLocaleDateString()}`);
+    // Default to "Shopping List" — footer date+time differentiates
+    setNewListName("Shopping List");
     setNewListBudget("50");
     setShowCreateModal(true);
   }
@@ -183,13 +191,13 @@ export default function ListsScreen() {
     <GlassScreen>
       {/* Header with New List button */}
       <SimpleHeader
-        title="Shopping Lists"
+        title={firstName ? `${firstName}'s Lists` : "Shopping Lists"}
         accentColor={colors.semantic.lists}
         subtitle={
           tabMode === "active"
             ? lists && lists.length > 0
               ? `${lists.length} active list${lists.length !== 1 ? "s" : ""}`
-              : undefined
+              : "Ready to start shopping?"
             : history && history.length > 0
               ? `${history.length} past trip${history.length !== 1 ? "s" : ""}`
               : undefined

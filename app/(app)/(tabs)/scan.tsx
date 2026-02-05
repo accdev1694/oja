@@ -27,10 +27,12 @@ import {
   borderRadius,
   useGlassAlert,
 } from "@/components/ui/glass";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export default function ScanScreen() {
   const router = useRouter();
   const { alert } = useGlassAlert();
+  const { firstName } = useCurrentUser();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -303,7 +305,7 @@ export default function ScanScreen() {
       <SimpleHeader
         title="Scan Receipt"
         accentColor={colors.semantic.scan}
-        subtitle="Track spending & build price history"
+        subtitle={firstName ? `${firstName}, track your spending` : "Track spending & build price history"}
       />
 
       <View style={styles.content}>

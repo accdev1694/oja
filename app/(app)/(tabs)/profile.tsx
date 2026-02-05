@@ -24,12 +24,14 @@ import {
   spacing,
   useGlassAlert,
 } from "@/components/ui/glass";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
   const { user } = useUser();
   const router = useRouter();
   const { alert } = useGlassAlert();
+  const { firstName } = useCurrentUser();
 
   const allLists = useQuery(api.shoppingLists.getByUser);
   const pantryItems = useQuery(api.pantryItems.getByUser);
@@ -154,7 +156,7 @@ export default function ProfileScreen() {
   return (
     <GlassScreen>
       <SimpleHeader
-        title="Profile"
+        title={firstName ? `Hey, ${firstName}` : "Profile"}
         accentColor={colors.semantic.profile}
         subtitle="Your insights & settings"
       />

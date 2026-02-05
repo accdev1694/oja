@@ -64,8 +64,19 @@ import {
 } from "@/components/ui/glass";
 import { RemoveButton } from "@/components/ui/RemoveButton";
 import { AddToListButton } from "@/components/ui/AddToListButton";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
+
+/** Time-based greeting with optional name */
+function getGreeting(firstName?: string): string {
+  const hour = new Date().getHours();
+  let greeting = "Hello";
+  if (hour < 12) greeting = "Good morning";
+  else if (hour < 17) greeting = "Good afternoon";
+  else greeting = "Good evening";
+  return firstName ? `${greeting}, ${firstName}` : greeting;
+}
 
 type PantryViewMode = "attention" | "all";
 
@@ -85,6 +96,7 @@ export default function PantryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { alert } = useGlassAlert();
+  const { firstName } = useCurrentUser();
   const items = useQuery(api.pantryItems.getByUser);
   const activeLists = useQuery(api.shoppingLists.getActive);
   const updateStockLevel = useMutation(api.pantryItems.updateStockLevel);
@@ -553,12 +565,12 @@ export default function PantryScreen() {
       <GestureHandlerRootView style={styles.container}>
         {/* Header */}
         <SimpleHeader
-          title="My Stock"
+          title={getGreeting(firstName)}
           accentColor={colors.semantic.pantry}
           subtitle={
             viewMode === "attention"
               ? `${attentionCount} item${attentionCount !== 1 ? "s" : ""} need restocking`
-              : `${filteredItems.length} of ${items.length} items`
+              : `Your stock · ${filteredItems.length} of ${items.length} items`
           }
           rightElement={
             <View style={styles.headerButtons}>

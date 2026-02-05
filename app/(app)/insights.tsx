@@ -37,6 +37,7 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 import { useDelightToast } from "@/hooks/useDelightToast";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CHART_WIDTH = SCREEN_WIDTH - spacing.lg * 2 - spacing.md * 2;
@@ -48,6 +49,7 @@ export default function InsightsScreen() {
   const confettiRef = useRef<any>(null);
   const prevAchievementCount = useRef<number | null>(null);
   const { toast, dismiss, onAchievementUnlock } = useDelightToast();
+  const { firstName } = useCurrentUser();
 
   const digest = useQuery(api.insights.getWeeklyDigest);
   const savingsJar = useQuery(api.insights.getSavingsJar);
@@ -104,10 +106,10 @@ export default function InsightsScreen() {
   return (
     <GlassScreen>
       <GlassHeader
-        title="Insights"
+        title={firstName ? `${firstName}'s Insights` : "Insights"}
         subtitle={
           savingsJar && savingsJar.totalSaved > 0
-            ? `You've saved £${savingsJar.totalSaved.toFixed(2)} so far`
+            ? `You've saved £${savingsJar.totalSaved.toFixed(2)} so far!`
             : digest && digest.tripsCount > 0
               ? `${digest.tripsCount} trip${digest.tripsCount !== 1 ? "s" : ""} this week`
               : "Your shopping intelligence"
