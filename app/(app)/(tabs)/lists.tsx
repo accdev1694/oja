@@ -276,17 +276,24 @@ export default function ListsScreen() {
             }}
             style={styles.joinCardEmpty}
           >
-            <GlassCard variant="bordered" style={styles.joinCard}>
-              <View style={styles.joinCardContent}>
-                <MaterialCommunityIcons
-                  name="account-group-outline"
-                  size={22}
-                  color={colors.text.tertiary}
-                />
-                <Text style={styles.joinCardText}>Join a shared list</Text>
+            <GlassCard variant="bordered" style={styles.joinCardExpanded}>
+              <View style={styles.joinCardExpandedContent}>
+                <View style={styles.joinCardIconCircle}>
+                  <MaterialCommunityIcons
+                    name="link-variant"
+                    size={24}
+                    color={colors.accent.primary}
+                  />
+                </View>
+                <View style={styles.joinCardTextContainer}>
+                  <Text style={styles.joinCardTitle}>Got an invite?</Text>
+                  <Text style={styles.joinCardSubtitle}>
+                    Enter a code to join someone's shopping list
+                  </Text>
+                </View>
                 <MaterialCommunityIcons
                   name="chevron-right"
-                  size={20}
+                  size={24}
                   color={colors.text.tertiary}
                 />
               </View>
@@ -958,6 +965,35 @@ const styles = StyleSheet.create({
   joinCardEmpty: {
     marginTop: spacing.lg,
     marginHorizontal: spacing.md,
+  },
+  joinCardExpanded: {
+    marginTop: spacing.sm,
+  },
+  joinCardExpandedContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  joinCardIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: `${colors.accent.primary}15`,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  joinCardTextContainer: {
+    flex: 1,
+  },
+  joinCardTitle: {
+    ...typography.bodyLarge,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  joinCardSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    marginTop: 2,
   },
   listCard: {
     marginBottom: spacing.md,
