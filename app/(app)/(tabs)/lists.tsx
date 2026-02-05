@@ -268,6 +268,30 @@ export default function ListsScreen() {
             onAction={handleOpenCreateModal}
             actionText="Create Your First List"
           />
+          {/* Join a shared list — always visible even with no lists */}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/join-list");
+            }}
+            style={styles.joinCardEmpty}
+          >
+            <GlassCard variant="bordered" style={styles.joinCard}>
+              <View style={styles.joinCardContent}>
+                <MaterialCommunityIcons
+                  name="account-group-outline"
+                  size={22}
+                  color={colors.text.tertiary}
+                />
+                <Text style={styles.joinCardText}>Join a shared list</Text>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color={colors.text.tertiary}
+                />
+              </View>
+            </GlassCard>
+          </Pressable>
         </View>
       ) : tabMode === "history" && displayList.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -930,6 +954,10 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.text.secondary,
     flex: 1,
+  },
+  joinCardEmpty: {
+    marginTop: spacing.lg,
+    marginHorizontal: spacing.md,
   },
   listCard: {
     marginBottom: spacing.md,
