@@ -283,7 +283,7 @@ export default function ListsScreen() {
                   size={22}
                   color={colors.text.tertiary}
                 />
-                <Text style={styles.joinCardText}>Join List</Text>
+                <Text style={styles.joinCardText}>Join List?</Text>
                 <MaterialCommunityIcons
                   name="chevron-right"
                   size={20}
@@ -361,7 +361,7 @@ export default function ListsScreen() {
                   size={22}
                   color={colors.text.tertiary}
                 />
-                <Text style={styles.joinCardText}>Join List</Text>
+                <Text style={styles.joinCardText}>Join List?</Text>
                 <MaterialCommunityIcons
                   name="chevron-right"
                   size={20}
