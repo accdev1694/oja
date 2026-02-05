@@ -179,13 +179,13 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
     },
   },
 
-  // ── WRITE TOOLS (5) ─ return confirmation, never auto-execute ────────
+  // ── WRITE TOOLS (5) ─ execute immediately when called ────────────────
 
   {
     name: "create_shopping_list",
     description:
-      "Prepare to create a new shopping list. Returns a confirmation — does NOT auto-create. " +
-      "Use when user says 'create a list', 'make a new list', 'start a list for Aldi'.",
+      "Create a new shopping list. ONLY call this when you have the list name. " +
+      "If user says 'create a list' without a name, ASK them what to call it first — don't call this function.",
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
@@ -209,8 +209,8 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
   {
     name: "add_items_to_list",
     description:
-      "Prepare to add items to a shopping list. Returns confirmation — does NOT auto-add. " +
-      "Use when user says 'add X to my list' or names grocery items to buy.",
+      "Add items to a shopping list. If no list is specified and user has multiple lists, " +
+      "ASK which list to add to — don't guess. If only one active list, use it.",
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
@@ -242,7 +242,7 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
   {
     name: "update_stock_level",
     description:
-      "Prepare to update a pantry item's stock level. Returns confirmation. " +
+      "Update a pantry item's stock level immediately. " +
       "Use when user says 'I'm out of milk' or 'mark eggs as low'.",
     parameters: {
       type: SchemaType.OBJECT,
@@ -265,7 +265,7 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
   {
     name: "check_off_item",
     description:
-      "Prepare to check off an item on a shopping list. Returns confirmation. " +
+      "Check off an item on a shopping list immediately. " +
       "Use when user says 'got the milk' or 'check off bread'.",
     parameters: {
       type: SchemaType.OBJECT,
@@ -286,7 +286,7 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
   {
     name: "add_pantry_item",
     description:
-      "Prepare to add a new item to the pantry. Returns confirmation. " +
+      "Add a new item to the pantry immediately. " +
       "Use when user says 'add rice to my pantry'.",
     parameters: {
       type: SchemaType.OBJECT,
@@ -311,7 +311,7 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
   },
 ];
 
-// ─── Write tool names (for confirmation detection) ─────────────────────
+// ─── Write tool names ───────────────────────────────────────────────────
 
 const WRITE_TOOLS = new Set([
   "create_shopping_list",
@@ -345,17 +345,25 @@ PERSONALITY:
 
 CAPABILITIES:
 - Answer questions about pantry stock, shopping lists, prices, spending, savings, streaks, achievements
-- Create lists and add items (always confirm before writing)
-- Update stock levels and check off items (always confirm)
+- Create lists and add items
+- Update stock levels and check off items
 - Compare prices across stores
 - Give spending insights and trends
 
-RULES:
-- For WRITE operations: Use the function, then tell the user what you'll do and that they need to confirm.
-- For READ operations: Call the function, then summarise the data conversationally.
-- If ambiguous, ask a clarifying question.
-- Prices in GBP: "£1.15" not "1.15 pounds".
+RULES FOR WRITE OPERATIONS (IMPORTANT):
+- NEVER ask "Would you like me to do X?" or "Shall I confirm?" — if user asks for something, just DO it.
+- If REQUIRED info is missing, ASK for it conversationally:
+  - User: "Create a list" → You: "Sure! What would you like to call it?"
+  - User: "Add milk" (multiple lists) → You: "Which list should I add it to?"
+- Once you have all required info, call the function and tell them it's done.
+- User intent = permission. "Create a list" means they want a list created.
+
+RULES FOR READ OPERATIONS:
+- Call the function, then summarise the data conversationally.
 - If no data: "I don't have data for that yet — keep shopping and I'll learn!"
+
+GENERAL RULES:
+- Prices in GBP: "£1.15" not "1.15 pounds".
 - Never invent data. If a function returns empty, say so honestly.
 - Round numbers: "about £45" not "£44.73".
 
@@ -378,21 +386,14 @@ export async function executeVoiceTool(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args: Record<string, any>
 ): Promise<ToolResult> {
-  // ── WRITE operations → return confirmation, don't execute ──
-  if (WRITE_TOOLS.has(functionName)) {
-    return {
-      type: "confirm",
-      result: {
-        needsConfirmation: true,
-        action: functionName,
-        params: args,
-        description: buildConfirmLabel(functionName, args),
-      },
-    };
-  }
-
-  // ── READ operations → execute query and return data ──
+  // ── Execute operations and return results ──
   try {
+    // ── WRITE operations → execute immediately ──
+    if (WRITE_TOOLS.has(functionName)) {
+      return await executeWriteTool(ctx, functionName, args);
+    }
+
+    // ── READ operations → execute query and return data ──
     switch (functionName) {
       case "get_pantry_items": {
         const items = await ctx.runQuery(api.pantryItems.getByUser, {});
@@ -517,34 +518,186 @@ export async function executeVoiceTool(
   }
 }
 
-// ─── Confirmation Label Builder ────────────────────────────────────────
+// ─── Write Tool Executor ────────────────────────────────────────────────
 
-function buildConfirmLabel(
+async function executeWriteTool(
+  ctx: ActionCtx,
   functionName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args: Record<string, any>
-): string {
+): Promise<ToolResult> {
   switch (functionName) {
     case "create_shopping_list": {
-      const budget = args.budget ? ` with £${args.budget} budget` : "";
-      const store = args.storeName ? ` for ${args.storeName}` : "";
-      return `Create list "${args.name}"${store}${budget}`;
+      const listId = await ctx.runMutation(api.shoppingLists.create, {
+        name: args.name,
+        budget: args.budget,
+        storeName: args.storeName,
+      });
+      return {
+        type: "data",
+        result: {
+          success: true,
+          listId,
+          message: `Created list "${args.name}"${args.budget ? ` with £${args.budget} budget` : ""}`,
+        },
+      };
     }
+
     case "add_items_to_list": {
-      const itemNames = (args.items || [])
+      // If no listId provided, try to find the list by name or use the only active list
+      let targetListId = args.listId as Id<"shoppingLists"> | undefined;
+
+      if (!targetListId && args.listName) {
+        // Try to find list by name
+        const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((i: any) => i.name)
-        .join(", ");
-      const target = args.listName || "your list";
-      return `Add ${itemNames} to ${target}`;
+        const match = lists.find((l: any) =>
+          l.name.toLowerCase().includes(args.listName.toLowerCase())
+        );
+        if (match) {
+          targetListId = match._id;
+        }
+      }
+
+      if (!targetListId) {
+        // Check if there's only one active list
+        const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+        if (lists.length === 1) {
+          targetListId = lists[0]._id;
+        } else if (lists.length === 0) {
+          return {
+            type: "data",
+            result: { success: false, error: "No active lists found. Create a list first." },
+          };
+        } else {
+          // Multiple lists - Gemini should have asked which one
+          return {
+            type: "data",
+            result: {
+              success: false,
+              error: "Multiple lists found. Please specify which list.",
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              availableLists: lists.map((l: any) => l.name),
+            },
+          };
+        }
+      }
+
+      // Add each item
+      const addedItems: string[] = [];
+      for (const item of args.items || []) {
+        await ctx.runMutation(api.listItems.create, {
+          listId: targetListId,
+          name: item.name,
+          quantity: item.quantity || 1,
+        });
+        addedItems.push(item.name);
+      }
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Added ${addedItems.join(", ")} to your list`,
+          itemsAdded: addedItems.length,
+        },
+      };
     }
-    case "update_stock_level":
-      return `Mark ${args.itemName} as ${args.stockLevel}`;
-    case "check_off_item":
-      return `Check off ${args.itemName}`;
-    case "add_pantry_item":
-      return `Add ${args.name} to pantry`;
+
+    case "update_stock_level": {
+      // Find the pantry item
+      const items = await ctx.runQuery(api.pantryItems.getByUser, {});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const match = items.find((i: any) =>
+        i.name.toLowerCase().includes(args.itemName.toLowerCase())
+      );
+
+      if (!match) {
+        return {
+          type: "data",
+          result: { success: false, error: `Couldn't find "${args.itemName}" in your pantry.` },
+        };
+      }
+
+      await ctx.runMutation(api.pantryItems.updateStockLevel, {
+        id: match._id,
+        stockLevel: args.stockLevel,
+      });
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Marked ${match.name} as ${args.stockLevel}`,
+        },
+      };
+    }
+
+    case "check_off_item": {
+      // Need listId - use active list context or find it
+      let targetListId = args.listId as Id<"shoppingLists"> | undefined;
+
+      if (!targetListId) {
+        const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const inProgress = lists.find((l: any) => l.status === "in_progress");
+        if (inProgress) {
+          targetListId = inProgress._id;
+        } else if (lists.length === 1) {
+          targetListId = lists[0]._id;
+        } else {
+          return {
+            type: "data",
+            result: { success: false, error: "Please specify which list." },
+          };
+        }
+      }
+
+      // Find and check off the item
+      const listItems = await ctx.runQuery(api.listItems.getByList, { listId: targetListId });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const itemMatch = listItems.find((i: any) =>
+        i.name.toLowerCase().includes(args.itemName.toLowerCase())
+      );
+
+      if (!itemMatch) {
+        return {
+          type: "data",
+          result: { success: false, error: `Couldn't find "${args.itemName}" on your list.` },
+        };
+      }
+
+      await ctx.runMutation(api.listItems.toggleChecked, { id: itemMatch._id });
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Checked off ${itemMatch.name}`,
+        },
+      };
+    }
+
+    case "add_pantry_item": {
+      await ctx.runMutation(api.pantryItems.create, {
+        name: args.name,
+        category: args.category || "Other",
+        stockLevel: args.stockLevel || "stocked",
+      });
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Added ${args.name} to your pantry`,
+        },
+      };
+    }
+
     default:
-      return `Perform ${functionName}`;
+      return {
+        type: "data",
+        result: { success: false, error: `Unknown write operation: ${functionName}` },
+      };
   }
 }

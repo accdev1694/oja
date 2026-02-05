@@ -13,9 +13,13 @@ import {
   Pressable,
   ActivityIndicator,
   StyleSheet,
+  Platform,
+  Dimensions,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { GlassModal } from "@/components/ui/glass/GlassModal";
+import { TAB_BAR_HEIGHT } from "@/components/ui/glass/GlassTabBar";
 import { MessageBubble } from "./MessageBubble";
 import {
   colors,
@@ -63,6 +67,7 @@ export function VoiceSheet({
   onCancelAction,
   onResetConversation,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
 
   // Auto-scroll to bottom on new messages
@@ -80,6 +85,8 @@ export function VoiceSheet({
       position="bottom"
       maxWidth="full"
       overlayOpacity={0.5}
+      statusBarTranslucent
+      bottomOffset={TAB_BAR_HEIGHT}
       contentStyle={styles.sheet}
     >
       {/* Header */}
@@ -218,14 +225,17 @@ export function VoiceSheet({
   );
 }
 
+const SHEET_HEIGHT = Math.round(Dimensions.get("window").height * 0.55);
+
 const styles = StyleSheet.create({
   sheet: {
-    maxHeight: "70%",
+    height: SHEET_HEIGHT,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
-    paddingBottom: spacing.lg,
+    padding: 0,
+    overflow: "hidden",
   },
   header: {
     flexDirection: "row",
@@ -343,6 +353,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
   },

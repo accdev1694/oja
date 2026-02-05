@@ -884,9 +884,9 @@ Respond with ONLY valid JSON, no markdown, no explanation:
  * Context-aware voice assistant using Gemini function calling.
  *
  * Accepts a transcript and conversation history, lets Gemini decide which
- * Convex queries to call, feeds the results back, and returns a natural
- * language response. Write operations return a pendingAction for client
- * confirmation — they are never auto-executed.
+ * Convex queries/mutations to call, feeds the results back, and returns a
+ * natural language response. Write operations execute immediately — if
+ * required info is missing, Gemini asks conversationally first.
  */
 export const voiceAssistant = action({
   args: {
@@ -1512,3 +1512,106 @@ function getFallbackItems(country: string, cuisines: string[]): SeedItem[] {
 
   return allItems;
 }
+
+// ─── Text-to-Speech (Google Cloud → Azure → expo-speech fallback) ──────
+
+/**
+ * Convert text to speech with cascading providers:
+ * 1. Google Cloud TTS Neural2 (1M chars/month free, needs billing account)
+ * 2. Azure Cognitive Services (500k chars/month free, no card needed)
+ * 3. Returns null → client falls back to expo-speech (device TTS)
+ */
+export const textToSpeech = action({
+  args: {
+    text: v.string(),
+    voiceGender: v.optional(v.union(v.literal("FEMALE"), v.literal("MALE"))),
+  },
+  handler: async (_, args): Promise<{ audioBase64: string | null; provider: string | null; error: string | null }> => {
+    const googleKey = process.env.GOOGLE_CLOUD_API_KEY;
+    const azureKey = process.env.AZURE_SPEECH_KEY;
+    const azureRegion = process.env.AZURE_SPEECH_REGION || "uksouth";
+
+    // ── 1. Try Google Cloud TTS ─────────────────────────────────────────
+    if (googleKey) {
+      try {
+        const voiceName = args.voiceGender === "MALE"
+          ? "en-GB-Neural2-D"
+          : "en-GB-Neural2-C";
+
+        const response = await fetch(
+          `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              input: { text: args.text },
+              voice: {
+                languageCode: "en-GB",
+                name: voiceName,
+                ssmlGender: args.voiceGender || "FEMALE",
+              },
+              audioConfig: {
+                audioEncoding: "MP3",
+                speakingRate: 1.0,
+                pitch: 0,
+                effectsProfileId: ["small-bluetooth-speaker-class-device"],
+              },
+            }),
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          return { audioBase64: data.audioContent, provider: "google", error: null };
+        }
+        console.warn("[textToSpeech] Google TTS failed:", response.status);
+      } catch (error) {
+        console.warn("[textToSpeech] Google TTS error:", error);
+      }
+    }
+
+    // ── 2. Try Azure Cognitive Services ─────────────────────────────────
+    if (azureKey) {
+      try {
+        // Azure uses SSML for voice selection
+        const voiceName = args.voiceGender === "MALE"
+          ? "en-GB-RyanNeural"
+          : "en-GB-SoniaNeural"; // Sonia is warm and natural
+
+        const ssml = `
+          <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-GB">
+            <voice name="${voiceName}">
+              ${args.text}
+            </voice>
+          </speak>
+        `;
+
+        const response = await fetch(
+          `https://${azureRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
+          {
+            method: "POST",
+            headers: {
+              "Ocp-Apim-Subscription-Key": azureKey,
+              "Content-Type": "application/ssml+xml",
+              "X-Microsoft-OutputFormat": "audio-16khz-128kbitrate-mono-mp3",
+            },
+            body: ssml,
+          }
+        );
+
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString("base64");
+          return { audioBase64: base64, provider: "azure", error: null };
+        }
+        console.warn("[textToSpeech] Azure TTS failed:", response.status);
+      } catch (error) {
+        console.warn("[textToSpeech] Azure TTS error:", error);
+      }
+    }
+
+    // ── 3. No cloud TTS available → client uses expo-speech ─────────────
+    console.log("[textToSpeech] No cloud TTS configured, falling back to device TTS");
+    return { audioBase64: null, provider: null, error: null };
+  },
+});

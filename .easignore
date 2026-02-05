@@ -1,9 +1,19 @@
+# Expo local cache (causes permission errors on EAS)
+.expo/
+
+# GitHub workflows
+.github/
+
 # BMAD artifacts
 _bmad-output/
 _bmad/
 
 # Claude Code
 .claude/
+
+# Screenshots/images from dev (not in assets)
+chat-modal-screenshot.png
+oja.png
 
 # Playwright
 .playwright-mcp/
