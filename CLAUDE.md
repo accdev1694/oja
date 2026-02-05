@@ -58,7 +58,7 @@
 | **Backend** | Convex | Real-time database + serverless functions |
 | **AI/ML** | Gemini 2.5 Flash + OpenAI GPT-4o-mini (fallback) | Receipt parsing + Price estimation + Voice assistant |
 | **Voice STT** | expo-speech-recognition | On-device speech-to-text (free, native engines) |
-| **Voice TTS** | expo-speech | Text-to-speech for assistant responses |
+| **Voice TTS** | Google Cloud TTS → Azure → expo-speech | Neural British voices with cascade fallback |
 | **State** | React hooks + Convex | Real-time reactive state |
 | **Animations** | React Native Reanimated | Smooth native animations |
 | **Haptics** | Expo Haptics | Tactile feedback |
@@ -731,7 +731,7 @@ Config location: `C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.js
 
 ## Voice Assistant — Context-Aware Conversational AI
 
-**Status:** ✅ Implemented | **Built:** 2026-02-04
+**Status:** ✅ Implemented | **Built:** 2026-02-04 | **Updated:** 2026-02-05
 **Approach:** Gemini 2.5 Flash function-calling (not simple NLU — full conversational AI)
 
 ### Architecture
@@ -743,14 +743,31 @@ User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognit
     → Gemini returns functionCall → action runs ctx.runQuery(...)
     → results sent back as functionResponse → Gemini composes answer
     → (loop max 3 function calls per turn)
-  → response displayed in sheet + optional TTS (expo-speech, free)
+  → response displayed in sheet
+  → Neural TTS (Google Cloud → Azure → expo-speech fallback)
+  → Auto-resume listening (continuous conversation mode)
 ```
 
-**Write operations** (create list, add items, update stock) return a `pendingAction` — client shows confirm/cancel. Never auto-execute.
+**Write operations**: User intent = permission. If user says "create a list", assistant asks for missing info conversationally, then executes. No redundant "Would you like me to..." confirmations.
 
 **Multi-turn**: Conversation history kept on client (max 6 turns = 12 messages), sent with each request.
 
+**Continuous mode**: After TTS finishes, listening auto-resumes if sheet is open. Soft haptic on auto-resume vs stronger for manual tap.
+
 **Fallback**: On Gemini failure → degraded OpenAI prompt (no function calling, just context-based answer).
+
+### TTS Cascade (Neural Voices)
+
+```
+1. Google Cloud TTS (Neural2-C, en-GB female) — best quality
+2. Azure Speech Services (SoniaNeural, en-GB) — fallback
+3. expo-speech (device TTS, enhanced British voice) — final fallback
+```
+
+**Free tiers:**
+- Google Cloud: 1M chars/month (Neural2)
+- Azure: 500K chars/month (Free F0)
+- expo-speech: Unlimited (device engine)
 
 ### What the Assistant Can Do
 
@@ -797,22 +814,26 @@ User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognit
 
 ### Requirements
 
-- **Dev build required** — `expo-speech-recognition` uses native modules (not Expo Go compatible)
+- **Dev build required** — `expo-speech-recognition` and `expo-av` use native modules (not Expo Go compatible)
 - **Microphone permission** — requested on first use with friendly error if denied
 - **Gemini API key** — set in Convex dashboard as `GEMINI_API_KEY`
+
+**Optional (for neural TTS):**
+- `GOOGLE_CLOUD_API_KEY` — Google Cloud TTS API key (enable Text-to-Speech API)
+- `AZURE_SPEECH_KEY` — Azure Cognitive Services Speech key
+- `AZURE_SPEECH_REGION` — Azure region (e.g., `uksouth`)
 
 ### Next Steps — Voice Assistant
 
 | Item | Description | Priority |
 |------|-------------|----------|
-| **Dev build QA** | Test on iOS/Android dev builds with real speech | High |
+| **Dev build QA** | Test on iOS/Android dev builds with real speech + neural TTS | High |
 | **TTS toggle** | Add toggle in VoiceSheet header to disable TTS | Medium |
 | **Navigation actions** | "Go to my pantry" → navigate to screen | Medium |
-| **Continuous listening** | Hold-to-talk or continuous mode | Low |
 | **Voice-initiated receipt scan** | "Scan my receipt" → open camera | Low |
 | **Unit tests** | Mock Gemini, test 30+ command variations | Medium |
 | **Multi-language** | Support for non-English STT | Low |
 
 ---
 
-_Updated 2026-02-04. Voice assistant fully implemented (Gemini 2.5 Flash function-calling, 17 tools, conversational AI). Replaced original 2-intent parseVoiceCommand plan with full context-aware assistant._
+_Updated 2026-02-05. Added neural TTS cascade (Google Cloud → Azure → expo-speech), continuous conversation mode, and removed redundant confirmation flow._
