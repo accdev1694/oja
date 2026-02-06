@@ -24,7 +24,8 @@
 | E2E. Playwright Tests | 🔄 In Progress (72 passed, 10 failed — see E2E Testing section) |
 | 7. Subscription & Payments | ✅ Complete (Stripe integration, webhooks, free trial) |
 | 8. Admin Dashboard | 🔄 In Progress (backend done in `convex/admin.ts`) |
-| 9. Voice Assistant | ✅ Complete (Gemini 2.5 Flash function-calling + expo-speech-recognition) |
+| 9. Voice Assistant | ✅ Complete (Gemini 2.0 Flash Exp with 25 tools — full CRUD) |
+| 10. List Item Editing | ✅ Complete (edit name, quantity, price via modal) |
 
 **Current Priorities:**
 1. **Dev Build + Voice QA** — Test voice assistant on iOS/Android dev builds (requires native modules)
@@ -731,8 +732,8 @@ Config location: `C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.js
 
 ## Voice Assistant — Tobi (Context-Aware Conversational AI)
 
-**Status:** ✅ Implemented | **Built:** 2026-02-04 | **Updated:** 2026-02-05
-**Approach:** Gemini 2.5 Flash function-calling (not simple NLU — full conversational AI)
+**Status:** ✅ Implemented | **Built:** 2026-02-04 | **Updated:** 2026-02-06
+**Approach:** Gemini 2.0 Flash Exp function-calling (not simple NLU — full conversational AI)
 **Name:** Tobi — warm British-Nigerian personality, male voice
 
 ### Architecture
@@ -740,12 +741,12 @@ Config location: `C:\Users\diloc\AppData\Roaming\Claude\claude_desktop_config.js
 ```
 User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognition)
   → transcript → Convex `voiceAssistant` action
-    → Gemini 2.5 Flash with 17 function declarations
+    → Gemini 2.0 Flash Exp with 25 function declarations
     → Gemini returns functionCall → action runs ctx.runQuery(...)
     → results sent back as functionResponse → Gemini composes answer
     → (loop max 3 function calls per turn)
   → response displayed in sheet
-  → Neural TTS (Google Cloud → Azure → expo-speech fallback)
+  → Neural TTS (Azure RyanNeural → Google Neural2-D → expo-speech fallback)
   → Auto-resume listening (continuous conversation mode)
 ```
 
@@ -772,9 +773,34 @@ User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognit
 
 ### What the Assistant Can Do
 
-**READ (12 tools):** `get_pantry_items` (with stock filter), `get_active_lists`, `get_list_items`, `get_list_by_name`, `get_price_estimate`, `get_price_stats`, `get_price_trend`, `get_weekly_digest`, `get_savings_jar`, `get_streaks`, `get_achievements`, `get_item_variants`
+**READ (15 tools):**
+- `get_pantry_items` — pantry stock with filter (stocked/low/out)
+- `get_active_lists` — all active shopping lists
+- `get_list_items` — items on a specific list
+- `get_list_details` — comprehensive list info (items, budget, spent, remaining)
+- `get_budget_status` — budget status (spent, remaining, percentage)
+- `get_app_summary` — app-wide overview (lists count, low stock, savings)
+- `get_price_estimate` — current price for any item
+- `get_price_stats` — price history and cheapest store
+- `get_price_trend` — is price rising or falling
+- `get_item_variants` — size options with prices (e.g., milk 1pt, 2pt, 4pt)
+- `get_weekly_digest` — this week's spending summary
+- `get_savings_jar` — cumulative savings
+- `get_streaks` — activity streaks
+- `get_achievements` — unlocked badges
+- `get_monthly_trends` — 6-month spending trends
 
-**WRITE (5 tools, confirmation required):** `create_shopping_list`, `add_items_to_list`, `update_stock_level`, `check_off_item`, `add_pantry_item`
+**WRITE (10 tools):**
+- `create_shopping_list` — create new list with optional name/budget
+- `add_items_to_list` — add items to a list
+- `update_list_budget` — change a list's budget
+- `update_stock_level` — mark pantry items stocked/low/out
+- `check_off_item` — check off items while shopping
+- `add_pantry_item` — add new items to pantry
+- `delete_list` — delete a shopping list (requires confirmation)
+- `remove_list_item` — remove item from a list
+- `remove_pantry_item` — remove item from pantry
+- `clear_checked_items` — clear all checked items from a list
 
 ### Example Conversations
 
@@ -782,18 +808,20 @@ User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognit
 |-----------|-------------|
 | "What am I running low on?" | Calls `get_pantry_items` with stockFilter → lists low/out items |
 | "How much is milk?" | Calls `get_price_estimate` → shows price with confidence label |
-| "Create a list called Aldi Shop" | Returns `confirm_action` → user confirms → creates list |
-| "Add eggs and bread to my weekly list" | Returns `confirm_action` with items → user confirms → adds |
+| "How much room is left in my budget?" | Calls `get_budget_status` → "You've spent £32 of your £50 budget" |
+| "Create a list called Aldi with £40 budget" | Calls `create_shopping_list` → creates list with budget |
+| "Add eggs and bread to my list" | Calls `add_items_to_list` → adds items with price estimates |
+| "Remove eggs from my list" | Calls `remove_list_item` → removes item |
+| "Delete my Aldi list" | Calls `delete_list` → asks confirmation → deletes |
 | "How much did I spend this week?" | Calls `get_weekly_digest` → summarises spending |
-| "What are my streaks?" | Calls `get_streaks` → shows active streaks |
+| "Give me an overview" | Calls `get_app_summary` → lists count, low stock, savings |
 
 ### Key Files
 
 | File | Lines | Role |
 |------|-------|------|
-| `convex/lib/voiceTools.ts` | 550 | 17 function declarations, system prompt builder, tool dispatcher |
+| `convex/lib/voiceTools.ts` | ~1250 | 25 function declarations, system prompt builder, tool dispatcher |
 | `convex/ai.ts` (voiceAssistant) | +150 | Gemini function-call loop (max 3), OpenAI fallback |
-| `convex/ai.ts` (executeVoiceAction) | +110 | Confirmed write operation executor |
 | `lib/voice/voiceTypes.ts` | 44 | Shared TypeScript types |
 | `hooks/useVoiceAssistant.ts` | 317 | STT lifecycle, API calls, TTS, rate limiting, conversation history |
 | `components/voice/VoiceFAB.tsx` | 146 | Floating mic button with pulse animation |
@@ -838,4 +866,4 @@ User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognit
 
 ---
 
-_Updated 2026-02-05. Added neural TTS cascade (Google Cloud → Azure → expo-speech), continuous conversation mode, and removed redundant confirmation flow._
+_Updated 2026-02-06. Expanded from 17 to 25 tools (full CRUD). Added budget status, list details, app summary reads. Added delete list, remove items, clear checked, update budget writes. Changed model from gemini-2.5-flash to gemini-2.0-flash-exp._
