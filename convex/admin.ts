@@ -603,6 +603,12 @@ export const overridePrice = mutation({
     if (args.deleteEntry) {
       await ctx.db.delete(args.priceId);
     } else if (args.newPrice !== undefined) {
+      if (args.newPrice <= 0) {
+        throw new Error("Price must be a positive number");
+      }
+      if (args.newPrice > 10000) {
+        throw new Error("Price exceeds reasonable maximum (£10,000)");
+      }
       await ctx.db.patch(args.priceId, {
         unitPrice: args.newPrice,
         updatedAt: Date.now(),

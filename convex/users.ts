@@ -280,6 +280,17 @@ export const listAllUsers = query({
 export const resetUserByEmail = mutation({
   args: { email: v.string() },
   handler: async (ctx, args) => {
+    // Verify caller is an admin
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const caller = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!caller) throw new Error("Caller not found");
+    if (!caller.isAdmin) throw new Error("Admin access required");
+
     // Find user by email
     const user = await ctx.db
       .query("users")
