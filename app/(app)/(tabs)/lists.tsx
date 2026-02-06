@@ -41,6 +41,8 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 type TabMode = "active" | "history";
 
+const MAX_LIST_NAME_LENGTH = 24;
+
 export default function ListsScreen() {
   const router = useRouter();
   const { alert } = useGlassAlert();
@@ -273,29 +275,30 @@ export default function ListsScreen() {
             actionText="Create Your First List"
           />
           {/* Join a shared list — always visible even with no lists */}
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/join-list");
-            }}
-            style={styles.joinCardEmpty}
-          >
-            <GlassCard variant="bordered" style={styles.joinCard}>
-              <View style={styles.joinCardContent}>
-                <MaterialCommunityIcons
-                  name="link-variant"
-                  size={22}
-                  color={colors.text.tertiary}
-                />
-                <Text style={styles.joinCardText}>Join List?</Text>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={20}
-                  color={colors.text.tertiary}
-                />
-              </View>
-            </GlassCard>
-          </Pressable>
+          <View style={styles.joinCardEmpty}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/join-list");
+              }}
+            >
+              <GlassCard variant="bordered" style={styles.joinCard}>
+                <View style={styles.joinCardContent}>
+                  <MaterialCommunityIcons
+                    name="link-variant"
+                    size={18}
+                    color={colors.text.tertiary}
+                  />
+                  <Text style={styles.joinCardText}>Join List?</Text>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={18}
+                    color={colors.text.tertiary}
+                  />
+                </View>
+              </GlassCard>
+            </Pressable>
+          </View>
           <View style={styles.bottomSpacer} />
         </ScrollView>
       ) : tabMode === "history" && displayList.length === 0 ? (
@@ -353,28 +356,30 @@ export default function ListsScreen() {
           )}
 
           {/* Join a shared list — inline card */}
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/join-list");
-            }}
-          >
-            <GlassCard variant="bordered" style={styles.joinCard}>
-              <View style={styles.joinCardContent}>
-                <MaterialCommunityIcons
-                  name="account-group-outline"
-                  size={22}
-                  color={colors.text.tertiary}
-                />
-                <Text style={styles.joinCardText}>Join List?</Text>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={20}
-                  color={colors.text.tertiary}
-                />
-              </View>
-            </GlassCard>
-          </Pressable>
+          <View style={styles.joinCardWrapper}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/join-list");
+              }}
+            >
+              <GlassCard variant="bordered" style={styles.joinCard}>
+                <View style={styles.joinCardContent}>
+                  <MaterialCommunityIcons
+                    name="link-variant"
+                    size={18}
+                    color={colors.text.tertiary}
+                  />
+                  <Text style={styles.joinCardText}>Join List?</Text>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={18}
+                    color={colors.text.tertiary}
+                  />
+                </View>
+              </GlassCard>
+            </Pressable>
+          </View>
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
@@ -424,15 +429,27 @@ export default function ListsScreen() {
 
         {/* List Name Input */}
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>List Name</Text>
+          <View style={styles.inputLabelRow}>
+            <Text style={styles.inputLabel}>List Name</Text>
+            <Text
+              style={[
+                styles.charCount,
+                newListName.length > MAX_LIST_NAME_LENGTH - 5 && styles.charCountWarning,
+                newListName.length >= MAX_LIST_NAME_LENGTH && styles.charCountLimit,
+              ]}
+            >
+              {MAX_LIST_NAME_LENGTH - newListName.length}
+            </Text>
+          </View>
           <View style={styles.inputContainer}>
             <MaterialCommunityIcons name="clipboard-list" size={20} color={colors.text.tertiary} />
             <TextInput
               style={styles.textInput}
               value={newListName}
-              onChangeText={setNewListName}
+              onChangeText={(text) => setNewListName(text.slice(0, MAX_LIST_NAME_LENGTH))}
               placeholder="e.g., Weekly Shop"
               placeholderTextColor={colors.text.tertiary}
+              maxLength={MAX_LIST_NAME_LENGTH}
               autoFocus
             />
           </View>
@@ -953,9 +970,13 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: 140,
   },
+  joinCardWrapper: {
+    alignItems: "center",
+    marginTop: spacing.lg,
+  },
   joinCard: {
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   joinCardContent: {
     flexDirection: "row",
@@ -965,11 +986,10 @@ const styles = StyleSheet.create({
   joinCardText: {
     ...typography.bodyMedium,
     color: colors.text.secondary,
-    flex: 1,
   },
   joinCardEmpty: {
+    alignItems: "center",
     marginTop: spacing.lg,
-    marginHorizontal: spacing.md,
   },
   listCard: {
     marginBottom: spacing.md,
@@ -1148,10 +1168,25 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: spacing.md,
   },
+  inputLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
   inputLabel: {
     ...typography.labelMedium,
     color: colors.text.secondary,
-    marginBottom: spacing.xs,
+  },
+  charCount: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+  },
+  charCountWarning: {
+    color: colors.semantic.warning,
+  },
+  charCountLimit: {
+    color: colors.semantic.danger,
   },
   inputContainer: {
     flexDirection: "row",

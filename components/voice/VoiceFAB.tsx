@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   container: {
     position: "absolute",
     right: spacing.md,
-    bottom: TAB_BAR_HEIGHT + spacing.md,
+    bottom: TAB_BAR_HEIGHT + spacing.lg,
     zIndex: 100,
   },
   fab: {
