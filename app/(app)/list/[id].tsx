@@ -177,6 +177,12 @@ export default function ListDetailScreen() {
     quantity: number;
   } | null>(null);
 
+  // Edit item modal state
+  const [editingItem, setEditingItem] = useState<ListItem | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+
   // Notification state
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -691,6 +697,54 @@ export default function ListDetailScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Remove", style: "destructive", onPress: doRemove },
     ]);
+  }
+
+  function handleEditItem(item: ListItem) {
+    setEditingItem(item);
+    setEditName(item.name);
+    setEditQuantity(String(item.quantity));
+    setEditPrice(item.estimatedPrice ? String(item.estimatedPrice) : "");
+  }
+
+  function handleCloseEditModal() {
+    setEditingItem(null);
+    setEditName("");
+    setEditQuantity("");
+    setEditPrice("");
+  }
+
+  async function handleSaveEdit() {
+    if (!editingItem) return;
+
+    const updates: {
+      id: Id<"listItems">;
+      name?: string;
+      quantity?: number;
+      estimatedPrice?: number;
+    } = { id: editingItem._id };
+
+    if (editName.trim() && editName !== editingItem.name) {
+      updates.name = editName.trim();
+    }
+
+    const qty = parseInt(editQuantity);
+    if (!isNaN(qty) && qty > 0 && qty !== editingItem.quantity) {
+      updates.quantity = qty;
+    }
+
+    const price = parseFloat(editPrice);
+    if (!isNaN(price) && price >= 0 && price !== editingItem.estimatedPrice) {
+      updates.estimatedPrice = price;
+    }
+
+    try {
+      await updateItem(updates);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      handleCloseEditModal();
+    } catch (error) {
+      console.error("Failed to update item:", error);
+      alert("Error", "Failed to update item");
+    }
   }
 
   async function handlePriorityChange(
@@ -1310,19 +1364,15 @@ export default function ListDetailScreen() {
                         item={item}
                         onToggle={() => handleToggleItem(item._id)}
                         onRemove={() => handleRemoveItem(item._id, item.name)}
+                        onEdit={() => handleEditItem(item)}
                         onPriorityChange={(priority) => handlePriorityChange(item._id, priority)}
                         isShopping={list.status === "shopping"}
-                        onAddToList={() => handleAddItemToList({
-                          name: item.name,
-                          estimatedPrice: item.estimatedPrice ?? undefined,
-                          quantity: item.quantity,
-                        })}
                         isOwner={isOwner}
                         canApprove={canApprove}
                         commentCount={commentCounts?.[item._id as string] ?? 0}
                         onApprove={() => handleApproveItem(item._id)}
                         onReject={() => handleRejectItem(item._id)}
-                        onOpenComments={isPartner || isOwner ? () => openCommentThread(item._id, item.name) : undefined}
+                        onOpenComments={hasPartners ? () => openCommentThread(item._id, item.name) : undefined}
                       />
                     ))}
                   </>
@@ -1656,6 +1706,79 @@ export default function ListDetailScreen() {
         </View>
       </GlassModal>
 
+      {/* Edit Item Modal */}
+      <GlassModal
+        visible={editingItem !== null}
+        onClose={handleCloseEditModal}
+        maxWidth={340}
+        avoidKeyboard
+      >
+        <View style={styles.editModalHeader}>
+          <MaterialCommunityIcons name="pencil" size={28} color={colors.accent.primary} />
+          <Text style={styles.editModalTitle}>Edit Item</Text>
+        </View>
+
+        <View style={styles.editInputGroup}>
+          <Text style={styles.editInputLabel}>Name</Text>
+          <View style={styles.editInputContainer}>
+            <TextInput
+              style={styles.editTextInput}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Item name"
+              placeholderTextColor={colors.text.tertiary}
+              autoFocus
+            />
+          </View>
+        </View>
+
+        <View style={styles.editInputRow}>
+          <View style={[styles.editInputGroup, { flex: 1 }]}>
+            <Text style={styles.editInputLabel}>Quantity</Text>
+            <View style={styles.editInputContainer}>
+              <TextInput
+                style={styles.editTextInput}
+                value={editQuantity}
+                onChangeText={setEditQuantity}
+                placeholder="1"
+                placeholderTextColor={colors.text.tertiary}
+                keyboardType="number-pad"
+              />
+            </View>
+          </View>
+
+          <View style={[styles.editInputGroup, { flex: 1 }]}>
+            <Text style={styles.editInputLabel}>Price (£)</Text>
+            <View style={styles.editInputContainer}>
+              <TextInput
+                style={styles.editTextInput}
+                value={editPrice}
+                onChangeText={setEditPrice}
+                placeholder="0.00"
+                placeholderTextColor={colors.text.tertiary}
+                keyboardType="decimal-pad"
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.editModalActions}>
+          <GlassButton variant="ghost" size="md" onPress={handleCloseEditModal} style={{ flex: 1 }}>
+            Cancel
+          </GlassButton>
+          <GlassButton
+            variant="primary"
+            size="md"
+            icon="check"
+            onPress={handleSaveEdit}
+            style={{ flex: 1 }}
+            disabled={!editName.trim()}
+          >
+            Save
+          </GlassButton>
+        </View>
+      </GlassModal>
+
       {/* List Picker Modal */}
       <GlassModal
         visible={addToListItem !== null}
@@ -1756,6 +1879,7 @@ interface ShoppingListItemProps {
   item: ListItem;
   onToggle: () => void;
   onRemove: () => void;
+  onEdit: () => void;
   onPriorityChange: (priority: "must-have" | "should-have" | "nice-to-have") => void;
   isShopping: boolean;
   onAddToList?: () => void;
@@ -1772,6 +1896,7 @@ function ShoppingListItem({
   item,
   onToggle,
   onRemove,
+  onEdit,
   onPriorityChange,
   isShopping,
   onAddToList,
@@ -1995,6 +2120,24 @@ function ShoppingListItem({
                   <AddToListButton onPress={onAddToList} size="md" />
                 )}
 
+                {/* Edit button */}
+                {!item.isChecked && (
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      onEdit();
+                    }}
+                    style={styles.editButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialCommunityIcons
+                      name="pencil-outline"
+                      size={18}
+                      color={colors.text.tertiary}
+                    />
+                  </Pressable>
+                )}
+
                 {/* Remove button */}
                 <RemoveButton onPress={onRemove} size="md" />
               </View>
@@ -2055,6 +2198,11 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  editButton: {
+    padding: spacing.xs,
+    borderRadius: 8,
+    backgroundColor: `${colors.text.tertiary}15`,
   },
   fullWidthButton: {
     flex: 1,
@@ -2787,6 +2935,48 @@ const styles = StyleSheet.create({
   },
 
   // List picker modal
+  // Edit Item Modal
+  editModalHeader: {
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  editModalTitle: {
+    ...typography.headlineMedium,
+    color: colors.text.primary,
+    marginTop: spacing.sm,
+  },
+  editInputGroup: {
+    marginBottom: spacing.md,
+  },
+  editInputRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  editInputLabel: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  editInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    paddingHorizontal: spacing.md,
+    height: 48,
+  },
+  editTextInput: {
+    flex: 1,
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+  },
+  editModalActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
   listPickerModal: {
     alignItems: "center",
   },
