@@ -179,7 +179,51 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
     },
   },
 
-  // ── WRITE TOOLS (5) ─ execute immediately when called ────────────────
+  {
+    name: "get_budget_status",
+    description:
+      "Get budget status for a shopping list: spent amount, remaining amount, and percentage used. " +
+      "Use when user asks 'how much room is left in my budget?' or 'how much have I spent?'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        listName: {
+          type: SchemaType.STRING,
+          description: "Optional list name. If not provided, uses the current/only active list.",
+        },
+      },
+    },
+  },
+
+  {
+    name: "get_list_details",
+    description:
+      "Get comprehensive details about a shopping list: items, budget, spent, remaining, status, item count. " +
+      "Use when user asks about a specific list or wants full details.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        listName: {
+          type: SchemaType.STRING,
+          description: "List name to get details for. If not provided, uses current/only active list.",
+        },
+      },
+    },
+  },
+
+  {
+    name: "get_app_summary",
+    description:
+      "Get a summary of the entire app state: active lists count, total budget across lists, " +
+      "pantry items running low, receipts scanned this week, savings jar total. " +
+      "Use when user asks 'what's going on?' or 'give me an overview'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {},
+    },
+  },
+
+  // ── WRITE TOOLS (9) ─ execute immediately when called ────────────────
 
   {
     name: "create_shopping_list",
@@ -309,6 +353,102 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
       required: ["name"],
     },
   },
+
+  {
+    name: "update_list_budget",
+    description:
+      "Update the budget for a shopping list. " +
+      "Use when user says 'change the budget to £60' or 'set budget to 75 pounds'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        listName: {
+          type: SchemaType.STRING,
+          description: "List name. If not provided, uses current/only active list.",
+        },
+        budget: {
+          type: SchemaType.NUMBER,
+          description: "New budget amount in GBP",
+        },
+      },
+      required: ["budget"],
+    },
+  },
+
+  {
+    name: "delete_list",
+    description:
+      "Delete a shopping list. ALWAYS confirm with user before deleting. " +
+      "Use when user says 'delete my Aldi list' or 'remove that list'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        listName: {
+          type: SchemaType.STRING,
+          description: "Name of the list to delete",
+        },
+        confirmed: {
+          type: SchemaType.BOOLEAN,
+          description: "Whether user has confirmed deletion. Must be true to proceed.",
+        },
+      },
+      required: ["listName", "confirmed"],
+    },
+  },
+
+  {
+    name: "remove_list_item",
+    description:
+      "Remove an item from a shopping list. " +
+      "Use when user says 'remove eggs from my list' or 'take off the bread'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        listName: {
+          type: SchemaType.STRING,
+          description: "List name. If not provided, uses current/only active list.",
+        },
+        itemName: {
+          type: SchemaType.STRING,
+          description: "Item name to remove",
+        },
+      },
+      required: ["itemName"],
+    },
+  },
+
+  {
+    name: "remove_pantry_item",
+    description:
+      "Remove an item from the pantry. " +
+      "Use when user says 'delete milk from pantry' or 'remove rice from my stock'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        itemName: {
+          type: SchemaType.STRING,
+          description: "Pantry item name to remove",
+        },
+      },
+      required: ["itemName"],
+    },
+  },
+
+  {
+    name: "clear_checked_items",
+    description:
+      "Clear all checked/completed items from a shopping list. " +
+      "Use when user says 'clear checked items' or 'remove completed items'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        listName: {
+          type: SchemaType.STRING,
+          description: "List name. If not provided, uses current/only active list.",
+        },
+      },
+    },
+  },
 ];
 
 // ─── Write tool names ───────────────────────────────────────────────────
@@ -319,19 +459,34 @@ const WRITE_TOOLS = new Set([
   "update_stock_level",
   "check_off_item",
   "add_pantry_item",
+  "update_list_budget",
+  "delete_list",
+  "remove_list_item",
+  "remove_pantry_item",
+  "clear_checked_items",
 ]);
 
 // ─── System Prompt ─────────────────────────────────────────────────────
 
-export function buildSystemPrompt(context: {
+export interface VoiceContext {
   currentScreen: string;
   activeListId?: string;
   activeListName?: string;
+  activeListBudget?: number;
+  activeListSpent?: number;
+  activeListsCount?: number;
+  lowStockCount?: number;
   userName?: string;
-}): string {
+}
+
+export function buildSystemPrompt(context: VoiceContext): string {
   const activeListInfo = context.activeListId
     ? `"${context.activeListName}" (id: ${context.activeListId})`
     : "none";
+
+  const budgetInfo = context.activeListBudget
+    ? `Budget: £${context.activeListBudget}, Spent: £${context.activeListSpent || 0}, Remaining: £${Math.max(0, (context.activeListBudget || 0) - (context.activeListSpent || 0))}`
+    : "No budget set";
 
   return `You are Tobi, the friendly voice assistant for Oja, a UK grocery shopping app.
 
@@ -344,33 +499,66 @@ PERSONALITY:
 - Celebrate wins ("Nice one! You've saved £23 this week!")
 - Be empathetic about overspending ("No worries, happens to everyone")
 
-CAPABILITIES:
-- Answer questions about pantry stock, shopping lists, prices, spending, savings, streaks, achievements
-- Create lists and add items
-- Update stock levels and check off items
-- Compare prices across stores
-- Give spending insights and trends
+FULL CAPABILITIES (you can do ALL of these):
+
+READ Operations:
+- get_pantry_items: Check pantry stock (filter by: stocked, low, out)
+- get_active_lists: See all active shopping lists
+- get_list_items: See items on a specific list
+- get_list_details: Get full details about a list (items, budget, spent, remaining)
+- get_budget_status: Check budget status (spent, remaining, percentage)
+- get_app_summary: Get overview of entire app (lists count, low stock items, savings)
+- get_price_estimate: Check current price for any item
+- get_price_stats: Get price history and cheapest store for an item
+- get_price_trend: See if an item's price is rising or falling
+- get_item_variants: Get size options and prices (e.g., milk 1pt, 2pt, 4pt)
+- get_weekly_digest: This week's spending summary
+- get_savings_jar: Total cumulative savings
+- get_streaks: Activity streaks
+- get_achievements: Unlocked badges
+- get_monthly_trends: 6-month spending trends
+
+WRITE Operations:
+- create_shopping_list: Create a new list (with optional name and budget)
+- add_items_to_list: Add items to a list
+- update_list_budget: Change a list's budget
+- update_stock_level: Mark pantry items as stocked/low/out
+- check_off_item: Check off items while shopping
+- add_pantry_item: Add new items to pantry
+- delete_list: Delete a shopping list (requires confirmation)
+- remove_list_item: Remove an item from a list
+- remove_pantry_item: Remove an item from pantry
+- clear_checked_items: Clear all checked items from a list
 
 RULES FOR WRITE OPERATIONS (IMPORTANT):
 - NEVER ask "Would you like me to do X?" or "Shall I confirm?" — if user asks for something, just DO it.
 - If REQUIRED info is missing, ASK for it conversationally:
-  - User: "Create a list" → You: "Sure! What would you like to call it?"
+  - User: "Create a list" → Just create it with default name "Shopping List"
   - User: "Add milk" (multiple lists) → You: "Which list should I add it to?"
 - Once you have all required info, call the function and tell them it's done.
 - User intent = permission. "Create a list" means they want a list created.
+- For DELETE operations: Always confirm before deleting ("Are you sure you want to delete X?")
 
 RULES FOR READ OPERATIONS:
 - Call the function, then summarise the data conversationally.
 - If no data: "I don't have data for that yet — keep shopping and I'll learn!"
+
+CONTEXT AWARENESS:
+- When user says "this list" or "my list" or "the budget" — use the active list context below
+- When user says "my pantry" or "what am I running low on" — use get_pantry_items
+- When user asks "how many lists" — use get_active_lists or get_app_summary
 
 GENERAL RULES:
 - Prices in GBP: "£1.15" not "1.15 pounds".
 - Never invent data. If a function returns empty, say so honestly.
 - Round numbers: "about £45" not "£44.73".
 
-CONTEXT:
-- Current screen: ${context.currentScreen}
-- Active list: ${activeListInfo}`;
+CURRENT CONTEXT:
+- Screen: ${context.currentScreen}
+- Active list: ${activeListInfo}
+- ${budgetInfo}
+- Active lists count: ${context.activeListsCount ?? "unknown"}
+- Items running low: ${context.lowStockCount ?? "unknown"}`;
 }
 
 // ─── Tool Dispatcher ───────────────────────────────────────────────────
@@ -507,6 +695,137 @@ export async function executeVoiceTool(
         return { type: "data", result: trends };
       }
 
+      case "get_budget_status": {
+        const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let targetList: any = null;
+
+        if (args.listName) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          targetList = lists.find((l: any) =>
+            l.name.toLowerCase().includes(args.listName.toLowerCase())
+          );
+        } else if (lists.length === 1) {
+          targetList = lists[0];
+        } else if (lists.length > 1) {
+          // Find in-progress list first, then most recent
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
+        }
+
+        if (!targetList) {
+          return {
+            type: "data",
+            result: { error: "No active list found. Create a list first." },
+          };
+        }
+
+        const budget = targetList.budget || 0;
+        const spent = targetList.totalEstimatedCost || 0;
+        const remaining = Math.max(0, budget - spent);
+        const percentUsed = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+
+        return {
+          type: "data",
+          result: {
+            listName: targetList.name,
+            budget,
+            spent,
+            remaining,
+            percentUsed,
+            status: percentUsed >= 100 ? "over_budget" : percentUsed >= 80 ? "near_limit" : "healthy",
+          },
+        };
+      }
+
+      case "get_list_details": {
+        const allLists = await ctx.runQuery(api.shoppingLists.getActive, {});
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let list: any = null;
+
+        if (args.listName) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          list = allLists.find((l: any) =>
+            l.name.toLowerCase().includes(args.listName.toLowerCase())
+          );
+        } else if (allLists.length === 1) {
+          list = allLists[0];
+        } else if (allLists.length > 1) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          list = allLists.find((l: any) => l.status === "shopping") || allLists[0];
+        }
+
+        if (!list) {
+          return {
+            type: "data",
+            result: { error: "No active list found." },
+          };
+        }
+
+        const listItems = await ctx.runQuery(api.listItems.getByList, {
+          listId: list._id,
+        });
+
+        const budget = list.budget || 0;
+        const spent = list.totalEstimatedCost || 0;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const checkedCount = listItems.filter((i: any) => i.isChecked).length;
+
+        return {
+          type: "data",
+          result: {
+            name: list.name,
+            status: list.status,
+            budget,
+            spent,
+            remaining: Math.max(0, budget - spent),
+            itemCount: listItems.length,
+            checkedCount,
+            uncheckedCount: listItems.length - checkedCount,
+            storeName: list.storeName,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            items: listItems.slice(0, 10).map((i: any) => ({
+              name: i.name,
+              quantity: i.quantity,
+              price: i.estimatedPrice,
+              checked: i.isChecked,
+            })),
+          },
+        };
+      }
+
+      case "get_app_summary": {
+        const activeLists = await ctx.runQuery(api.shoppingLists.getActive, {});
+        const pantryItems = await ctx.runQuery(api.pantryItems.getByUser, {});
+        const savingsJar = await ctx.runQuery(api.insights.getSavingsJar, {});
+        const weeklyDigest = await ctx.runQuery(api.insights.getWeeklyDigest, {});
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const lowStockItems = pantryItems.filter((i: any) => i.stockLevel === "low" || i.stockLevel === "out");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const totalBudget = activeLists.reduce((sum: number, l: any) => sum + (l.budget || 0), 0);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const totalEstimated = activeLists.reduce((sum: number, l: any) => sum + (l.totalEstimatedCost || 0), 0);
+
+        return {
+          type: "data",
+          result: {
+            activeListsCount: activeLists.length,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            activeListNames: activeLists.map((l: any) => l.name),
+            totalBudgetAcrossLists: totalBudget,
+            totalEstimatedSpend: totalEstimated,
+            pantryItemsCount: pantryItems.length,
+            lowStockCount: lowStockItems.length,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            lowStockItems: lowStockItems.slice(0, 5).map((i: any) => i.name),
+            totalSavings: savingsJar?.totalSaved || 0,
+            thisWeekSpent: weeklyDigest?.thisWeekTotal || 0,
+            thisWeekTrips: weeklyDigest?.tripsCount || 0,
+          },
+        };
+      }
+
       default:
         return { type: "data", result: { error: `Unknown function: ${functionName}` } };
     }
@@ -587,19 +906,30 @@ async function executeWriteTool(
         }
       }
 
+      // Get current user for price estimation
+      const identity = await ctx.auth.getUserIdentity();
+      const currentUser = identity
+        ? await ctx.runQuery(api.users.getCurrent, {})
+        : null;
+
       // Add each item with price estimate (Zero-Blank rule)
       const addedItems: string[] = [];
       for (const item of args.items || []) {
         // Get price estimate for the item
         let estimatedPrice: number | undefined;
-        try {
-          const priceResult = await ctx.runAction(api.ai.estimateItemPrice, {
-            itemName: item.name,
-          });
-          estimatedPrice = priceResult.price;
-        } catch {
-          // If price estimation fails, continue without price
-          console.warn(`[Voice] Could not estimate price for "${item.name}"`);
+        if (currentUser) {
+          try {
+            const priceResult = await ctx.runAction(api.ai.estimateItemPrice, {
+              itemName: item.name,
+              userId: currentUser._id,
+            });
+            if (priceResult) {
+              estimatedPrice = priceResult.estimatedPrice;
+            }
+          } catch {
+            // If price estimation fails, continue without price
+            console.warn(`[Voice] Could not estimate price for "${item.name}"`);
+          }
         }
 
         await ctx.runMutation(api.listItems.create, {
@@ -696,15 +1026,26 @@ async function executeWriteTool(
     }
 
     case "add_pantry_item": {
+      // Get current user for price estimation
+      const pantryIdentity = await ctx.auth.getUserIdentity();
+      const pantryUser = pantryIdentity
+        ? await ctx.runQuery(api.users.getCurrent, {})
+        : null;
+
       // Get price estimate for the item (Zero-Blank rule)
       let lastPrice: number | undefined;
-      try {
-        const priceResult = await ctx.runAction(api.ai.estimateItemPrice, {
-          itemName: args.name,
-        });
-        lastPrice = priceResult.price;
-      } catch {
-        console.warn(`[Voice] Could not estimate price for pantry item "${args.name}"`);
+      if (pantryUser) {
+        try {
+          const priceResult = await ctx.runAction(api.ai.estimateItemPrice, {
+            itemName: args.name,
+            userId: pantryUser._id,
+          });
+          if (priceResult) {
+            lastPrice = priceResult.estimatedPrice;
+          }
+        } catch {
+          console.warn(`[Voice] Could not estimate price for pantry item "${args.name}"`);
+        }
       }
 
       await ctx.runMutation(api.pantryItems.create, {
@@ -720,6 +1061,234 @@ async function executeWriteTool(
         result: {
           success: true,
           message: `Added ${args.name} to your pantry`,
+        },
+      };
+    }
+
+    case "update_list_budget": {
+      const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let targetList: any = null;
+
+      if (args.listName) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        targetList = lists.find((l: any) =>
+          l.name.toLowerCase().includes(args.listName.toLowerCase())
+        );
+      } else if (lists.length === 1) {
+        targetList = lists[0];
+      } else if (lists.length > 1) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
+      }
+
+      if (!targetList) {
+        return {
+          type: "data",
+          result: { success: false, error: "No active list found to update." },
+        };
+      }
+
+      await ctx.runMutation(api.shoppingLists.update, {
+        id: targetList._id,
+        budget: args.budget,
+      });
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Updated ${targetList.name} budget to £${args.budget}`,
+          listName: targetList.name,
+          newBudget: args.budget,
+        },
+      };
+    }
+
+    case "delete_list": {
+      if (!args.confirmed) {
+        // Return info for confirmation - Gemini should ask user to confirm
+        const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const targetList = lists.find((l: any) =>
+          l.name.toLowerCase().includes(args.listName.toLowerCase())
+        );
+
+        if (!targetList) {
+          return {
+            type: "data",
+            result: { success: false, error: `Couldn't find a list named "${args.listName}".` },
+          };
+        }
+
+        // Get item count for confirmation message
+        const listItems = await ctx.runQuery(api.listItems.getByList, {
+          listId: targetList._id,
+        });
+        const itemCount = listItems.length;
+
+        return {
+          type: "data",
+          result: {
+            success: false,
+            needsConfirmation: true,
+            listName: targetList.name,
+            itemCount,
+            message: `Are you sure you want to delete "${targetList.name}"? It has ${itemCount} items.`,
+          },
+        };
+      }
+
+      // User confirmed - proceed with deletion
+      const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const targetList = lists.find((l: any) =>
+        l.name.toLowerCase().includes(args.listName.toLowerCase())
+      );
+
+      if (!targetList) {
+        return {
+          type: "data",
+          result: { success: false, error: `Couldn't find a list named "${args.listName}".` },
+        };
+      }
+
+      await ctx.runMutation(api.shoppingLists.remove, { id: targetList._id });
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Deleted "${targetList.name}"`,
+        },
+      };
+    }
+
+    case "remove_list_item": {
+      const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let targetList: any = null;
+
+      if (args.listName) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        targetList = lists.find((l: any) =>
+          l.name.toLowerCase().includes(args.listName.toLowerCase())
+        );
+      } else if (lists.length === 1) {
+        targetList = lists[0];
+      } else if (lists.length > 1) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
+      }
+
+      if (!targetList) {
+        return {
+          type: "data",
+          result: { success: false, error: "No active list found." },
+        };
+      }
+
+      const listItems = await ctx.runQuery(api.listItems.getByList, {
+        listId: targetList._id,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const itemToRemove = listItems.find((i: any) =>
+        i.name.toLowerCase().includes(args.itemName.toLowerCase())
+      );
+
+      if (!itemToRemove) {
+        return {
+          type: "data",
+          result: { success: false, error: `Couldn't find "${args.itemName}" on ${targetList.name}.` },
+        };
+      }
+
+      await ctx.runMutation(api.listItems.remove, { id: itemToRemove._id });
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Removed ${itemToRemove.name} from ${targetList.name}`,
+        },
+      };
+    }
+
+    case "remove_pantry_item": {
+      const items = await ctx.runQuery(api.pantryItems.getByUser, {});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const itemToRemove = items.find((i: any) =>
+        i.name.toLowerCase().includes(args.itemName.toLowerCase())
+      );
+
+      if (!itemToRemove) {
+        return {
+          type: "data",
+          result: { success: false, error: `Couldn't find "${args.itemName}" in your pantry.` },
+        };
+      }
+
+      await ctx.runMutation(api.pantryItems.remove, { id: itemToRemove._id });
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Removed ${itemToRemove.name} from your pantry`,
+        },
+      };
+    }
+
+    case "clear_checked_items": {
+      const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let targetList: any = null;
+
+      if (args.listName) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        targetList = lists.find((l: any) =>
+          l.name.toLowerCase().includes(args.listName.toLowerCase())
+        );
+      } else if (lists.length === 1) {
+        targetList = lists[0];
+      } else if (lists.length > 1) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
+      }
+
+      if (!targetList) {
+        return {
+          type: "data",
+          result: { success: false, error: "No active list found." },
+        };
+      }
+
+      const listItems = await ctx.runQuery(api.listItems.getByList, {
+        listId: targetList._id,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const checkedItems = listItems.filter((i: any) => i.isChecked);
+
+      if (checkedItems.length === 0) {
+        return {
+          type: "data",
+          result: { success: true, message: "No checked items to clear." },
+        };
+      }
+
+      // Remove all checked items
+      for (const item of checkedItems) {
+        await ctx.runMutation(api.listItems.remove, { id: item._id });
+      }
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Cleared ${checkedItems.length} checked item${checkedItems.length !== 1 ? "s" : ""} from ${targetList.name}`,
+          itemsRemoved: checkedItems.length,
         },
       };
     }

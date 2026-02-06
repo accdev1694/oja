@@ -53,7 +53,7 @@ async function openaiGenerate(prompt: string, options?: { temperature?: number; 
  */
 async function geminiGenerate(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-2.0-flash-exp",
     generationConfig: {
       temperature: options?.temperature ?? 0.7,
       maxOutputTokens: options?.maxTokens ?? 4000,
@@ -894,6 +894,10 @@ export const voiceAssistant = action({
     currentScreen: v.string(),
     activeListId: v.optional(v.id("shoppingLists")),
     activeListName: v.optional(v.string()),
+    activeListBudget: v.optional(v.number()),
+    activeListSpent: v.optional(v.number()),
+    activeListsCount: v.optional(v.number()),
+    lowStockCount: v.optional(v.number()),
     userName: v.optional(v.string()),
     conversationHistory: v.optional(
       v.array(
@@ -918,13 +922,17 @@ export const voiceAssistant = action({
       currentScreen: args.currentScreen,
       activeListId: args.activeListId,
       activeListName: args.activeListName,
+      activeListBudget: args.activeListBudget,
+      activeListSpent: args.activeListSpent,
+      activeListsCount: args.activeListsCount,
+      lowStockCount: args.lowStockCount,
       userName: args.userName,
     });
 
     try {
       // Build Gemini model with function declarations
       const model = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
+        model: "gemini-2.0-flash-exp",
         systemInstruction: systemPrompt,
         tools: [{ functionDeclarations: voiceFunctionDeclarations }],
         generationConfig: {
