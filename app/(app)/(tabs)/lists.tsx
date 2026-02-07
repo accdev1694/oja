@@ -37,6 +37,7 @@ import {
   useGlassAlert,
 } from "@/components/ui/glass";
 import { NotificationDropdown } from "@/components/partners";
+import { TipBanner } from "@/components/ui/TipBanner";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 type TabMode = "active" | "history";
@@ -256,6 +257,9 @@ export default function ListsScreen() {
 
       {/* Trial Nudge Banner */}
       <TrialNudgeBanner />
+
+      {/* Contextual Tips */}
+      <TipBanner context="lists" />
 
       {/* Content */}
       {!isLoaded ? (

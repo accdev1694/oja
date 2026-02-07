@@ -64,6 +64,7 @@ import {
 } from "@/components/ui/glass";
 import { RemoveButton } from "@/components/ui/RemoveButton";
 import { AddToListButton } from "@/components/ui/AddToListButton";
+import { TipBanner } from "@/components/ui/TipBanner";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -607,6 +608,9 @@ export default function PantryScreen() {
 
         {/* Trial Nudge Banner */}
         <TrialNudgeBanner />
+
+        {/* Contextual Tips */}
+        <TipBanner context="pantry" />
 
         {/* View Mode Tabs — sliding pill animates between red↔green */}
         <View style={styles.viewModeTabs} onLayout={onTabContainerLayout}>
