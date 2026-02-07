@@ -28,19 +28,28 @@ export function TrialNudgeBanner() {
     ? Math.max(0, Math.ceil((trialEndsAt - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  // Show during last 2 days of trial or after expiry
-  const showTrialUrgency = isTrial && daysLeft <= 2;
+  // Show throughout entire trial period or after expiry
+  const showTrial = isTrial;
   const showExpired = isExpired;
 
-  if (!showTrialUrgency && !showExpired) return null;
+  if (!showTrial && !showExpired) return null;
 
+  // Different messaging based on urgency
+  const isUrgent = daysLeft <= 2;
   const message = showExpired
     ? "Your trial ended — upgrade for unlimited lists & pantry"
     : daysLeft === 0
       ? "Trial ends today — subscribe to keep unlimited access"
-      : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left — subscribe to keep unlimited access`;
+      : isUrgent
+        ? `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left — subscribe to keep unlimited access`
+        : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left on your free trial`;
 
-  const accentColor = showExpired ? colors.accent.warm : colors.accent.secondary;
+  // Warm color for expired/urgent, teal for normal trial period
+  const accentColor = showExpired
+    ? colors.accent.warm
+    : isUrgent
+      ? colors.accent.secondary
+      : colors.accent.primary;
 
   return (
     <Pressable
