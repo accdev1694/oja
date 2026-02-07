@@ -15,6 +15,7 @@ import React from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { VoiceFAB } from "@/components/voice/VoiceFAB";
 
 import {
@@ -216,6 +217,9 @@ function PersistentTabBar() {
 export default function AppLayout() {
   const { isLoaded, isSignedIn } = useAuth();
 
+  // Register for push notifications (only when signed in)
+  usePushNotifications();
+
   if (!isLoaded) {
     return (
       <View style={styles.container}>
@@ -249,6 +253,10 @@ export default function AppLayout() {
         />
         <Stack.Screen
           name="subscription"
+          options={{ presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="ai-usage"
           options={{ presentation: "modal" }}
         />
         <Stack.Screen name="admin" />

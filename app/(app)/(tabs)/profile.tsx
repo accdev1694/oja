@@ -37,6 +37,7 @@ export default function ProfileScreen() {
   const pantryItems = useQuery(api.pantryItems.getByUser);
   const scanCredits = useQuery(api.subscriptions.getScanCredits);
   const subscription = useQuery(api.subscriptions.getCurrentSubscription);
+  const aiUsage = useQuery(api.aiUsage.getUsageSummary);
   const receipts = useQuery(api.receipts.getByUser);
   const activeChallenge = useQuery(api.insights.getActiveChallenge);
   const generateChallenge = useMutation(api.insights.generateChallenge);
@@ -269,6 +270,28 @@ export default function ProfileScreen() {
                 <View style={styles.navInfo}>
                   <Text style={styles.navTitle}>Insights</Text>
                   <Text style={styles.navSubtitle}>Trends, savings & achievements</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.tertiary} />
+              </View>
+            </GlassCard>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/(app)/ai-usage" as any);
+            }}
+          >
+            <GlassCard variant="standard" style={styles.navCard}>
+              <View style={styles.navRow}>
+                <View style={[styles.navIcon, { backgroundColor: `${colors.accent.secondary}20` }]}>
+                  <MaterialCommunityIcons name="robot" size={20} color={colors.accent.secondary} />
+                </View>
+                <View style={styles.navInfo}>
+                  <Text style={styles.navTitle}>AI Usage</Text>
+                  <Text style={styles.navSubtitle}>
+                    Voice: {aiUsage?.voice?.usage ?? 0}/{aiUsage?.voice?.limit ?? 200} this month
+                  </Text>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.tertiary} />
               </View>
