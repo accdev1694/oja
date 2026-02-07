@@ -1,0 +1,126 @@
+name: oja_flutter
+description: Budget-First Shopping Confidence - Native mobile app for shopping control
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+
+  # Navigation
+  go_router: ^13.0.0
+
+  # Backend & Sync
+  convex_flutter: ^0.5.0
+  dio: ^5.4.0
+  web_socket_channel: ^2.4.0
+
+  # Local Database
+  drift: ^2.14.0
+  sqlite3_flutter_libs: ^0.5.18
+  path_provider: ^2.1.1
+  path: ^1.8.3
+
+  # Authentication
+  clerk_flutter: ^0.1.0
+  flutter_secure_storage: ^9.0.0
+
+  # UI Components
+  flutter_animate: ^4.3.0
+  shimmer: ^3.0.0
+  cached_network_image: ^3.3.0
+  flutter_svg: ^2.0.9
+  lottie: ^2.7.0
+
+  # Glass UI Effects
+  glassmorphism: ^3.0.0
+  blur: ^3.1.0
+
+  # Camera & Image
+  camera: ^0.10.5+7
+  image_picker: ^1.0.5
+  image: ^4.1.4
+
+  # Voice & Audio
+  speech_to_text: ^6.4.1
+  flutter_tts: ^3.8.5
+  just_audio: ^0.9.36
+
+  # Charts & Visualization
+  fl_chart: ^0.65.0
+  confetti: ^0.7.0
+
+  # Haptics & Feedback
+  vibration: ^1.8.4
+
+  # Payments
+  flutter_stripe: ^10.0.0
+
+  # Notifications
+  firebase_messaging: ^14.7.9
+  flutter_local_notifications: ^16.2.0
+
+  # Location
+  geolocator: ^10.1.0
+  geocoding: ^2.1.1
+
+  # Utilities
+  intl: ^0.18.1
+  uuid: ^4.2.1
+  equatable: ^2.0.5
+  json_annotation: ^4.8.1
+  freezed_annotation: ^2.4.1
+  collection: ^1.18.0
+  rxdart: ^0.27.7
+
+  # Logging & Analytics
+  logger: ^2.0.2+1
+  firebase_analytics: ^10.7.4
+  firebase_core: ^2.24.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Code Generation
+  build_runner: ^2.4.7
+  riverpod_generator: ^2.3.9
+  freezed: ^2.4.6
+  json_serializable: ^6.7.1
+  drift_dev: ^2.14.0
+
+  # Linting
+  flutter_lints: ^3.0.1
+  custom_lint: ^0.5.8
+
+  # Testing
+  mocktail: ^1.0.1
+  golden_toolkit: ^0.15.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/fonts/
+    - assets/animations/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
