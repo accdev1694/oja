@@ -198,11 +198,14 @@ export const completeOnboarding = mutation({
         updatedAt: now,
       });
 
+      // Calculate trial days for dynamic message
+      const trialDays = Math.ceil((trialEndsAt - now) / (24 * 60 * 60 * 1000));
+
       await ctx.db.insert("notifications", {
         userId: user._id,
         type: "trial_started",
         title: "Welcome to Oja Premium!",
-        body: "You have 7 days of full access to all features — explore everything!",
+        body: `You have ${trialDays} days of full access to all features — explore everything!`,
         read: false,
         createdAt: now,
       });

@@ -16,6 +16,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useActivityTracking } from "@/hooks/useActivityTracking";
 import { VoiceFAB } from "@/components/voice/VoiceFAB";
 
 import {
@@ -219,6 +220,9 @@ export default function AppLayout() {
 
   // Register for push notifications (only when signed in)
   usePushNotifications();
+
+  // Track user activity for nurture sequence
+  useActivityTracking();
 
   if (!isLoaded) {
     return (

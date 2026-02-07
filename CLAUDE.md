@@ -28,12 +28,13 @@
 | 10. List Item Editing | ✅ Complete (edit name, quantity, price via modal) |
 | 11. AI Usage Metering | ✅ Complete (voice limits, usage tracking, push notifications) |
 | 12. Push Notifications | ✅ Complete (Expo Notifications, usage alerts, deep linking) |
+| 13. Nurture Sequence | ✅ Complete (activity tracking, day-based nudges, contextual tips) |
 
 **Current Priorities:**
 1. **Dev Build + Voice QA** — Test voice assistant on iOS/Android dev builds (requires native modules)
 2. ~~Push Notification Integration~~ ✅ Complete — Expo Notifications wiring done
 3. **Price Bracket Matcher Validation** — Test against 19 real receipts (target >80% accuracy)
-4. **First-Week Nurture Sequence** — Daily helpful nudges for new users (Day 2, 3, 5)
+4. ~~First-Week Nurture Sequence~~ ✅ Complete — Day 1-5 nudges, trial reminders, contextual tips
 5. **E2E Test Fixes** — 10 failures blocking ~35 cascade-skipped tests
 
 ---
@@ -211,17 +212,17 @@ More users → More receipt scans → Better price data
 | 4 | ✅ | Micro-celebrations on check-off | 1 |
 | 5 | ✅ | Voice audit — warm personality in all copy | 1 |
 | 6 | ✅ | Gesture onboarding (SwipeOnboardingOverlay) | 2 |
-| 7 | ❌ | **Smart push notifications** (3 types) | 2 |
+| 7 | ✅ | Smart push notifications (3 types) | 2 |
 | 8 | ✅ | Weekly Insights narrative | 2 |
 | 9 | ✅ | Warm accent color (#FFB088) | 2 |
 | 10 | ✅ | Profile simplification | 2 |
-| 11 | ❌ | **First-week nurture sequence** | 3 |
+| 11 | ✅ | First-week nurture sequence | 3 |
 | 12 | ❌ | **Price intelligence surface** | 3 |
 | 13 | ✅ | Journey prompts between tabs | 3 |
 | 14 | ✅ | Visible investment counter | 3 |
 | 15 | ✅ | Savings milestone celebrations | 3 |
 
-**12/15 done. 3 remaining:** push notifications (#7), nurture sequence (#11), price intelligence surface (#12).
+**14/15 done. 1 remaining:** price intelligence surface (#12).
 
 ---
 
@@ -370,7 +371,8 @@ oja/
 │   │   ├── AdaptiveCard.tsx
 │   │   ├── AddToListButton.tsx
 │   │   ├── CategoryFilter.tsx
-│   │   └── RemoveButton.tsx
+│   │   ├── RemoveButton.tsx
+│   │   └── TipBanner.tsx        # Contextual tips banner (dismissible)
 │   ├── pantry/                  # Pantry components
 │   ├── voice/                   # Voice assistant components
 │   │   ├── VoiceFAB.tsx         # Floating mic button (global, above tab bar)
@@ -389,6 +391,7 @@ oja/
 │   ├── usePartnerRole.ts
 │   ├── useNotifications.ts
 │   ├── useVoiceAssistant.ts     # Voice assistant lifecycle (STT, API, TTS, rate limiting)
+│   ├── useActivityTracking.ts   # Session tracking for nurture sequence
 │   └── useDelightToast.ts
 │
 ├── lib/                          # Utilities
@@ -415,6 +418,8 @@ oja/
 │   ├── iconMapping.ts           # Server-side icon mapping
 │   ├── admin.ts                 # Admin dashboard backend
 │   ├── insights.ts              # Weekly digest + gamification
+│   ├── nurture.ts               # First-week nurture sequence + activity tracking
+│   ├── tips.ts                  # Contextual tips system
 │   ├── partners.ts              # Partner mode backend
 │   ├── notifications.ts         # Notification management
 │   ├── stripe.ts                # Stripe integration
@@ -554,14 +559,115 @@ CLERK_SECRET_KEY=sk_...
 
 ---
 
+## Nurture Sequence & Contextual Tips
+
+**Status:** ✅ Implemented | **Built:** 2026-02-07
+
+### Purpose
+
+Help new users discover app value during their critical first week. Uses push notifications, in-app notifications, and contextual tips to guide users through key features.
+
+### Architecture
+
+```
+User Activity → recordActivity mutation (session tracking)
+  ↓
+Daily Cron (10am UTC) → processNurtureSequence
+  ↓
+Check eligibility: signup day, trial status, last activity
+  ↓
+Send push + in-app notification → mark as sent
+```
+
+### Nurture Messages (Day-Based)
+
+| Key | Day | Title | Trigger |
+|-----|:---:|-------|---------|
+| `day_1_welcome` | 1 | Welcome to Oja! | First-time user |
+| `day_2_pantry` | 2 | Your pantry's looking good! | Has pantry items |
+| `day_3_lists` | 3 | Ready to shop? | Engaged users |
+| `day_5_scan` | 5 | Let Oja do the maths | Users with lists |
+| `trial_ending_3d` | - | 3 days left on your trial | Trial ending soon |
+| `trial_ending_1d` | - | Last day of your trial | Trial ends tomorrow |
+| `trial_ended` | - | Your trial has ended | Trial expired |
+| `inactive_7d` | - | We miss you! | 7+ days inactive |
+
+### Contextual Tips System
+
+Tips are context-aware and dismissible. Once dismissed, a tip won't show again.
+
+| Context | Tips Available |
+|---------|---------------|
+| `pantry` | Stock levels, swipe gestures, search |
+| `lists` | Budget tracking, list sharing |
+| `list_detail` | Check off items, price estimates |
+| `scan` | Receipt scanning tips |
+| `profile` | Settings, subscription |
+| `voice` | Voice commands intro |
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `convex/nurture.ts` | Nurture sequence logic, cron handler, activity tracking |
+| `convex/tips.ts` | Contextual tips queries and mutations |
+| `convex/crons.ts` | Daily nurture-sequence cron (10am UTC) |
+| `hooks/useActivityTracking.ts` | Client-side session tracking (foreground/background) |
+| `components/ui/TipBanner.tsx` | Reusable dismissible tip component |
+
+### Dynamic Trial Messages
+
+Trial messages now calculate actual days remaining instead of hardcoded "7 days":
+
+```typescript
+const trialDays = Math.ceil((trialEndsAt - now) / (24 * 60 * 60 * 1000));
+// "You have 5 days of full access to all features"
+```
+
+### Schema Updates
+
+```typescript
+// Added to users table:
+lastActiveAt: v.optional(v.number()),
+sessionCount: v.optional(v.number()),
+lastSessionAt: v.optional(v.number()),
+
+// New tables:
+nurtureMessages: { userId, messageKey, sentAt, channel }
+  .index("by_user"), .index("by_user_message")
+
+tipsDismissed: { userId, tipKey, dismissedAt }
+  .index("by_user"), .index("by_user_tip")
+```
+
+### Usage
+
+**Display contextual tips:**
+```tsx
+import { TipBanner } from "@/components/ui/TipBanner";
+
+// In your screen component:
+<TipBanner context="pantry" />
+```
+
+**Track user activity (already wired in app layout):**
+```tsx
+import { useActivityTracking } from "@/hooks/useActivityTracking";
+
+// In AppLayout:
+useActivityTracking(); // Records sessions automatically
+```
+
+---
+
 ## Remaining Work
 
 ### High Priority — Retention & Engagement
 
 | Item | Description | Effort |
 |------|-------------|--------|
-| **Push Notifications** | 3 types: stock reminder, streak motivation, weekly digest | High |
-| **First-Week Nurture Sequence** | Day 2/3/5 helpful nudges for new users | Medium |
+| ~~Push Notifications~~ | ✅ Complete — 3 types: stock reminder, streak motivation, weekly digest | ~~High~~ |
+| ~~First-Week Nurture Sequence~~ | ✅ Complete — Day 1-5 nudges, trial reminders, contextual tips | ~~Medium~~ |
 | **Price Intelligence Surface** | "Milk is 12% cheaper at Aldi this month" | High |
 
 ### Validation — Price Intelligence
@@ -576,7 +682,7 @@ CLERK_SECRET_KEY=sk_...
 | Item | Description | Status |
 |------|-------------|--------|
 | **Voice Assistant QA** | Test on dev builds with real speech, diverse accents | Implementation done |
-| **Partner Mode** | Push notification integration remaining | Backend + UI done |
+| ~~Partner Mode~~ | ✅ Complete — Push notification integration done | ~~Backend + UI done~~ |
 | **Admin Dashboard** | Frontend UI needed | Backend done (`convex/admin.ts`) |
 | **E2E Test Fixes** | 10 failures blocking ~35 cascade-skipped tests | See E2E section |
 

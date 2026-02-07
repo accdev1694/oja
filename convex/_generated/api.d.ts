@@ -10,6 +10,7 @@
 
 import type * as admin from "../admin.js";
 import type * as ai from "../ai.js";
+import type * as aiUsage from "../aiUsage.js";
 import type * as crons from "../crons.js";
 import type * as currentPrices from "../currentPrices.js";
 import type * as http from "../http.js";
@@ -21,6 +22,7 @@ import type * as lib_voiceParser from "../lib/voiceParser.js";
 import type * as lib_voiceTools from "../lib/voiceTools.js";
 import type * as listItems from "../listItems.js";
 import type * as notifications from "../notifications.js";
+import type * as nurture from "../nurture.js";
 import type * as pantryItems from "../pantryItems.js";
 import type * as partners from "../partners.js";
 import type * as priceHistory from "../priceHistory.js";
@@ -28,6 +30,7 @@ import type * as receipts from "../receipts.js";
 import type * as shoppingLists from "../shoppingLists.js";
 import type * as stripe from "../stripe.js";
 import type * as subscriptions from "../subscriptions.js";
+import type * as tips from "../tips.js";
 import type * as users from "../users.js";
 
 import type {
@@ -39,6 +42,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   ai: typeof ai;
+  aiUsage: typeof aiUsage;
   crons: typeof crons;
   currentPrices: typeof currentPrices;
   http: typeof http;
@@ -50,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   "lib/voiceTools": typeof lib_voiceTools;
   listItems: typeof listItems;
   notifications: typeof notifications;
+  nurture: typeof nurture;
   pantryItems: typeof pantryItems;
   partners: typeof partners;
   priceHistory: typeof priceHistory;
@@ -57,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   shoppingLists: typeof shoppingLists;
   stripe: typeof stripe;
   subscriptions: typeof subscriptions;
+  tips: typeof tips;
   users: typeof users;
 }>;
 

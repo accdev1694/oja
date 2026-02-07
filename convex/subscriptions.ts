@@ -170,11 +170,14 @@ export const startFreeTrial = mutation({
       updatedAt: now,
     });
 
+    // Calculate trial days for dynamic message
+    const trialDays = Math.ceil((trialEndsAt - now) / (24 * 60 * 60 * 1000));
+
     await ctx.db.insert("notifications", {
       userId: user._id,
       type: "trial_started",
       title: "Premium Trial Started!",
-      body: "You have 7 days of free premium access. Enjoy all features!",
+      body: `You have ${trialDays} days of free premium access. Enjoy all features!`,
       read: false,
       createdAt: now,
     });

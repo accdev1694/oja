@@ -38,6 +38,11 @@ export default defineSchema({
     // Onboarding
     onboardingComplete: v.boolean(),
 
+    // Activity tracking (for nurture sequence)
+    lastActiveAt: v.optional(v.number()), // Last activity timestamp
+    sessionCount: v.optional(v.number()), // Number of app sessions
+    lastSessionAt: v.optional(v.number()), // Start of last session (for "welcome back")
+
     // Admin
     isAdmin: v.optional(v.boolean()),
 
@@ -45,7 +50,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_clerk_id", ["clerkId"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .index("by_created", ["createdAt"]),
 
   // Pantry items (stock tracker)
   pantryItems: defineTable({
@@ -553,4 +559,27 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_active", ["active"]),
+
+  // ─── Nurture Sequence ────────────────────────────────────────────────────────
+  // Tracks which nurture messages have been sent to each user
+
+  nurtureMessages: defineTable({
+    userId: v.id("users"),
+    messageKey: v.string(), // e.g., "day_1_welcome", "day_2_first_list", "trial_ending_3d"
+    sentAt: v.number(),
+    channel: v.union(v.literal("push"), v.literal("in_app"), v.literal("both")),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_message", ["userId", "messageKey"]),
+
+  // ─── Contextual Tips ─────────────────────────────────────────────────────────
+  // Tracks which tips have been dismissed by each user
+
+  tipsDismissed: defineTable({
+    userId: v.id("users"),
+    tipKey: v.string(), // e.g., "swipe_to_change_stock", "tap_to_add_list", "voice_assistant"
+    dismissedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_tip", ["userId", "tipKey"]),
 });
