@@ -3,10 +3,27 @@
  * Used by mutations to check if a user can perform premium actions.
  */
 
+// AI feature limits by plan (monthly)
+export const AI_LIMITS = {
+  voice: {
+    free: 20,
+    premium_monthly: 200,
+    premium_annual: 200,
+  },
+  // Receipts: free users get 3/mo, paid users unlimited (they earn sub discount)
+  receipt: {
+    free: 3,
+    premium_monthly: -1, // unlimited
+    premium_annual: -1, // unlimited
+  },
+} as const;
+
 function getFreeFeatures() {
   return {
     maxLists: 3,
     maxPantryItems: 50,
+    maxReceiptScans: AI_LIMITS.receipt.free,
+    maxVoiceRequests: AI_LIMITS.voice.free,
     receiptScanning: true,
     priceHistory: true,
     partnerMode: true,
@@ -17,9 +34,12 @@ function getFreeFeatures() {
 
 function getPlanFeatures(plan: string) {
   if (plan === "free") return getFreeFeatures();
+  const voiceLimit = AI_LIMITS.voice[plan as keyof typeof AI_LIMITS.voice] ?? 200;
   return {
     maxLists: -1,
     maxPantryItems: -1,
+    maxReceiptScans: -1, // unlimited for paid
+    maxVoiceRequests: voiceLimit,
     receiptScanning: true,
     priceHistory: true,
     partnerMode: true,
@@ -128,4 +148,13 @@ export async function requireFeature(ctx: any, userId: any, feature: string): Pr
   }
 
   return { allowed: true };
+}
+
+/**
+ * Get AI feature limit for a user's plan.
+ */
+export function getAILimit(plan: string, feature: keyof typeof AI_LIMITS): number {
+  const limits = AI_LIMITS[feature];
+  const planKey = plan as keyof typeof limits;
+  return limits[planKey] ?? limits.free;
 }

@@ -918,6 +918,25 @@ export const voiceAssistant = action({
       };
     }
 
+    // Check and increment voice usage
+    const usageResult = await ctx.runMutation(api.aiUsage.incrementUsage, {
+      feature: "voice",
+      tokenCount: 500, // Estimated tokens per voice request
+    }) as { allowed: boolean; usage: number; limit: number; percentage: number; message?: string };
+
+    if (!usageResult.allowed) {
+      return {
+        type: "limit_reached" as const,
+        text: usageResult.message || "You've reached your monthly voice limit. Upgrade for more!",
+        pendingAction: null,
+        usage: {
+          current: usageResult.usage,
+          limit: usageResult.limit,
+          percentage: usageResult.percentage,
+        },
+      };
+    }
+
     const systemPrompt = buildSystemPrompt({
       currentScreen: args.currentScreen,
       activeListId: args.activeListId,

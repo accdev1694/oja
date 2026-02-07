@@ -24,6 +24,17 @@ export default defineSchema({
       })
     ),
 
+    // AI feature settings
+    aiSettings: v.optional(
+      v.object({
+        voiceEnabled: v.boolean(), // User can disable voice assistant
+        usageAlerts: v.boolean(), // Notify at 50%, 80%, 100%
+      })
+    ),
+
+    // Push notifications
+    expoPushToken: v.optional(v.string()), // Expo push token for notifications
+
     // Onboarding
     onboardingComplete: v.boolean(),
 
@@ -487,6 +498,26 @@ export default defineSchema({
     .index("by_receipt", ["receiptId"]),
 
   // === Epic 8: Admin ===
+
+  // === AI Usage Tracking ===
+
+  // Monthly AI usage per user (voice, estimates, etc.)
+  aiUsage: defineTable({
+    userId: v.id("users"),
+    feature: v.string(), // "voice" | "price_estimate" | "list_suggestions"
+    periodStart: v.number(), // Start of billing month
+    periodEnd: v.number(), // End of billing month
+    requestCount: v.number(),
+    tokenCount: v.optional(v.number()), // Estimated tokens used
+    limit: v.number(), // Monthly limit for this feature
+    lastNotifiedAt: v.optional(v.number()), // Last usage notification sent
+    lastNotifiedThreshold: v.optional(v.number()), // 50, 80, or 100
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_feature", ["userId", "feature"])
+    .index("by_user_feature_period", ["userId", "feature", "periodEnd"]),
 
   // Admin audit logs
   adminLogs: defineTable({
