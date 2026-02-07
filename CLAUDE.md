@@ -26,10 +26,12 @@
 | 8. Admin Dashboard | 🔄 In Progress (backend done in `convex/admin.ts`) |
 | 9. Voice Assistant | ✅ Complete (Gemini 2.0 Flash Exp with 25 tools — full CRUD) |
 | 10. List Item Editing | ✅ Complete (edit name, quantity, price via modal) |
+| 11. AI Usage Metering | ✅ Complete (voice limits, usage tracking, push notifications) |
+| 12. Push Notifications | ✅ Complete (Expo Notifications, usage alerts, deep linking) |
 
 **Current Priorities:**
 1. **Dev Build + Voice QA** — Test voice assistant on iOS/Android dev builds (requires native modules)
-2. **Push Notification Integration** — Expo Notifications wiring (backend + UI components already built)
+2. ~~Push Notification Integration~~ ✅ Complete — Expo Notifications wiring done
 3. **Price Bracket Matcher Validation** — Test against 19 real receipts (target >80% accuracy)
 4. **First-Week Nurture Sequence** — Daily helpful nudges for new users (Day 2, 3, 5)
 5. **E2E Test Fixes** — 10 failures blocking ~35 cascade-skipped tests
@@ -866,4 +868,152 @@ User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognit
 
 ---
 
-_Updated 2026-02-06. Expanded from 17 to 25 tools (full CRUD). Added budget status, list details, app summary reads. Added delete list, remove items, clear checked, update budget writes. Changed model from gemini-2.5-flash to gemini-2.0-flash-exp._
+## AI Usage Metering
+
+**Status:** ✅ Implemented | **Built:** 2026-02-07
+
+### Philosophy
+
+- **Receipts are unlimited for paid users** — they feed the data flywheel (more scans = better prices for everyone) and earn subscription discounts
+- **Voice is metered** — pure LLM cost with no data value back to the platform
+- **User consent** — users can disable AI features or usage alerts in settings
+
+### Usage Limits
+
+| Feature | Free | Premium |
+|---------|:----:|:-------:|
+| Voice requests | 20/month | 200/month |
+| Receipt scans | 3/month | Unlimited |
+
+### Notification Thresholds
+
+Push + in-app notifications sent at:
+- **50%** — "Halfway through your voice allowance"
+- **80%** — "80% of voice used, X remaining"
+- **100%** — "Voice limit reached — upgrade for more!"
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `convex/aiUsage.ts` | Usage tracking: increment, check limits, send notifications |
+| `convex/lib/featureGating.ts` | AI_LIMITS configuration (20/200 voice, 3/unlimited receipts) |
+| `convex/schema.ts` | `aiUsage` table + `aiSettings` on users |
+| `app/(app)/ai-usage.tsx` | UI screen: progress bars, stats, settings toggles |
+
+### Schema
+
+```typescript
+// aiUsage table
+aiUsage: defineTable({
+  userId: v.id("users"),
+  feature: v.string(),           // "voice" or "receipt"
+  periodStart: v.number(),       // Start of billing period
+  periodEnd: v.number(),         // End of billing period
+  requestCount: v.number(),      // Requests used
+  limit: v.number(),             // Monthly limit (999999 = unlimited)
+  lastNotifiedThreshold: v.optional(v.number()),
+  ...timestamps
+})
+  .index("by_user_feature_period", ["userId", "feature", "periodEnd"])
+
+// User aiSettings
+aiSettings: v.optional(v.object({
+  voiceEnabled: v.boolean(),     // Can toggle off voice entirely
+  usageAlerts: v.boolean(),      // Push notifications at thresholds
+}))
+```
+
+### API
+
+```typescript
+// Check if feature is available (without incrementing)
+api.aiUsage.canUseFeature({ feature: "voice" })
+// → { allowed: true, usage: 15, limit: 200, percentage: 8 }
+
+// Increment usage (returns allowed status)
+api.aiUsage.incrementUsage({ feature: "voice" })
+// → { allowed: true, usage: 16, limit: 200, percentage: 8 }
+// → { allowed: false, message: "...", ... } // at limit
+
+// Get usage summary for current month
+api.aiUsage.getUsageSummary()
+// → { voice: { usage, limit, percentage }, receipts: {...}, aiSettings }
+
+// Update settings
+api.aiUsage.updateAiSettings({ voiceEnabled: false })
+```
+
+---
+
+## Push Notifications
+
+**Status:** ✅ Implemented | **Built:** 2026-02-07
+
+### Architecture
+
+```
+App loads → usePushNotifications hook
+  → Request permission (physical device only)
+  → Get Expo push token
+  → Save to backend (registerPushToken mutation)
+  → Listen for incoming notifications (foreground)
+  → Listen for notification taps (deep linking)
+```
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `convex/notifications.ts` | Token management + sendPush action |
+| `hooks/usePushNotifications.ts` | Client hook: register, listen, deep link |
+| `app/(app)/_layout.tsx` | Wires usePushNotifications on app load |
+
+### API
+
+```typescript
+// Register push token (called automatically)
+api.notifications.registerPushToken({ token: "ExponentPushToken[...]" })
+
+// Remove token (on logout)
+api.notifications.removePushToken()
+
+// Send push (internal action)
+internal.notifications.sendPush({
+  userId,
+  title: "Voice limit reached",
+  body: "You've used all 200 voice requests this month.",
+  data: { type: "ai_usage", screen: "ai-usage" }
+})
+```
+
+### Deep Linking
+
+When user taps a notification:
+- `data.screen` → navigate to `/(app)/${screen}`
+- `data.type === "ai_usage"` → navigate to `/(app)/ai-usage`
+- `data.listId` → navigate to `/(app)/list/${listId}`
+
+### Android Channel
+
+```typescript
+Notifications.setNotificationChannelAsync("default", {
+  name: "default",
+  importance: Notifications.AndroidImportance.MAX,
+  vibrationPattern: [0, 250, 250, 250],
+  lightColor: "#00D4AA",
+});
+```
+
+### Notification Types
+
+| Type | Trigger | Deep Link |
+|------|---------|-----------|
+| `ai_usage` | 50%, 80%, 100% voice usage | `/ai-usage` |
+| `comment_added` | Partner comments on item | `/list/[id]` |
+| `list_message` | Partner sends list message | `/list/[id]` |
+| `list_approval_*` | Approval workflow updates | `/list/[id]` |
+
+---
+
+_Updated 2026-02-07. Added AI usage metering (voice limits, receipt unlimited for paid). Added push notifications with Expo Push API and deep linking._
