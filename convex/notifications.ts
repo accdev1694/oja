@@ -1,5 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery, internalAction } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 
 export const getByUser = query({
   args: {},
@@ -144,5 +146,141 @@ export const markAllAsRead = mutation({
     }
 
     return { count: unread.length };
+  },
+});
+
+// ─── Push Notifications ─────────────────────────────────────────────────────
+
+/**
+ * Register/update user's Expo push token
+ */
+export const registerPushToken = mutation({
+  args: {
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    // Only update if token changed
+    if (user.expoPushToken !== args.token) {
+      await ctx.db.patch(user._id, {
+        expoPushToken: args.token,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+/**
+ * Remove user's push token (on logout or permission revoke)
+ */
+export const removePushToken = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    if (user.expoPushToken) {
+      await ctx.db.patch(user._id, {
+        expoPushToken: undefined,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+/**
+ * Internal action: Send push notification via Expo Push API
+ */
+export const sendPush = internalAction({
+  args: {
+    userId: v.id("users"),
+    title: v.string(),
+    body: v.string(),
+    data: v.optional(v.any()),
+  },
+  handler: async (ctx, args): Promise<{ sent: boolean; reason?: string; ticketId?: string }> => {
+    // Get user's push token
+    const user = await ctx.runQuery(internal.notifications.getUserPushToken, {
+      userId: args.userId,
+    }) as { expoPushToken?: string } | null;
+
+    if (!user?.expoPushToken) {
+      console.log(`[sendPush] No push token for user ${args.userId}`);
+      return { sent: false, reason: "no_token" };
+    }
+
+    // Validate Expo push token format
+    if (!user.expoPushToken.startsWith("ExponentPushToken[")) {
+      console.warn(`[sendPush] Invalid token format for user ${args.userId}`);
+      return { sent: false, reason: "invalid_token" };
+    }
+
+    try {
+      const response = await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Accept-Encoding": "gzip, deflate",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: user.expoPushToken,
+          title: args.title,
+          body: args.body,
+          data: args.data ?? {},
+          sound: "default",
+          priority: "high",
+        }),
+      });
+
+      const result = await response.json() as { data?: { status?: string; message?: string; id?: string } };
+
+      if (result.data?.status === "error") {
+        console.error(`[sendPush] Expo error:`, result.data.message);
+        return { sent: false, reason: result.data.message };
+      }
+
+      console.log(`[sendPush] Sent to user ${args.userId}:`, args.title);
+      return { sent: true, ticketId: result.data?.id };
+    } catch (error) {
+      console.error(`[sendPush] Failed:`, error);
+      return { sent: false, reason: "fetch_error" };
+    }
+  },
+});
+
+/**
+ * Internal query: Get user's push token (for use by sendPush action)
+ */
+export const getUserPushToken = internalQuery({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return null;
+    return {
+      expoPushToken: user.expoPushToken,
+      preferences: user.preferences,
+      aiSettings: user.aiSettings,
+    };
   },
 });
