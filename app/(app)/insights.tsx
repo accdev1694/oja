@@ -1071,9 +1071,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
-    paddingHorizontal: 6,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: borderRadius.sm,
   },
   changeText: {
     fontSize: 11,
@@ -1181,9 +1181,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 3,
     backgroundColor: `${colors.accent.warning}15`,
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    borderRadius: 10,
+    borderRadius: borderRadius.sm,
   },
   streakBestText: {
     ...typography.bodySmall,
@@ -1202,14 +1202,14 @@ const styles = StyleSheet.create({
     width: "47%",
     alignItems: "center",
     backgroundColor: colors.glass.background,
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
     padding: spacing.md,
-    gap: 6,
+    gap: spacing.sm,
   },
   bestIconCircle: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1227,9 +1227,9 @@ const styles = StyleSheet.create({
   // Achievements
   achievementCountBadge: {
     backgroundColor: `${colors.accent.secondary}30`,
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: borderRadius.sm,
   },
   achievementCountText: {
     ...typography.bodySmall,

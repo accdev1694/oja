@@ -22,6 +22,7 @@ import {
   colors,
   typography,
   spacing,
+  borderRadius,
   useGlassAlert,
 } from "@/components/ui/glass";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -424,7 +425,7 @@ const styles = StyleSheet.create({
   skeletonSectionTitle: {
     width: 80,
     height: 14,
-    borderRadius: 4,
+    borderRadius: borderRadius.sm,
     backgroundColor: colors.glass.backgroundStrong,
     marginBottom: spacing.sm,
     marginLeft: spacing.xs,
@@ -453,7 +454,7 @@ const styles = StyleSheet.create({
   avatarContainer: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: borderRadius.full,
     backgroundColor: `${colors.semantic.profile}20`,
     justifyContent: "center",
     alignItems: "center",
@@ -543,7 +544,7 @@ const styles = StyleSheet.create({
   navIcon: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: borderRadius.full,
     justifyContent: "center",
     alignItems: "center",
   },

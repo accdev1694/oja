@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     backgroundColor: `${colors.accent.warm}15`,
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    marginHorizontal: spacing.md,
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: `${colors.accent.warm}30`,

@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect, startTransition } from "react";
 import {
   View,
   Text,
@@ -122,7 +122,6 @@ export default function PantryScreen() {
 
   // View mode: "attention" shows only Low+Out items, "all" shows everything
   const [viewMode, setViewMode] = useState<PantryViewMode>("attention");
-  const hasInteracted = useRef(false);
 
   // Sliding pill animation: 0 = attention (left), 1 = all (right)
   const tabProgress = useSharedValue(0);
@@ -541,24 +540,33 @@ export default function PantryScreen() {
     groupedItems[item.category].push(item);
   });
 
+  // Convert to sections format for SectionList
+  const sections = Object.entries(groupedItems).map(([category, items]) => ({
+    title: category,
+    data: items,
+  }));
+
   const activeFilterCount = 5 - stockFilters.size;
 
   const handleViewModeSwitch = (mode: PantryViewMode) => {
     if (mode === viewMode) return;
-    hasInteracted.current = true;
     impactAsync(ImpactFeedbackStyle.Light);
-    setViewMode(mode);
-    // Spring the pill — overshoot is clipped by container overflow: hidden
+
+    // Animate the pill immediately (high priority)
     tabProgress.value = withSpring(mode === "all" ? 1 : 0, {
       damping: 18,
       stiffness: 180,
     });
-    // Reset filters when switching modes
-    setSearchQuery("");
-    // Collapse all categories in "all" mode so only headers render (fast)
-    if (mode === "all" && categories.length > 0) {
-      setCollapsedCategories(new Set(categories));
-    }
+
+    // Defer list re-render to keep UI responsive
+    startTransition(() => {
+      setViewMode(mode);
+      setSearchQuery("");
+      // Collapse all categories in "all" mode so only headers render (fast)
+      if (mode === "all" && categories.length > 0) {
+        setCollapsedCategories(new Set(categories));
+      }
+    });
   };
 
   return (
@@ -585,23 +593,21 @@ export default function PantryScreen() {
                 <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
                 <Text style={styles.addButtonText}>Add</Text>
               </Pressable>
-              {viewMode === "all" && (
-                <Pressable
-                  style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
-                  onPress={() => setFilterVisible(true)}
-                >
-                  <MaterialCommunityIcons
-                    name="tune-variant"
-                    size={22}
-                    color={activeFilterCount > 0 ? colors.accent.primary : colors.text.secondary}
-                  />
-                  {activeFilterCount > 0 && (
-                    <View style={styles.filterBadge}>
-                      <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-                    </View>
-                  )}
-                </Pressable>
-              )}
+              <Pressable
+                style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
+                onPress={() => setFilterVisible(true)}
+              >
+                <MaterialCommunityIcons
+                  name="tune-variant"
+                  size={22}
+                  color={activeFilterCount > 0 ? colors.accent.primary : colors.text.secondary}
+                />
+                {activeFilterCount > 0 && (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                  </View>
+                )}
+              </Pressable>
             </View>
           }
         />
@@ -670,30 +676,25 @@ export default function PantryScreen() {
           </Pressable>
         </View>
 
-        {/* Search & filters — only in "all" mode */}
-        {viewMode === "all" && (
-          <>
-            <View style={styles.searchContainer}>
-              <GlassSearchInput
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                onClear={() => setSearchQuery("")}
-                placeholder="Search stock..."
-              />
-            </View>
+        {/* Search field — shown in both modes */}
+        <View style={styles.searchContainer}>
+          <GlassSearchInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onClear={() => setSearchQuery("")}
+            placeholder="Search stock..."
+          />
+        </View>
 
-          </>
-        )}
-
-        {/* Content */}
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom }]}
-          showsVerticalScrollIndicator={false}
-        >
-          {viewMode === "attention" ? (
-            // Attention mode: flat list, no category grouping
-            filteredItems.length === 0 ? (
+        {/* Content — ScrollView with collapsible categories for both modes */}
+        {viewMode === "attention" ? (
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom }]}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Empty state for attention mode */}
+            {filteredItems.length === 0 ? (
               <View style={styles.attentionEmptyContainer}>
                 <MaterialCommunityIcons
                   name="check-circle-outline"
@@ -706,17 +707,20 @@ export default function PantryScreen() {
                 </Text>
               </View>
             ) : (
-              <View style={styles.itemList}>
-                <View style={styles.hintRow}>
-                  <TypewriterHint text="Swipe left/right to adjust stock level" />
-                </View>
+              <>
+                {/* Hint row */}
+                {Object.keys(groupedItems).some((cat) => !collapsedCategories.has(cat)) && (
+                  <View style={styles.hintRow}>
+                    <TypewriterHint text="Swipe left/right to adjust stock level" />
+                  </View>
+                )}
+
                 {/* Journey prompt: bridge Stock → Lists */}
                 {outCount > 0 && (
                   <Pressable
                     onPress={async () => {
                       impactAsync(ImpactFeedbackStyle.Light);
                       try {
-                        // Get or create a list, then add all out-of-stock items
                         let listId;
                         if (activeLists && activeLists.length > 0) {
                           listId = activeLists[0]._id;
@@ -724,7 +728,7 @@ export default function PantryScreen() {
                           const listName = `Shopping List ${new Date().toLocaleDateString()}`;
                           listId = await createList({ name: listName, budget: 50 });
                         }
-                        const result = await addFromPantryOut({ listId });
+                        await addFromPantryOut({ listId });
                         notificationAsync(NotificationFeedbackType.Success);
                         router.navigate(`/(app)/list/${listId}` as any);
                       } catch (error) {
@@ -751,23 +755,71 @@ export default function PantryScreen() {
                     </GlassCard>
                   </Pressable>
                 )}
-                {filteredItems.map((item, index) => (
-                  <PantryItemRow
-                    key={item._id}
-                    item={item}
-                    onSwipeDecrease={() => handleSwipeDecrease(item)}
-                    onSwipeIncrease={() => handleSwipeIncrease(item)}
-                    onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
-                    onRemove={() => handleRemoveItem(item)}
-                    onAddToList={() => handleAddToList(item)}
-                    animationDelay={hasInteracted.current ? 0 : index * 50}
-                  />
-                ))}
-              </View>
-            )
-          ) : (
-            // All Items mode: grouped by category with collapsible sections
-            <>
+
+                {/* Category sections — same collapsible pattern as All Items */}
+                {Object.entries(groupedItems).map(([category, categoryItems]) => {
+                  const isCollapsed = collapsedCategories.has(category);
+
+                  const toggleCategory = () => {
+                    impactAsync(ImpactFeedbackStyle.Light);
+                    setCollapsedCategories((prev) => {
+                      const newSet = new Set(prev);
+                      if (newSet.has(category)) {
+                        newSet.delete(category);
+                      } else {
+                        newSet.add(category);
+                      }
+                      return newSet;
+                    });
+                  };
+
+                  return (
+                    <View key={category} style={styles.categorySection}>
+                      <TouchableOpacity
+                        style={styles.categoryHeader}
+                        onPress={toggleCategory}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.categoryTitleRow}>
+                          <Text style={styles.categoryTitle}>{category}</Text>
+                          <View style={styles.categoryCountBadge}>
+                            <Text style={styles.categoryCount}>{categoryItems.length}</Text>
+                          </View>
+                        </View>
+                        <MaterialCommunityIcons
+                          name={isCollapsed ? "chevron-right" : "chevron-down"}
+                          size={24}
+                          color={colors.text.tertiary}
+                        />
+                      </TouchableOpacity>
+
+                      {!isCollapsed && (
+                        <View style={styles.itemList}>
+                          {categoryItems.map((item) => (
+                            <PantryItemRow
+                              key={item._id}
+                              item={item}
+                              onSwipeDecrease={() => handleSwipeDecrease(item)}
+                              onSwipeIncrease={() => handleSwipeIncrease(item)}
+                              onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
+                              onRemove={() => handleRemoveItem(item)}
+                              onAddToList={() => handleAddToList(item)}
+                            />
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </>
+            )}
+          </ScrollView>
+        ) : (
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom }]}
+            showsVerticalScrollIndicator={false}
+          >
             {Object.keys(groupedItems).some((cat) => !collapsedCategories.has(cat)) && (
               <View style={styles.hintRow}>
                 <TypewriterHint text="Swipe left/right to adjust stock level" />
@@ -811,7 +863,7 @@ export default function PantryScreen() {
 
                   {!isCollapsed && (
                     <View style={styles.itemList}>
-                      {categoryItems.map((item, index) => (
+                      {categoryItems.map((item) => (
                         <PantryItemRow
                           key={item._id}
                           item={item}
@@ -820,7 +872,6 @@ export default function PantryScreen() {
                           onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
                           onRemove={() => handleRemoveItem(item)}
                           onAddToList={() => handleAddToList(item)}
-                          animationDelay={hasInteracted.current ? 0 : index * 50}
                         />
                       ))}
                     </View>
@@ -828,9 +879,8 @@ export default function PantryScreen() {
                 </View>
               );
             })}
-            </>
-          )}
-        </ScrollView>
+          </ScrollView>
+        )}
 
         {/* Added-to-list Toast */}
         {toastVisible && (
@@ -1139,7 +1189,6 @@ function PantryItemRow({
   onMeasure,
   onRemove,
   onAddToList,
-  animationDelay = 0,
 }: {
   item: {
     _id: Id<"pantryItems">;
@@ -1159,7 +1208,6 @@ function PantryItemRow({
   onMeasure: (x: number, y: number) => void;
   onRemove: () => void;
   onAddToList: () => void;
-  animationDelay?: number;
 }) {
   const cardRef = useRef<View>(null);
 
@@ -1186,9 +1234,10 @@ function PantryItemRow({
         ? "Running low"
         : "Out of stock";
 
+  // Skip entering animations entirely - with 80+ items, staggered FadeIn causes noticeable delay
+  // Keep exiting animation for smooth removal feedback
   return (
     <Animated.View
-      entering={FadeIn.delay(animationDelay).duration(200)}
       exiting={FadeOut.duration(150)}
       style={styles.itemRowContainer}
     >
@@ -1318,7 +1367,7 @@ function AddedToListToast({ itemName, y }: { itemName: string; y: number }) {
             position: "absolute",
             width: 100,
             height: 44,
-            borderRadius: 22,
+            borderRadius: borderRadius.full,
             borderWidth: 2,
             borderColor: colors.accent.success,
           },
@@ -1334,10 +1383,10 @@ function AddedToListToast({ itemName, y }: { itemName: string; y: number }) {
             backgroundColor: colors.background.primary,
             borderWidth: 1.5,
             borderColor: colors.accent.success,
-            borderRadius: 22,
-            paddingVertical: 10,
-            paddingHorizontal: 18,
-            gap: 8,
+            borderRadius: borderRadius.full,
+            paddingVertical: spacing.sm,
+            paddingHorizontal: spacing.xl,
+            gap: spacing.sm,
           },
           pillStyle,
         ]}
@@ -1358,7 +1407,7 @@ const styles = StyleSheet.create({
   // Skeleton loading styles
   skeletonContainer: {
     flex: 1,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
   skeletonSection: {
@@ -1374,13 +1423,13 @@ const styles = StyleSheet.create({
   skeletonTitle: {
     width: 100,
     height: 20,
-    borderRadius: 6,
+    borderRadius: borderRadius.sm,
     backgroundColor: colors.glass.backgroundStrong,
   },
   skeletonBadge: {
     width: 30,
     height: 20,
-    borderRadius: 10,
+    borderRadius: borderRadius.sm,
     backgroundColor: colors.glass.backgroundStrong,
   },
   // Empty state
@@ -1393,7 +1442,7 @@ const styles = StyleSheet.create({
   // View mode tabs
   viewModeTabs: {
     flexDirection: "row",
-    marginHorizontal: spacing.xl,
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
     backgroundColor: colors.glass.background,
     borderRadius: borderRadius.lg,
@@ -1439,7 +1488,7 @@ const styles = StyleSheet.create({
   },
   viewModeBadge: {
     backgroundColor: colors.glass.backgroundHover,
-    paddingHorizontal: 6,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 1,
     borderRadius: borderRadius.full,
     minWidth: 22,
@@ -1471,7 +1520,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingTop: spacing["5xl"],
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     gap: spacing.md,
   },
   attentionEmptyTitle: {
@@ -1486,13 +1535,13 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   searchContainer: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
   },
   filterButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.glass.background,
     alignItems: "center",
     justifyContent: "center",
@@ -1505,12 +1554,12 @@ const styles = StyleSheet.create({
     top: -2,
     right: -2,
     backgroundColor: colors.accent.primary,
-    borderRadius: 10,
+    borderRadius: borderRadius.sm,
     minWidth: 18,
     height: 18,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 4,
+    paddingHorizontal: spacing.xs,
   },
   filterBadgeText: {
     ...typography.labelSmall,
@@ -1518,7 +1567,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   hintRow: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },
   hintText: {
@@ -1531,7 +1580,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
   },
   categorySection: {
@@ -1670,7 +1719,7 @@ const styles = StyleSheet.create({
     gap: 4,
     height: 38,
     paddingHorizontal: spacing.md,
-    borderRadius: 19,
+    borderRadius: borderRadius.full,
     backgroundColor: `${colors.accent.primary}20`,
     borderWidth: 1,
     borderColor: `${colors.accent.primary}40`,
@@ -1692,7 +1741,7 @@ const styles = StyleSheet.create({
   addInput: {
     width: "100%",
     backgroundColor: colors.glass.background,
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     color: colors.text.primary,
@@ -1716,7 +1765,7 @@ const styles = StyleSheet.create({
   addChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: 20,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.glass.background,
     borderWidth: 1,
     borderColor: colors.glass.border,
@@ -1743,7 +1792,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: 10,
+    borderRadius: borderRadius.sm,
     backgroundColor: colors.glass.background,
     borderWidth: 1,
     borderColor: colors.glass.border,

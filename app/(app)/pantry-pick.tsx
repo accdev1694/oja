@@ -452,15 +452,15 @@ const styles = StyleSheet.create({
   stockBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    borderRadius: 10,
+    borderRadius: borderRadius.sm,
   },
   stockDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: borderRadius.full,
   },
   stockText: {
     fontSize: 11,

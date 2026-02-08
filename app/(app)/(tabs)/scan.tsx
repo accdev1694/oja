@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 120,
     height: 120,
-    borderRadius: 60,
+    borderRadius: borderRadius.full,
     backgroundColor: `${colors.semantic.scan}20`,
     justifyContent: "center",
     alignItems: "center",
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
   instructionNumber: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.glass.backgroundStrong,
     justifyContent: "center",
     alignItems: "center",
@@ -661,7 +661,7 @@ const styles = StyleSheet.create({
   parsingIcon: {
     width: 100,
     height: 100,
-    borderRadius: 50,
+    borderRadius: borderRadius.full,
     backgroundColor: `${colors.accent.primary}20`,
     justifyContent: "center",
     alignItems: "center",

@@ -1023,7 +1023,7 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
   },
   statusText: {
     ...typography.labelSmall,
@@ -1031,7 +1031,7 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     padding: spacing.xs,
-    borderRadius: 8,
+    borderRadius: borderRadius.sm,
     backgroundColor: `${colors.semantic.danger}15`,
   },
   budgetRow: {
@@ -1097,12 +1097,12 @@ const styles = StyleSheet.create({
   },
   tabBadge: {
     backgroundColor: colors.accent.primary,
-    borderRadius: 10,
+    borderRadius: borderRadius.sm,
     minWidth: 20,
     height: 20,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 6,
+    paddingHorizontal: spacing.sm,
   },
   tabBadgeText: {
     ...typography.labelSmall,
@@ -1196,7 +1196,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.glass.background,
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.glass.border,
     paddingHorizontal: spacing.md,
