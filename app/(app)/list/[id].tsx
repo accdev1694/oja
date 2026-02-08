@@ -45,8 +45,6 @@ import {
 } from "@/components/ui/glass";
 import { CategoryFilter } from "@/components/ui/CategoryFilter";
 import { usePartnerRole } from "@/hooks/usePartnerRole";
-import { RemoveButton } from "@/components/ui/RemoveButton";
-import { AddToListButton } from "@/components/ui/AddToListButton";
 import {
   ApprovalBadge,
   ApprovalActions,
@@ -155,6 +153,7 @@ export default function ListDetailScreen() {
   const addItem = useMutation(api.listItems.create);
   const updateItem = useMutation(api.listItems.update);
   const removeItem = useMutation(api.listItems.remove);
+  const removeMultipleItems = useMutation(api.listItems.removeMultiple);
   const startShopping = useMutation(api.shoppingLists.startShopping);
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
 
@@ -256,6 +255,9 @@ export default function ListDetailScreen() {
 
   // Category filter for items list
   const [listCategoryFilter, setListCategoryFilter] = useState<string | null>(null);
+
+  // Bulk selection state (checkboxes always visible)
+  const [selectedItems, setSelectedItems] = useState<Set<Id<"listItems">>>(new Set());
 
   // Progressive disclosure states (Criterion 1: Simplicity)
   const [addFormVisible, setAddFormVisible] = useState(false);
@@ -439,22 +441,7 @@ export default function ListDetailScreen() {
   async function handleToggleItem(itemId: Id<"listItems">) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Find the item
-    const item = items?.find((i) => i._id === itemId);
-    if (!item) return;
-
-    // If in shopping mode and checking (not unchecking), show actual price modal
-    if (list?.status === "shopping" && !item.isChecked) {
-      setCheckingItemId(itemId);
-      setCheckingItemName(item.name);
-      setCheckingItemEstPrice(item.estimatedPrice || 0);
-      setCheckingItemQuantity(item.quantity);
-      setActualPriceValue(item.estimatedPrice?.toString() || "");
-      setShowActualPriceModal(true);
-      return;
-    }
-
-    // Otherwise, just toggle (for unchecking or non-shopping mode)
+    // Simply toggle the item checked state (strikethrough)
     try {
       await toggleChecked({ id: itemId });
       onMundaneAction(); // Surprise delight on check-off
@@ -697,6 +684,58 @@ export default function ListDetailScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Remove", style: "destructive", onPress: doRemove },
     ]);
+  }
+
+  // Selection mode functions
+  function toggleItemSelection(itemId: Id<"listItems">) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }
+
+  function selectAllItems() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (items) {
+      setSelectedItems(new Set(items.map((i) => i._id)));
+    }
+  }
+
+  function clearSelection() {
+    setSelectedItems(new Set());
+  }
+
+  async function handleBulkDelete() {
+    if (selectedItems.size === 0) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const count = selectedItems.size;
+
+    const doDelete = async () => {
+      try {
+        await removeMultipleItems({ ids: Array.from(selectedItems) });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        clearSelection();
+      } catch (error) {
+        console.error("Failed to delete items:", error);
+        alert("Error", "Failed to delete items");
+      }
+    };
+
+    alert(
+      "Delete Items",
+      `Delete ${count} selected ${count === 1 ? "item" : "items"}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: doDelete },
+      ]
+    );
   }
 
   function handleEditItem(item: ListItem) {
@@ -1326,7 +1365,27 @@ export default function ListDetailScreen() {
             </View>
           ) : (
             <View style={styles.itemsContainer}>
-              <Text style={styles.sectionTitle}>Items ({items.length})</Text>
+              <View style={styles.itemsHeader}>
+                <Text style={styles.sectionTitle}>Items ({items.length})</Text>
+                <View style={styles.selectionActions}>
+                  <Pressable
+                    onPress={selectAllItems}
+                    style={styles.selectButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.selectButtonText}>All</Text>
+                  </Pressable>
+                  {selectedItems.size > 0 && (
+                    <Pressable
+                      onPress={clearSelection}
+                      style={styles.selectButton}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[styles.selectButtonText, { color: colors.text.tertiary }]}>Clear</Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
               {(() => {
                 const listCategories = [...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort();
                 const listCategoryCounts: Record<string, number> = {};
@@ -1376,6 +1435,8 @@ export default function ListDetailScreen() {
                         onApprove={() => handleApproveItem(item._id)}
                         onReject={() => handleRejectItem(item._id)}
                         onOpenComments={hasPartners ? () => openCommentThread(item._id, item.name) : undefined}
+                        isSelected={selectedItems.has(item._id)}
+                        onSelectToggle={() => toggleItemSelection(item._id)}
                       />
                     ))}
                   </>
@@ -1388,6 +1449,26 @@ export default function ListDetailScreen() {
           <View style={styles.bottomSpacer} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Selection Bar — shown when items are selected */}
+      {selectedItems.size > 0 && (
+        <View style={styles.selectionBar}>
+          <Text style={styles.selectionBarText}>
+            {selectedItems.size} {selectedItems.size === 1 ? "item" : "items"} selected
+          </Text>
+          <Pressable
+            onPress={handleBulkDelete}
+            style={styles.deleteSelectedButton}
+          >
+            <MaterialCommunityIcons
+              name="trash-can-outline"
+              size={20}
+              color="#fff"
+            />
+            <Text style={styles.deleteSelectedText}>Delete</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* Edit Budget Modal */}
       <GlassModal
@@ -1893,6 +1974,9 @@ interface ShoppingListItemProps {
   onApprove?: () => void;
   onReject?: () => void;
   onOpenComments?: () => void;
+  // Selection props (checkboxes always visible)
+  isSelected?: boolean;
+  onSelectToggle?: () => void;
 }
 
 // ── Typewriter hint for shopping mode ─────────────────────────────────
@@ -1986,6 +2070,8 @@ function ShoppingListItem({
   onApprove,
   onReject,
   onOpenComments,
+  isSelected,
+  onSelectToggle,
 }: ShoppingListItemProps) {
   const translateX = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -2040,24 +2126,8 @@ function ShoppingListItem({
       translateX.value = withSpring(0, { damping: 15 });
     });
 
-  // Tap gesture for checking off items in shopping mode
-  const tapGesture = Gesture.Tap()
-    .onStart(() => {
-      scale.value = withSpring(0.98, animations.spring.stiff);
-    })
-    .onEnd(() => {
-      scale.value = withSpring(1, animations.spring.gentle);
-      if (isShopping) {
-        runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
-        runOnJS(onToggle)();
-      }
-    });
-
-  // Compose gestures - tap and pan work together
-  const composedGesture = Gesture.Simultaneous(
-    tapGesture,
-    panGesture
-  );
+  // Only use pan gesture for priority swipes (tap is handled by Pressable)
+  const composedGesture = panGesture;
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -2105,23 +2175,43 @@ function ShoppingListItem({
               style={[styles.itemCard, item.isChecked && styles.itemCardChecked, item.approvalStatus === "pending" && styles.itemCardPending]}
             >
               <View style={styles.itemRow}>
-                {/* Checkbox — only visible during shopping mode */}
-                {isShopping ? (
-                  <GlassCircularCheckbox
-                    checked={item.isChecked}
-                    onToggle={onToggle}
-                    size="md"
+                {/* Selection checkbox — always visible */}
+                <Pressable
+                  onPress={onSelectToggle}
+                  style={styles.selectionCheckbox}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialCommunityIcons
+                    name={isSelected ? "checkbox-marked" : "checkbox-blank-outline"}
+                    size={22}
+                    color={isSelected ? colors.accent.primary : colors.text.tertiary}
                   />
-                ) : (
-                  /* Bullet indicator in planning mode */
-                  <View style={styles.planningBullet}>
-                    <View style={styles.planningBulletDot} />
-                  </View>
-                )}
+                </Pressable>
 
-                {/* Item content */}
-                <View style={styles.itemContent}>
-                  <View style={styles.itemNameRow}>
+                {/* Tappable area for checking off in shopping mode */}
+                <Pressable
+                  style={styles.itemTappableArea}
+                  onPress={
+                    isShopping
+                      ? () => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          onToggle();
+                        }
+                      : undefined
+                  }
+                  disabled={!isShopping}
+                >
+                  {/* Shopping mode checkbox — visible during shopping */}
+                  {isShopping && (
+                    <GlassCircularCheckbox
+                      checked={item.isChecked}
+                      onToggle={onToggle}
+                      size="md"
+                    />
+                  )}
+
+                  {/* Pair 1: Icon + Name */}
+                  <View style={styles.itemPairLeft}>
                     <MaterialCommunityIcons
                       name={iconResult.icon as keyof typeof MaterialCommunityIcons.glyphMap}
                       size={18}
@@ -2135,96 +2225,50 @@ function ShoppingListItem({
                     </Text>
                   </View>
 
-                  <View style={styles.itemDetails}>
-                    {/* Must-have indicator — only show for urgent items */}
-                    {currentPriority === "must-have" && (
-                      <View style={styles.mustHaveIndicator}>
-                        <MaterialCommunityIcons
-                          name="alert-circle"
-                          size={14}
-                          color={colors.semantic.danger}
-                        />
-                      </View>
-                    )}
-
-                    <View style={styles.quantityBadge}>
-                      <Text style={styles.quantityText}>×{item.quantity}</Text>
-                    </View>
-
-                    {item.estimatedPrice && (
-                      <Text style={styles.itemPrice}>
-                        £{(item.estimatedPrice * item.quantity).toFixed(2)}
-                      </Text>
-                    )}
-
-                    {item.actualPrice && isShopping && (
-                      <View style={styles.actualPriceBadge}>
-                        <Text style={styles.actualPriceText}>
-                          £{(item.actualPrice * item.quantity).toFixed(2)}
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* Approval Badge */}
-                    {item.approvalStatus && (
-                      <ApprovalBadge status={item.approvalStatus} compact />
-                    )}
+                  {/* Pair 2: Qty + Price */}
+                  <View style={styles.itemPairCenter}>
+                    <Text style={[styles.quantityText, item.isChecked && styles.quantityTextChecked]}>
+                      ×{item.quantity}
+                    </Text>
+                    <Text style={[styles.itemPrice, item.isChecked && styles.itemPriceChecked]}>
+                      £{((item.actualPrice || item.estimatedPrice || 0) * item.quantity).toFixed(2)}
+                    </Text>
                   </View>
+                </Pressable>
 
-                  {/* Approval Actions for pending items — owner or approver partner */}
-                  {item.approvalStatus === "pending" && (isOwner || canApprove) && (
-                    <ApprovalActions
-                      onApprove={onApprove ?? (() => {})}
-                      onReject={onReject ?? (() => {})}
-                    />
+                {/* Pair 3: Edit + Delete */}
+                <View style={styles.itemPairRight}>
+                  {!item.isChecked && (
+                    <Pressable
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        onEdit();
+                      }}
+                      style={styles.iconButton}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <MaterialCommunityIcons
+                        name="pencil-outline"
+                        size={18}
+                        color={colors.text.tertiary}
+                      />
+                    </Pressable>
                   )}
-                </View>
-
-                {/* Comment button */}
-                {onOpenComments && (
-                  <Pressable
-                    style={styles.commentButton}
-                    onPress={onOpenComments}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <MaterialCommunityIcons
-                      name="comment-text-outline"
-                      size={16}
-                      color={colors.text.secondary}
-                    />
-                    {(commentCount ?? 0) > 0 && (
-                      <View style={styles.commentCountBadge}>
-                        <Text style={styles.commentCountText}>{commentCount}</Text>
-                      </View>
-                    )}
-                  </Pressable>
-                )}
-
-                {/* Add to another list button */}
-                {onAddToList && !isShopping && (
-                  <AddToListButton onPress={onAddToList} size="md" />
-                )}
-
-                {/* Edit button */}
-                {!item.isChecked && (
                   <Pressable
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      onEdit();
+                      onRemove();
                     }}
-                    style={styles.editButton}
+                    style={styles.iconButton}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <MaterialCommunityIcons
-                      name="pencil-outline"
+                      name="trash-can-outline"
                       size={18}
-                      color={colors.text.tertiary}
+                      color={colors.semantic.danger}
                     />
                   </Pressable>
-                )}
-
-                {/* Remove button */}
-                <RemoveButton onPress={onRemove} size="md" />
+                </View>
               </View>
             </GlassCard>
           </Animated.View>
@@ -2282,11 +2326,6 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-  },
-  editButton: {
-    padding: spacing.xs,
-    borderRadius: borderRadius.sm,
-    backgroundColor: `${colors.text.tertiary}15`,
   },
   // Shopping Mode Container
   shoppingModeContainer: {
@@ -2440,7 +2479,65 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.labelLarge,
     color: colors.text.secondary,
+  },
+
+  // Items header with select button
+  itemsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: spacing.xs,
+  },
+  selectButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  selectButtonText: {
+    ...typography.labelSmall,
+    color: colors.text.secondary,
+  },
+  selectionActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+
+  // Selection bar at bottom
+  selectionBar: {
+    position: "absolute",
+    bottom: 100,
+    left: spacing.lg,
+    right: spacing.lg,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.glass.card,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  selectionBarText: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+  },
+  deleteSelectedButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.semantic.danger,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  deleteSelectedText: {
+    ...typography.labelMedium,
+    color: "#fff",
+    fontWeight: "600",
   },
 
   // Pending approval banner
@@ -2508,30 +2605,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  planningBullet: {
-    width: 24,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
+  selectionCheckbox: {
+    marginRight: spacing.xs,
   },
-  planningBulletDot: {
-    width: 8,
-    height: 8,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.text.tertiary,
-    opacity: 0.5,
-  },
-  itemContent: {
+  itemTappableArea: {
     flex: 1,
-  },
-  itemNameRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
+    gap: spacing.sm,
+  },
+  itemPairLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  itemPairCenter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  itemPairRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   itemName: {
-    ...typography.bodyLarge,
+    ...typography.bodyMedium,
     color: colors.text.primary,
     flex: 1,
   },
@@ -2539,11 +2640,8 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
     color: colors.text.tertiary,
   },
-  itemDetails: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    flexWrap: "wrap",
+  iconButton: {
+    padding: spacing.xs,
   },
   priorityBadge: {
     flexDirection: "row",
@@ -2558,28 +2656,23 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
   },
-  quantityBadge: {
-    backgroundColor: colors.glass.backgroundStrong,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
   quantityText: {
-    ...typography.labelSmall,
-    color: colors.text.secondary,
-  },
-  itemPrice: {
     ...typography.bodySmall,
     color: colors.text.secondary,
   },
-  actualPriceBadge: {
-    backgroundColor: `${colors.accent.primary}20`,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
+  quantityTextChecked: {
+    color: colors.text.tertiary,
   },
-  actualPriceText: {
-    ...typography.labelSmall,
+  itemPrice: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    fontWeight: "600",
+  },
+  itemPriceChecked: {
+    color: colors.text.tertiary,
+  },
+  actualPriceInline: {
+    ...typography.bodyMedium,
     color: colors.accent.primary,
     fontWeight: "600",
   },
@@ -2959,33 +3052,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: colors.text.primary,
     fontWeight: "800" as const,
-  },
-  commentButton: {
-    position: "relative" as const,
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.glass.background,
-    justifyContent: "center" as const,
-    alignItems: "center" as const,
-  },
-  commentCountBadge: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    minWidth: 16,
-    height: 16,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.accent.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing.xs,
-  },
-  commentCountText: {
-    ...typography.labelSmall,
-    fontSize: 9,
-    color: colors.text.primary,
-    fontWeight: "800",
   },
 
   // Edit budget modal styles

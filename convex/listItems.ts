@@ -312,6 +312,44 @@ export const remove = mutation({
 });
 
 /**
+ * Remove multiple items at once (bulk delete)
+ */
+export const removeMultiple = mutation({
+  args: { ids: v.array(v.id("listItems")) },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    if (args.ids.length === 0) {
+      return { success: true, deleted: 0 };
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    let deleted = 0;
+    for (const id of args.ids) {
+      const item = await ctx.db.get(id);
+      if (!item) continue;
+
+      const perms = await getUserListPermissions(ctx, item.listId, user._id);
+      // Owner can always remove. Editors/approvers can remove their own items.
+      if (perms.isOwner || (perms.canEdit && item.userId === user._id)) {
+        await ctx.db.delete(id);
+        deleted++;
+      }
+    }
+
+    return { success: true, deleted };
+  },
+});
+
+/**
  * Add multiple items from pantry "Out" items
  */
 export const addFromPantryOut = mutation({

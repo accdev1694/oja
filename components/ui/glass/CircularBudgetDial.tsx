@@ -1,8 +1,10 @@
 /**
  * CircularBudgetDial - SVG-based circular arc showing budget progress
  *
- * Replaces the collapsible budget card with a visual dial.
- * ~330° arc with a small gap + separator line at the 6 o'clock position.
+ * - Green arc fills clockwise from 6 o'clock as budget is used
+ * - At 100%, green completes full circle back to 6 o'clock
+ * - Over budget: red arc continues past 6 o'clock clockwise
+ * - Shrinking (e.g., during shopping) animates anticlockwise
  */
 
 import React, { useEffect } from "react";
@@ -40,26 +42,29 @@ export function CircularBudgetDial({
 
   const circumference = 2 * Math.PI * radius;
 
-  // Fill starts at 6 o'clock (bottom) and goes full circle clockwise
-  const startRotation = 180;
+  // Start at 6 o'clock (bottom) - SVG starts at 3 o'clock, so rotate 90°
+  const startRotation = 90;
 
-  // Separator line at 6 o'clock (bottom center) between end and start
+  // Separator line at 6 o'clock (bottom center)
   const separatorLength = 10;
   const separatorY1 = center + radius - separatorLength / 2;
   const separatorY2 = center + radius + separatorLength / 2;
 
-  // Calculate fill ratio (capped at 1.0 for visual, but we show "over" text)
-  const ratio = budget > 0 ? Math.min(spent / budget, 1) : 0;
+  // Calculate ratios
+  const greenRatio = budget > 0 ? Math.min(spent / budget, 1) : 0;
+  const overRatio = budget > 0 ? Math.max((spent - budget) / budget, 0) : 0;
+  // Cap over-budget at 100% extra (200% total) for visual sanity
+  const cappedOverRatio = Math.min(overRatio, 1);
+
   const remaining = budget - spent;
   const isOver = spent > budget;
 
-  // Budget state for color + sentiment
-  const getColor = () => {
-    if (isOver) return colors.semantic.danger;
-    if (spent > budget * 0.8) return colors.semantic.warning;
+  // Green color changes as we approach budget
+  const getGreenColor = () => {
+    if (spent > budget * 0.8 && spent <= budget) return colors.semantic.warning;
     return colors.semantic.success;
   };
-  const fillColor = getColor();
+  const greenColor = getGreenColor();
 
   const getSentiment = () => {
     if (budget <= 0) return null;
@@ -69,19 +74,34 @@ export function CircularBudgetDial({
     return "Looking good — lots of room left";
   };
   const sentiment = getSentiment();
+  const sentimentColor = isOver ? colors.semantic.danger : greenColor;
 
-  // Animated fill
-  const animatedRatio = useSharedValue(0);
+  // Animated values for smooth transitions (both grow and shrink)
+  const animatedGreenRatio = useSharedValue(0);
+  const animatedRedRatio = useSharedValue(0);
 
   useEffect(() => {
-    animatedRatio.value = withTiming(ratio, {
+    animatedGreenRatio.value = withTiming(greenRatio, {
       duration: 800,
       easing: Easing.out(Easing.cubic),
     });
-  }, [ratio]);
+    animatedRedRatio.value = withTiming(cappedOverRatio, {
+      duration: 800,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [greenRatio, cappedOverRatio]);
 
-  const animatedFillProps = useAnimatedProps(() => {
-    const filledLength = circumference * animatedRatio.value;
+  // Green arc props (0-100% of budget)
+  const animatedGreenProps = useAnimatedProps(() => {
+    const filledLength = circumference * animatedGreenRatio.value;
+    return {
+      strokeDashoffset: circumference - filledLength,
+    };
+  });
+
+  // Red arc props (over-budget overflow)
+  const animatedRedProps = useAnimatedProps(() => {
+    const filledLength = circumference * animatedRedRatio.value;
     return {
       strokeDashoffset: circumference - filledLength,
     };
@@ -102,19 +122,33 @@ export function CircularBudgetDial({
             strokeWidth={strokeWidth}
             fill="none"
           />
-          {/* Fill arc (progress) */}
+          {/* Green fill arc (0-100% of budget) */}
           <AnimatedCircle
             cx={center}
             cy={center}
             r={radius}
-            stroke={fillColor}
+            stroke={greenColor}
             strokeWidth={strokeWidth}
             fill="none"
             strokeDasharray={`${circumference} ${circumference}`}
             strokeLinecap="round"
             rotation={startRotation}
             origin={`${center}, ${center}`}
-            animatedProps={animatedFillProps}
+            animatedProps={animatedGreenProps}
+          />
+          {/* Red overflow arc (over-budget, continues past 6 o'clock) */}
+          <AnimatedCircle
+            cx={center}
+            cy={center}
+            r={radius}
+            stroke={colors.semantic.danger}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={`${circumference} ${circumference}`}
+            strokeLinecap="round"
+            rotation={startRotation}
+            origin={`${center}, ${center}`}
+            animatedProps={animatedRedProps}
           />
           {/* Separator line at 6 o'clock */}
           <Line
@@ -130,23 +164,32 @@ export function CircularBudgetDial({
 
         {/* Center text overlay */}
         <View style={[styles.centerText, { width: size, height: size }]}>
+          {/* Budget (biggest) */}
           <Text
-            style={[
-              styles.amount,
-              isOver && { color: colors.semantic.danger },
-            ]}
+            style={styles.budgetAmount}
             numberOfLines={1}
             adjustsFontSizeToFit
           >
             {currency}
-            {Math.abs(remaining).toFixed(2)}
-          </Text>
-          <Text style={styles.label}>
-            {isOver ? "over budget" : "remaining"}
-          </Text>
-          <Text style={styles.subLabel}>
-            of {currency}
             {budget.toFixed(2)}
+          </Text>
+
+          {/* Spent (with state color) */}
+          <Text style={[styles.spentLabel, { color: sentimentColor }]}>
+            {currency}
+            {spent.toFixed(2)} spent
+          </Text>
+
+          {/* Left/Over (with state color) */}
+          <Text
+            style={[
+              styles.remainingLabel,
+              { color: isOver ? colors.semantic.danger : colors.semantic.success },
+            ]}
+          >
+            {isOver
+              ? `${currency}${Math.abs(remaining).toFixed(2)} over`
+              : `${currency}${remaining.toFixed(2)} left`}
           </Text>
         </View>
 
@@ -158,7 +201,7 @@ export function CircularBudgetDial({
         )}
       </View>
       {sentiment && (
-        <Text style={[styles.sentiment, { color: fillColor }]}>{sentiment}</Text>
+        <Text style={[styles.sentiment, { color: sentimentColor }]}>{sentiment}</Text>
       )}
     </Wrapper>
   );
@@ -174,23 +217,23 @@ const styles = StyleSheet.create({
     left: 0,
     justifyContent: "center",
     alignItems: "center",
-    paddingTop: 4,
   },
-  amount: {
+  budgetAmount: {
     ...typography.headlineMedium,
     color: colors.text.primary,
     fontWeight: "700",
+    fontSize: 20,
   },
-  label: {
+  spentLabel: {
     ...typography.labelSmall,
-    color: colors.text.secondary,
-    marginTop: -2,
+    fontSize: 11,
+    marginTop: 2,
   },
-  subLabel: {
+  remainingLabel: {
     ...typography.labelSmall,
-    color: colors.text.tertiary,
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 1,
+    fontWeight: "600",
   },
   sentiment: {
     ...typography.labelSmall,
