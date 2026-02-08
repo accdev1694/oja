@@ -1366,8 +1366,25 @@ export default function ListDetailScreen() {
           ) : (
             <View style={styles.itemsContainer}>
               <View style={styles.itemsHeader}>
-                <Text style={styles.sectionTitle}>Items ({items.length})</Text>
+                <Text style={styles.sectionTitle}>
+                  {selectedItems.size > 0
+                    ? `${selectedItems.size} selected`
+                    : `Items (${items.length})`}
+                </Text>
                 <View style={styles.selectionActions}>
+                  {selectedItems.size > 0 && (
+                    <Pressable
+                      onPress={handleBulkDelete}
+                      style={styles.deleteIconButton}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <MaterialCommunityIcons
+                        name="trash-can-outline"
+                        size={20}
+                        color={colors.semantic.danger}
+                      />
+                    </Pressable>
+                  )}
                   <Pressable
                     onPress={selectAllItems}
                     style={styles.selectButton}
@@ -1449,26 +1466,6 @@ export default function ListDetailScreen() {
           <View style={styles.bottomSpacer} />
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* Selection Bar — shown when items are selected */}
-      {selectedItems.size > 0 && (
-        <View style={styles.selectionBar}>
-          <Text style={styles.selectionBarText}>
-            {selectedItems.size} {selectedItems.size === 1 ? "item" : "items"} selected
-          </Text>
-          <Pressable
-            onPress={handleBulkDelete}
-            style={styles.deleteSelectedButton}
-          >
-            <MaterialCommunityIcons
-              name="trash-can-outline"
-              size={20}
-              color="#fff"
-            />
-            <Text style={styles.deleteSelectedText}>Delete</Text>
-          </Pressable>
-        </View>
-      )}
 
       {/* Edit Budget Modal */}
       <GlassModal
@@ -2504,40 +2501,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-
-  // Selection bar at bottom
-  selectionBar: {
-    position: "absolute",
-    bottom: 100,
-    left: spacing.lg,
-    right: spacing.lg,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: colors.glass.card,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  selectionBarText: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-  },
-  deleteSelectedButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    backgroundColor: colors.semantic.danger,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  deleteSelectedText: {
-    ...typography.labelMedium,
-    color: "#fff",
-    fontWeight: "600",
+  deleteIconButton: {
+    padding: spacing.xs,
   },
 
   // Pending approval banner
