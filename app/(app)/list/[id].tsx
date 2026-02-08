@@ -1047,15 +1047,18 @@ export default function ListDetailScreen() {
               </>
             )}
             {list.status === "shopping" && (
-              <GlassButton
-                variant="primary"
-                size="md"
-                icon="check-circle-outline"
-                onPress={handleCompleteShopping}
-                style={styles.fullWidthButton}
-              >
-                Complete Shopping
-              </GlassButton>
+              <View style={styles.shoppingModeContainer}>
+                <ShoppingTypewriterHint />
+                <GlassButton
+                  variant="primary"
+                  size="md"
+                  icon="check-circle-outline"
+                  onPress={handleCompleteShopping}
+                  style={styles.fullWidthButton}
+                >
+                  Complete Shopping
+                </GlassButton>
+              </View>
             )}
           </View>
 
@@ -1892,6 +1895,83 @@ interface ShoppingListItemProps {
   onOpenComments?: () => void;
 }
 
+// ── Typewriter hint for shopping mode ─────────────────────────────────
+const TYPEWRITER_SPEED = 60; // ms per character
+const HINT_COLOR = colors.text.tertiary;
+
+function ShoppingTypewriterHint() {
+  const text = "Shopping in Progress. Tap item to check off.";
+  const [charIndex, setCharIndex] = useState(0);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (charIndex < text.length) {
+      const timer = setTimeout(() => {
+        setCharIndex((i) => i + 1);
+      }, TYPEWRITER_SPEED);
+      return () => clearTimeout(timer);
+    } else if (!done) {
+      const timer = setTimeout(() => setDone(true), 400);
+      return () => clearTimeout(timer);
+    } else {
+      // Wait 3 seconds then restart
+      const timer = setTimeout(() => {
+        setDone(false);
+        setCharIndex(0);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [charIndex, done]);
+
+  return (
+    <View style={shoppingHintStyles.container}>
+      <MaterialCommunityIcons
+        name="cart-check"
+        size={12}
+        color={HINT_COLOR}
+        style={shoppingHintStyles.icon}
+      />
+      <Text style={shoppingHintStyles.text}>
+        {text.split("").map((char, i) => {
+          const isActive = !done && i === charIndex - 1;
+          const isVisible = i < charIndex;
+          return (
+            <Text
+              key={i}
+              style={{
+                color: isVisible ? HINT_COLOR : "transparent",
+                fontWeight: isActive ? "700" : "400",
+                textShadowColor: isActive ? HINT_COLOR : "transparent",
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: isActive ? 8 : 0,
+              }}
+            >
+              {char}
+            </Text>
+          );
+        })}
+      </Text>
+    </View>
+  );
+}
+
+const shoppingHintStyles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.sm,
+  },
+  icon: {
+    marginRight: spacing.xs,
+    opacity: 0.8,
+  },
+  text: {
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+});
+
 function ShoppingListItem({
   item,
   onToggle,
@@ -1960,6 +2040,25 @@ function ShoppingListItem({
       translateX.value = withSpring(0, { damping: 15 });
     });
 
+  // Tap gesture for checking off items in shopping mode
+  const tapGesture = Gesture.Tap()
+    .onStart(() => {
+      scale.value = withSpring(0.98, animations.spring.stiff);
+    })
+    .onEnd(() => {
+      scale.value = withSpring(1, animations.spring.gentle);
+      if (isShopping) {
+        runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
+        runOnJS(onToggle)();
+      }
+    });
+
+  // Compose gestures - tap and pan work together
+  const composedGesture = Gesture.Simultaneous(
+    tapGesture,
+    panGesture
+  );
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
@@ -1982,14 +2081,6 @@ function ShoppingListItem({
     borderWidth: checkFlash.value > 0 ? 1.5 : 0,
   }));
 
-  const handlePressIn = () => {
-    scale.value = withSpring(0.98, animations.spring.stiff);
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, animations.spring.gentle);
-  };
-
   const iconResult = getIconForItem(item.name, item.category || "other");
 
   return (
@@ -2006,21 +2097,27 @@ function ShoppingListItem({
         <MaterialCommunityIcons name="arrow-down-bold" size={20} color="#fff" />
       </Animated.View>
 
-      <GestureDetector gesture={panGesture}>
+      <GestureDetector gesture={composedGesture}>
         <Animated.View style={animatedStyle}>
-          <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut}>
-            <Animated.View style={[{ borderRadius: 16 }, checkFlashStyle]}>
+          <Animated.View style={[{ borderRadius: borderRadius.lg }, checkFlashStyle]}>
             <GlassCard
               variant="standard"
               style={[styles.itemCard, item.isChecked && styles.itemCardChecked, item.approvalStatus === "pending" && styles.itemCardPending]}
             >
               <View style={styles.itemRow}>
-                {/* Checkbox */}
-                <GlassCircularCheckbox
-                  checked={item.isChecked}
-                  onToggle={onToggle}
-                  size="md"
-                />
+                {/* Checkbox — only visible during shopping mode */}
+                {isShopping ? (
+                  <GlassCircularCheckbox
+                    checked={item.isChecked}
+                    onToggle={onToggle}
+                    size="md"
+                  />
+                ) : (
+                  /* Bullet indicator in planning mode */
+                  <View style={styles.planningBullet}>
+                    <View style={styles.planningBulletDot} />
+                  </View>
+                )}
 
                 {/* Item content */}
                 <View style={styles.itemContent}>
@@ -2039,17 +2136,16 @@ function ShoppingListItem({
                   </View>
 
                   <View style={styles.itemDetails}>
-                    {/* Priority Badge */}
-                    <View style={[styles.priorityBadge, { backgroundColor: `${priorityConfig.color}20` }]}>
-                      <MaterialCommunityIcons
-                        name={priorityConfig.icon}
-                        size={10}
-                        color={priorityConfig.color}
-                      />
-                      <Text style={[styles.priorityText, { color: priorityConfig.color }]}>
-                        {priorityConfig.label}
-                      </Text>
-                    </View>
+                    {/* Must-have indicator — only show for urgent items */}
+                    {currentPriority === "must-have" && (
+                      <View style={styles.mustHaveIndicator}>
+                        <MaterialCommunityIcons
+                          name="alert-circle"
+                          size={14}
+                          color={colors.semantic.danger}
+                        />
+                      </View>
+                    )}
 
                     <View style={styles.quantityBadge}>
                       <Text style={styles.quantityText}>×{item.quantity}</Text>
@@ -2066,17 +2162,6 @@ function ShoppingListItem({
                         <Text style={styles.actualPriceText}>
                           £{(item.actualPrice * item.quantity).toFixed(2)}
                         </Text>
-                      </View>
-                    )}
-
-                    {item.autoAdded && (
-                      <View style={styles.autoAddedBadge}>
-                        <MaterialCommunityIcons
-                          name="lightning-bolt"
-                          size={12}
-                          color={colors.accent.secondary}
-                        />
-                        <Text style={styles.autoAddedText}>Auto</Text>
                       </View>
                     )}
 
@@ -2142,8 +2227,7 @@ function ShoppingListItem({
                 <RemoveButton onPress={onRemove} size="md" />
               </View>
             </GlassCard>
-            </Animated.View>
-          </Pressable>
+          </Animated.View>
         </Animated.View>
       </GestureDetector>
     </View>
@@ -2172,7 +2256,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     gap: spacing.lg,
   },
   errorText: {
@@ -2201,8 +2285,12 @@ const styles = StyleSheet.create({
   },
   editButton: {
     padding: spacing.xs,
-    borderRadius: 8,
+    borderRadius: borderRadius.sm,
     backgroundColor: `${colors.text.tertiary}15`,
+  },
+  // Shopping Mode Container
+  shoppingModeContainer: {
+    flex: 1,
   },
   fullWidthButton: {
     flex: 1,
@@ -2329,7 +2417,7 @@ const styles = StyleSheet.create({
   emptyIconContainer: {
     width: 100,
     height: 100,
-    borderRadius: 50,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.glass.background,
     justifyContent: "center",
     alignItems: "center",
@@ -2363,7 +2451,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(245, 158, 11, 0.12)",
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: 10,
+    borderRadius: borderRadius.md,
     marginBottom: spacing.sm,
   },
   pendingBannerText: {
@@ -2419,6 +2507,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
+  },
+  planningBullet: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  planningBulletDot: {
+    width: 8,
+    height: 8,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.text.tertiary,
+    opacity: 0.5,
   },
   itemContent: {
     flex: 1,
@@ -2507,7 +2608,7 @@ const styles = StyleSheet.create({
   midShopIconContainer: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: borderRadius.full,
     backgroundColor: `${colors.accent.primary}15`,
     justifyContent: "center",
     alignItems: "center",
@@ -2570,7 +2671,7 @@ const styles = StyleSheet.create({
   midShopOptionIcon: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: borderRadius.xl,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -2607,7 +2708,7 @@ const styles = StyleSheet.create({
   actualPriceIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: borderRadius.xl,
     backgroundColor: `${colors.semantic.success}15`,
     justifyContent: "center",
     alignItems: "center",
@@ -2749,7 +2850,7 @@ const styles = StyleSheet.create({
   refreshButton: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.glass.background,
     justifyContent: "center",
     alignItems: "center",
@@ -2757,7 +2858,7 @@ const styles = StyleSheet.create({
   toggleSuggestionsButton: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: borderRadius.lg,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -2802,7 +2903,7 @@ const styles = StyleSheet.create({
   suggestionAddButton: {
     width: 26,
     height: 26,
-    borderRadius: 13,
+    borderRadius: borderRadius.full,
     backgroundColor: `${colors.semantic.success}20`,
     justifyContent: "center",
     alignItems: "center",
@@ -2810,7 +2911,7 @@ const styles = StyleSheet.create({
   suggestionDismissButton: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: borderRadius.full,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -2830,14 +2931,14 @@ const styles = StyleSheet.create({
   headerIconButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
   },
   headerStatusBadge: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: borderRadius.lg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2848,11 +2949,11 @@ const styles = StyleSheet.create({
     right: -4,
     minWidth: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: borderRadius.sm,
     backgroundColor: colors.accent.primary,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: 3,
+    paddingHorizontal: spacing.xs,
   },
   chatCountText: {
     fontSize: 9,
@@ -2863,7 +2964,7 @@ const styles = StyleSheet.create({
     position: "relative" as const,
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.glass.background,
     justifyContent: "center" as const,
     alignItems: "center" as const,
@@ -2874,11 +2975,11 @@ const styles = StyleSheet.create({
     right: -2,
     minWidth: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: borderRadius.sm,
     backgroundColor: colors.accent.primary,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 3,
+    paddingHorizontal: spacing.xs,
   },
   commentCountText: {
     ...typography.labelSmall,
