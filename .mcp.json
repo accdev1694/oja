@@ -29,7 +29,7 @@
       "command": "cmd",
       "args": ["/c", "npx", "-y", "expo-mcp-server"],
       "env": {
-        "EXPO_TOKEN": "Ewzv9_Leb7YZbhm9NHCdatMs3SukN4clo-LRU02G"
+        "EXPO_TOKEN": "${EXPO_TOKEN}"
       }
     }
   }

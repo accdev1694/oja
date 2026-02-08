@@ -175,6 +175,7 @@ ${prompt}`;
         })
         .map((item) => ({
           ...item,
+          stockLevel: "low" as const, // Default all items to "low" - one swipe to adjust
           source: item.source === "cultural" ? "cultural" as const : "local" as const,
           estimatedPrice: typeof item.estimatedPrice === "number" ? item.estimatedPrice : undefined,
           hasVariants: typeof item.hasVariants === "boolean" ? item.hasVariants : undefined,
@@ -1537,7 +1538,8 @@ function getFallbackItems(country: string, cuisines: string[]): SeedItem[] {
 
   console.log(`[getFallbackItems] Returning ${localItems.length} local + ${selectedCulturalItems.length} cultural = ${allItems.length} total items`);
 
-  return allItems;
+  // Normalize all items to "low" stock level - one swipe to adjust
+  return allItems.map(item => ({ ...item, stockLevel: "low" as const }));
 }
 
 // ─── Text-to-Speech (Google Cloud → Azure → expo-speech fallback) ──────

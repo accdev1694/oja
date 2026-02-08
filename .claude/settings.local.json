@@ -126,7 +126,12 @@
       "Bash(~/.bashrc)",
       "Bash(export ANDROID_HOME=\"/c/Users/diloc/AppData/Local/Android/Sdk\")",
       "Bash(export PATH=\"$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH\")",
-      "Bash(~/.bash_profile)"
+      "Bash(~/.bash_profile)",
+      "Bash(git pull:*)",
+      "Bash(git checkout:*)",
+      "Bash(git stash:*)",
+      "Bash(./gradlew assembleDebug:*)",
+      "mcp__playwright__browser_close"
     ]
   },
   "enableAllProjectMcpServers": true,

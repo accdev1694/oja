@@ -23,7 +23,7 @@ export const TIPS = {
   pantry_tap_add_list: {
     context: "pantry",
     title: "Quick add to list",
-    body: "Tap the cart icon on any low-stock item to add it to your shopping list.",
+    body: "Tap the list-add icon on any low-stock item to add it to your shopping list.",
     showAfterSessions: 2,
     showIfCondition: "has_low_stock",
     priority: 2,

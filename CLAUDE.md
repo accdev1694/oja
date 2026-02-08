@@ -33,9 +33,10 @@
 **Current Priorities:**
 1. **Dev Build + Voice QA** — Test voice assistant on iOS/Android dev builds (requires native modules)
 2. ~~Push Notification Integration~~ ✅ Complete — Expo Notifications wiring done
-3. **Price Bracket Matcher Validation** — Test against 19 real receipts (target >80% accuracy)
-4. ~~First-Week Nurture Sequence~~ ✅ Complete — Day 1-5 nudges, trial reminders, contextual tips
-5. **E2E Test Fixes** — 10 failures blocking ~35 cascade-skipped tests
+3. **Android Builds** — Using local builds + manual Play Console upload (EAS free tier exhausted, resets March 1st).
+4. **Price Bracket Matcher Validation** — Test against 19 real receipts (target >80% accuracy)
+5. ~~First-Week Nurture Sequence~~ ✅ Complete — Day 1-5 nudges, trial reminders, contextual tips
+6. **E2E Test Fixes** — 10 failures blocking ~35 cascade-skipped tests
 
 ---
 

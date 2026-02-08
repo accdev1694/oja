@@ -33,6 +33,14 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Firebase / Google Service Account keys (NEVER commit these!)
+oja-tts-*.json
+oja-shopping-app-*.json
+*-firebase-adminsdk-*.json
+*serviceaccount*.json
+google-services.json
+GoogleService-Info.plist
+
 # typescript
 *.tsbuildinfo
 

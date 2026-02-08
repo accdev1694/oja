@@ -25,16 +25,18 @@ Notifications.setNotificationHandler({
 export function usePushNotifications() {
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<string>("undetermined");
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
+  const responseListener = useRef<Notifications.EventSubscription | null>(null);
   const router = useRouter();
 
   const registerToken = useMutation(api.notifications.registerPushToken);
 
   useEffect(() => {
+    let isMounted = true;
+
     // Register for push notifications
     registerForPushNotificationsAsync().then((token) => {
-      if (token) {
+      if (token && isMounted) {
         setExpoPushToken(token);
         // Save token to backend
         registerToken({ token }).catch(console.warn);
@@ -66,12 +68,10 @@ export function usePushNotifications() {
     );
 
     return () => {
-      if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
-      }
-      if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
-      }
+      isMounted = false;
+      // Use the modern .remove() API on subscription objects
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
     };
   }, []);
 
@@ -93,39 +93,60 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
 
   // Android requires a notification channel
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "default",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#00D4AA",
-    });
+    try {
+      await Notifications.setNotificationChannelAsync("default", {
+        name: "default",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#00D4AA",
+      });
+    } catch (error) {
+      // Channel creation may fail if Firebase isn't configured
+      console.warn("[Push] Failed to create notification channel:", error);
+    }
   }
 
   // Check existing permission
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
+  try {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
 
-  // Request permission if not granted
-  if (existingStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
+    // Request permission if not granted
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
 
-  if (finalStatus !== "granted") {
-    console.log("[Push] Permission not granted");
+    if (finalStatus !== "granted") {
+      console.log("[Push] Permission not granted");
+      return null;
+    }
+  } catch (error) {
+    console.warn("[Push] Failed to check/request permissions:", error);
     return null;
   }
 
   // Get the Expo push token
   try {
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+
+    // On Android, this requires Firebase to be configured properly
+    // In development without FCM credentials, this will fail gracefully
     const tokenData = await Notifications.getExpoPushTokenAsync({
       projectId,
     });
     console.log("[Push] Token:", tokenData.data);
     return tokenData.data;
-  } catch (error) {
-    console.error("[Push] Failed to get token:", error);
+  } catch (error: any) {
+    // Handle Firebase not initialized error gracefully
+    if (error?.message?.includes("FirebaseApp is not initialized")) {
+      console.warn(
+        "[Push] Firebase not configured. Push notifications require FCM setup for Android dev builds. " +
+        "See: https://docs.expo.dev/push-notifications/fcm-credentials/"
+      );
+    } else {
+      console.warn("[Push] Failed to get token:", error?.message || error);
+    }
     return null;
   }
 }

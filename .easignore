@@ -10,6 +10,8 @@ _bmad/
 
 # Claude Code
 .claude/
+.claudeignore
+.geminiignore
 
 # Screenshots/images from dev (not in assets)
 chat-modal-screenshot.png
@@ -25,17 +27,33 @@ playwright.config.ts
 # Testing
 __tests__/
 testing.md
+jest.config.js
+test-integration.js
 
 # Development files
 receipts/
 moodboard/
 nul
 _result.json
-oja.png
+
+# Flutter migration (separate project)
+oja_flutter/
+flutter.md
+
+# Build output
+dist/
+
+# Firebase credentials (sensitive)
+oja-tts-*.json
+*-firebase-adminsdk-*.json
+google-services.json
 
 # Docs (not needed for build)
 CLAUDE.md
 project-context.md
+
+# MCP config
+.mcp.json
 
 # Git
 .git/
