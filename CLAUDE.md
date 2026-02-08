@@ -146,22 +146,22 @@ const composedGesture = Gesture.Simultaneous(tapGesture, panGesture);
 
 ### Bulk Selection
 
-Selection checkboxes are always visible on every list item (no toggle mode):
+Selection checkboxes are always visible on every list item (no toggle mode). Selection UI is inline in the items header — minimal and doesn't block content:
 
 - **Checkbox on every item** — Always visible, tap to select/deselect
-- **"All" button** — Always visible in items header, selects all items
-- **"Clear" button** — Appears only when items selected, deselects all
-- **Selection bar** — Appears at bottom when any items selected
-  - Shows count: "3 selected"
-  - Delete button with confirmation haptic
-  - Uses `removeMultiple` mutation for batch delete
+- **Header changes when selected** — Shows "X selected" instead of "Items (N)"
+- **Trash icon** — Appears inline when items selected (icon-only, minimal)
+- **"All" button** — Always visible, selects all items
+- **"Clear" button** — Appears only when items selected
 
 ```typescript
 // Selection state (always active, no toggle mode)
 const [selectedItems, setSelectedItems] = useState<Set<Id<"listItems">>>(new Set());
 
-// Bulk delete
-const removeMultiple = useMutation(api.listItems.removeMultiple);
+// Header displays selection count or item count
+{selectedItems.size > 0 ? `${selectedItems.size} selected` : `Items (${items.length})`}
+
+// Bulk delete with removeMultiple mutation
 await removeMultiple({ ids: Array.from(selectedItems) });
 ```
 
