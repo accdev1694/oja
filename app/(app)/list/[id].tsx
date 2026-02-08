@@ -839,6 +839,7 @@ export default function ListDetailScreen() {
 
   async function handleStartShopping() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    clearSelection();
     try {
       await startShopping({ id });
     } catch (error) {
@@ -1367,41 +1368,44 @@ export default function ListDetailScreen() {
             <View style={styles.itemsContainer}>
               <View style={styles.itemsHeader}>
                 <Text style={styles.sectionTitle}>
-                  {selectedItems.size > 0
+                  {selectedItems.size > 0 && list.status !== "shopping"
                     ? `${selectedItems.size} selected`
                     : `Items (${items.length})`}
                 </Text>
-                <View style={styles.selectionActions}>
-                  {selectedItems.size > 0 && (
+                {/* Bulk selection actions — hidden during shopping mode */}
+                {list.status !== "shopping" && (
+                  <View style={styles.selectionActions}>
+                    {selectedItems.size > 0 && (
+                      <Pressable
+                        onPress={handleBulkDelete}
+                        style={styles.deleteIconButton}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <MaterialCommunityIcons
+                          name="trash-can-outline"
+                          size={20}
+                          color={colors.semantic.danger}
+                        />
+                      </Pressable>
+                    )}
                     <Pressable
-                      onPress={handleBulkDelete}
-                      style={styles.deleteIconButton}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <MaterialCommunityIcons
-                        name="trash-can-outline"
-                        size={20}
-                        color={colors.semantic.danger}
-                      />
-                    </Pressable>
-                  )}
-                  <Pressable
-                    onPress={selectAllItems}
-                    style={styles.selectButton}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Text style={styles.selectButtonText}>All</Text>
-                  </Pressable>
-                  {selectedItems.size > 0 && (
-                    <Pressable
-                      onPress={clearSelection}
+                      onPress={selectAllItems}
                       style={styles.selectButton}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                      <Text style={[styles.selectButtonText, { color: colors.text.tertiary }]}>Clear</Text>
+                      <Text style={styles.selectButtonText}>All</Text>
                     </Pressable>
-                  )}
-                </View>
+                    {selectedItems.size > 0 && (
+                      <Pressable
+                        onPress={clearSelection}
+                        style={styles.selectButton}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={[styles.selectButtonText, { color: colors.text.tertiary }]}>Clear</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                )}
               </View>
               {(() => {
                 const listCategories = [...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort();
@@ -2172,18 +2176,20 @@ function ShoppingListItem({
               style={[styles.itemCard, item.isChecked && styles.itemCardChecked, item.approvalStatus === "pending" && styles.itemCardPending]}
             >
               <View style={styles.itemRow}>
-                {/* Selection checkbox — always visible */}
-                <Pressable
-                  onPress={onSelectToggle}
-                  style={styles.selectionCheckbox}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <MaterialCommunityIcons
-                    name={isSelected ? "checkbox-marked" : "checkbox-blank-outline"}
-                    size={22}
-                    color={isSelected ? colors.accent.primary : colors.text.tertiary}
-                  />
-                </Pressable>
+                {/* Selection checkbox — only in planning mode (hidden during shopping to avoid conflict with shopping checkbox) */}
+                {!isShopping && (
+                  <Pressable
+                    onPress={onSelectToggle}
+                    style={styles.selectionCheckbox}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialCommunityIcons
+                      name={isSelected ? "checkbox-marked" : "checkbox-blank-outline"}
+                      size={22}
+                      color={isSelected ? colors.accent.primary : colors.text.tertiary}
+                    />
+                  </Pressable>
+                )}
 
                 {/* Tappable area for checking off in shopping mode */}
                 <Pressable
