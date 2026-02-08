@@ -15,7 +15,7 @@
 | 2. Pantry Tracker | ✅ Complete |
 | 3. Shopping Lists | ✅ Complete |
 | UI. Glass Redesign | ✅ Complete |
-| UX. Emotional Design | ✅ Complete (12/15 recommendations implemented) |
+| UX. Emotional Design | ✅ Complete (14/15 recommendations implemented) |
 | 4. Partner Mode | 🔄 In Progress (backend + UI done, push notification integration pending) |
 | 5. Receipt Intelligence | ✅ Complete |
 | 5.5. Zero-Blank Price Intelligence | ✅ Phases 1-4, 6 Complete (Phase 5 bracket matcher pending validation) |
@@ -108,6 +108,44 @@ Import warm tokens from:      glassTokens.colors.accent.warm
 
 ---
 
+## Shopping List UX
+
+**Updated:** 2026-02-08
+
+### Planning vs Shopping Mode
+
+The shopping list has two distinct states with different UX:
+
+| Mode | Status | Checkbox | Tap Action | Visual Hint |
+|------|--------|----------|------------|-------------|
+| **Planning** | `active` | Hidden (bullet point) | Opens edit modal | None |
+| **Shopping** | `shopping` | Visible | Checks off item | Typewriter hint |
+
+### Shopping Mode Features
+
+- **Tap anywhere on item card** to check off (not just checkbox)
+- **Typewriter hint**: "Shopping in Progress. Tap item to check off." animates above Complete button
+- **Full-width Complete Shopping button** below the hint
+- **Simplified badges**: Only "must-have" priority shown (alert icon), removed "Auto" badge
+- **Swipe to change priority** still works in both modes
+
+### Key Implementation
+
+```typescript
+// Tap gesture for checking off in shopping mode
+const tapGesture = Gesture.Tap()
+  .onEnd(() => {
+    if (isShopping) {
+      runOnJS(onToggle)();
+    }
+  });
+
+// Composed with pan gesture for priority changes
+const composedGesture = Gesture.Simultaneous(tapGesture, panGesture);
+```
+
+---
+
 ## Zero-Blank Price Intelligence
 
 **CRITICAL ARCHITECTURE**: Every item in Oja shows a price estimate. Never blank. Never "?".
@@ -192,7 +230,7 @@ More users → More receipt scans → Better price data
 
 ## UX Analysis Summary
 
-**Analysis date:** 31 January 2026 | **Updated:** 2 February 2026
+**Analysis date:** 31 January 2026 | **Updated:** 8 February 2026
 
 | Criterion | Score | Target | Status |
 |-----------|:-----:|:------:|--------|
@@ -933,7 +971,7 @@ User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognit
 | `convex/ai.ts` (voiceAssistant) | +150 | Gemini function-call loop (max 3), OpenAI fallback |
 | `lib/voice/voiceTypes.ts` | 44 | Shared TypeScript types |
 | `hooks/useVoiceAssistant.ts` | 317 | STT lifecycle, API calls, TTS, rate limiting, conversation history |
-| `components/voice/VoiceFAB.tsx` | 146 | Floating mic button with pulse animation |
+| `components/voice/VoiceFAB.tsx` | 253 | Draggable floating mic button with pulse animation + position persistence |
 | `components/voice/VoiceSheet.tsx` | 377 | Bottom sheet: conversation bubbles, status, action confirmation |
 | `components/voice/MessageBubble.tsx` | 85 | Glass-styled chat bubbles (user right, assistant left) |
 
@@ -950,6 +988,13 @@ User taps FAB → VoiceSheet opens → on-device STT (free, expo-speech-recognit
 - Uses £ formatting, celebrates wins ("Nice one, mate!")
 - Never shows raw data — always summarises conversationally
 - Empathetic about budget struggles
+
+### VoiceFAB (Draggable)
+
+- **Draggable** — Users can drag the mic button anywhere on screen
+- **Position persisted** — Saved to AsyncStorage, restored on app launch
+- **Edge snapping** — Snaps to left or right edge when released
+- **Respects safe areas** — Stays within screen bounds and above tab bar
 
 ### Requirements
 
@@ -1123,7 +1168,7 @@ Notifications.setNotificationChannelAsync("default", {
 
 ---
 
-_Updated 2026-02-07. Added AI usage metering (voice limits, receipt unlimited for paid). Added push notifications with Expo Push API and deep linking._
+_Updated 2026-02-08. Shopping list UX improvements (tap-to-check, typewriter hint, simplified badges). VoiceFAB now draggable with position persistence. Price fallback cascade for list items. Border radius consistency across screens._
 
 ---
 
