@@ -3,6 +3,27 @@ import { mutation, query } from "./_generated/server";
 import { getUserListPermissions } from "./partners";
 
 /**
+ * Helper to get price estimate from currentPrices table
+ * Falls back when lastPrice is unavailable
+ */
+async function getPriceFromCurrentPrices(
+  ctx: any,
+  itemName: string
+): Promise<number | undefined> {
+  const normalizedName = itemName.toLowerCase().trim();
+  const prices = await ctx.db
+    .query("currentPrices")
+    .withIndex("by_item", (q: any) => q.eq("normalizedName", normalizedName))
+    .collect();
+
+  if (prices.length === 0) return undefined;
+
+  // Return cheapest price
+  const sorted = [...prices].sort((a: any, b: any) => a.unitPrice - b.unitPrice);
+  return sorted[0].unitPrice;
+}
+
+/**
  * Get all items for a shopping list (owners + partners)
  */
 export const getByList = query({
@@ -75,6 +96,12 @@ export const create = mutation({
 
     const now = Date.now();
 
+    // Price cascade: use provided price, else look up from currentPrices
+    let estimatedPrice = args.estimatedPrice;
+    if (estimatedPrice === undefined) {
+      estimatedPrice = await getPriceFromCurrentPrices(ctx, args.name);
+    }
+
     // Determine approval status:
     // - Owner adds → check if any approver partner exists → set pending for approver to review
     // - Partner adds → set pending for owner to review
@@ -101,7 +128,7 @@ export const create = mutation({
       category: args.category,
       quantity: args.quantity,
       unit: args.unit,
-      estimatedPrice: args.estimatedPrice,
+      estimatedPrice,
       priority: args.priority ?? "should-have",
       isChecked: false,
       autoAdded: args.autoAdded ?? false,
@@ -323,6 +350,12 @@ export const addFromPantryOut = mutation({
 
     // Add each out item to the list
     for (const pantryItem of outItems) {
+      // Price cascade: lastPrice → currentPrices → undefined (AI will fill later)
+      let estimatedPrice = pantryItem.lastPrice;
+      if (estimatedPrice === undefined) {
+        estimatedPrice = await getPriceFromCurrentPrices(ctx, pantryItem.name);
+      }
+
       const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
@@ -330,7 +363,7 @@ export const addFromPantryOut = mutation({
         name: pantryItem.name,
         category: pantryItem.category,
         quantity: 1,
-        estimatedPrice: pantryItem.lastPrice,
+        estimatedPrice,
         priority: "must-have",
         isChecked: false,
         autoAdded: true,
@@ -380,6 +413,12 @@ export const addFromPantrySelected = mutation({
       const pantryItem = await ctx.db.get(pantryItemId);
       if (!pantryItem || pantryItem.userId !== user._id) continue;
 
+      // Price cascade: lastPrice → currentPrices → undefined (AI will fill later)
+      let estimatedPrice = pantryItem.lastPrice;
+      if (estimatedPrice === undefined) {
+        estimatedPrice = await getPriceFromCurrentPrices(ctx, pantryItem.name);
+      }
+
       await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
@@ -387,7 +426,7 @@ export const addFromPantrySelected = mutation({
         name: pantryItem.name,
         category: pantryItem.category,
         quantity: 1,
-        estimatedPrice: pantryItem.lastPrice,
+        estimatedPrice,
         priority: "must-have",
         isChecked: false,
         autoAdded: true,
