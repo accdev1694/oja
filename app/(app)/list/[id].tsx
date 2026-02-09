@@ -13,7 +13,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { getIconForItem } from "@/lib/icons/iconMatcher";
@@ -24,6 +24,9 @@ import Animated, {
   withSpring,
   withTiming,
   runOnJS,
+  useAnimatedScrollHandler,
+  interpolate,
+  Extrapolation,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
@@ -156,6 +159,7 @@ export default function ListDetailScreen() {
   const removeMultipleItems = useMutation(api.listItems.removeMultiple);
   const startShopping = useMutation(api.shoppingLists.startShopping);
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
+  const restockFromCheckedItems = useMutation(api.pantryItems.restockFromCheckedItems);
 
   const updateList = useMutation(api.shoppingLists.update);
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
@@ -166,7 +170,8 @@ export default function ListDetailScreen() {
   const { isOwner, isPartner, canEdit, canApprove, loading: roleLoading } = usePartnerRole(id);
   const handleApproval = useMutation(api.partners.handleApproval);
   const setPreferredVariant = useMutation(api.pantryItems.setPreferredVariant);
-  const commentCounts = useQuery(api.partners.getCommentCounts, items ? { listItemIds: items.map((i) => i._id) } : "skip");
+  const listItemIds = useMemo(() => items?.map((i) => i._id) ?? [], [items]);
+  const commentCounts = useQuery(api.partners.getCommentCounts, items ? { listItemIds } : "skip");
   const allActiveLists = useQuery(api.shoppingLists.getActive);
 
   // Add-to-list picker state
@@ -268,6 +273,37 @@ export default function ListDetailScreen() {
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
 
+  // Scroll tracking for sticky mini budget bar (hooks must be before early returns)
+  const scrollY = useSharedValue(0);
+  const DIAL_SCROLL_THRESHOLD = 200 + spacing.md;
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const miniBarStyle = useAnimatedStyle(() => {
+    return {
+      opacity: interpolate(
+        scrollY.value,
+        [DIAL_SCROLL_THRESHOLD - 20, DIAL_SCROLL_THRESHOLD + 10],
+        [0, 1],
+        Extrapolation.CLAMP,
+      ),
+      transform: [
+        {
+          translateY: interpolate(
+            scrollY.value,
+            [DIAL_SCROLL_THRESHOLD - 20, DIAL_SCROLL_THRESHOLD + 10],
+            [-44, 0],
+            Extrapolation.CLAMP,
+          ),
+        },
+      ],
+    };
+  });
+
   // Auto-fill price estimate when available and user hasn't typed one
   useEffect(() => {
     if (priceEstimate && priceEstimate.cheapest && !newItemPrice) {
@@ -342,65 +378,82 @@ export default function ListDetailScreen() {
     return () => clearTimeout(timeoutId);
   }, [items?.length, showSuggestions]);
 
-  // Loading state
-  if (list === undefined || items === undefined) {
-    return (
-      <GlassScreen>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent.primary} />
-          <Text style={styles.loadingText}>Loading list...</Text>
-        </View>
-      </GlassScreen>
-    );
-  }
+  // Calculate totals — memoized to avoid O(n) per render
+  // Must be before early returns to satisfy Rules of Hooks
+  const safeItems = items ?? [];
+  const { estimatedTotal, actualTotal, shoppingTotal, checkedTotal, checkedCount, totalCount } = useMemo(() => {
+    let estimated = 0;
+    let actual = 0;
+    let shopping = 0;
+    let checked = 0;
+    let checkedN = 0;
 
-  // Error state - list not found
-  if (!list) {
-    return (
-      <GlassScreen>
-        <View style={styles.errorContainer}>
-          <MaterialCommunityIcons
-            name="alert-circle-outline"
-            size={64}
-            color={colors.semantic.danger}
-          />
-          <Text style={styles.errorText}>List not found</Text>
-          <GlassButton variant="primary" icon="home" onPress={() => router.replace("/(app)/(tabs)")}>
-            Go Home
-          </GlassButton>
-        </View>
-      </GlassScreen>
-    );
-  }
+    for (const item of safeItems) {
+      const estPrice = (item.estimatedPrice || 0) * item.quantity;
+      estimated += estPrice;
 
-  // Calculate totals
-  const estimatedTotal = items.reduce((sum, item) => {
-    return sum + (item.estimatedPrice || 0) * item.quantity;
-  }, 0);
-
-  const actualTotal = items.reduce((sum, item) => {
-    if (item.isChecked && item.actualPrice) {
-      return sum + item.actualPrice * item.quantity;
+      if (item.isChecked) {
+        checkedN++;
+        if (item.actualPrice) {
+          actual += item.actualPrice * item.quantity;
+          shopping += item.actualPrice * item.quantity;
+        } else {
+          shopping += estPrice;
+        }
+        checked += (item.actualPrice || item.estimatedPrice || 0) * item.quantity;
+      } else {
+        shopping += estPrice;
+      }
     }
-    return sum;
-  }, 0);
 
-  // Blended total for shopping mode: actual for checked items + estimated for unchecked
-  const shoppingTotal = items.reduce((sum, item) => {
-    if (item.isChecked && item.actualPrice) {
-      return sum + item.actualPrice * item.quantity;
-    }
-    return sum + (item.estimatedPrice || 0) * item.quantity;
-  }, 0);
-
-  const checkedCount = items.filter((item) => item.isChecked).length;
-  const totalCount = items.length;
+    return {
+      estimatedTotal: estimated,
+      actualTotal: actual,
+      shoppingTotal: shopping,
+      checkedTotal: checked,
+      checkedCount: checkedN,
+      totalCount: safeItems.length,
+    };
+  }, [safeItems]);
 
   // Budget status
-  const budget = list.budget || 0;
-  const currentTotal = list.status === "shopping" ? shoppingTotal : estimatedTotal;
+  const budget = list?.budget || 0;
+  const listStatus = list?.status;
+  const currentTotal = listStatus === "shopping" ? shoppingTotal : estimatedTotal;
   const remainingBudget = budget - currentTotal;
   const isOverBudget = budget > 0 && currentTotal > budget;
+
+  // Mini bar values (mode-aware)
+  const isPlanning = listStatus === "active";
+  const miniBarActiveValue = isPlanning ? estimatedTotal : checkedTotal;
+  const miniBarRemaining = budget - miniBarActiveValue;
+  const miniBarIsOver = miniBarActiveValue > budget;
+  const miniBarRatio = budget > 0 ? miniBarActiveValue / budget : 0;
+  const miniBarColor = miniBarIsOver
+    ? colors.semantic.danger
+    : miniBarRatio > 0.8
+      ? colors.semantic.warning
+      : colors.semantic.success;
+  const miniBarLabel = isPlanning ? "planned" : "spent";
+
+  // Memoized category data + display items
+  const { listCategories, listCategoryCounts, displayItems, pendingCount } = useMemo(() => {
+    const cats = [...new Set(safeItems.map((i) => i.category).filter(Boolean) as string[])].sort();
+    const counts: Record<string, number> = {};
+    safeItems.forEach((i) => { if (i.category) counts[i.category] = (counts[i.category] || 0) + 1; });
+    const filtered = listCategoryFilter
+      ? safeItems.filter((i) => i.category === listCategoryFilter)
+      : safeItems;
+    const sorted = [...filtered].sort((a, b) => {
+      const aPending = a.approvalStatus === "pending" ? 0 : 1;
+      const bPending = b.approvalStatus === "pending" ? 0 : 1;
+      return aPending - bPending;
+    });
+    const pending = filtered.filter((i) => i.approvalStatus === "pending").length;
+    return { listCategories: cats, listCategoryCounts: counts, displayItems: sorted, pendingCount: pending };
+  }, [safeItems, listCategoryFilter]);
+
+  const isShopping = listStatus === "shopping";
 
   // Edit budget handlers
   function handleOpenEditBudget() {
@@ -438,7 +491,7 @@ export default function ListDetailScreen() {
     }
   }
 
-  async function handleToggleItem(itemId: Id<"listItems">) {
+  const handleToggleItem = useCallback(async (itemId: Id<"listItems">) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     // Simply toggle the item checked state (strikethrough)
@@ -449,7 +502,7 @@ export default function ListDetailScreen() {
       console.error("Failed to toggle item:", error);
       alert("Error", "Failed to update item");
     }
-  }
+  }, [toggleChecked, onMundaneAction, alert]);
 
   // Actual price modal handlers (Story 3.8)
   function closeActualPriceModal() {
@@ -668,7 +721,7 @@ export default function ListDetailScreen() {
     }
   }
 
-  async function handleRemoveItem(itemId: Id<"listItems">, itemName: string) {
+  const handleRemoveItem = useCallback(async (itemId: Id<"listItems">, itemName: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const doRemove = async () => {
       try {
@@ -684,10 +737,10 @@ export default function ListDetailScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Remove", style: "destructive", onPress: doRemove },
     ]);
-  }
+  }, [removeItem, alert]);
 
   // Selection mode functions
-  function toggleItemSelection(itemId: Id<"listItems">) {
+  const toggleItemSelection = useCallback((itemId: Id<"listItems">) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedItems((prev) => {
       const next = new Set(prev);
@@ -698,7 +751,7 @@ export default function ListDetailScreen() {
       }
       return next;
     });
-  }
+  }, []);
 
   function selectAllItems() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -738,12 +791,12 @@ export default function ListDetailScreen() {
     );
   }
 
-  function handleEditItem(item: ListItem) {
+  const handleEditItem = useCallback((item: ListItem) => {
     setEditingItem(item);
     setEditName(item.name);
     setEditQuantity(String(item.quantity));
     setEditPrice(item.estimatedPrice ? String(item.estimatedPrice) : "");
-  }
+  }, []);
 
   function handleCloseEditModal() {
     setEditingItem(null);
@@ -786,17 +839,17 @@ export default function ListDetailScreen() {
     }
   }
 
-  async function handlePriorityChange(
+  const handlePriorityChange = useCallback(async (
     itemId: Id<"listItems">,
     newPriority: "must-have" | "should-have" | "nice-to-have"
-  ) {
+  ) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await updateItem({ id: itemId, priority: newPriority });
     } catch (error) {
       console.error("Failed to update priority:", error);
     }
-  }
+  }, [updateItem]);
 
   function handleAddItemToList(item: { name: string; estimatedPrice?: number; quantity: number }) {
     const otherLists = (allActiveLists ?? []).filter(
@@ -854,8 +907,24 @@ export default function ListDetailScreen() {
     const doComplete = async () => {
       try {
         await completeShopping({ id });
+
+        // Restock pantry items that were checked off
+        const result = await restockFromCheckedItems({ listId: id });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.back();
+
+        const restockMsg = result.restockedCount > 0
+          ? `${result.restockedCount} pantry item${result.restockedCount !== 1 ? "s" : ""} restocked.`
+          : "";
+
+        const tipMsg = restockMsg
+          ? `\n\nTip: Scan your receipt anytime for more accurate prices.`
+          : "";
+
+        alert(
+          "Shopping Complete",
+          `Trip finished!${restockMsg ? `\n${restockMsg}` : ""}${tipMsg}`,
+          [{ text: "Done", onPress: () => router.back() }]
+        );
       } catch (error) {
         console.error("Failed to complete shopping:", error);
         alert("Error", "Failed to complete shopping");
@@ -935,7 +1004,7 @@ export default function ListDetailScreen() {
   }
 
   // Partner mode handlers
-  async function handleApproveItem(itemId: Id<"listItems">) {
+  const handleApproveItem = useCallback(async (itemId: Id<"listItems">) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await handleApproval({ listItemId: itemId, decision: "approved" });
@@ -944,9 +1013,9 @@ export default function ListDetailScreen() {
       console.error("Failed to approve item:", error);
       alert("Error", "Failed to approve item");
     }
-  }
+  }, [handleApproval, alert]);
 
-  async function handleRejectItem(itemId: Id<"listItems">) {
+  const handleRejectItem = useCallback(async (itemId: Id<"listItems">) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await handleApproval({ listItemId: itemId, decision: "rejected" });
@@ -955,22 +1024,45 @@ export default function ListDetailScreen() {
       console.error("Failed to reject item:", error);
       alert("Error", "Failed to reject item");
     }
-  }
+  }, [handleApproval, alert]);
 
-  function openCommentThread(itemId: Id<"listItems">, itemName: string) {
+  const openCommentThread = useCallback((itemId: Id<"listItems">, itemName: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setCommentItemId(itemId);
     setCommentItemName(itemName);
     setShowCommentThread(true);
+  }, []);
+
+  // Loading state — after all hooks to satisfy Rules of Hooks
+  if (list === undefined || items === undefined) {
+    return (
+      <GlassScreen>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.accent.primary} />
+          <Text style={styles.loadingText}>Loading list...</Text>
+        </View>
+      </GlassScreen>
+    );
   }
 
-  // Status badge config
-  const statusConfig = {
-    active: { color: colors.accent.primary, label: "Planning", icon: "clipboard-edit-outline" },
-    shopping: { color: colors.semantic.warning, label: "Shopping", icon: "cart-outline" },
-    completed: { color: colors.text.tertiary, label: "Completed", icon: "check-circle-outline" },
-  };
-  const status = statusConfig[list.status as keyof typeof statusConfig] || statusConfig.active;
+  // Error state - list not found
+  if (!list) {
+    return (
+      <GlassScreen>
+        <View style={styles.errorContainer}>
+          <MaterialCommunityIcons
+            name="alert-circle-outline"
+            size={64}
+            color={colors.semantic.danger}
+          />
+          <Text style={styles.errorText}>List not found</Text>
+          <GlassButton variant="primary" icon="home" onPress={() => router.replace("/(app)/(tabs)")}>
+            Go Home
+          </GlassButton>
+        </View>
+      </GlassScreen>
+    );
+  }
 
   return (
     <GlassScreen>
@@ -1023,28 +1115,55 @@ export default function ListDetailScreen() {
                   color={colors.text.secondary}
                 />
               </Pressable>
-              <View style={[styles.headerStatusBadge, { backgroundColor: `${status.color}20` }]}>
-                <MaterialCommunityIcons
-                  name={status.icon as keyof typeof MaterialCommunityIcons.glyphMap}
-                  size={16}
-                  color={status.color}
-                />
-              </View>
             </View>
           }
         />
 
-        <ScrollView
+        {/* Sticky mini budget bar — slides in when dial scrolls out of view */}
+        {budget > 0 && (
+          <Animated.View style={[styles.miniBudgetBar, miniBarStyle]}>
+            <Pressable onPress={handleOpenEditBudget} style={styles.miniBudgetBarInner}>
+              <View style={styles.miniBudgetBarLeft}>
+                <Text style={styles.miniBudgetBarLabel}>Budget</Text>
+                <Text style={styles.miniBudgetBarValue}>
+                  £{budget.toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.miniBudgetBarCenter}>
+                <Text style={[styles.miniBudgetBarLabel, { color: isPlanning ? colors.accent.secondary : miniBarColor }]}>
+                  {miniBarLabel.charAt(0).toUpperCase() + miniBarLabel.slice(1)}
+                </Text>
+                <Text style={[styles.miniBudgetBarValue, { color: isPlanning ? colors.accent.secondary : miniBarColor }]}>
+                  £{miniBarActiveValue.toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.miniBudgetBarRight}>
+                <Text style={styles.miniBudgetBarLabel}>
+                  {miniBarIsOver ? "Over" : "Left"}
+                </Text>
+                <Text style={[styles.miniBudgetBarValue, { color: miniBarIsOver ? colors.semantic.danger : colors.semantic.success }]}>
+                  £{Math.abs(miniBarRemaining).toFixed(2)}
+                </Text>
+              </View>
+            </Pressable>
+          </Animated.View>
+        )}
+
+        <Animated.ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
         >
           {/* Circular Budget Dial — tap to edit */}
           {budget > 0 && (
             <CircularBudgetDial
-              spent={currentTotal}
               budget={budget}
+              planned={estimatedTotal}
+              spent={checkedTotal}
+              mode={list.status}
               onPress={handleOpenEditBudget}
             />
           )}
@@ -1089,15 +1208,26 @@ export default function ListDetailScreen() {
             {list.status === "shopping" && (
               <View style={styles.shoppingModeContainer}>
                 <ShoppingTypewriterHint />
-                <GlassButton
-                  variant="primary"
-                  size="md"
-                  icon="check-circle-outline"
-                  onPress={handleCompleteShopping}
-                  style={styles.fullWidthButton}
-                >
-                  Complete Shopping
-                </GlassButton>
+                <View style={styles.shoppingButtonRow}>
+                  <GlassButton
+                    variant="secondary"
+                    size="md"
+                    icon="plus"
+                    onPress={handleToggleAddForm}
+                    style={styles.shoppingRowButton}
+                  >
+                    Add Item
+                  </GlassButton>
+                  <GlassButton
+                    variant="primary"
+                    size="md"
+                    icon="check-circle-outline"
+                    onPress={handleCompleteShopping}
+                    style={styles.shoppingRowButton}
+                  >
+                    Complete
+                  </GlassButton>
+                </View>
               </View>
             )}
           </View>
@@ -1105,8 +1235,8 @@ export default function ListDetailScreen() {
           {/* Add Item — collapsed button or expanded form with inline suggestions */}
           {canEdit !== false && (
             <>
-              {/* Collapsed: "+ Add Item" button */}
-              {!addFormVisible && items.length > 0 && (
+              {/* Collapsed: "+ Add Item" button (hidden during shopping — button is in the row above) */}
+              {!addFormVisible && items.length > 0 && list.status !== "shopping" && (
                 <GlassButton
                   variant="secondary"
                   size="md"
@@ -1407,68 +1537,49 @@ export default function ListDetailScreen() {
                   </View>
                 )}
               </View>
-              {(() => {
-                const listCategories = [...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort();
-                const listCategoryCounts: Record<string, number> = {};
-                items.forEach((i) => { if (i.category) listCategoryCounts[i.category] = (listCategoryCounts[i.category] || 0) + 1; });
-                const categoryFiltered = listCategoryFilter
-                  ? items.filter((i) => i.category === listCategoryFilter)
-                  : items;
-                // Sort pending items to top
-                const displayItems = [...categoryFiltered].sort((a, b) => {
-                  const aPending = a.approvalStatus === "pending" ? 0 : 1;
-                  const bPending = b.approvalStatus === "pending" ? 0 : 1;
-                  return aPending - bPending;
-                });
-                const pendingCount = categoryFiltered.filter((i) => i.approvalStatus === "pending").length;
-                return (
-                  <>
-                    <CategoryFilter
-                      categories={listCategories}
-                      selected={listCategoryFilter}
-                      onSelect={setListCategoryFilter}
-                      counts={listCategoryCounts}
-                    />
-                    {pendingCount > 0 && (
-                      <View style={styles.pendingBanner}>
-                        <MaterialCommunityIcons
-                          name="clock-outline"
-                          size={16}
-                          color={colors.accent.warning}
-                        />
-                        <Text style={styles.pendingBannerText}>
-                          {pendingCount} {pendingCount === 1 ? "item needs" : "items need"} approval
-                        </Text>
-                      </View>
-                    )}
-                    {displayItems.map((item) => (
-                      <ShoppingListItem
-                        key={item._id}
-                        item={item}
-                        onToggle={() => handleToggleItem(item._id)}
-                        onRemove={() => handleRemoveItem(item._id, item.name)}
-                        onEdit={() => handleEditItem(item)}
-                        onPriorityChange={(priority) => handlePriorityChange(item._id, priority)}
-                        isShopping={list.status === "shopping"}
-                        isOwner={isOwner}
-                        canApprove={canApprove}
-                        commentCount={commentCounts?.[item._id as string] ?? 0}
-                        onApprove={() => handleApproveItem(item._id)}
-                        onReject={() => handleRejectItem(item._id)}
-                        onOpenComments={hasPartners ? () => openCommentThread(item._id, item.name) : undefined}
-                        isSelected={selectedItems.has(item._id)}
-                        onSelectToggle={() => toggleItemSelection(item._id)}
-                      />
-                    ))}
-                  </>
-                );
-              })()}
+              <CategoryFilter
+                categories={listCategories}
+                selected={listCategoryFilter}
+                onSelect={setListCategoryFilter}
+                counts={listCategoryCounts}
+              />
+              {pendingCount > 0 && (
+                <View style={styles.pendingBanner}>
+                  <MaterialCommunityIcons
+                    name="clock-outline"
+                    size={16}
+                    color={colors.accent.warning}
+                  />
+                  <Text style={styles.pendingBannerText}>
+                    {pendingCount} {pendingCount === 1 ? "item needs" : "items need"} approval
+                  </Text>
+                </View>
+              )}
+              {displayItems.map((item) => (
+                <ShoppingListItem
+                  key={item._id}
+                  item={item}
+                  onToggle={handleToggleItem}
+                  onRemove={handleRemoveItem}
+                  onEdit={handleEditItem}
+                  onPriorityChange={handlePriorityChange}
+                  isShopping={isShopping}
+                  isOwner={isOwner}
+                  canApprove={canApprove}
+                  commentCount={commentCounts?.[item._id as string] ?? 0}
+                  onApprove={handleApproveItem}
+                  onReject={handleRejectItem}
+                  onOpenComments={hasPartners ? openCommentThread : undefined}
+                  isSelected={selectedItems.has(item._id)}
+                  onSelectToggle={toggleItemSelection}
+                />
+              ))}
             </View>
           )}
 
           {/* Bottom spacing */}
           <View style={styles.bottomSpacer} />
-        </ScrollView>
+        </Animated.ScrollView>
       </KeyboardAvoidingView>
 
       {/* Edit Budget Modal */}
@@ -1962,22 +2073,22 @@ const PRIORITY_ORDER: Array<"must-have" | "should-have" | "nice-to-have"> = [
 
 interface ShoppingListItemProps {
   item: ListItem;
-  onToggle: () => void;
-  onRemove: () => void;
-  onEdit: () => void;
-  onPriorityChange: (priority: "must-have" | "should-have" | "nice-to-have") => void;
+  onToggle: (itemId: Id<"listItems">) => void;
+  onRemove: (itemId: Id<"listItems">, itemName: string) => void;
+  onEdit: (item: ListItem) => void;
+  onPriorityChange: (itemId: Id<"listItems">, priority: "must-have" | "should-have" | "nice-to-have") => void;
   isShopping: boolean;
   onAddToList?: () => void;
   // Partner mode props
   isOwner?: boolean;
   canApprove?: boolean;
   commentCount?: number;
-  onApprove?: () => void;
-  onReject?: () => void;
-  onOpenComments?: () => void;
+  onApprove?: (itemId: Id<"listItems">) => void;
+  onReject?: (itemId: Id<"listItems">) => void;
+  onOpenComments?: (itemId: Id<"listItems">, itemName: string) => void;
   // Selection props (checkboxes always visible)
   isSelected?: boolean;
-  onSelectToggle?: () => void;
+  onSelectToggle?: (itemId: Id<"listItems">) => void;
 }
 
 // ── Typewriter hint for shopping mode ─────────────────────────────────
@@ -2057,7 +2168,7 @@ const shoppingHintStyles = StyleSheet.create({
   },
 });
 
-function ShoppingListItem({
+const ShoppingListItem = memo(function ShoppingListItem({
   item,
   onToggle,
   onRemove,
@@ -2091,23 +2202,21 @@ function ShoppingListItem({
   const currentPriority = item.priority || "should-have";
   const priorityConfig = PRIORITY_CONFIG[currentPriority];
 
-  const triggerPriorityChange = (direction: "left" | "right") => {
+  const triggerPriorityChange = useCallback((direction: "left" | "right") => {
     const currentIndex = PRIORITY_ORDER.indexOf(currentPriority);
     let newIndex: number;
 
     if (direction === "left") {
-      // Swipe left = decrease priority (towards nice-to-have)
       newIndex = Math.min(currentIndex + 1, PRIORITY_ORDER.length - 1);
     } else {
-      // Swipe right = increase priority (towards must-have)
       newIndex = Math.max(currentIndex - 1, 0);
     }
 
     if (newIndex !== currentIndex) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      onPriorityChange(PRIORITY_ORDER[newIndex]);
+      onPriorityChange(item._id, PRIORITY_ORDER[newIndex]);
     }
-  };
+  }, [currentPriority, onPriorityChange, item._id]);
 
   const panGesture = Gesture.Pan()
     .activeOffsetX([-20, 20])
@@ -2179,7 +2288,7 @@ function ShoppingListItem({
                 {/* Selection checkbox — only in planning mode (hidden during shopping to avoid conflict with shopping checkbox) */}
                 {!isShopping && (
                   <Pressable
-                    onPress={onSelectToggle}
+                    onPress={() => onSelectToggle?.(item._id)}
                     style={styles.selectionCheckbox}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
@@ -2198,7 +2307,7 @@ function ShoppingListItem({
                     isShopping
                       ? () => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          onToggle();
+                          onToggle(item._id);
                         }
                       : undefined
                   }
@@ -2208,7 +2317,7 @@ function ShoppingListItem({
                   {isShopping && (
                     <GlassCircularCheckbox
                       checked={item.isChecked}
-                      onToggle={onToggle}
+                      onToggle={() => onToggle(item._id)}
                       size="md"
                     />
                   )}
@@ -2245,7 +2354,7 @@ function ShoppingListItem({
                     <Pressable
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        onEdit();
+                        onEdit(item);
                       }}
                       style={styles.iconButton}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -2260,7 +2369,7 @@ function ShoppingListItem({
                   <Pressable
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      onRemove();
+                      onRemove(item._id, item.name);
                     }}
                     style={styles.iconButton}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -2279,7 +2388,7 @@ function ShoppingListItem({
       </GestureDetector>
     </View>
   );
-}
+});
 
 // =============================================================================
 // STYLES
@@ -2317,6 +2426,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
+
+  // Sticky mini budget bar
+  miniBudgetBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: "rgba(13, 21, 40, 0.92)",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+  },
+  miniBudgetBarInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  miniBudgetBarLeft: {
+    alignItems: "flex-start",
+  },
+  miniBudgetBarCenter: {
+    alignItems: "center",
+  },
+  miniBudgetBarRight: {
+    alignItems: "flex-end",
+  },
+  miniBudgetBarLabel: {
+    fontSize: 10,
+    fontWeight: "500",
+    color: colors.text.tertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  miniBudgetBarValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text.primary,
+    marginTop: 1,
+  },
   bottomSpacer: {
     height: 140,
   },
@@ -2335,6 +2485,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   fullWidthButton: {
+    flex: 1,
+  },
+  shoppingButtonRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  shoppingRowButton: {
     flex: 1,
   },
 
@@ -2469,10 +2626,13 @@ const styles = StyleSheet.create({
     ...typography.headlineSmall,
     color: colors.text.primary,
     marginBottom: spacing.xs,
+    textAlign: "center",
   },
   emptySubtitle: {
     ...typography.bodyMedium,
     color: colors.text.secondary,
+    textAlign: "center",
+    paddingHorizontal: spacing.lg,
   },
 
   // Items Section
@@ -2999,14 +3159,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerStatusBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.lg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
   chatCountBadge: {
     position: "absolute" as const,
     top: -2,
