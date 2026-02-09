@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
     minHeight: 56,
   },
   leftContainer: {
-    width: 60,
+    minWidth: 44,
     alignItems: "flex-start",
   },
   centerContainer: {
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   rightContainer: {
-    width: 60,
+    minWidth: 60,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
