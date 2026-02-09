@@ -653,21 +653,12 @@ export default function InsightsScreen() {
             {achievements && achievements.length > 0 ? (
               <View style={styles.achievementsGrid}>
                 {achievements.map((a: any) => (
-                  <View key={a._id} style={styles.achievementBadge}>
-                    <View style={styles.achievementIconCircle}>
-                      <MaterialCommunityIcons
-                        name={(a.icon as any) || "star"}
-                        size={24}
-                        color={colors.accent.secondary}
-                      />
-                    </View>
-                    <Text style={styles.achievementTitle} numberOfLines={1}>
-                      {a.title}
-                    </Text>
-                    <Text style={styles.achievementDesc} numberOfLines={2}>
-                      {a.description}
-                    </Text>
-                  </View>
+                  <AchievementBadge
+                    key={a._id}
+                    icon={a.icon}
+                    title={a.title}
+                    description={a.description}
+                  />
                 ))}
               </View>
             ) : (
@@ -842,6 +833,34 @@ const BestItem = React.memo(function BestItem({
       </View>
       <Text style={styles.bestValue}>{value}</Text>
       <Text style={styles.bestLabel}>{label}</Text>
+    </View>
+  );
+});
+
+const AchievementBadge = React.memo(function AchievementBadge({
+  icon,
+  title,
+  description,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <View style={styles.achievementBadge}>
+      <View style={styles.achievementIconCircle}>
+        <MaterialCommunityIcons
+          name={(icon as any) || "star"}
+          size={24}
+          color={colors.accent.secondary}
+        />
+      </View>
+      <Text style={styles.achievementTitle} numberOfLines={1}>
+        {title}
+      </Text>
+      <Text style={styles.achievementDesc} numberOfLines={2}>
+        {description}
+      </Text>
     </View>
   );
 });

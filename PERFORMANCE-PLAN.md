@@ -209,7 +209,7 @@ Lines 497-501: `.reduce()` called INSIDE `.map()` — recomputes the total for e
 `StatBox` (line 793) and `BestItem` (line 813) are small but called 4x each.
 
 - [x] Wrap `StatBox` and `BestItem` in `React.memo()` — all props are primitives, default comparator is fine
-- [ ] Achievement grid items (lines 641-657) are inline JSX inside `.map()` — extract to a memoized `AchievementBadge` component if achievement count grows large (deferred — only needed if achievement count grows)
+- [x] Achievement grid items (lines 641-657) are inline JSX inside `.map()` — extract to a memoized `AchievementBadge` component if achievement count grows large
 
 ---
 
