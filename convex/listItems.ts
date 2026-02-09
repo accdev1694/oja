@@ -291,7 +291,8 @@ export const remove = mutation({
 
     const item = await ctx.db.get(args.id);
     if (!item) {
-      throw new Error("Item not found");
+      // Item already deleted — treat as success (idempotent delete)
+      return { success: true };
     }
 
     const user = await ctx.db

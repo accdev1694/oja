@@ -53,7 +53,7 @@ async function openaiGenerate(prompt: string, options?: { temperature?: number; 
  */
 async function geminiGenerate(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash-exp",
+    model: "gemini-2.0-flash",
     generationConfig: {
       temperature: options?.temperature ?? 0.7,
       maxOutputTokens: options?.maxTokens ?? 4000,
@@ -952,7 +952,7 @@ export const voiceAssistant = action({
     try {
       // Build Gemini model with function declarations
       const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         systemInstruction: systemPrompt,
         tools: [{ functionDeclarations: voiceFunctionDeclarations }],
         generationConfig: {
