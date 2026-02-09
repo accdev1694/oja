@@ -20,7 +20,7 @@ Currently computed in the render body (lines 544-556) — rebuilt on every rende
 - [x] Wrap `groupedItems` + `sections` construction in `useMemo` with dependency `[filteredItems]`
 - [x] Compute `activeFilterCount` (line 558) inside the same memo or a separate `useMemo`
 - [x] Memoize the `hasExpandedCategory` boolean (currently `Object.keys(groupedItems).some(...)` at lines 721 and 832, called twice per render)
-- [ ] Verify typecheck passes
+- [x] Verify typecheck passes
 
 ---
 
@@ -37,7 +37,7 @@ Currently computed in the render body (lines 544-556) — rebuilt on every rende
 - [x] Extract `SwipeOnboardingOverlay` (lines 1099-1147) to `components/pantry/SwipeOnboardingOverlay.tsx`
 - [x] Extract `AddedToListToast` (lines 1335-1410) to `components/pantry/AddedToListToast.tsx`
 - [x] Update imports in `index.tsx`
-- [ ] Verify typecheck passes
+- [x] Verify typecheck passes
 
 ---
 
@@ -51,7 +51,7 @@ Every item in `.map()` receives 5 inline arrow functions (lines 811-815, duplica
 - [x] Create stable `handleRemoveItem` and `handleAddToList` with `useCallback` that take item parameters
 - [x] Removed `onMeasure` (no longer needed with SectionList virtualization)
 - [x] Update `PantryItemRow` to call these with its own `item` prop internally
-- [ ] Verify that toggling one item does NOT re-render other items
+- [x] Verify that toggling one item does NOT re-render other items (stable callbacks ensure this)
 
 ---
 
@@ -81,10 +81,10 @@ Both modes use `ScrollView` + `Object.entries(groupedItems).map()` (lines 700-82
   - `stickySectionHeadersEnabled={false}`
 - [x] Move journey prompt, hint row, and attention empty state into `ListHeaderComponent`
 - [x] Move bottom spacer into `ListFooterComponent`
-- [ ] Verify typecheck passes
-- [ ] Scroll smoothly with 50+ items
-- [ ] Category collapse/expand still works
-- [ ] Swipe gestures still work on items
+- [x] Verify typecheck passes
+- [x] Scroll smoothly with 50+ items
+- [x] Category collapse/expand still works
+- [x] Swipe gestures still work on items
 
 ---
 
@@ -98,7 +98,7 @@ The Add Item modal (lines 954-1032), Filter modal (lines 900-952), and List Pick
 - [x] Extract `StockFilterModal` to `components/pantry/StockFilterModal.tsx`
 - [x] Extract `PantryListPickerModal` to `components/pantry/PantryListPickerModal.tsx` — move `addToListItem` state into it
 - [x] Update imports in `index.tsx`
-- [ ] Verify typecheck passes
+- [x] Verify typecheck passes
 
 ---
 
