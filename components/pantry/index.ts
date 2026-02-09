@@ -10,3 +10,12 @@ export type { StockLevel } from "./GaugeIndicator";
 export { FlyToListAnimation } from "./FlyToListAnimation";
 
 export { PantryItemCard } from "./PantryItemCard";
+
+export { PantryItemRow } from "./PantryItemRow";
+export type { PantryItemRowProps } from "./PantryItemRow";
+export { SwipeOnboardingOverlay } from "./SwipeOnboardingOverlay";
+export { TypewriterHint } from "./TypewriterHint";
+export { AddedToListToast } from "./AddedToListToast";
+export { AddPantryItemModal } from "./AddPantryItemModal";
+export { StockFilterModal } from "./StockFilterModal";
+export { PantryListPickerModal } from "./PantryListPickerModal";

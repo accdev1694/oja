@@ -5,11 +5,10 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  SectionList,
   TouchableOpacity,
   Dimensions,
   Pressable,
-  TextInput,
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -20,41 +19,36 @@ import {
   NotificationFeedbackType,
   ImpactFeedbackStyle,
 } from "expo-haptics";
-import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
-  FadeIn,
-  FadeOut,
-  runOnJS,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withTiming,
-  withDelay,
-  withSequence,
-  withRepeat,
   interpolateColor,
-  Easing,
 } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  GaugeIndicator,
   STOCK_LEVEL_ORDER,
   type StockLevel,
+  PantryItemRow,
+  SwipeOnboardingOverlay,
+  TypewriterHint,
+  AddedToListToast,
+  AddPantryItemModal,
+  StockFilterModal,
+  PantryListPickerModal,
 } from "@/components/pantry";
-import { getSafeIcon } from "@/lib/icons/iconMatcher";
 
-// Glass UI Components
 import {
   GlassScreen,
   GlassCard,
   GlassSearchInput,
-  GlassButton,
   SimpleHeader,
   SkeletonPantryItem,
   EmptyPantry,
-  GlassModal,
   TrialNudgeBanner,
   colors,
   typography,
@@ -62,8 +56,6 @@ import {
   borderRadius,
   useGlassAlert,
 } from "@/components/ui/glass";
-import { RemoveButton } from "@/components/ui/RemoveButton";
-import { AddToListButton } from "@/components/ui/AddToListButton";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
@@ -81,17 +73,52 @@ function getGreeting(firstName?: string): string {
 
 type PantryViewMode = "attention" | "all";
 
-const STOCK_CATEGORIES = [
-  "Dairy", "Bakery", "Produce", "Meat", "Pantry Staples", "Spices & Seasonings",
-  "Condiments", "Beverages", "Snacks", "Frozen", "Canned Goods", "Grains & Pasta",
-  "Oils & Vinegars", "Baking", "Household", "Personal Care", "Health & Wellness",
-];
+// =============================================================================
+// CATEGORY SECTION HEADER (shared between attention + all modes)
+// =============================================================================
 
-const STOCK_LEVELS: { level: StockLevel; label: string; color: string }[] = [
-  { level: "stocked", label: "Stocked", color: colors.budget.healthy },
-  { level: "low", label: "Running Low", color: colors.budget.caution },
-  { level: "out", label: "Out of Stock", color: colors.budget.exceeded },
-];
+interface CategoryHeaderProps {
+  category: string;
+  count: number;
+  isCollapsed: boolean;
+  onToggle: (category: string) => void;
+}
+
+const CategoryHeader = React.memo(function CategoryHeader({
+  category,
+  count,
+  isCollapsed,
+  onToggle,
+}: CategoryHeaderProps) {
+  const handlePress = useCallback(() => {
+    impactAsync(ImpactFeedbackStyle.Light);
+    onToggle(category);
+  }, [category, onToggle]);
+
+  return (
+    <TouchableOpacity
+      style={styles.categoryHeader}
+      onPress={handlePress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.categoryTitleRow}>
+        <Text style={styles.categoryTitle}>{category}</Text>
+        <View style={styles.categoryCountBadge}>
+          <Text style={styles.categoryCount}>{count}</Text>
+        </View>
+      </View>
+      <MaterialCommunityIcons
+        name={isCollapsed ? "chevron-right" : "chevron-down"}
+        size={24}
+        color={colors.text.tertiary}
+      />
+    </TouchableOpacity>
+  );
+});
+
+// =============================================================================
+// MAIN SCREEN
+// =============================================================================
 
 export default function PantryScreen() {
   const router = useRouter();
@@ -105,7 +132,6 @@ export default function PantryScreen() {
   const addListItem = useMutation(api.listItems.create);
   const addFromPantryOut = useMutation(api.listItems.addFromPantryOut);
   const migrateIcons = useMutation(api.pantryItems.migrateIcons);
-  const createPantryItem = useMutation(api.pantryItems.create);
   const removePantryItem = useMutation(api.pantryItems.remove);
 
   // Migrate icons for items that don't have them yet
@@ -128,7 +154,6 @@ export default function PantryScreen() {
   const tabPillWidth = useSharedValue(0);
 
   const onTabContainerLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
-    // Container inner width minus padding (4px each side)
     tabPillWidth.value = (e.nativeEvent.layout.width - 8) / 2;
   }, []);
 
@@ -142,9 +167,6 @@ export default function PantryScreen() {
 
   // Add item modal
   const [addModalVisible, setAddModalVisible] = useState(false);
-  const [newItemName, setNewItemName] = useState("");
-  const [newItemCategory, setNewItemCategory] = useState("Pantry Staples");
-  const [newItemStock, setNewItemStock] = useState<StockLevel>("stocked");
 
   // Gesture onboarding
   const [showGestureOnboarding, setShowGestureOnboarding] = useState(false);
@@ -167,10 +189,8 @@ export default function PantryScreen() {
     AsyncStorage.setItem("oja_gesture_onboarding_done", "true");
   }, []);
 
-  // Toast position (card Y coordinate)
-  const [flyStartPosition, setFlyStartPosition] = useState({ x: 0, y: 0 });
-
   // Toast state
+  const [flyStartPosition, setFlyStartPosition] = useState({ x: 0, y: 0 });
   const [toastVisible, setToastVisible] = useState(false);
   const [toastItemName, setToastItemName] = useState("");
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -197,7 +217,8 @@ export default function PantryScreen() {
     setCollapsedCategories(new Set(categories));
   }, [categories]);
 
-  // Count items needing restocking (Low + Out) for badge
+  // ── Step 1.1: Memoize derived data ────────────────────────────────────
+
   const attentionCount = useMemo(() => {
     if (!items) return 0;
     return items.filter(
@@ -205,7 +226,6 @@ export default function PantryScreen() {
     ).length;
   }, [items]);
 
-  // Count items completely out of stock (for journey prompt)
   const outCount = useMemo(() => {
     if (!items) return 0;
     return items.filter((item) => item.stockLevel === "out").length;
@@ -223,16 +243,14 @@ export default function PantryScreen() {
     };
   });
 
-  // Filter items based on view mode, search, stock level, and category
+  // Filter items based on view mode, search, stock level
   const filteredItems = useMemo(() => {
     if (!items) return [];
 
     return items.filter((item) => {
-      // In attention mode, only show low + out items
       if (viewMode === "attention") {
         if (item.stockLevel !== "low" && item.stockLevel !== "out") return false;
       } else {
-        // In "all" mode, respect manual stock filters
         if (!stockFilters.has(item.stockLevel as StockLevel)) return false;
       }
       if (searchQuery.trim()) {
@@ -242,7 +260,32 @@ export default function PantryScreen() {
     });
   }, [items, searchQuery, stockFilters, viewMode]);
 
-  const toggleStockFilter = (level: StockLevel) => {
+  // Step 1.1: Memoize groupedItems + sections
+  const sections = useMemo(() => {
+    const grouped: Record<string, typeof filteredItems> = {};
+    filteredItems.forEach((item) => {
+      if (!grouped[item.category]) {
+        grouped[item.category] = [];
+      }
+      grouped[item.category].push(item);
+    });
+    return Object.entries(grouped).map(([category, data]) => ({
+      title: category,
+      data,
+    }));
+  }, [filteredItems]);
+
+  const activeFilterCount = useMemo(() => 5 - stockFilters.size, [stockFilters]);
+
+  // Step 1.1: Memoize hasExpandedCategory (was computed twice inline)
+  const hasExpandedCategory = useMemo(
+    () => sections.some((s) => !collapsedCategories.has(s.title)),
+    [sections, collapsedCategories]
+  );
+
+  // ── Step 1.3: Stabilize callbacks ─────────────────────────────────────
+
+  const toggleStockFilter = useCallback((level: StockLevel) => {
     impactAsync(ImpactFeedbackStyle.Light);
     setStockFilters((prev) => {
       const newSet = new Set(prev);
@@ -255,36 +298,36 @@ export default function PantryScreen() {
       }
       return newSet;
     });
-  };
-
-  // Position tracking for fly animation
-  const [itemPositions, setItemPositions] = useState<Record<string, { x: number; y: number }>>({});
-
-  const handleItemMeasure = useCallback((itemId: string, x: number, y: number) => {
-    setItemPositions((prev) => ({ ...prev, [itemId]: { x, y } }));
   }, []);
 
-  // Auto-add "out" item to shopping list with toast
-  const autoAddToShoppingList = async (
+  const showAllFilters = useCallback(() => {
+    setStockFilters(new Set<StockLevel>(["stocked", "low", "out"]));
+    impactAsync(ImpactFeedbackStyle.Light);
+  }, []);
+
+  const showToast = useCallback((itemName: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToastItemName(itemName);
+    setToastVisible(true);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastVisible(false);
+    }, 2200);
+  }, []);
+
+  const autoAddToShoppingList = useCallback(async (
     item: { _id: Id<"pantryItems">; name: string; category: string },
     startPos?: { x: number; y: number }
   ) => {
     try {
-      if (startPos) {
-        setFlyStartPosition(startPos);
-      }
+      if (startPos) setFlyStartPosition(startPos);
       showToast(item.name);
 
       let listId: Id<"shoppingLists">;
-
       if (activeLists && activeLists.length > 0) {
         listId = activeLists[0]._id;
       } else {
         const listName = `Shopping List ${new Date().toLocaleDateString()}`;
-        listId = await createList({
-          name: listName,
-          budget: 50,
-        });
+        listId = await createList({ name: listName, budget: 50 });
       }
 
       await addListItem({
@@ -299,159 +342,26 @@ export default function PantryScreen() {
     } catch (error) {
       console.error("Failed to auto-add to list:", error);
     }
-  };
+  }, [activeLists, createList, addListItem, showToast]);
 
-  const showToast = useCallback((itemName: string) => {
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    setToastItemName(itemName);
-    setToastVisible(true);
-    toastTimeoutRef.current = setTimeout(() => {
-      setToastVisible(false);
-    }, 2200);
+  const getNextLowerLevel = useCallback((current: StockLevel): StockLevel | null => {
+    const currentIndex = STOCK_LEVEL_ORDER.indexOf(current);
+    if (currentIndex > 0) return STOCK_LEVEL_ORDER[currentIndex - 1];
+    return null;
   }, []);
 
-  const handleAddItem = async () => {
-    const name = newItemName.trim();
-    if (!name) return;
-    impactAsync(ImpactFeedbackStyle.Medium);
-    try {
-      await createPantryItem({
-        name,
-        category: newItemCategory,
-        stockLevel: newItemStock,
-      });
-      notificationAsync(NotificationFeedbackType.Success);
-      setAddModalVisible(false);
-      setNewItemName("");
-      setNewItemCategory("Pantry Staples");
-      setNewItemStock("stocked");
-    } catch (error: any) {
-      console.error("Failed to add item:", error);
-      const msg = error?.message ?? error?.data ?? "";
-      if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
-        notificationAsync(NotificationFeedbackType.Warning);
-        alert(
-          "Pantry Limit Reached",
-          "Free plan allows up to 50 pantry items. Upgrade to Premium for unlimited items.",
-          [
-            { text: "Maybe Later", style: "cancel" },
-            { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
-          ]
-        );
-      } else {
-        alert("Error", "Failed to add pantry item");
-      }
-    }
-  };
-
-  const handleRemoveItem = (item: { _id: Id<"pantryItems">; name: string }) => {
-    impactAsync(ImpactFeedbackStyle.Medium);
-    const doRemove = async () => {
-      try {
-        await removePantryItem({ id: item._id });
-        notificationAsync(NotificationFeedbackType.Success);
-      } catch (error) {
-        console.error("Failed to remove item:", error);
-      }
-    };
-
-    alert("Remove Item", `Remove "${item.name}" from your stock?`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: doRemove },
-    ]);
-  };
-
-  // Add-to-list handler — opens list picker
-  const handleAddToList = (item: { name: string; lastPrice?: number }) => {
-    const planningLists = (activeLists ?? []).filter(
-      (l) => l.status === "active" || l.status === "shopping"
-    );
-
-    if (planningLists.length === 0) {
-      // No active lists — offer to create one
-      const doCreate = async () => {
-        try {
-          const listId = await createList({ name: "Shopping List" });
-          await addListItem({
-            listId: listId as Id<"shoppingLists">,
-            name: item.name,
-            quantity: 1,
-            estimatedPrice: item.lastPrice,
-          });
-          showAddedToast(item.name);
-        } catch (e) {
-          console.error("Failed to create list:", e);
-        }
-      };
-      alert("No Active Lists", "Create a new list and add this item?", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Create", onPress: doCreate },
-      ]);
-      return;
-    }
-
-    if (planningLists.length === 1) {
-      // Only one list — add directly
-      handlePickList(planningLists[0]._id, planningLists[0].name, item.name, item.lastPrice);
-      return;
-    }
-
-    // Multiple lists — show picker
-    setAddToListItem(item);
-  };
-
-  const handlePickList = async (
-    listId: Id<"shoppingLists">,
-    listName: string,
-    itemName: string,
-    estimatedPrice?: number
-  ) => {
-    try {
-      await addListItem({
-        listId,
-        name: itemName,
-        quantity: 1,
-        estimatedPrice,
-      });
-      showAddedToast(itemName, listName);
-    } catch (e) {
-      console.error("Failed to add to list:", e);
-    }
-    setAddToListItem(null);
-  };
-
-  const showAddedToast = (itemName: string) => {
-    setToastItemName(itemName);
-    setToastVisible(true);
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = setTimeout(() => setToastVisible(false), 2000);
-  };
-
-  // Get next lower stock level
-  const getNextLowerLevel = (current: StockLevel): StockLevel | null => {
+  const getNextHigherLevel = useCallback((current: StockLevel): StockLevel | null => {
     const currentIndex = STOCK_LEVEL_ORDER.indexOf(current);
-    if (currentIndex > 0) {
-      return STOCK_LEVEL_ORDER[currentIndex - 1];
-    }
+    if (currentIndex < STOCK_LEVEL_ORDER.length - 1) return STOCK_LEVEL_ORDER[currentIndex + 1];
     return null;
-  };
+  }, []);
 
-  // Get next higher stock level
-  const getNextHigherLevel = (current: StockLevel): StockLevel | null => {
-    const currentIndex = STOCK_LEVEL_ORDER.indexOf(current);
-    if (currentIndex < STOCK_LEVEL_ORDER.length - 1) {
-      return STOCK_LEVEL_ORDER[currentIndex + 1];
-    }
-    return null;
-  };
-
-  const handleSwipeDecrease = async (item: {
-    _id: Id<"pantryItems">;
-    name: string;
-    category: string;
-    stockLevel: string;
-  }) => {
+  // Step 1.3: Stable callbacks that take itemId, called by PantryItemRow internally
+  const handleSwipeDecrease = useCallback(async (itemId: Id<"pantryItems">) => {
     if (showGestureOnboarding) dismissGestureOnboarding();
+    const item = items?.find((i) => i._id === itemId);
+    if (!item) return;
+
     const nextLevel = getNextLowerLevel(item.stockLevel as StockLevel);
     if (!nextLevel) return;
 
@@ -465,23 +375,19 @@ export default function PantryScreen() {
 
     try {
       await updateStockLevel({ id: item._id, stockLevel: nextLevel });
-
       if (nextLevel === "out") {
-        const pos = itemPositions[item._id as string];
-        await autoAddToShoppingList(item, pos || { x: SCREEN_WIDTH / 2, y: 300 });
+        await autoAddToShoppingList(item, { x: SCREEN_WIDTH / 2, y: 300 });
       }
     } catch (error) {
       console.error("Failed to decrease stock:", error);
     }
-  };
+  }, [items, showGestureOnboarding, dismissGestureOnboarding, getNextLowerLevel, updateStockLevel, autoAddToShoppingList]);
 
-  const handleSwipeIncrease = async (item: {
-    _id: Id<"pantryItems">;
-    name: string;
-    category: string;
-    stockLevel: string;
-  }) => {
+  const handleSwipeIncrease = useCallback(async (itemId: Id<"pantryItems">) => {
     if (showGestureOnboarding) dismissGestureOnboarding();
+    const item = items?.find((i) => i._id === itemId);
+    if (!item) return;
+
     const nextLevel = getNextHigherLevel(item.stockLevel as StockLevel);
     if (!nextLevel) return;
 
@@ -498,9 +404,239 @@ export default function PantryScreen() {
     } catch (error) {
       console.error("Failed to increase stock:", error);
     }
-  };
+  }, [items, showGestureOnboarding, dismissGestureOnboarding, getNextHigherLevel, updateStockLevel]);
 
-  // Loading state with skeletons
+  const handleRemoveItem = useCallback((itemId: Id<"pantryItems">) => {
+    const item = items?.find((i) => i._id === itemId);
+    if (!item) return;
+
+    impactAsync(ImpactFeedbackStyle.Medium);
+    const doRemove = async () => {
+      try {
+        await removePantryItem({ id: item._id });
+        notificationAsync(NotificationFeedbackType.Success);
+      } catch (error) {
+        console.error("Failed to remove item:", error);
+      }
+    };
+
+    alert("Remove Item", `Remove "${item.name}" from your stock?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: doRemove },
+    ]);
+  }, [items, removePantryItem, alert]);
+
+  const handleAddToList = useCallback((itemId: Id<"pantryItems">) => {
+    const item = items?.find((i) => i._id === itemId);
+    if (!item) return;
+
+    const planningLists = (activeLists ?? []).filter(
+      (l) => l.status === "active" || l.status === "shopping"
+    );
+
+    if (planningLists.length === 0) {
+      const doCreate = async () => {
+        try {
+          const listId = await createList({ name: "Shopping List" });
+          await addListItem({
+            listId: listId as Id<"shoppingLists">,
+            name: item.name,
+            quantity: 1,
+            estimatedPrice: item.lastPrice,
+          });
+          showToast(item.name);
+        } catch (e) {
+          console.error("Failed to create list:", e);
+        }
+      };
+      alert("No Active Lists", "Create a new list and add this item?", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Create", onPress: doCreate },
+      ]);
+      return;
+    }
+
+    if (planningLists.length === 1) {
+      handlePickList(planningLists[0]._id, planningLists[0].name, item.name, item.lastPrice);
+      return;
+    }
+
+    setAddToListItem({ name: item.name, lastPrice: item.lastPrice });
+  }, [items, activeLists, createList, addListItem, showToast, alert]);
+
+  const handlePickList = useCallback(async (
+    listId: Id<"shoppingLists">,
+    listName: string,
+    itemName: string,
+    estimatedPrice?: number
+  ) => {
+    try {
+      await addListItem({
+        listId,
+        name: itemName,
+        quantity: 1,
+        estimatedPrice,
+      });
+      showToast(itemName);
+    } catch (e) {
+      console.error("Failed to add to list:", e);
+    }
+    setAddToListItem(null);
+  }, [addListItem, showToast]);
+
+  // Step 1.4: Stable toggleCategory callback
+  const toggleCategory = useCallback((category: string) => {
+    setCollapsedCategories((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(category)) {
+        newSet.delete(category);
+      } else {
+        newSet.add(category);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const handleViewModeSwitch = useCallback((mode: PantryViewMode) => {
+    if (mode === viewMode) return;
+    impactAsync(ImpactFeedbackStyle.Light);
+
+    tabProgress.value = withSpring(mode === "all" ? 1 : 0, {
+      damping: 18,
+      stiffness: 180,
+    });
+
+    startTransition(() => {
+      setViewMode(mode);
+      setSearchQuery("");
+      if (mode === "all" && categories.length > 0) {
+        setCollapsedCategories(new Set(categories));
+      }
+    });
+  }, [viewMode, categories, tabProgress]);
+
+  const handleOpenAddModal = useCallback(() => {
+    impactAsync(ImpactFeedbackStyle.Light);
+    setAddModalVisible(true);
+  }, []);
+
+  const handleCloseAddModal = useCallback(() => {
+    setAddModalVisible(false);
+  }, []);
+
+  const handleOpenFilter = useCallback(() => {
+    setFilterVisible(true);
+  }, []);
+
+  const handleCloseFilter = useCallback(() => {
+    setFilterVisible(false);
+  }, []);
+
+  const handleCloseListPicker = useCallback(() => {
+    setAddToListItem(null);
+  }, []);
+
+  // Journey prompt handler
+  const handleJourneyPress = useCallback(async () => {
+    impactAsync(ImpactFeedbackStyle.Light);
+    try {
+      let listId;
+      if (activeLists && activeLists.length > 0) {
+        listId = activeLists[0]._id;
+      } else {
+        const listName = `Shopping List ${new Date().toLocaleDateString()}`;
+        listId = await createList({ name: listName, budget: 50 });
+      }
+      await addFromPantryOut({ listId });
+      notificationAsync(NotificationFeedbackType.Success);
+      router.navigate(`/(app)/list/${listId}` as any);
+    } catch (error) {
+      console.error("Failed to add out items:", error);
+    }
+  }, [activeLists, createList, addFromPantryOut, router]);
+
+  // ── Step 1.5: SectionList renderers ───────────────────────────────────
+
+  const renderSectionHeader = useCallback(({ section }: { section: { title: string; data: any[] } }) => {
+    return (
+      <CategoryHeader
+        category={section.title}
+        count={section.data.length}
+        isCollapsed={collapsedCategories.has(section.title)}
+        onToggle={toggleCategory}
+      />
+    );
+  }, [collapsedCategories, toggleCategory]);
+
+  const renderItem = useCallback(({ item, section }: { item: any; section: { title: string } }) => {
+    // If category is collapsed, render nothing
+    if (collapsedCategories.has(section.title)) return null;
+
+    return (
+      <PantryItemRow
+        item={item}
+        onSwipeDecrease={handleSwipeDecrease}
+        onSwipeIncrease={handleSwipeIncrease}
+        onRemove={handleRemoveItem}
+        onAddToList={handleAddToList}
+      />
+    );
+  }, [collapsedCategories, handleSwipeDecrease, handleSwipeIncrease, handleRemoveItem, handleAddToList]);
+
+  const keyExtractor = useCallback((item: any) => item._id, []);
+
+  const ListHeader = useMemo(() => {
+    if (filteredItems.length === 0 && viewMode === "attention") {
+      return (
+        <View style={styles.attentionEmptyContainer}>
+          <MaterialCommunityIcons
+            name="check-circle-outline"
+            size={64}
+            color={colors.accent.success}
+          />
+          <Text style={styles.attentionEmptyTitle}>All stocked up!</Text>
+          <Text style={styles.attentionEmptySubtitle}>
+            Nothing needs restocking right now. Tap "All Items" to browse your full stock.
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <>
+        {hasExpandedCategory && (
+          <View style={styles.hintRow}>
+            <TypewriterHint text="Swipe left/right to adjust stock level" />
+          </View>
+        )}
+
+        {viewMode === "attention" && outCount > 0 && (
+          <Pressable onPress={handleJourneyPress}>
+            <GlassCard style={styles.journeyBanner}>
+              <View style={styles.journeyRow}>
+                <MaterialCommunityIcons
+                  name="cart-arrow-right"
+                  size={20}
+                  color={colors.accent.primary}
+                />
+                <Text style={styles.journeyText}>
+                  {outCount} item{outCount !== 1 ? "s" : ""} out — add to your next list?
+                </Text>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={18}
+                  color={colors.text.tertiary}
+                />
+              </View>
+            </GlassCard>
+          </Pressable>
+        )}
+      </>
+    );
+  }, [filteredItems.length, viewMode, hasExpandedCategory, outCount, handleJourneyPress]);
+
+  // ── Loading & empty states ────────────────────────────────────────────
+
   if (items === undefined) {
     return (
       <GlassScreen edges={["top"]}>
@@ -528,7 +664,6 @@ export default function PantryScreen() {
     );
   }
 
-  // Empty state
   if (items.length === 0) {
     return (
       <GlassScreen edges={["top"]}>
@@ -539,44 +674,6 @@ export default function PantryScreen() {
       </GlassScreen>
     );
   }
-
-  // Group filtered items by category
-  const groupedItems: Record<string, typeof filteredItems> = {};
-  filteredItems.forEach((item) => {
-    if (!groupedItems[item.category]) {
-      groupedItems[item.category] = [];
-    }
-    groupedItems[item.category].push(item);
-  });
-
-  // Convert to sections format for SectionList
-  const sections = Object.entries(groupedItems).map(([category, items]) => ({
-    title: category,
-    data: items,
-  }));
-
-  const activeFilterCount = 5 - stockFilters.size;
-
-  const handleViewModeSwitch = (mode: PantryViewMode) => {
-    if (mode === viewMode) return;
-    impactAsync(ImpactFeedbackStyle.Light);
-
-    // Animate the pill immediately (high priority)
-    tabProgress.value = withSpring(mode === "all" ? 1 : 0, {
-      damping: 18,
-      stiffness: 180,
-    });
-
-    // Defer list re-render to keep UI responsive
-    startTransition(() => {
-      setViewMode(mode);
-      setSearchQuery("");
-      // Collapse all categories in "all" mode so only headers render (fast)
-      if (mode === "all" && categories.length > 0) {
-        setCollapsedCategories(new Set(categories));
-      }
-    });
-  };
 
   return (
     <GlassScreen edges={["top"]}>
@@ -592,19 +689,13 @@ export default function PantryScreen() {
           }
           rightElement={
             <View style={styles.headerButtons}>
-              <Pressable
-                style={styles.addButton}
-                onPress={() => {
-                  impactAsync(ImpactFeedbackStyle.Light);
-                  setAddModalVisible(true);
-                }}
-              >
+              <Pressable style={styles.addButton} onPress={handleOpenAddModal}>
                 <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
                 <Text style={styles.addButtonText}>Add</Text>
               </Pressable>
               <Pressable
                 style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
-                onPress={() => setFilterVisible(true)}
+                onPress={handleOpenFilter}
               >
                 <MaterialCommunityIcons
                   name="tune-variant"
@@ -629,7 +720,6 @@ export default function PantryScreen() {
 
         {/* View Mode Tabs — sliding pill animates between red↔green */}
         <View style={styles.viewModeTabs} onLayout={onTabContainerLayout}>
-          {/* Sliding pill indicator */}
           <Animated.View style={[styles.slidingPill, slidingPillStyle]} />
 
           <Pressable
@@ -685,7 +775,7 @@ export default function PantryScreen() {
           </Pressable>
         </View>
 
-        {/* Search field — shown in both modes */}
+        {/* Search field */}
         <View style={styles.searchContainer}>
           <GlassSearchInput
             value={searchQuery}
@@ -695,395 +785,50 @@ export default function PantryScreen() {
           />
         </View>
 
-        {/* Content — ScrollView with collapsible categories for both modes */}
-        {viewMode === "attention" ? (
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom }]}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Empty state for attention mode */}
-            {filteredItems.length === 0 ? (
-              <View style={styles.attentionEmptyContainer}>
-                <MaterialCommunityIcons
-                  name="check-circle-outline"
-                  size={64}
-                  color={colors.accent.success}
-                />
-                <Text style={styles.attentionEmptyTitle}>All stocked up!</Text>
-                <Text style={styles.attentionEmptySubtitle}>
-                  Nothing needs restocking right now. Tap "All Items" to browse your full stock.
-                </Text>
-              </View>
-            ) : (
-              <>
-                {/* Hint row */}
-                {Object.keys(groupedItems).some((cat) => !collapsedCategories.has(cat)) && (
-                  <View style={styles.hintRow}>
-                    <TypewriterHint text="Swipe left/right to adjust stock level" />
-                  </View>
-                )}
-
-                {/* Journey prompt: bridge Stock → Lists */}
-                {outCount > 0 && (
-                  <Pressable
-                    onPress={async () => {
-                      impactAsync(ImpactFeedbackStyle.Light);
-                      try {
-                        let listId;
-                        if (activeLists && activeLists.length > 0) {
-                          listId = activeLists[0]._id;
-                        } else {
-                          const listName = `Shopping List ${new Date().toLocaleDateString()}`;
-                          listId = await createList({ name: listName, budget: 50 });
-                        }
-                        await addFromPantryOut({ listId });
-                        notificationAsync(NotificationFeedbackType.Success);
-                        router.navigate(`/(app)/list/${listId}` as any);
-                      } catch (error) {
-                        console.error("Failed to add out items:", error);
-                      }
-                    }}
-                  >
-                    <GlassCard style={styles.journeyBanner}>
-                      <View style={styles.journeyRow}>
-                        <MaterialCommunityIcons
-                          name="cart-arrow-right"
-                          size={20}
-                          color={colors.accent.primary}
-                        />
-                        <Text style={styles.journeyText}>
-                          {outCount} item{outCount !== 1 ? "s" : ""} out — add to your next list?
-                        </Text>
-                        <MaterialCommunityIcons
-                          name="chevron-right"
-                          size={18}
-                          color={colors.text.tertiary}
-                        />
-                      </View>
-                    </GlassCard>
-                  </Pressable>
-                )}
-
-                {/* Category sections — same collapsible pattern as All Items */}
-                {Object.entries(groupedItems).map(([category, categoryItems]) => {
-                  const isCollapsed = collapsedCategories.has(category);
-
-                  const toggleCategory = () => {
-                    impactAsync(ImpactFeedbackStyle.Light);
-                    setCollapsedCategories((prev) => {
-                      const newSet = new Set(prev);
-                      if (newSet.has(category)) {
-                        newSet.delete(category);
-                      } else {
-                        newSet.add(category);
-                      }
-                      return newSet;
-                    });
-                  };
-
-                  return (
-                    <View key={category} style={styles.categorySection}>
-                      <TouchableOpacity
-                        style={styles.categoryHeader}
-                        onPress={toggleCategory}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.categoryTitleRow}>
-                          <Text style={styles.categoryTitle}>{category}</Text>
-                          <View style={styles.categoryCountBadge}>
-                            <Text style={styles.categoryCount}>{categoryItems.length}</Text>
-                          </View>
-                        </View>
-                        <MaterialCommunityIcons
-                          name={isCollapsed ? "chevron-right" : "chevron-down"}
-                          size={24}
-                          color={colors.text.tertiary}
-                        />
-                      </TouchableOpacity>
-
-                      {!isCollapsed && (
-                        <View style={styles.itemList}>
-                          {categoryItems.map((item) => (
-                            <PantryItemRow
-                              key={item._id}
-                              item={item}
-                              onSwipeDecrease={() => handleSwipeDecrease(item)}
-                              onSwipeIncrease={() => handleSwipeIncrease(item)}
-                              onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
-                              onRemove={() => handleRemoveItem(item)}
-                              onAddToList={() => handleAddToList(item)}
-                            />
-                          ))}
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
-              </>
-            )}
-          </ScrollView>
-        ) : (
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom }]}
-            showsVerticalScrollIndicator={false}
-          >
-            {Object.keys(groupedItems).some((cat) => !collapsedCategories.has(cat)) && (
-              <View style={styles.hintRow}>
-                <TypewriterHint text="Swipe left/right to adjust stock level" />
-              </View>
-            )}
-            {Object.entries(groupedItems).map(([category, categoryItems]) => {
-              const isCollapsed = collapsedCategories.has(category);
-
-              const toggleCategory = () => {
-                impactAsync(ImpactFeedbackStyle.Light);
-                setCollapsedCategories((prev) => {
-                  const newSet = new Set(prev);
-                  if (newSet.has(category)) {
-                    newSet.delete(category);
-                  } else {
-                    newSet.add(category);
-                  }
-                  return newSet;
-                });
-              };
-
-              return (
-                <View key={category} style={styles.categorySection}>
-                  <TouchableOpacity
-                    style={styles.categoryHeader}
-                    onPress={toggleCategory}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.categoryTitleRow}>
-                      <Text style={styles.categoryTitle}>{category}</Text>
-                      <View style={styles.categoryCountBadge}>
-                        <Text style={styles.categoryCount}>{categoryItems.length}</Text>
-                      </View>
-                    </View>
-                    <MaterialCommunityIcons
-                      name={isCollapsed ? "chevron-right" : "chevron-down"}
-                      size={24}
-                      color={colors.text.tertiary}
-                    />
-                  </TouchableOpacity>
-
-                  {!isCollapsed && (
-                    <View style={styles.itemList}>
-                      {categoryItems.map((item) => (
-                        <PantryItemRow
-                          key={item._id}
-                          item={item}
-                          onSwipeDecrease={() => handleSwipeDecrease(item)}
-                          onSwipeIncrease={() => handleSwipeIncrease(item)}
-                          onMeasure={(x, y) => handleItemMeasure(item._id as string, x, y)}
-                          onRemove={() => handleRemoveItem(item)}
-                          onAddToList={() => handleAddToList(item)}
-                        />
-                      ))}
-                    </View>
-                  )}
-                </View>
-              );
-            })}
-          </ScrollView>
-        )}
+        {/* Step 1.5: Virtualized SectionList (replaces both ScrollViews) */}
+        <SectionList
+          sections={sections}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          ListHeaderComponent={ListHeader}
+          ListFooterComponent={<View style={{ height: 140 + insets.bottom }} />}
+          stickySectionHeadersEnabled={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={15}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+        />
 
         {/* Added-to-list Toast */}
         {toastVisible && (
           <AddedToListToast itemName={toastItemName} y={flyStartPosition.y} />
         )}
 
-        {/* Filter Modal */}
-        <GlassModal
+        {/* Step 1.6: Extracted Modals */}
+        <StockFilterModal
           visible={filterVisible}
-          onClose={() => setFilterVisible(false)}
-          maxWidth={340}
-          contentStyle={styles.filterModal}
-        >
-          <Text style={styles.filterTitle}>Filter by Stock Level</Text>
-          <Text style={styles.filterSubtitle}>Select which levels to show</Text>
+          onClose={handleCloseFilter}
+          stockFilters={stockFilters}
+          onToggleFilter={toggleStockFilter}
+          onShowAll={showAllFilters}
+        />
 
-          <View style={styles.filterOptions}>
-            {STOCK_LEVELS.map((option) => (
-              <TouchableOpacity
-                key={option.level}
-                style={[
-                  styles.filterOption,
-                  stockFilters.has(option.level) && styles.filterOptionSelected,
-                ]}
-                onPress={() => toggleStockFilter(option.level)}
-                activeOpacity={0.7}
-              >
-                <GaugeIndicator level={option.level} size="small" />
-                <Text style={styles.filterOptionLabel}>{option.label}</Text>
-                {stockFilters.has(option.level) && (
-                  <MaterialCommunityIcons
-                    name="check-circle"
-                    size={22}
-                    color={colors.accent.primary}
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={styles.filterActions}>
-            <GlassButton
-              variant="ghost"
-              size="md"
-              onPress={() => {
-                setStockFilters(new Set<StockLevel>(["stocked", "low", "out"]));
-                impactAsync(ImpactFeedbackStyle.Light);
-              }}
-            >
-              Show All
-            </GlassButton>
-            <GlassButton
-              variant="primary"
-              size="md"
-              onPress={() => setFilterVisible(false)}
-            >
-              Done
-            </GlassButton>
-          </View>
-        </GlassModal>
-
-        {/* Add Item Modal */}
-        <GlassModal
+        <AddPantryItemModal
           visible={addModalVisible}
-          onClose={() => setAddModalVisible(false)}
-          maxWidth={400}
-          avoidKeyboard
-          contentStyle={styles.addModalContent}
-        >
-          <MaterialCommunityIcons name="fridge-outline" size={36} color={colors.accent.primary} />
-          <Text style={styles.addModalTitle}>Add to Stock</Text>
+          onClose={handleCloseAddModal}
+        />
 
-          {/* Name input */}
-          <TextInput
-            style={styles.addInput}
-            placeholder="Item name (e.g. Olive Oil)"
-            placeholderTextColor={colors.text.tertiary}
-            value={newItemName}
-            onChangeText={setNewItemName}
-            autoFocus
-            maxLength={80}
-          />
-
-          {/* Category picker */}
-          <Text style={styles.addLabel}>Category</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.addChipsScroll}
-            contentContainerStyle={styles.addChipsContent}
-          >
-            {STOCK_CATEGORIES.map((cat) => (
-              <Pressable
-                key={cat}
-                style={[styles.addChip, newItemCategory === cat && styles.addChipActive]}
-                onPress={() => setNewItemCategory(cat)}
-              >
-                <Text style={[styles.addChipText, newItemCategory === cat && styles.addChipTextActive]}>
-                  {cat}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-
-          {/* Stock level picker */}
-          <Text style={styles.addLabel}>Stock Level</Text>
-          <View style={styles.addStockRow}>
-            {STOCK_LEVELS.map((option) => (
-              <Pressable
-                key={option.level}
-                style={[styles.addStockChip, newItemStock === option.level && styles.addStockChipActive]}
-                onPress={() => setNewItemStock(option.level)}
-              >
-                <GaugeIndicator level={option.level} size="small" />
-                <Text style={[
-                  styles.addStockChipText,
-                  newItemStock === option.level && styles.addStockChipTextActive,
-                ]}>
-                  {option.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {/* Actions */}
-          <View style={styles.addActions}>
-            <GlassButton variant="ghost" size="md" onPress={() => setAddModalVisible(false)}>
-              Cancel
-            </GlassButton>
-            <GlassButton
-              variant="primary"
-              size="md"
-              icon="plus"
-              onPress={handleAddItem}
-              disabled={!newItemName.trim()}
-            >
-              Add Item
-            </GlassButton>
-          </View>
-        </GlassModal>
-
-        {/* List Picker Modal */}
-        <GlassModal
+        <PantryListPickerModal
           visible={addToListItem !== null}
-          onClose={() => setAddToListItem(null)}
-          maxWidth={340}
-          contentStyle={styles.listPickerModal}
-        >
-          <MaterialCommunityIcons name="playlist-plus" size={36} color={colors.accent.primary} />
-          <Text style={styles.filterTitle}>Add to List</Text>
-          <Text style={styles.filterSubtitle}>
-            Choose a list for "{addToListItem?.name}"
-          </Text>
-          <View style={styles.listPickerOptions}>
-            {(activeLists ?? [])
-              .filter((l) => l.status === "active" || l.status === "shopping")
-              .map((list) => (
-                <Pressable
-                  key={list._id}
-                  style={styles.listPickerOption}
-                  onPress={() =>
-                    handlePickList(
-                      list._id,
-                      list.name,
-                      addToListItem?.name ?? "",
-                      addToListItem?.lastPrice
-                    )
-                  }
-                >
-                  <MaterialCommunityIcons
-                    name="clipboard-list-outline"
-                    size={20}
-                    color={colors.text.secondary}
-                  />
-                  <Text style={styles.listPickerOptionName} numberOfLines={1}>
-                    {list.name}
-                  </Text>
-                  <Text style={styles.listPickerOptionMeta}>
-                    {list.status === "shopping" ? "Shopping" : "Active"}
-                  </Text>
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={18}
-                    color={colors.text.tertiary}
-                  />
-                </Pressable>
-              ))}
-          </View>
-          <View style={styles.filterActions}>
-            <GlassButton variant="ghost" size="md" onPress={() => setAddToListItem(null)}>
-              Cancel
-            </GlassButton>
-          </View>
-        </GlassModal>
+          itemName={addToListItem?.name ?? ""}
+          itemPrice={addToListItem?.lastPrice}
+          lists={activeLists ?? []}
+          onPickList={handlePickList}
+          onClose={handleCloseListPicker}
+        />
       </GestureHandlerRootView>
 
       {/* Gesture Onboarding Overlay */}
@@ -1093,327 +838,13 @@ export default function PantryScreen() {
 }
 
 // =============================================================================
-// SWIPE ONBOARDING OVERLAY
+// STYLES
 // =============================================================================
-
-function SwipeOnboardingOverlay({ onDismiss }: { onDismiss: () => void }) {
-  const handX = useSharedValue(0);
-  const overlayOpacity = useSharedValue(0);
-
-  useEffect(() => {
-    // Fade in
-    overlayOpacity.value = withTiming(1, { duration: 300 });
-    // Animate hand sliding left and right repeatedly
-    handX.value = withRepeat(
-      withSequence(
-        withTiming(40, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-        withTiming(-40, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1, // infinite
-      false,
-    );
-  }, []);
-
-  const handStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: handX.value }],
-  }));
-
-  const overlayStyle = useAnimatedStyle(() => ({
-    opacity: overlayOpacity.value,
-  }));
-
-  return (
-    <Animated.View style={[onboardingStyles.overlay, overlayStyle]}>
-      <Pressable style={onboardingStyles.backdrop} onPress={onDismiss} />
-      <View style={onboardingStyles.content}>
-        <Animated.View style={[onboardingStyles.handContainer, handStyle]}>
-          <MaterialCommunityIcons
-            name="gesture-swipe-horizontal"
-            size={48}
-            color={colors.accent.primary}
-          />
-        </Animated.View>
-        <Text style={onboardingStyles.title}>Swipe to adjust stock</Text>
-        <Text style={onboardingStyles.subtitle}>
-          Swipe any item left or right to change its stock level
-        </Text>
-        <Pressable style={onboardingStyles.gotItButton} onPress={onDismiss}>
-          <Text style={onboardingStyles.gotItText}>Got it</Text>
-        </Pressable>
-      </View>
-    </Animated.View>
-  );
-}
-
-const onboardingStyles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1000,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-  },
-  content: {
-    alignItems: "center",
-    paddingHorizontal: spacing.xl,
-  },
-  handContainer: {
-    marginBottom: spacing.lg,
-  },
-  title: {
-    ...typography.headlineSmall,
-    color: colors.text.primary,
-    textAlign: "center",
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    ...typography.bodyMedium,
-    color: colors.text.secondary,
-    textAlign: "center",
-    marginBottom: spacing.xl,
-  },
-  gotItButton: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.25)",
-  },
-  gotItText: {
-    ...typography.labelLarge,
-    color: colors.text.primary,
-  },
-});
-
-// Pantry Item Row Component — uses GestureDetector instead of Swipeable
-function PantryItemRow({
-  item,
-  onSwipeDecrease,
-  onSwipeIncrease,
-  onMeasure,
-  onRemove,
-  onAddToList,
-}: {
-  item: {
-    _id: Id<"pantryItems">;
-    name: string;
-    category: string;
-    stockLevel: string;
-    icon?: string;
-    lastPrice?: number;
-    priceSource?: string;
-    lastStoreName?: string;
-    defaultSize?: string;
-    defaultUnit?: string;
-    preferredVariant?: string;
-  };
-  onSwipeDecrease: () => void;
-  onSwipeIncrease: () => void;
-  onMeasure: (x: number, y: number) => void;
-  onRemove: () => void;
-  onAddToList: () => void;
-}) {
-  const cardRef = useRef<View>(null);
-
-  // Pan gesture — card does NOT move, only triggers stock level change
-  const panGesture = Gesture.Pan()
-    .activeOffsetX([-20, 20])
-    .failOffsetY([-10, 10])
-    .onEnd((e) => {
-      if (e.translationX < -50) {
-        // Swiped left → decrement
-        runOnJS(onSwipeDecrease)();
-      } else if (e.translationX > 50) {
-        // Swiped right → increment
-        runOnJS(onSwipeIncrease)();
-      }
-    });
-
-  const iconName = getSafeIcon(item.icon, item.category) as keyof typeof MaterialCommunityIcons.glyphMap;
-
-  const stockLabel =
-    item.stockLevel === "stocked"
-      ? "Stocked"
-      : item.stockLevel === "low"
-        ? "Running low"
-        : "Out of stock";
-
-  // Skip entering animations entirely - with 80+ items, staggered FadeIn causes noticeable delay
-  // Keep exiting animation for smooth removal feedback
-  return (
-    <Animated.View
-      exiting={FadeOut.duration(150)}
-      style={styles.itemRowContainer}
-    >
-      <GestureDetector gesture={panGesture}>
-        <Animated.View>
-          <View ref={cardRef} collapsable={false}>
-            <GlassCard style={styles.itemCard}>
-              {/* Gauge indicator */}
-              <GaugeIndicator level={item.stockLevel as StockLevel} size="small" />
-
-              {/* Item info */}
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemName} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <View style={styles.itemSubRow}>
-                  <Text style={styles.stockLevelText}>{stockLabel}</Text>
-                </View>
-              </View>
-
-              {/* Add to list button */}
-              <AddToListButton onPress={onAddToList} size="sm" />
-
-              {/* Remove button */}
-              <RemoveButton onPress={onRemove} size="sm" />
-            </GlassCard>
-          </View>
-        </Animated.View>
-      </GestureDetector>
-    </Animated.View>
-  );
-}
-
-// ── Typewriter hint with glow on current letter ─────────────────────
-const TYPEWRITER_SPEED = 60; // ms per character
-const GLOW_COLOR = colors.accent.primary;
-
-function TypewriterHint({ text }: { text: string }) {
-  const [charIndex, setCharIndex] = useState(0);
-  const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    if (charIndex < text.length) {
-      const timer = setTimeout(() => {
-        setCharIndex((i) => i + 1);
-      }, TYPEWRITER_SPEED);
-      return () => clearTimeout(timer);
-    } else if (!done) {
-      const timer = setTimeout(() => setDone(true), 400);
-      return () => clearTimeout(timer);
-    } else {
-      // Wait 4 seconds then restart
-      const timer = setTimeout(() => {
-        setDone(false);
-        setCharIndex(0);
-      }, 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [charIndex, text.length, done]);
-
-  return (
-    <Text style={styles.hintText}>
-      {text.split("").map((char, i) => {
-        const isActive = !done && i === charIndex - 1;
-        const isVisible = i < charIndex;
-        return (
-          <Text
-            key={i}
-            style={{
-              color: isVisible ? GLOW_COLOR : "transparent",
-              fontWeight: isActive ? "700" : "400",
-              textShadowColor: isActive ? GLOW_COLOR : "transparent",
-              textShadowOffset: { width: 0, height: 0 },
-              textShadowRadius: isActive ? 8 : 0,
-            }}
-          >
-            {char}
-          </Text>
-        );
-      })}
-    </Text>
-  );
-}
-
-// ── Added-to-list burst toast — appears right on the swiped card ─────
-function AddedToListToast({ itemName, y }: { itemName: string; y: number }) {
-  const scale = useSharedValue(0.3);
-  const opacity = useSharedValue(1);
-  const ring = useSharedValue(0);
-
-  useEffect(() => {
-    // Burst in
-    scale.value = withSpring(1, { damping: 12, stiffness: 200 });
-    // Ring burst
-    ring.value = withTiming(1, { duration: 600 });
-    // Fade out
-    opacity.value = withDelay(1600, withTiming(0, { duration: 400 }));
-  }, []);
-
-  const pillStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
-  }));
-
-  const ringStyle = useAnimatedStyle(() => ({
-    opacity: (1 - ring.value) * opacity.value,
-    transform: [{ scaleX: 1 + ring.value * 2 }, { scaleY: 1 + ring.value }],
-  }));
-
-  return (
-    <View
-      style={{
-        position: "absolute",
-        top: y - 24,
-        left: 0,
-        right: 0,
-        alignItems: "center",
-        zIndex: 9999,
-        elevation: 9999,
-      }}
-      pointerEvents="none"
-    >
-      {/* Ring burst */}
-      <Animated.View
-        style={[
-          {
-            position: "absolute",
-            width: 100,
-            height: 44,
-            borderRadius: borderRadius.full,
-            borderWidth: 2,
-            borderColor: colors.accent.success,
-          },
-          ringStyle,
-        ]}
-      />
-      {/* Pill */}
-      <Animated.View
-        style={[
-          {
-            flexDirection: "row",
-            alignItems: "center",
-            backgroundColor: colors.background.primary,
-            borderWidth: 1.5,
-            borderColor: colors.accent.success,
-            borderRadius: borderRadius.full,
-            paddingVertical: spacing.sm,
-            paddingHorizontal: spacing.xl,
-            gap: spacing.sm,
-          },
-          pillStyle,
-        ]}
-      >
-        <MaterialCommunityIcons name="check-circle" size={20} color={colors.accent.success} />
-        <Text style={{ color: colors.text.primary, fontSize: 14, fontWeight: "700" }} numberOfLines={1}>
-          {itemName} added to list
-        </Text>
-      </Animated.View>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  // Skeleton loading styles
   skeletonContainer: {
     flex: 1,
     paddingHorizontal: spacing.lg,
@@ -1441,14 +872,12 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
     backgroundColor: colors.glass.backgroundStrong,
   },
-  // Empty state
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: spacing["2xl"],
   },
-  // View mode tabs
   viewModeTabs: {
     flexDirection: "row",
     marginHorizontal: spacing.lg,
@@ -1476,7 +905,6 @@ const styles = StyleSheet.create({
     bottom: 4,
     left: 4,
     borderRadius: borderRadius.md,
-    // width, translateX, backgroundColor driven by animated style
   },
   viewModeTabText: {
     ...typography.labelMedium,
@@ -1523,7 +951,6 @@ const styles = StyleSheet.create({
   viewModeBadgeTextActive: {
     color: colors.accent.primary,
   },
-  // Attention mode empty state
   attentionEmptyContainer: {
     flex: 1,
     alignItems: "center",
@@ -1579,21 +1006,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },
-  hintText: {
-    ...typography.labelSmall,
-    color: colors.text.tertiary,
-    textAlign: "center",
-    fontSize: 11,
-  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-  },
-  categorySection: {
-    marginBottom: spacing.sm,
   },
   categoryHeader: {
     flexDirection: "row",
@@ -1621,9 +1039,6 @@ const styles = StyleSheet.create({
     ...typography.labelSmall,
     color: colors.text.secondary,
   },
-  itemList: {
-    gap: spacing.md,
-  },
   journeyBanner: {
     marginBottom: spacing.xs,
     borderColor: `${colors.accent.primary}30`,
@@ -1639,84 +1054,6 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     flex: 1,
   },
-  itemRowContainer: {
-    borderRadius: borderRadius.lg,
-  },
-  itemCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.md,
-    gap: spacing.lg,
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemName: {
-    fontSize: 20,
-    fontWeight: "600",
-    lineHeight: 26,
-    color: colors.text.primary,
-  },
-  stockLevelText: {
-    fontSize: 18,
-    fontWeight: "500",
-    lineHeight: 24,
-    color: colors.text.tertiary,
-  },
-  itemSubRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  itemPriceLabel: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: colors.accent.primary,
-  },
-  // Modal styles
-  filterModal: {
-    alignItems: "center",
-  },
-  filterTitle: {
-    ...typography.headlineMedium,
-    color: colors.text.primary,
-    textAlign: "center",
-    marginBottom: spacing.xs,
-  },
-  filterSubtitle: {
-    ...typography.bodyMedium,
-    color: colors.text.secondary,
-    textAlign: "center",
-    marginBottom: spacing.xl,
-  },
-  filterOptions: {
-    gap: spacing.md,
-  },
-  filterOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.md,
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: "transparent",
-    gap: spacing.md,
-  },
-  filterOptionSelected: {
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderColor: "rgba(255, 255, 255, 0.3)",
-  },
-  filterOptionLabel: {
-    ...typography.bodyLarge,
-    color: colors.text.primary,
-    flex: 1,
-  },
-  filterActions: {
-    flexDirection: "row",
-    gap: spacing.md,
-    marginTop: spacing.xl,
-  },
-  // Header buttons
   headerButtons: {
     flexDirection: "row",
     alignItems: "center",
@@ -1737,118 +1074,5 @@ const styles = StyleSheet.create({
     ...typography.labelMedium,
     color: colors.accent.primary,
     fontWeight: "700",
-  },
-  // Add item modal
-  addModalContent: {
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  addModalTitle: {
-    ...typography.headlineMedium,
-    color: colors.text.primary,
-  },
-  addInput: {
-    width: "100%",
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    color: colors.text.primary,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-  },
-  addLabel: {
-    ...typography.labelMedium,
-    color: colors.text.secondary,
-    alignSelf: "flex-start",
-  },
-  addChipsScroll: {
-    width: "100%",
-    maxHeight: 40,
-  },
-  addChipsContent: {
-    gap: spacing.xs,
-    paddingRight: spacing.md,
-  },
-  addChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.glass.background,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-  },
-  addChipActive: {
-    backgroundColor: `${colors.accent.primary}20`,
-    borderColor: colors.accent.primary,
-  },
-  addChipText: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-  addChipTextActive: {
-    color: colors.accent.primary,
-    fontWeight: "600",
-  },
-  addStockRow: {
-    width: "100%",
-    gap: spacing.xs,
-  },
-  addStockChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.glass.background,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-  },
-  addStockChipActive: {
-    backgroundColor: `${colors.accent.primary}15`,
-    borderColor: colors.accent.primary,
-  },
-  addStockChipText: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-  addStockChipTextActive: {
-    color: colors.accent.primary,
-    fontWeight: "600",
-  },
-  addActions: {
-    flexDirection: "row",
-    gap: spacing.md,
-    marginTop: spacing.sm,
-  },
-
-  // List picker modal
-  listPickerModal: {
-    alignItems: "center",
-  },
-  listPickerOptions: {
-    width: "100%",
-    gap: spacing.md,
-  },
-  listPickerOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.md,
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: "transparent",
-    gap: spacing.md,
-  },
-  listPickerOptionName: {
-    ...typography.bodyLarge,
-    color: colors.text.primary,
-    flex: 1,
-  },
-  listPickerOptionMeta: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
   },
 });
