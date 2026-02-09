@@ -248,7 +248,7 @@ Line 189: `onPress={() => handleTabPress(tabName)}` creates a new function for e
 
 - [x] Change `handleTabPress` to `useCallback` (line 169)
 - [x] Pass `tabName` as a prop to `TabItem` and have `TabItem` call `onPress(tabName)` internally
-- [ ] ~~Or: create 4 stable callbacks with `useCallback` (small fixed set)~~ (not needed — single stable callback + tabName prop approach used)
+- [x] ~~Or: create 4 stable callbacks with `useCallback` (small fixed set)~~ (not needed — single stable callback + tabName prop approach used)
 
 ---
 
@@ -260,6 +260,10 @@ Line 189: `onPress={() => handleTabPress(tabName)}` creates a new function for e
 
 - [x] Wrap `TabItem` in `React.memo()` — compare `isFocused`, `badge`, `config` (config is a static object, reference-stable)
 - [x] With stable `onPress` from Step 4.2, only the previously-focused and newly-focused tabs re-render
+
+### Expected result
+
+`TabItem` and `PersistentTabBar` wrapped in `React.memo()`. `handleTabPress` stabilized with `useCallback`. `TAB_ROUTES` and `TABS` hoisted to module-level constants. Inline arrow functions removed — only previously-focused and newly-focused tabs re-render on navigation.
 
 ---
 
