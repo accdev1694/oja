@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -8,7 +8,6 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-  withSpring,
   runOnJS,
 } from "react-native-reanimated";
 
@@ -27,17 +26,28 @@ export function TipBanner({ context }: TipBannerProps) {
   const dismissTip = useMutation(api.tips.dismissTip);
 
   const opacity = useSharedValue(1);
-  const height = useSharedValue(1);
+  const measuredHeight = useSharedValue(0);
+  const animatedHeight = useSharedValue<number | null>(null);
+  const marginBottom = useSharedValue(spacing.md);
   const [isDismissing, setIsDismissing] = React.useState(false);
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    // Capture the natural height on first layout
+    if (measuredHeight.value === 0) {
+      measuredHeight.value = event.nativeEvent.layout.height;
+    }
+  };
 
   const handleDismiss = async () => {
     if (!tip || isDismissing) return;
     setIsDismissing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Animate out
-    opacity.value = withTiming(0, { duration: 200 });
-    height.value = withTiming(0, { duration: 300 }, () => {
+    // Start from measured height and animate to 0
+    animatedHeight.value = measuredHeight.value;
+    animatedHeight.value = withTiming(0, { duration: 250 });
+    marginBottom.value = withTiming(0, { duration: 250 });
+    opacity.value = withTiming(0, { duration: 200 }, () => {
       runOnJS(completeDismiss)();
     });
   };
@@ -50,13 +60,16 @@ export function TipBanner({ context }: TipBannerProps) {
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    transform: [{ scaleY: height.value }],
+    marginBottom: marginBottom.value,
+    // Only apply height constraint when animating (otherwise let content determine height)
+    ...(animatedHeight.value !== null && { height: animatedHeight.value }),
+    overflow: "hidden" as const,
   }));
 
   if (!tip) return null;
 
   return (
-    <Animated.View style={[styles.container, animatedStyle]}>
+    <Animated.View style={[styles.container, animatedStyle]} onLayout={handleLayout}>
       <View style={styles.iconContainer}>
         <MaterialCommunityIcons name="lightbulb-on-outline" size={20} color={colors.accent.warm} />
       </View>
@@ -81,7 +94,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     padding: spacing.md,
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    // marginBottom is animated via animatedStyle
     borderWidth: 1,
     borderColor: `${colors.accent.warm}30`,
   },

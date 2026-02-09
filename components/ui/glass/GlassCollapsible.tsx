@@ -60,7 +60,7 @@ export function GlassCollapsible({
           )}
         </View>
         <MaterialCommunityIcons
-          name={expanded ? "chevron-up" : "chevron-down"}
+          name={expanded ? "chevron-down" : "chevron-right"}
           size={20}
           color={colors.text.tertiary}
         />
