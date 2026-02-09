@@ -7,13 +7,13 @@ import {
   TouchableOpacity,
   ScrollView,
 } from "react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { useMutation, useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import {
@@ -31,6 +31,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export default function ScanScreen() {
   const router = useRouter();
+  const { listId: listIdParam } = useLocalSearchParams<{ listId?: string }>();
   const { alert } = useGlassAlert();
   const { firstName } = useCurrentUser();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -38,6 +39,13 @@ export default function ScanScreen() {
   const [isParsing, setIsParsing] = useState(false);
   const [selectedListId, setSelectedListId] = useState<Id<"shoppingLists"> | null>(null);
   const [showListPicker, setShowListPicker] = useState(false);
+
+  // Auto-select list when navigated from complete shopping flow
+  useEffect(() => {
+    if (listIdParam) {
+      setSelectedListId(listIdParam as Id<"shoppingLists">);
+    }
+  }, [listIdParam]);
 
   const shoppingLists = useQuery(api.shoppingLists.getByUser, {});
   const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);

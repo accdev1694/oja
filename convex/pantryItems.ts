@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
 
@@ -646,6 +647,92 @@ export const autoRestockFromReceipt = mutation({
       fuzzyMatches,
       itemsToAdd,
     };
+  },
+});
+
+/**
+ * Restock pantry items from checked-off list items after shopping completes.
+ *
+ * For every checked item with a pantryItemId:
+ *   - Set stockLevel → "stocked"
+ *   - Update lastPrice from actualPrice (or estimatedPrice fallback)
+ *   - Set priceSource → "shopping_list"
+ *
+ * Deduplicates by pantryItemId — if the same pantry item appears multiple
+ * times in the list, the highest-priced entry wins (most recent purchase
+ * likely reflects current pricing).
+ */
+export const restockFromCheckedItems = mutation({
+  args: {
+    listId: v.id("shoppingLists"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Verify list ownership
+    const list = await ctx.db.get(args.listId);
+    if (!list || list.userId !== user._id) {
+      throw new Error("List not found or unauthorized");
+    }
+
+    const items = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.listId))
+      .collect();
+
+    // Build deduplicated map: pantryItemId → best price
+    // If same pantry item appears multiple times, keep the highest price
+    const pantryUpdates = new Map<
+      Id<"pantryItems">,
+      { price: number | undefined; name: string }
+    >();
+
+    for (const item of items) {
+      if (!item.isChecked || !item.pantryItemId) continue;
+
+      const price = item.actualPrice || item.estimatedPrice;
+      const existing = pantryUpdates.get(item.pantryItemId);
+
+      if (
+        !existing ||
+        (price !== undefined &&
+          (existing.price === undefined || price > existing.price))
+      ) {
+        pantryUpdates.set(item.pantryItemId, { price, name: item.name });
+      }
+    }
+
+    const now = Date.now();
+    const restocked: Id<"pantryItems">[] = [];
+
+    for (const [pantryItemId, { price }] of pantryUpdates) {
+      const pantryItem = await ctx.db.get(pantryItemId);
+      if (!pantryItem || pantryItem.userId !== user._id) continue;
+
+      await ctx.db.patch(pantryItemId, {
+        stockLevel: "stocked" as const,
+        updatedAt: now,
+        ...(price !== undefined && {
+          lastPrice: price,
+          priceSource: "shopping_list" as const,
+        }),
+      });
+      restocked.push(pantryItemId);
+    }
+
+    return { restockedCount: restocked.length };
   },
 });
 
