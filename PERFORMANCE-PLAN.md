@@ -235,8 +235,8 @@ Line 67-77: `onAchievementUnlock` is missing from the `useEffect` dependency arr
 
 `PersistentTabBar` (line 143) is a plain function. It re-renders on every route change because `AppLayout` re-renders.
 
-- [ ] Wrap `PersistentTabBar` in `React.memo()`
-- [ ] Note: it uses `usePathname()` internally, so it will still update when the route changes — but it won't re-render from unrelated `AppLayout` state changes
+- [x] Wrap `PersistentTabBar` in `React.memo()`
+- [x] Note: it uses `usePathname()` internally, so it will still update when the route changes — but it won't re-render from unrelated `AppLayout` state changes
 
 ---
 
@@ -246,9 +246,9 @@ Line 67-77: `onAchievementUnlock` is missing from the `useEffect` dependency arr
 
 Line 189: `onPress={() => handleTabPress(tabName)}` creates a new function for each tab on every render.
 
-- [ ] Change `handleTabPress` to `useCallback` (line 169)
-- [ ] Pass `tabName` as a prop to `TabItem` and have `TabItem` call `onPress(tabName)` internally
-- [ ] Or: create 4 stable callbacks with `useCallback` (small fixed set)
+- [x] Change `handleTabPress` to `useCallback` (line 169)
+- [x] Pass `tabName` as a prop to `TabItem` and have `TabItem` call `onPress(tabName)` internally
+- [ ] ~~Or: create 4 stable callbacks with `useCallback` (small fixed set)~~ (not needed — single stable callback + tabName prop approach used)
 
 ---
 
@@ -258,8 +258,8 @@ Line 189: `onPress={() => handleTabPress(tabName)}` creates a new function for e
 
 `TabItem` (line 77) re-renders all 4 tabs on every route change even though only 2 tabs change focus state.
 
-- [ ] Wrap `TabItem` in `React.memo()` — compare `isFocused`, `badge`, `config` (config is a static object, reference-stable)
-- [ ] With stable `onPress` from Step 4.2, only the previously-focused and newly-focused tabs re-render
+- [x] Wrap `TabItem` in `React.memo()` — compare `isFocused`, `badge`, `config` (config is a static object, reference-stable)
+- [x] With stable `onPress` from Step 4.2, only the previously-focused and newly-focused tabs re-render
 
 ---
 

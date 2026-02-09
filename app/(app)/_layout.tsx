@@ -70,11 +70,12 @@ function getActiveTab(pathname: string): string {
 interface TabItemProps {
   config: (typeof TAB_CONFIG)[string];
   isFocused: boolean;
-  onPress: () => void;
+  tabName: string;
+  onPress: (tabName: string) => void;
   badge?: number;
 }
 
-function TabItem({ config, isFocused, onPress, badge }: TabItemProps) {
+const TabItem = React.memo(function TabItem({ config, isFocused, tabName, onPress, badge }: TabItemProps) {
   const scale = useSharedValue(1);
   const bgOpacity = useSharedValue(isFocused ? 1 : 0);
 
@@ -98,7 +99,7 @@ function TabItem({ config, isFocused, onPress, badge }: TabItemProps) {
   };
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress();
+    onPress(tabName);
   };
 
   const iconName = isFocused ? config.iconFocused || config.icon : config.icon;
@@ -134,13 +135,22 @@ function TabItem({ config, isFocused, onPress, badge }: TabItemProps) {
       </Animated.View>
     </Pressable>
   );
-}
+});
 
 // =============================================================================
 // PERSISTENT TAB BAR
 // =============================================================================
 
-function PersistentTabBar() {
+const TAB_ROUTES: Record<string, string> = {
+  index: "/(app)/(tabs)/",
+  lists: "/(app)/(tabs)/lists",
+  scan: "/(app)/(tabs)/scan",
+  profile: "/(app)/(tabs)/profile",
+};
+
+const TABS = ["index", "lists", "scan", "profile"] as const;
+
+const PersistentTabBar = React.memo(function PersistentTabBar() {
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -164,21 +174,16 @@ function PersistentTabBar() {
 
   if (!show) return null;
 
-  const tabs = ["index", "lists", "scan", "profile"] as const;
-
-  const handleTabPress = (tabName: string) => {
-    const routes: Record<string, string> = {
-      index: "/(app)/(tabs)/",
-      lists: "/(app)/(tabs)/lists",
-      scan: "/(app)/(tabs)/scan",
-      profile: "/(app)/(tabs)/profile",
-    };
-    router.navigate(routes[tabName] as any);
-  };
+  const handleTabPress = React.useCallback(
+    (tabName: string) => {
+      router.navigate(TAB_ROUTES[tabName] as any);
+    },
+    [router]
+  );
 
   const tabBarContent = (
     <View style={[tabStyles.tabBarInner, { paddingBottom: bottomPadding }]}>
-      {tabs.map((tabName) => {
+      {TABS.map((tabName) => {
         const config = TAB_CONFIG[tabName];
         const badge = tabName === "index" ? stockBadge : undefined;
         return (
@@ -186,7 +191,8 @@ function PersistentTabBar() {
             key={tabName}
             config={config}
             isFocused={activeTab === tabName}
-            onPress={() => handleTabPress(tabName)}
+            tabName={tabName}
+            onPress={handleTabPress}
             badge={badge}
           />
         );
@@ -209,7 +215,7 @@ function PersistentTabBar() {
       {tabBarContent}
     </View>
   );
-}
+});
 
 // =============================================================================
 // APP LAYOUT
