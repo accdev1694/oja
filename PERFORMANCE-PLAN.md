@@ -180,14 +180,14 @@ Most users have <10 active lists, so virtualization isn't critical yet. But hist
 
 Lines 497-501: `.reduce()` called INSIDE `.map()` — recomputes the total for every category row.
 
-- [ ] Compute `totalAll` once before the `.map()`:
+- [x] Compute `totalAll` once before the `.map()`:
   ```tsx
   const totalAll = useMemo(() =>
     monthlyTrends.categoryBreakdown.reduce((s, c) => s + c.total, 0),
     [monthlyTrends]
   );
   ```
-- [ ] Use `totalAll` inside the `.map()` at line 502
+- [x] Use `totalAll` inside the `.map()` at line 502
 
 ---
 
@@ -197,8 +197,8 @@ Lines 497-501: `.reduce()` called INSIDE `.map()` — recomputes the total for e
 
 `generateWeeklyNarrative(digest)` (line 173) and `getSeasonalTip()` (line 687) are called in the render path every re-render.
 
-- [ ] Wrap `generateWeeklyNarrative(digest)` result in `useMemo` with dependency `[digest]`
-- [ ] Wrap `getSeasonalTip()` result in `useMemo` with dependency `[]` (changes daily, stable within a session)
+- [x] Wrap `generateWeeklyNarrative(digest)` result in `useMemo` with dependency `[digest]`
+- [x] Wrap `getSeasonalTip()` result in `useMemo` with dependency `[]` (changes daily, stable within a session)
 
 ---
 
@@ -208,8 +208,8 @@ Lines 497-501: `.reduce()` called INSIDE `.map()` — recomputes the total for e
 
 `StatBox` (line 793) and `BestItem` (line 813) are small but called 4x each.
 
-- [ ] Wrap `StatBox` and `BestItem` in `React.memo()` — all props are primitives, default comparator is fine
-- [ ] Achievement grid items (lines 641-657) are inline JSX inside `.map()` — extract to a memoized `AchievementBadge` component if achievement count grows large
+- [x] Wrap `StatBox` and `BestItem` in `React.memo()` — all props are primitives, default comparator is fine
+- [ ] Achievement grid items (lines 641-657) are inline JSX inside `.map()` — extract to a memoized `AchievementBadge` component if achievement count grows large (deferred — only needed if achievement count grows)
 
 ---
 
@@ -219,7 +219,7 @@ Lines 497-501: `.reduce()` called INSIDE `.map()` — recomputes the total for e
 
 Line 67-77: `onAchievementUnlock` is missing from the `useEffect` dependency array.
 
-- [ ] Add `onAchievementUnlock` to the dependency array (it's already stable from `useDelightToast`'s `useCallback`)
+- [x] Add `onAchievementUnlock` to the dependency array (it's already stable from `useDelightToast`'s `useCallback`)
 
 ---
 

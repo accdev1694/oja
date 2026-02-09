@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -74,7 +74,25 @@ export default function InsightsScreen() {
       impactAsync(ImpactFeedbackStyle.Heavy);
     }
     prevAchievementCount.current = count;
-  }, [achievements]);
+  }, [achievements, onAchievementUnlock]);
+
+  // Step 3.1: Pre-compute category total ONCE (was O(n²) — .reduce() inside .map())
+  const categoryTotal = useMemo(
+    () =>
+      monthlyTrends?.categoryBreakdown.reduce(
+        (s: number, c: any) => s + c.total,
+        0
+      ) ?? 0,
+    [monthlyTrends]
+  );
+
+  // Step 3.2: Memoize render-path computations
+  const weeklyNarrative = useMemo(
+    () => (digest ? generateWeeklyNarrative(digest) : ""),
+    [digest]
+  );
+
+  const seasonalTip = useMemo(() => getSeasonalTip(), []);
 
   const loading = digest === undefined;
 
@@ -170,7 +188,7 @@ export default function InsightsScreen() {
 
                 {/* Weekly Narrative */}
                 <Text style={styles.weeklyNarrative}>
-                  {generateWeeklyNarrative(digest)}
+                  {weeklyNarrative}
                 </Text>
 
                 {/* Sparkline */}
@@ -495,11 +513,7 @@ export default function InsightsScreen() {
             >
               <View style={styles.categoryList}>
                 {monthlyTrends.categoryBreakdown.map((cat: any, i: number) => {
-                  const totalAll = monthlyTrends.categoryBreakdown.reduce(
-                    (s: number, c: any) => s + c.total,
-                    0
-                  );
-                  const pct = totalAll > 0 ? (cat.total / totalAll) * 100 : 0;
+                  const pct = categoryTotal > 0 ? (cat.total / categoryTotal) * 100 : 0;
                   const barColor = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
                   return (
                     <View key={cat.category} style={styles.categoryRow}>
@@ -684,7 +698,7 @@ export default function InsightsScreen() {
               <Text style={styles.sectionTitle}>Did You Know?</Text>
             </View>
             <Text style={styles.discoveryTip}>
-              {getSeasonalTip()}
+              {seasonalTip}
             </Text>
           </GlassCard>
         </Animated.View>
@@ -790,7 +804,7 @@ function generateWeeklyNarrative(digest: {
 // SUB-COMPONENTS
 // =============================================================================
 
-function StatBox({
+const StatBox = React.memo(function StatBox({
   label,
   value,
   icon,
@@ -808,9 +822,9 @@ function StatBox({
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
-}
+});
 
-function BestItem({
+const BestItem = React.memo(function BestItem({
   icon,
   label,
   value,
@@ -830,7 +844,7 @@ function BestItem({
       <Text style={styles.bestLabel}>{label}</Text>
     </View>
   );
-}
+});
 
 // =============================================================================
 // STYLES
