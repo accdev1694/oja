@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Animated,
 } from "react-native";
-import { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -133,28 +133,31 @@ export default function ConfirmReceiptScreen() {
     );
   }
 
-  const lowConfidenceItems = editedItems.filter(
-    (item) => item.confidence && item.confidence < 70
+  const lowConfidenceItems = useMemo(
+    () => editedItems.filter((item) => item.confidence && item.confidence < 70),
+    [editedItems]
   );
 
   // Calculate totals from edited items
-  const subtotal = editedItems.reduce((sum, item) => sum + item.totalPrice, 0);
   const tax = receipt.tax || 0;
-  const total = subtotal + tax;
+  const { subtotal, total } = useMemo(() => {
+    const sub = editedItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    return { subtotal: sub, total: sub + tax };
+  }, [editedItems, tax]);
 
-  function openEditNameModal(index: number) {
+  const openEditNameModal = useCallback((index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEditingItemIndex(index);
     setEditingField("name");
     setEditValue(editedItems[index].name);
-  }
+  }, [editedItems]);
 
-  function openEditPriceModal(index: number) {
+  const openEditPriceModal = useCallback((index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEditingItemIndex(index);
     setEditingField("price");
     setEditValue(editedItems[index].totalPrice.toFixed(2));
-  }
+  }, [editedItems]);
 
   function saveEdit() {
     if (editingItemIndex === null) return;
@@ -182,11 +185,10 @@ export default function ConfirmReceiptScreen() {
     setEditValue("");
   }
 
-  function handleDeleteItem(index: number) {
+  const handleDeleteItem = useCallback((index: number) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    const updated = editedItems.filter((_, i) => i !== index);
-    setEditedItems(updated);
-  }
+    setEditedItems((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   function handleAddMissingItem() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -329,15 +331,13 @@ export default function ConfirmReceiptScreen() {
   }
 
   // Get pantry suggestions for autocomplete
-  const pantrySuggestions =
-    pantryItems
-      ?.filter((item: any) =>
-        editValue && editingField === "name"
-          ? item.name.toLowerCase().includes(editValue.toLowerCase())
-          : false
-      )
+  const pantrySuggestions = useMemo(() => {
+    if (!pantryItems || !editValue || editingField !== "name") return [];
+    return pantryItems
+      .filter((item: any) => item.name.toLowerCase().includes(editValue.toLowerCase()))
       .slice(0, 5)
-      .map((item: any) => item.name) || [];
+      .map((item: any) => item.name);
+  }, [pantryItems, editValue, editingField]);
 
   return (
     <GlassScreen>
@@ -420,9 +420,9 @@ export default function ConfirmReceiptScreen() {
               key={index}
               item={item}
               index={index}
-              onEditName={() => openEditNameModal(index)}
-              onEditPrice={() => openEditPriceModal(index)}
-              onDelete={() => handleDeleteItem(index)}
+              onEditName={openEditNameModal}
+              onEditPrice={openEditPriceModal}
+              onDelete={handleDeleteItem}
             />
           ))}
 
@@ -658,12 +658,12 @@ export default function ConfirmReceiptScreen() {
 interface EditableItemRowProps {
   item: ReceiptItem;
   index: number;
-  onEditName: () => void;
-  onEditPrice: () => void;
-  onDelete: () => void;
+  onEditName: (index: number) => void;
+  onEditPrice: (index: number) => void;
+  onDelete: (index: number) => void;
 }
 
-function EditableItemRow({
+const EditableItemRow = React.memo(function EditableItemRow({
   item,
   index,
   onEditName,
@@ -672,20 +672,21 @@ function EditableItemRow({
 }: EditableItemRowProps) {
   const isLowConfidence = item.confidence && item.confidence < 70;
 
-  const renderRightActions = (
-    progress: Animated.AnimatedInterpolation<number>,
-    dragX: Animated.AnimatedInterpolation<number>
-  ) => {
+  const handleEditName = useCallback(() => onEditName(index), [onEditName, index]);
+  const handleEditPrice = useCallback(() => onEditPrice(index), [onEditPrice, index]);
+  const handleDelete = useCallback(() => onDelete(index), [onDelete, index]);
+
+  const renderRightActions = useCallback(() => {
     return (
       <TouchableOpacity
         style={styles.deleteAction}
-        onPress={onDelete}
+        onPress={handleDelete}
         activeOpacity={0.7}
       >
         <MaterialCommunityIcons name="delete" size={24} color="#FFFFFF" />
       </TouchableOpacity>
     );
-  };
+  }, [handleDelete]);
 
   return (
     <Swipeable
@@ -698,7 +699,7 @@ function EditableItemRow({
           {isLowConfidence && <Text style={styles.warningIcon}>⚠️</Text>}
 
           <View style={styles.itemInfo}>
-            <TouchableOpacity onPress={onEditName} activeOpacity={0.7}>
+            <TouchableOpacity onPress={handleEditName} activeOpacity={0.7}>
               <Text style={styles.itemName}>{item.name}</Text>
             </TouchableOpacity>
 
@@ -706,13 +707,13 @@ function EditableItemRow({
           </View>
         </View>
 
-        <TouchableOpacity onPress={onEditPrice} activeOpacity={0.7}>
+        <TouchableOpacity onPress={handleEditPrice} activeOpacity={0.7}>
           <Text style={styles.itemPrice}>£{item.totalPrice.toFixed(2)}</Text>
         </TouchableOpacity>
       </View>
     </Swipeable>
   );
-}
+});
 
 // =============================================================================
 // STYLES

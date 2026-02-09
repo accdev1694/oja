@@ -279,9 +279,9 @@ Line 189: `onPress={() => handleTabPress(tabName)}` creates a new function for e
 
 Several calculations run on every render without memoization.
 
-- [ ] Wrap `pantrySuggestions` filter/slice/map chain (lines 332-340) in `useMemo` with dependencies `[pantryItems, editValue, editingField]`
-- [ ] Wrap `lowConfidenceItems` filter (lines 136-138) in `useMemo` with dependency `[editedItems]`
-- [ ] Wrap `subtotal` and `total` calculations (lines 141-143) in `useMemo` with dependency `[editedItems]`
+- [x] Wrap `pantrySuggestions` filter/slice/map chain (lines 332-340) in `useMemo` with dependencies `[pantryItems, editValue, editingField]`
+- [x] Wrap `lowConfidenceItems` filter (lines 136-138) in `useMemo` with dependency `[editedItems]`
+- [x] Wrap `subtotal` and `total` calculations (lines 141-143) in `useMemo` with dependency `[editedItems, tax]`
 
 ---
 
@@ -291,12 +291,12 @@ Several calculations run on every render without memoization.
 
 `EditableItemRow` (line 666) is a function component without `React.memo()`. Receives inline closures from lines 423-425.
 
-- [ ] Wrap `EditableItemRow` in `React.memo()` with a custom comparator
-- [ ] Stabilize `onEditName`, `onEditPrice`, `onDelete` callbacks:
+- [x] Wrap `EditableItemRow` in `React.memo()` with a custom comparator
+- [x] Stabilize `onEditName`, `onEditPrice`, `onDelete` callbacks:
   - Pass `index` as a prop to `EditableItemRow`
   - Create stable `openEditNameModal`, `openEditPriceModal`, `handleDeleteItem` with `useCallback`
   - Have `EditableItemRow` call `onEditName(index)` internally
-- [ ] Verify that editing one item doesn't re-render all items
+- [x] Verify that editing one item doesn't re-render all items
 
 ---
 
@@ -306,7 +306,11 @@ Several calculations run on every render without memoization.
 
 Lines 675-688: `renderRightActions` is a closure recreated on every `EditableItemRow` render.
 
-- [ ] Wrap `renderRightActions` in `useCallback` with dependency `[onDelete]`
+- [x] Wrap `renderRightActions` in `useCallback` with dependency `[handleDelete]`
+
+### Expected result
+
+`EditableItemRow` wrapped in `React.memo()`. Parent callbacks (`openEditNameModal`, `openEditPriceModal`, `handleDeleteItem`) stabilized with `useCallback`. Derived values (`lowConfidenceItems`, `subtotal`, `total`, `pantrySuggestions`) memoized with `useMemo`. `renderRightActions` inside `EditableItemRow` memoized with `useCallback`. Editing one item no longer re-renders all items.
 
 ---
 
