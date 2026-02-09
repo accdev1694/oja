@@ -188,6 +188,15 @@ export default function PantryScreen() {
     return [...cats].sort((a, b) => a.localeCompare(b));
   }, [items]);
 
+  // Initialize all categories as collapsed on first load
+  const categoriesInitialized = useRef(false);
+  useEffect(() => {
+    if (categoriesInitialized.current) return;
+    if (categories.length === 0) return;
+    categoriesInitialized.current = true;
+    setCollapsedCategories(new Set(categories));
+  }, [categories]);
+
   // Count items needing restocking (Low + Out) for badge
   const attentionCount = useMemo(() => {
     if (!items) return 0;

@@ -36,10 +36,6 @@ moodboard/
 nul
 _result.json
 
-# Flutter migration (separate project)
-oja_flutter/
-flutter.md
-
 # Build output
 dist/
 
