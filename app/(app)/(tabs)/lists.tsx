@@ -3,6 +3,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   Pressable,
   TextInput,
 } from "react-native";
@@ -33,12 +34,14 @@ import {
   typography,
   spacing,
   borderRadius,
-  animations,
   useGlassAlert,
 } from "@/components/ui/glass";
 import { NotificationDropdown } from "@/components/partners";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { ListCard } from "@/components/lists/ListCard";
+import { HistoryCard } from "@/components/lists/HistoryCard";
+import { SharedListCard } from "@/components/lists/SharedListCard";
 
 type TabMode = "active" | "history";
 
@@ -92,21 +95,7 @@ export default function ListsScreen() {
     });
   };
 
-  function formatDateTime(timestamp: number) {
-    const date = new Date(timestamp);
-    const dateStr = date.toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-    const timeStr = date.toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    return `${dateStr} at ${timeStr}`;
-  }
-
-  function handleDeleteList(listId: Id<"shoppingLists">, listName: string) {
+  const handleDeleteList = useCallback((listId: Id<"shoppingLists">, listName: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     alert("Delete List", `Are you sure you want to delete "${listName}"?`, [
       { text: "Cancel", style: "cancel" },
@@ -124,7 +113,48 @@ export default function ListsScreen() {
         },
       },
     ]);
-  }
+  }, [alert, deleteList]);
+
+  // Stable callbacks for cards — avoids inline closures that defeat React.memo
+  const handleListPress = useCallback((id: Id<"shoppingLists">) => {
+    router.push(`/list/${id}`);
+  }, [router]);
+
+  const handleDeletePress = useCallback((id: Id<"shoppingLists">, name: string) => {
+    handleDeleteList(id, name);
+  }, [handleDeleteList]);
+
+  const handleHistoryPress = useCallback((id: Id<"shoppingLists">) => {
+    router.push(`/trip-summary?id=${id}`);
+  }, [router]);
+
+  const handleSharedPress = useCallback((id: Id<"shoppingLists">) => {
+    router.push(`/list/${id}`);
+  }, [router]);
+
+  const historyKeyExtractor = useCallback((item: { _id: string }) => item._id, []);
+
+  const stableFormatDateTime = useCallback((timestamp: number) => {
+    const date = new Date(timestamp);
+    const dateStr = date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    const timeStr = date.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${dateStr} at ${timeStr}`;
+  }, []);
+
+  const renderHistoryCard = useCallback(({ item }: { item: typeof displayList[number] }) => (
+    <HistoryCard
+      list={item}
+      onPress={handleHistoryPress}
+      formatDateTime={stableFormatDateTime}
+    />
+  ), [handleHistoryPress, stableFormatDateTime]);
 
   function handleOpenCreateModal() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -293,7 +323,7 @@ export default function ListsScreen() {
                     size={18}
                     color={colors.text.tertiary}
                   />
-                  <Text style={styles.joinCardText}>Join List?</Text>
+                  <Text style={styles.joinCardText}>Accept Invite</Text>
                   <MaterialCommunityIcons
                     name="chevron-right"
                     size={18}
@@ -329,9 +359,9 @@ export default function ListsScreen() {
             <ListCard
               key={list._id}
               list={list}
-              onPress={() => router.push(`/list/${list._id}`)}
-              onDelete={() => handleDeleteList(list._id, list.name)}
-              formatDateTime={formatDateTime}
+              onPress={handleListPress}
+              onDelete={handleDeletePress}
+              formatDateTime={stableFormatDateTime}
             />
           ))}
 
@@ -351,8 +381,8 @@ export default function ListsScreen() {
                   <SharedListCard
                     key={list._id}
                     list={list}
-                    onPress={() => router.push(`/list/${list._id}`)}
-                    formatDateTime={formatDateTime}
+                    onPress={handleSharedPress}
+                    formatDateTime={stableFormatDateTime}
                   />
                 ) : null
               )}
@@ -374,7 +404,7 @@ export default function ListsScreen() {
                     size={18}
                     color={colors.text.tertiary}
                   />
-                  <Text style={styles.joinCardText}>Join List?</Text>
+                  <Text style={styles.joinCardText}>Accept Invite</Text>
                   <MaterialCommunityIcons
                     name="chevron-right"
                     size={18}
@@ -388,21 +418,15 @@ export default function ListsScreen() {
           <View style={styles.bottomSpacer} />
         </ScrollView>
       ) : (
-        <ScrollView
+        <FlatList
+          data={displayList}
+          keyExtractor={historyKeyExtractor}
+          renderItem={renderHistoryCard}
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-        >
-          {displayList.map((list) => (
-            <HistoryCard
-              key={list._id}
-              list={list}
-              onPress={() => router.push(`/trip-summary?id=${list._id}`)}
-              formatDateTime={formatDateTime}
-            />
-          ))}
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
+          ListFooterComponent={<View style={styles.bottomSpacer} />}
+        />
       )}
 
       {/* Notifications Dropdown */}
@@ -506,441 +530,6 @@ export default function ListsScreen() {
 }
 
 // =============================================================================
-// LIST CARD COMPONENT
-// =============================================================================
-
-interface ListCardProps {
-  list: {
-    _id: Id<"shoppingLists">;
-    name: string;
-    status: string;
-    budget?: number;
-    createdAt: number;
-    itemCount?: number;
-    totalEstimatedCost?: number;
-  };
-  onPress: () => void;
-  onDelete: () => void;
-  formatDateTime: (timestamp: number) => string;
-}
-
-// Generate friendly relative time name for list display
-function getRelativeListName(createdAt: number, customName?: string): string {
-  // If user has set a custom name (not the default pattern), use it
-  const defaultPattern = /^Shopping List\s+\d{1,2}\/\d{1,2}\/\d{2,4}$/;
-  if (customName && !defaultPattern.test(customName)) {
-    return customName;
-  }
-
-  const now = new Date();
-  const created = new Date(createdAt);
-
-  // Reset times to midnight for date comparison
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const createdDay = new Date(created.getFullYear(), created.getMonth(), created.getDate());
-
-  const diffTime = today.getTime() - createdDay.getTime();
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) {
-    return "Today's Shop";
-  }
-
-  if (diffDays === 1) {
-    return "Yesterday's Shop";
-  }
-
-  // Within this week (2-6 days ago)
-  if (diffDays < 7) {
-    const dayName = created.toLocaleDateString("en-GB", { weekday: "long" });
-    return `${dayName}'s Shop`;
-  }
-
-  // Last week (7-13 days ago)
-  if (diffDays < 14) {
-    return "Last Week";
-  }
-
-  // Older - show short date like "Jan 15"
-  return created.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
-}
-
-function ListCard({ list, onPress, onDelete, formatDateTime }: ListCardProps) {
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.98, animations.spring.stiff);
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, animations.spring.gentle);
-  };
-
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress();
-  };
-
-  const handleDelete = () => {
-    onDelete();
-  };
-
-  // Get friendly relative time name (e.g., "Today's Shop", "Yesterday's Shop")
-  const displayName = getRelativeListName(list.createdAt, list.name);
-
-  // Calculate budget status
-  const budgetStatus =
-    list.budget && list.totalEstimatedCost
-      ? list.totalEstimatedCost > list.budget
-        ? "exceeded"
-        : list.totalEstimatedCost > list.budget * 0.8
-          ? "caution"
-          : "healthy"
-      : "healthy";
-
-  const statusConfig = {
-    planning: { color: colors.accent.primary, label: "Planning" },
-    shopping: { color: colors.semantic.warning, label: "Shopping" },
-    completed: { color: colors.text.tertiary, label: "Completed" },
-  };
-
-  const status = statusConfig[list.status as keyof typeof statusConfig] || statusConfig.planning;
-
-  return (
-    <Animated.View style={animatedStyle}>
-      <Pressable onPress={handlePress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-        <GlassCard variant="standard" style={styles.listCard}>
-          {/* Header row */}
-          <View style={styles.listHeader}>
-            <View style={styles.listTitleContainer}>
-              <MaterialCommunityIcons
-                name="clipboard-list"
-                size={24}
-                color={colors.semantic.lists}
-              />
-              <Text style={styles.listName} numberOfLines={1}>
-                {displayName}
-              </Text>
-            </View>
-
-            <View style={styles.headerActions}>
-              {/* Status badge */}
-              <View style={[styles.statusBadge, { backgroundColor: `${status.color}20` }]}>
-                <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-              </View>
-
-              {/* Delete button */}
-              <Pressable
-                style={styles.deleteButton}
-                onPress={handleDelete}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <MaterialCommunityIcons
-                  name="trash-can-outline"
-                  size={20}
-                  color={colors.semantic.danger}
-                />
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Budget info */}
-          {list.budget && (
-            <View style={styles.budgetRow}>
-              <MaterialCommunityIcons
-                name="wallet-outline"
-                size={16}
-                color={
-                  budgetStatus === "exceeded"
-                    ? colors.semantic.danger
-                    : budgetStatus === "caution"
-                      ? colors.semantic.warning
-                      : colors.accent.primary
-                }
-              />
-              <Text
-                style={[
-                  styles.budgetText,
-                  {
-                    color:
-                      budgetStatus === "exceeded"
-                        ? colors.semantic.danger
-                        : budgetStatus === "caution"
-                          ? colors.semantic.warning
-                          : colors.accent.primary,
-                  },
-                ]}
-              >
-                £{list.budget.toFixed(2)} budget
-                {list.totalEstimatedCost
-                  ? ` • £${list.totalEstimatedCost.toFixed(2)} estimated`
-                  : ""}
-              </Text>
-            </View>
-          )}
-
-          {/* Item count and date */}
-          <View style={styles.metaRow}>
-            {list.itemCount !== undefined && (
-              <View style={styles.metaItem}>
-                <MaterialCommunityIcons
-                  name="format-list-checks"
-                  size={14}
-                  color={colors.text.tertiary}
-                />
-                <Text style={styles.metaText}>
-                  {list.itemCount} item{list.itemCount !== 1 ? "s" : ""}
-                </Text>
-              </View>
-            )}
-            <View style={styles.metaItem}>
-              <MaterialCommunityIcons name="clock-outline" size={14} color={colors.text.tertiary} />
-              <Text style={styles.metaText}>{formatDateTime(list.createdAt)}</Text>
-            </View>
-          </View>
-        </GlassCard>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-// =============================================================================
-// HISTORY CARD COMPONENT
-// =============================================================================
-
-interface HistoryCardProps {
-  list: {
-    _id: Id<"shoppingLists">;
-    name: string;
-    status: string;
-    budget?: number;
-    actualTotal?: number;
-    pointsEarned?: number;
-    completedAt?: number;
-    createdAt: number;
-    storeName?: string;
-  };
-  onPress: () => void;
-  formatDateTime: (timestamp: number) => string;
-}
-
-function HistoryCard({ list, onPress, formatDateTime }: HistoryCardProps) {
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.98, animations.spring.stiff);
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, animations.spring.gentle);
-  };
-
-  const budget = list.budget ?? 0;
-  const actual = list.actualTotal ?? 0;
-  const diff = budget - actual;
-  const savedMoney = diff > 0 && budget > 0;
-  const completedDate = list.completedAt
-    ? new Date(list.completedAt).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : formatDateTime(list.createdAt);
-
-  return (
-    <Animated.View style={animatedStyle}>
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onPress();
-        }}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-      >
-        <GlassCard variant="standard" style={styles.listCard}>
-          {/* Header row */}
-          <View style={styles.listHeader}>
-            <View style={styles.listTitleContainer}>
-              <MaterialCommunityIcons
-                name="clipboard-check"
-                size={24}
-                color={colors.text.tertiary}
-              />
-              <Text style={styles.listName} numberOfLines={1}>
-                {list.name}
-              </Text>
-            </View>
-            <View style={styles.headerActions}>
-              <View style={[styles.statusBadge, { backgroundColor: `${colors.text.tertiary}20` }]}>
-                <Text style={[styles.statusText, { color: colors.text.tertiary }]}>
-                  {list.status === "archived" ? "Archived" : "Completed"}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Savings or overspend */}
-          {budget > 0 && actual > 0 && (
-            <View style={styles.budgetRow}>
-              <MaterialCommunityIcons
-                name={savedMoney ? "trending-down" : "trending-up"}
-                size={16}
-                color={savedMoney ? colors.semantic.success : colors.semantic.danger}
-              />
-              <Text
-                style={[
-                  styles.budgetText,
-                  { color: savedMoney ? colors.semantic.success : colors.semantic.danger },
-                ]}
-              >
-                {savedMoney
-                  ? `Saved £${Math.abs(diff).toFixed(2)}`
-                  : `Over by £${Math.abs(diff).toFixed(2)}`}
-                {` • £${actual.toFixed(2)} spent`}
-              </Text>
-            </View>
-          )}
-
-          {/* Meta row */}
-          <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
-              <MaterialCommunityIcons name="calendar" size={14} color={colors.text.tertiary} />
-              <Text style={styles.metaText}>{completedDate}</Text>
-            </View>
-            {list.storeName && (
-              <View style={styles.metaItem}>
-                <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
-                <Text style={styles.metaText}>{list.storeName}</Text>
-              </View>
-            )}
-            {(list.pointsEarned ?? 0) > 0 && (
-              <View style={styles.metaItem}>
-                <MaterialCommunityIcons name="star" size={14} color={colors.accent.secondary} />
-                <Text style={[styles.metaText, { color: colors.accent.secondary }]}>
-                  +{list.pointsEarned} pts
-                </Text>
-              </View>
-            )}
-          </View>
-        </GlassCard>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-// =============================================================================
-// SHARED LIST CARD COMPONENT
-// =============================================================================
-
-interface SharedListCardProps {
-  list: {
-    _id: Id<"shoppingLists">;
-    name: string;
-    status: string;
-    budget?: number;
-    createdAt: number;
-    role: string;
-    ownerName: string;
-    itemCount?: number;
-    totalEstimatedCost?: number;
-  };
-  onPress: () => void;
-  formatDateTime: (timestamp: number) => string;
-}
-
-function SharedListCard({ list, onPress, formatDateTime }: SharedListCardProps) {
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.98, animations.spring.stiff);
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, animations.spring.gentle);
-  };
-
-  const roleConfig: Record<string, { label: string; color: string }> = {
-    viewer: { label: "Viewer", color: colors.text.tertiary },
-    editor: { label: "Editor", color: colors.accent.primary },
-    approver: { label: "Approver", color: colors.accent.secondary },
-  };
-
-  const role = roleConfig[list.role] ?? roleConfig.viewer;
-
-  return (
-    <Animated.View style={animatedStyle}>
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onPress();
-        }}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-      >
-        <GlassCard variant="standard" style={styles.listCard}>
-          {/* Header row */}
-          <View style={styles.listHeader}>
-            <View style={styles.listTitleContainer}>
-              <MaterialCommunityIcons
-                name="clipboard-account-outline"
-                size={24}
-                color={colors.accent.info}
-              />
-              <Text style={styles.listName} numberOfLines={1}>
-                {list.name}
-              </Text>
-            </View>
-            <View style={styles.headerActions}>
-              <View style={[styles.statusBadge, { backgroundColor: `${role.color}20` }]}>
-                <Text style={[styles.statusText, { color: role.color }]}>{role.label}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Owner info */}
-          <View style={styles.sharedOwnerRow}>
-            <MaterialCommunityIcons
-              name="account"
-              size={14}
-              color={colors.text.tertiary}
-            />
-            <Text style={styles.sharedOwnerText}>
-              by {list.ownerName}
-            </Text>
-          </View>
-
-          {/* Meta row */}
-          <View style={styles.metaRow}>
-            {list.budget && (
-              <View style={styles.metaItem}>
-                <MaterialCommunityIcons name="wallet-outline" size={14} color={colors.text.tertiary} />
-                <Text style={styles.metaText}>£{list.budget.toFixed(2)}</Text>
-              </View>
-            )}
-            <View style={styles.metaItem}>
-              <MaterialCommunityIcons name="clock-outline" size={14} color={colors.text.tertiary} />
-              <Text style={styles.metaText}>{formatDateTime(list.createdAt)}</Text>
-            </View>
-          </View>
-        </GlassCard>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-// =============================================================================
 // STYLES
 // =============================================================================
 
@@ -994,69 +583,6 @@ const styles = StyleSheet.create({
   joinCardEmpty: {
     alignItems: "center",
     marginTop: spacing.lg,
-  },
-  listCard: {
-    marginBottom: spacing.md,
-  },
-  listHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.sm,
-  },
-  listTitleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    gap: spacing.sm,
-  },
-  listName: {
-    ...typography.headlineSmall,
-    color: colors.text.primary,
-    flex: 1,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-  },
-  statusText: {
-    ...typography.labelSmall,
-    fontWeight: "600",
-  },
-  deleteButton: {
-    padding: spacing.xs,
-    borderRadius: borderRadius.sm,
-    backgroundColor: `${colors.semantic.danger}15`,
-  },
-  budgetRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  budgetText: {
-    ...typography.bodyMedium,
-    fontWeight: "600",
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  metaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  metaText: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
   },
 
   // Tab toggle
@@ -1142,16 +668,6 @@ const styles = StyleSheet.create({
     ...typography.labelMedium,
     color: colors.text.secondary,
     fontWeight: "600",
-  },
-  sharedOwnerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  sharedOwnerText: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
   },
 
   // Modal styles

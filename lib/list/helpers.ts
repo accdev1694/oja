@@ -52,6 +52,50 @@ export function areItemsSimilar(name1: string, name2: string): boolean {
 }
 
 /**
+ * Generate friendly relative time name for list display
+ * e.g., "Today's Shop", "Yesterday's Shop", "Monday's Shop"
+ */
+export function getRelativeListName(createdAt: number, customName?: string): string {
+  // If user has set a custom name (not the default pattern), use it
+  const defaultPattern = /^Shopping List\s+\d{1,2}\/\d{1,2}\/\d{2,4}$/;
+  if (customName && !defaultPattern.test(customName)) {
+    return customName;
+  }
+
+  const now = new Date();
+  const created = new Date(createdAt);
+
+  // Reset times to midnight for date comparison
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const createdDay = new Date(created.getFullYear(), created.getMonth(), created.getDate());
+
+  const diffTime = today.getTime() - createdDay.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) {
+    return "Today's Shop";
+  }
+
+  if (diffDays === 1) {
+    return "Yesterday's Shop";
+  }
+
+  // Within this week (2-6 days ago)
+  if (diffDays < 7) {
+    const dayName = created.toLocaleDateString("en-GB", { weekday: "long" });
+    return `${dayName}'s Shop`;
+  }
+
+  // Last week (7-13 days ago)
+  if (diffDays < 14) {
+    return "Last Week";
+  }
+
+  // Older - show short date like "Jan 15"
+  return created.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+}
+
+/**
  * Get a confidence label for a price based on its source and report count.
  * reportCount: 0 = "~est.", 1-2 = "at StoreName", 3-9 = "avg", 10+ = no qualifier
  */

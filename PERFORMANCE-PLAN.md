@@ -120,10 +120,10 @@ The Add Item modal (lines 954-1032), Filter modal (lines 900-952), and List Pick
 
 `ListCard` (line 568), `HistoryCard` (line 731), and `SharedListCard` (line 859) are plain functions. Each has its own `useSharedValue` for scale animation that gets recreated on parent re-render.
 
-- [ ] Wrap `ListCard` export with `React.memo()` — compare `list._id`, `list.status`, `list.budget`, `list.itemCount`, `list.totalEstimatedCost`, `list.createdAt`
-- [ ] Wrap `HistoryCard` export with `React.memo()` — compare `list._id`, `list.actualTotal`, `list.pointsEarned`, `list.completedAt`
-- [ ] Wrap `SharedListCard` export with `React.memo()` — compare `list._id`, `list.status`, `list.role`, `list.ownerName`
-- [ ] Verify typecheck passes
+- [x] Wrap `ListCard` export with `React.memo()` — compare `list._id`, `list.status`, `list.budget`, `list.itemCount`, `list.totalEstimatedCost`, `list.createdAt`
+- [x] Wrap `HistoryCard` export with `React.memo()` — compare `list._id`, `list.actualTotal`, `list.pointsEarned`, `list.completedAt`
+- [x] Wrap `SharedListCard` export with `React.memo()` — compare `list._id`, `list.status`, `list.role`, `list.ownerName`
+- [x] Verify typecheck passes
 
 ---
 
@@ -134,10 +134,10 @@ The Add Item modal (lines 954-1032), Filter modal (lines 900-952), and List Pick
 Lines 332-334: inline `onPress={() => router.push(...)}` and `onDelete={() => handleDeleteList(...)}`
 Lines 354, 400: same pattern for shared/history cards.
 
-- [ ] Create `handleListPress = useCallback((id) => router.push(...), [router])`
-- [ ] Create `handleDeletePress = useCallback((id, name) => handleDeleteList(id, name), [handleDeleteList])`
-- [ ] Pass `listId` prop to cards and let them call the stable callback internally
-- [ ] Same for `SharedListCard` and `HistoryCard` onPress handlers
+- [x] Create `handleListPress = useCallback((id) => router.push(...), [router])`
+- [x] Create `handleDeletePress = useCallback((id, name) => handleDeleteList(id, name), [handleDeleteList])`
+- [x] Pass `listId` prop to cards and let them call the stable callback internally
+- [x] Same for `SharedListCard` and `HistoryCard` onPress handlers
 
 ---
 
@@ -145,11 +145,11 @@ Lines 354, 400: same pattern for shared/history cards.
 
 **Risk:** Low | **Impact:** Medium (DX)
 
-- [ ] Move `ListCard` to `components/lists/ListCard.tsx`
-- [ ] Move `HistoryCard` to `components/lists/HistoryCard.tsx`
-- [ ] Move `SharedListCard` to `components/lists/SharedListCard.tsx`
-- [ ] Move `getRelativeListName` (lines 528-566) into `lib/list/helpers.ts`
-- [ ] Update imports in `lists.tsx`
+- [x] Move `ListCard` to `components/lists/ListCard.tsx`
+- [x] Move `HistoryCard` to `components/lists/HistoryCard.tsx`
+- [x] Move `SharedListCard` to `components/lists/SharedListCard.tsx`
+- [x] Move `getRelativeListName` (lines 528-566) into `lib/list/helpers.ts`
+- [x] Update imports in `lists.tsx`
 
 ---
 
@@ -159,8 +159,12 @@ Lines 354, 400: same pattern for shared/history cards.
 
 Most users have <10 active lists, so virtualization isn't critical yet. But history can grow.
 
-- [ ] Replace history tab's `ScrollView` + `.map()` (lines 391-405) with `<FlatList>` when `history.length > 20`
-- [ ] Keep active tab as-is (typically <10 items)
+- [x] Replace history tab's `ScrollView` + `.map()` with `<FlatList>` with stable `renderItem` and `keyExtractor`
+- [x] Keep active tab as-is (typically <10 items)
+
+### Expected result
+
+**Actual: 1,225 → 740 lines (40% reduction).** Cards extracted to `components/lists/`, each wrapped in `React.memo()` with custom comparators. Callbacks stabilized with `useCallback`. History virtualized with `FlatList`. `getRelativeListName` moved to `lib/list/helpers.ts`. Static config objects (`STATUS_CONFIG`, `ROLE_CONFIG`) hoisted outside components.
 
 ---
 
