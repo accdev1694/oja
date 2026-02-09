@@ -1,10 +1,11 @@
 /**
- * CircularBudgetDial - SVG-based circular arc showing budget progress
+ * CircularBudgetDial - Two-arc SVG budget dial (200px default)
  *
- * - Green arc fills clockwise from 6 o'clock as budget is used
- * - At 100%, green completes full circle back to 6 o'clock
- * - Over budget: red arc continues past 6 o'clock clockwise
- * - Shrinking (e.g., during shopping) animates anticlockwise
+ * Outer arc (indigo): planned total vs budget — prominent in planning mode
+ * Inner arc (green→amber→red): actual spent vs budget — prominent in shopping mode
+ *
+ * Both arcs start at 6 o'clock and fill clockwise.
+ * Over-budget: red overflow arc continues past 6 o'clock.
  */
 
 import React, { useEffect } from "react";
@@ -22,90 +23,152 @@ import { colors, typography, spacing } from "@/lib/design/glassTokens";
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 interface CircularBudgetDialProps {
-  spent: number;
+  /** User-set spending limit */
   budget: number;
+  /** Sum of estimated prices for all items on the list */
+  planned: number;
+  /** Cost of checked-off items (actualPrice || estimatedPrice fallback) */
+  spent: number;
+  /** List status: determines which arc is prominent */
+  mode: string;
+  /** Component outer dimension */
   size?: number;
+  /** Currency symbol */
   currency?: string;
+  /** Tap handler (edit budget) */
   onPress?: () => void;
 }
 
 export function CircularBudgetDial({
-  spent,
   budget,
-  size = 140,
+  planned,
+  spent,
+  mode,
+  size = 200,
   currency = "£",
   onPress,
 }: CircularBudgetDialProps) {
-  const strokeWidth = 12;
-  const radius = (size - strokeWidth) / 2;
+  const strokeWidth = 10;
   const center = size / 2;
+  const outerRadius = (size - strokeWidth) / 2;
+  const innerRadius = outerRadius - strokeWidth - 4; // 4px gap between arcs
 
-  const circumference = 2 * Math.PI * radius;
+  const outerCircumference = 2 * Math.PI * outerRadius;
+  const innerCircumference = 2 * Math.PI * innerRadius;
 
-  // Start at 6 o'clock (bottom) - SVG starts at 3 o'clock, so rotate 90°
+  // Start at 6 o'clock (bottom) — SVG default is 3 o'clock, so rotate 90°
   const startRotation = 90;
 
-  // Separator line at 6 o'clock (bottom center)
-  const separatorLength = 10;
-  const separatorY1 = center + radius - separatorLength / 2;
-  const separatorY2 = center + radius + separatorLength / 2;
+  const isPlanning = mode === "active";
+  const isShopping = mode === "shopping";
+  const isFinished = mode === "completed" || mode === "archived";
 
-  // Calculate ratios
-  const greenRatio = budget > 0 ? Math.min(spent / budget, 1) : 0;
-  const overRatio = budget > 0 ? Math.max((spent - budget) / budget, 0) : 0;
-  // Cap over-budget at 100% extra (200% total) for visual sanity
-  const cappedOverRatio = Math.min(overRatio, 1);
-
+  // "Left" is always relative to budget (the financial constraint)
+  // In planning: over = planned > budget. In shopping: over = spent > budget.
   const remaining = budget - spent;
-  const isOver = spent > budget;
+  const isOverBudget = spent > budget;
+  const isPlannedOver = planned > budget;
 
-  // Green color changes as we approach budget
-  const getGreenColor = () => {
-    if (spent > budget * 0.8 && spent <= budget) return colors.semantic.warning;
+  // --- Arc ratios ---
+  const plannedFillRatio = budget > 0 ? Math.min(planned / budget, 1) : 0;
+  const plannedOverRatio = budget > 0 ? Math.min(Math.max((planned - budget) / budget, 0), 1) : 0;
+  const spentFillRatio = budget > 0 ? Math.min(spent / budget, 1) : 0;
+  const spentOverRatio = budget > 0 ? Math.min(Math.max((spent - budget) / budget, 0), 1) : 0;
+
+  // --- Spent arc color (dynamic by ratio) ---
+  const getSpentColor = () => {
+    if (budget <= 0) return colors.semantic.success;
+    const ratio = spent / budget;
+    if (ratio > 1.0) return colors.semantic.danger;
+    if (ratio > 0.8) return colors.semantic.warning;
     return colors.semantic.success;
   };
-  const greenColor = getGreenColor();
+  const spentColor = getSpentColor();
 
+  // --- Opacity per mode ---
+  const outerFillOpacity = isPlanning ? 1.0 : isFinished ? 0.2 : 0.25;
+  const innerFillOpacity = isPlanning ? 0.0 : isFinished ? 0.7 : 1.0;
+
+  // --- Sentiment ---
   const getSentiment = () => {
     if (budget <= 0) return null;
-    if (isOver) return "Over budget — time to review";
-    if (spent > budget * 0.8) return "Getting close — stay focused";
-    if (spent > budget * 0.5) return "On track — doing well";
-    return "Looking good — lots of room left";
+
+    if (isPlanning) {
+      const ratio = planned / budget;
+      if (ratio > 1) return `Over budget by ${currency}${(planned - budget).toFixed(2)}`;
+      if (ratio > 0.8) return "Tight fit — almost at your limit";
+      if (ratio > 0.5) return "Fits your budget — looking good";
+      return "Fits your budget — lots of room";
+    }
+
+    // Shopping / completed / archived
+    const ratio = spent / budget;
+    if (ratio > 1) return `Over budget by ${currency}${(spent - budget).toFixed(2)}`;
+    if (ratio > 0.8) return "Getting close — nearly there";
+    if (ratio > 0.5) return "On track — stay focused";
+    return "On track — doing well";
   };
   const sentiment = getSentiment();
-  const sentimentColor = isOver ? colors.semantic.danger : greenColor;
+  const sentimentColor = (isPlanning ? isPlannedOver : isOverBudget)
+    ? colors.semantic.danger
+    : isPlanning
+      ? colors.accent.secondary
+      : spentColor;
 
-  // Animated values for smooth transitions (both grow and shrink)
-  const animatedGreenRatio = useSharedValue(0);
-  const animatedRedRatio = useSharedValue(0);
+  // --- Remaining label color (always budget - spent) ---
+  const remainingColor = isOverBudget ? colors.semantic.danger : colors.semantic.success;
+
+  // --- Planning "left" for the planned-vs-budget view ---
+  const plannedRemaining = budget - planned;
+  const plannedRemainingColor = isPlannedOver ? colors.semantic.danger : colors.semantic.success;
+
+  // --- Animation config ---
+  const arcConfig = { duration: 800, easing: Easing.out(Easing.cubic) };
+  const opacityConfig = { duration: 400, easing: Easing.out(Easing.cubic) };
+
+  // --- Shared values ---
+  const animOuterFill = useSharedValue(0);
+  const animOuterOver = useSharedValue(0);
+  const animInnerFill = useSharedValue(0);
+  const animInnerOver = useSharedValue(0);
+  const animOuterOpacity = useSharedValue(1);
+  const animInnerOpacity = useSharedValue(0);
 
   useEffect(() => {
-    animatedGreenRatio.value = withTiming(greenRatio, {
-      duration: 800,
-      easing: Easing.out(Easing.cubic),
-    });
-    animatedRedRatio.value = withTiming(cappedOverRatio, {
-      duration: 800,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [greenRatio, cappedOverRatio]);
+    animOuterFill.value = withTiming(plannedFillRatio, arcConfig);
+    animOuterOver.value = withTiming(plannedOverRatio, arcConfig);
+    animInnerFill.value = withTiming(spentFillRatio, arcConfig);
+    animInnerOver.value = withTiming(spentOverRatio, arcConfig);
+    animOuterOpacity.value = withTiming(outerFillOpacity, opacityConfig);
+    animInnerOpacity.value = withTiming(innerFillOpacity, opacityConfig);
+  }, [plannedFillRatio, plannedOverRatio, spentFillRatio, spentOverRatio, outerFillOpacity, innerFillOpacity]);
 
-  // Green arc props (0-100% of budget)
-  const animatedGreenProps = useAnimatedProps(() => {
-    const filledLength = circumference * animatedGreenRatio.value;
-    return {
-      strokeDashoffset: circumference - filledLength,
-    };
-  });
+  // --- Animated props for each arc ---
+  const outerFillProps = useAnimatedProps(() => ({
+    strokeDashoffset: outerCircumference - outerCircumference * animOuterFill.value,
+    opacity: animOuterOpacity.value,
+  }));
 
-  // Red arc props (over-budget overflow)
-  const animatedRedProps = useAnimatedProps(() => {
-    const filledLength = circumference * animatedRedRatio.value;
-    return {
-      strokeDashoffset: circumference - filledLength,
-    };
-  });
+  const outerOverProps = useAnimatedProps(() => ({
+    strokeDashoffset: outerCircumference - outerCircumference * animOuterOver.value,
+    opacity: animOuterOpacity.value,
+  }));
+
+  const innerFillProps = useAnimatedProps(() => ({
+    strokeDashoffset: innerCircumference - innerCircumference * animInnerFill.value,
+    opacity: animInnerOpacity.value,
+  }));
+
+  const innerOverProps = useAnimatedProps(() => ({
+    strokeDashoffset: innerCircumference - innerCircumference * animInnerOver.value,
+    opacity: animInnerOpacity.value,
+  }));
+
+  // --- Separator tick positions ---
+  const outerSepY1 = center + outerRadius - 4;
+  const outerSepY2 = center + outerRadius + 4;
+  const innerSepY1 = center + innerRadius - 4;
+  const innerSepY2 = center + innerRadius + 4;
 
   const Wrapper = onPress ? Pressable : View;
 
@@ -113,58 +176,116 @@ export function CircularBudgetDial({
     <Wrapper onPress={onPress} style={[styles.container, { marginBottom: spacing.md }]}>
       <View style={{ width: size, height: size }}>
         <Svg width={size} height={size}>
-          {/* Track circle (background) */}
+          {/* ── Outer Arc System (planned) ── */}
+
+          {/* Outer track */}
           <Circle
             cx={center}
             cy={center}
-            r={radius}
+            r={outerRadius}
             stroke="rgba(255, 255, 255, 0.08)"
             strokeWidth={strokeWidth}
             fill="none"
           />
-          {/* Green fill arc (0-100% of budget) */}
+          {/* Outer fill — indigo */}
           <AnimatedCircle
             cx={center}
             cy={center}
-            r={radius}
-            stroke={greenColor}
+            r={outerRadius}
+            stroke={colors.accent.secondary}
             strokeWidth={strokeWidth}
             fill="none"
-            strokeDasharray={`${circumference} ${circumference}`}
+            strokeDasharray={`${outerCircumference} ${outerCircumference}`}
             strokeLinecap="round"
             rotation={startRotation}
             origin={`${center}, ${center}`}
-            animatedProps={animatedGreenProps}
+            animatedProps={outerFillProps}
           />
-          {/* Red overflow arc (over-budget, continues past 6 o'clock) */}
+          {/* Outer overflow — red */}
           <AnimatedCircle
             cx={center}
             cy={center}
-            r={radius}
+            r={outerRadius}
             stroke={colors.semantic.danger}
             strokeWidth={strokeWidth}
             fill="none"
-            strokeDasharray={`${circumference} ${circumference}`}
+            strokeDasharray={`${outerCircumference} ${outerCircumference}`}
             strokeLinecap="round"
             rotation={startRotation}
             origin={`${center}, ${center}`}
-            animatedProps={animatedRedProps}
+            animatedProps={outerOverProps}
           />
-          {/* Separator line at 6 o'clock */}
+
+          {/* ── Inner Arc System (spent) ── */}
+
+          {/* Inner track — only visible when inner arc is active */}
+          <AnimatedCircle
+            cx={center}
+            cy={center}
+            r={innerRadius}
+            stroke="rgba(255, 255, 255, 0.08)"
+            strokeWidth={strokeWidth}
+            fill="none"
+            animatedProps={useAnimatedProps(() => ({
+              opacity: animInnerOpacity.value,
+            }))}
+          />
+          {/* Inner fill — green/amber/red */}
+          <AnimatedCircle
+            cx={center}
+            cy={center}
+            r={innerRadius}
+            stroke={spentColor}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={`${innerCircumference} ${innerCircumference}`}
+            strokeLinecap="round"
+            rotation={startRotation}
+            origin={`${center}, ${center}`}
+            animatedProps={innerFillProps}
+          />
+          {/* Inner overflow — red */}
+          <AnimatedCircle
+            cx={center}
+            cy={center}
+            r={innerRadius}
+            stroke={colors.semantic.danger}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={`${innerCircumference} ${innerCircumference}`}
+            strokeLinecap="round"
+            rotation={startRotation}
+            origin={`${center}, ${center}`}
+            animatedProps={innerOverProps}
+          />
+
+          {/* ── Separator ticks at 6 o'clock ── */}
           <Line
             x1={center}
-            y1={separatorY1}
+            y1={outerSepY1}
             x2={center}
-            y2={separatorY2}
+            y2={outerSepY2}
             stroke="rgba(255, 255, 255, 0.25)"
             strokeWidth={1.5}
             strokeLinecap="round"
           />
+          {!isPlanning && (
+            <Line
+              x1={center}
+              y1={innerSepY1}
+              x2={center}
+              y2={innerSepY2}
+              stroke="rgba(255, 255, 255, 0.25)"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+            />
+          )}
         </Svg>
 
         {/* Center text overlay */}
         <View style={[styles.centerText, { width: size, height: size }]}>
-          {/* Budget (biggest) */}
+          {/* Budget label + amount */}
+          <Text style={styles.budgetLabel}>Budgeted:</Text>
           <Text
             style={styles.budgetAmount}
             numberOfLines={1}
@@ -174,29 +295,43 @@ export function CircularBudgetDial({
             {budget.toFixed(2)}
           </Text>
 
-          {/* Spent (with state color) */}
-          <Text style={[styles.spentLabel, { color: sentimentColor }]}>
-            {currency}
-            {spent.toFixed(2)} spent
-          </Text>
-
-          {/* Left/Over (with state color) */}
-          <Text
-            style={[
-              styles.remainingLabel,
-              { color: isOver ? colors.semantic.danger : colors.semantic.success },
-            ]}
-          >
-            {isOver
-              ? `${currency}${Math.abs(remaining).toFixed(2)} over`
-              : `${currency}${remaining.toFixed(2)} left`}
-          </Text>
+          {isPlanning ? (
+            <>
+              {/* Planning: planned + left (relative to budget) */}
+              <Text style={[styles.metricLabel, { color: colors.accent.secondary }]}>
+                {currency}
+                {planned.toFixed(2)} planned
+              </Text>
+              <Text style={[styles.remainingLabel, { color: plannedRemainingColor }]}>
+                {isPlannedOver
+                  ? `${currency}${Math.abs(plannedRemaining).toFixed(2)} over`
+                  : `${currency}${plannedRemaining.toFixed(2)} left`}
+              </Text>
+            </>
+          ) : (
+            <>
+              {/* Shopping: planned (dim reference) + spent (active) + left */}
+              <Text style={[styles.plannedRef, { color: colors.accent.secondary }]}>
+                {currency}
+                {planned.toFixed(2)} planned
+              </Text>
+              <Text style={[styles.metricLabel, { color: spentColor }]}>
+                {currency}
+                {spent.toFixed(2)} spent
+              </Text>
+              <Text style={[styles.remainingLabel, { color: remainingColor }]}>
+                {isOverBudget
+                  ? `${currency}${Math.abs(remaining).toFixed(2)} over`
+                  : `${currency}${remaining.toFixed(2)} left`}
+              </Text>
+            </>
+          )}
         </View>
 
         {/* Pencil badge to signal tappability */}
         {onPress && (
           <View style={styles.editBadge}>
-            <MaterialCommunityIcons name="pencil" size={12} color={colors.text.secondary} />
+            <MaterialCommunityIcons name="pencil" size={14} color={colors.text.secondary} />
           </View>
         )}
       </View>
@@ -218,36 +353,54 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  budgetLabel: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: colors.text.tertiary,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: -2,
+  },
   budgetAmount: {
-    ...typography.headlineMedium,
+    ...typography.numberMedium,
     color: colors.text.primary,
     fontWeight: "700",
-    fontSize: 20,
   },
-  spentLabel: {
-    ...typography.labelSmall,
+  plannedRef: {
     fontSize: 11,
+    fontWeight: "500",
+    lineHeight: 15,
+    letterSpacing: 0.3,
     marginTop: 2,
+    opacity: 0.7,
+  },
+  metricLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 18,
+    letterSpacing: 0.3,
+    marginTop: 1,
   },
   remainingLabel: {
-    ...typography.labelSmall,
-    fontSize: 11,
-    marginTop: 1,
+    fontSize: 13,
     fontWeight: "600",
+    lineHeight: 18,
+    letterSpacing: 0.3,
+    marginTop: 1,
   },
   sentiment: {
     ...typography.labelSmall,
-    marginTop: 6,
+    marginTop: spacing.sm,
     opacity: 0.85,
   },
   editBadge: {
     position: "absolute",
-    bottom: 8,
-    right: 8,
+    bottom: 10,
+    right: 10,
     backgroundColor: "rgba(255, 255, 255, 0.12)",
-    borderRadius: 10,
-    width: 20,
-    height: 20,
+    borderRadius: 12,
+    width: 24,
+    height: 24,
     justifyContent: "center",
     alignItems: "center",
   },
