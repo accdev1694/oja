@@ -309,13 +309,23 @@ Grid layout showing price per store per size:
 
 **New file:** `app/onboarding/store-selection.tsx`
 
-- [ ] Copy structure from `cuisine-selection.tsx`
-- [ ] Replace CUISINES with store grid (from `getAllStores()`)
-- [ ] Show store displayName + brand color chip
-- [ ] Multi-select with checkmarks
-- [ ] "Where do you usually shop?" header
-- [ ] Save to `users.storePreferences.favorites`
-- [ ] Navigate to `pantry-seeding` on continue
+- [x] Copy structure from `cuisine-selection.tsx`
+- [x] Replace CUISINES with store grid (from `getAllStores()`)
+- [x] Show store displayName + brand color chip
+- [x] Multi-select with checkmarks
+- [x] "Where do you usually shop?" header
+- [x] Save to `users.storePreferences.favorites`
+- [x] Navigate to `pantry-seeding` on continue
+
+**Implementation Notes (2026-02-10):**
+- Created `app/onboarding/store-selection.tsx` modeled on `cuisine-selection.tsx`
+- Uses `useQuery(api.stores.getAll)` to fetch all 20 UK stores sorted by market share
+- Uses `useMutation(api.stores.setUserPreferences)` to save favorites
+- Each store tile displays: brand color chip, display name, store type badge
+- Selected stores show checkmark with store brand color as background
+- Animated press feedback using Reanimated springs
+- "Skip for now" option to bypass store selection
+- Passes country/cuisines params through to pantry-seeding screen
 
 ### Step C.2: Wire into Onboarding Flow
 
