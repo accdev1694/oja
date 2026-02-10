@@ -98,6 +98,15 @@ Requires dev build (native modules).
 6. **Zero-Blank Prices** - Every item must show a price estimate
 7. **Validated icons only** - Use `@/lib/icons/iconMatcher.ts` for MaterialCommunityIcons
 
+## Active Implementation Plan
+
+**Current:** `UK-STORES-IMPLEMENTATION.md` - UK Stores + Size/Unit System
+
+**Workflow:**
+1. User tells Claude which step number to implement (e.g., "implement A.2")
+2. Claude implements the step
+3. Claude checks off the checkbox in the plan file and pushes to git
+
 ## Known Issues
 
 ### E2E Tests (Playwright + React Native Web)
