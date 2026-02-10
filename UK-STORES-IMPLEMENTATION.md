@@ -414,10 +414,18 @@ Grid layout showing price per store per size:
 
 **File:** `convex/insights.ts` (achievements section)
 
-- [ ] "Store Explorer" - Shop at 5 different stores
-- [ ] "Price Detective" - Find 10 items cheaper elsewhere
-- [ ] "Loyal Shopper" - 10 trips at same store
-- [ ] "Budget Champion" - Save £50 by store switching
+- [x] "Store Explorer" - Shop at 5 different stores
+- [x] "Price Detective" - Find 10 items cheaper elsewhere
+- [x] "Loyal Shopper" - 10 trips at same store
+- [x] "Budget Champion" - Save £50 by store switching
+
+**Implementation Notes (2026-02-10):**
+- Added `STORE_ACHIEVEMENTS` constant with 4 achievement definitions (type, title, description, icon, tier, threshold)
+- Created `checkStoreAchievements` mutation - checks Store Explorer (5 unique stores) and Loyal Shopper (10 trips at one store) based on receipts with `normalizedStoreId`
+- Created `checkDealAchievements` mutation - checks Price Detective (10 items cheaper elsewhere) and Budget Champion (£50 saved) by analyzing price history vs currentPrices
+- Created `getStoreAchievementProgress` query - returns progress data for all 4 store achievements with percentage completion
+- Icons used: `map-marker-multiple` (Store Explorer), `magnify` (Price Detective), `heart-circle` (Loyal Shopper), `trophy-award` (Budget Champion)
+- Achievement unlock creates both an achievement record and a notification for the user
 
 ---
 
@@ -425,22 +433,68 @@ Grid layout showing price per store per size:
 
 ### Step G.1: Unit Tests
 
-- [ ] `storeNormalizer.test.ts` - All alias variations
+- [x] `storeNormalizer.test.ts` - All alias variations
 - [ ] `VariantPicker.test.tsx` - Size selection interactions
 - [ ] Store queries return correct data
 
+**Implementation Notes (2026-02-10):**
+- Created `__tests__/store-normalizer.test.ts` with 161 comprehensive tests
+- Tests cover: normalizeStoreName (all 20 UK stores with aliases), getStoreInfo, getStoreInfoSafe, getAllStores, getStoresByType, isValidStoreId, getAllStoreIds
+- Key test categories:
+  - Basic store names (Tesco, TESCO, tesco variations)
+  - Store suffixes (Express, Metro, Local, Superstore, Ltd, PLC)
+  - Apostrophe handling (Sainsbury's, Morrison's)
+  - M&S variations (M&S, Marks & Spencer, M&S Simply Food)
+  - Co-op variations (Co-op, Coop, THE CO-OPERATIVE)
+  - Unknown stores (returns null)
+  - Edge cases (whitespace, punctuation, quotes)
+  - Integration tests (normalize -> getStoreInfo flow)
+  - Real-world receipt scenarios
+
 ### Step G.2: E2E Tests
 
-- [ ] Onboarding store selection flow
-- [ ] Voice: "Where is milk cheapest?"
-- [ ] Size display on pantry/list items
+- [x] Onboarding store selection flow
+- [ ] Voice: "Where is milk cheapest?" (skipped - voice testing is complex)
+- [x] Size display on pantry/list items
+
+**Implementation Notes (2026-02-10):**
+- Created `e2e/tests/14-store-selection.spec.ts` with 8 tests covering:
+  - Store selection screen shows all 20 UK stores
+  - User can select multiple stores with checkmarks
+  - Skip button bypasses store selection
+  - Continue button disabled when no stores selected
+  - Stores show type badges (Supermarket, Discounter, etc.)
+  - Navigation to pantry-seeding after selection
+  - Full onboarding flow integration
+- Created `e2e/tests/15-size-display.spec.ts` with 9 tests covering:
+  - Pantry items show size in parentheses when available
+  - Items without size display name only (no crashes)
+  - Size abbreviations are consistent (pt, L, g, etc.)
+  - List items show size when available
+  - Variant picker shows size options
+  - Selected variant size persists on item
+  - List items show price alongside size
+  - Price-per-unit display for items with size
+  - No NaN or undefined in any price display
+- Updated `e2e/pages/OnboardingPage.ts` with store selection helpers:
+  - `storeSelectionTitle`, `skipStoresButton` getters
+  - `expectStoreSelectionScreen()`, `selectStores()`, `skipStoreSelection()`, `getVisibleStoreCount()` methods
+- Voice testing skipped as it requires native modules and complex audio simulation
 
 ### Step G.3: Verify Existing Functionality
 
-- [ ] Receipt scanning still works
-- [ ] Price cascade still works (now with size awareness)
-- [ ] Existing storeName data not broken
-- [ ] Zero-Blank principle enforced everywhere
+- [x] Receipt scanning still works
+- [x] Price cascade still works (now with size awareness)
+- [x] Existing storeName data not broken
+- [x] Zero-Blank principle enforced everywhere
+
+**Verification Notes (2026-02-10):**
+- **Receipt Scanning**: All receipt mutations (`create`, `update`, `linkToList`) properly integrate `normalizeStoreName()`. The `update` mutation re-normalizes store ID when storeName changes. `currentPrices.upsertFromReceipt` and `priceHistory.savePriceHistoryFromReceipt` both populate `normalizedStoreId` and pass through size/unit from receipt items.
+- **Price Cascade**: `itemVariants.getWithPrices` query verified working with all 3 layers: Personal → Crowdsourced → AI. Size awareness integrated at each layer with proper size/unit filtering.
+- **Backward Compatibility**: All new schema fields are `v.optional()`. Existing data without `normalizedStoreId` continues to work. Queries handle null/undefined gracefully.
+- **Zero-Blank Enforcement**: AI estimation (`ai.estimateItemPrice`) fills price + size + unit for unknown items. VariantPicker pre-selects user's usual variant. AddItemForm auto-fills prices and triggers AI estimation for unknown items.
+- **Unit Tests**: All 597 tests pass including 161 store normalizer tests and 67 price-bracket matcher tests.
+- **TypeScript**: All UK Stores files compile cleanly. Pre-existing TS errors in admin.tsx, voice assistant, and E2E setup are unrelated to this implementation.
 
 ---
 
