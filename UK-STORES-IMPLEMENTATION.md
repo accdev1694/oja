@@ -130,10 +130,18 @@ Store+Size Tagged Price Data
 
 **Files:** Pantry + List item components
 
-- [ ] Show size on pantry items: "Butter (250g)" instead of "Butter"
-- [ ] Show size in list items: "Butter (250g) - £1.85"
-- [ ] Modify `components/pantry/PantryItem.tsx` to display size
-- [ ] Modify `components/list/ShoppingListItem.tsx` to display size
+- [x] Show size on pantry items: "Butter (250g)" instead of "Butter"
+- [x] Show size in list items: "Butter (250g) - £1.85"
+- [x] Modify `components/pantry/PantryItemRow.tsx` to display size
+- [x] Modify `components/list/ShoppingListItem.tsx` to display size
+
+**Implementation Notes (2026-02-10):**
+- Added `formatSize()` helper function to both components
+- Helper abbreviates common UK units (pint->pt, litre->L, gram->g, etc.)
+- Handles pre-formatted sizes (e.g., "2pt", "500ml") by returning as-is
+- Display format: "Item Name (size)" when size data available
+- Updated `ListItem` type to include optional `size` and `unit` fields
+- Updated memoization comparison to include size fields for proper re-renders
 
 ### Step A.3: Variant Picker Component
 
@@ -210,18 +218,18 @@ Store+Size Tagged Price Data
 
 **File:** `convex/schema.ts`
 
-- [ ] Add `normalizedStoreId: v.optional(v.string())` to `currentPrices`
-- [ ] Add `normalizedStoreId: v.optional(v.string())` to `priceHistory`
-- [ ] Add `normalizedStoreId: v.optional(v.string())` to `receipts`
-- [ ] Add `normalizedStoreId: v.optional(v.string())` to `shoppingLists`
-- [ ] Add `storePreferences` object to `users`:
+- [x] Add `normalizedStoreId: v.optional(v.string())` to `currentPrices`
+- [x] Add `normalizedStoreId: v.optional(v.string())` to `priceHistory`
+- [x] Add `normalizedStoreId: v.optional(v.string())` to `receipts`
+- [x] Add `normalizedStoreId: v.optional(v.string())` to `shoppingLists`
+- [x] Add `storePreferences` object to `users`:
   ```typescript
   storePreferences: v.optional(v.object({
     favorites: v.array(v.string()),
     defaultStore: v.optional(v.string()),
   })),
   ```
-- [ ] Run `npx convex dev` to verify schema compiles
+- [x] Run `npx convex dev` to verify schema compiles
 
 ### Step B.3: Backend Store Functions
 

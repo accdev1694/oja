@@ -14,6 +14,44 @@ import { RemoveButton } from "@/components/ui/RemoveButton";
 import { AddToListButton } from "@/components/ui/AddToListButton";
 import { getSafeIcon } from "@/lib/icons/iconMatcher";
 
+/**
+ * Format size display for items
+ * Returns formatted size string or null if no size data
+ * Examples: "250g", "2pt", "500ml"
+ */
+function formatSize(size?: string, unit?: string): string | null {
+  if (!size) return null;
+  // If size already includes unit (e.g., "2pt", "500ml", "250g"), return as-is
+  if (/\d+\s*(ml|l|g|kg|pt|pint|oz|lb)/i.test(size)) return size;
+  // Otherwise combine: "2" + "pint" → "2pint" or abbreviate common units
+  if (unit) {
+    // Abbreviate common units for cleaner display
+    const unitAbbr: Record<string, string> = {
+      pint: "pt",
+      pints: "pt",
+      litre: "L",
+      litres: "L",
+      liter: "L",
+      liters: "L",
+      gram: "g",
+      grams: "g",
+      kilogram: "kg",
+      kilograms: "kg",
+      millilitre: "ml",
+      millilitres: "ml",
+      milliliter: "ml",
+      milliliters: "ml",
+      ounce: "oz",
+      ounces: "oz",
+      pound: "lb",
+      pounds: "lb",
+    };
+    const abbr = unitAbbr[unit.toLowerCase()] || unit;
+    return `${size}${abbr}`;
+  }
+  return size;
+}
+
 export interface PantryItemRowProps {
   item: {
     _id: Id<"pantryItems">;
@@ -40,6 +78,8 @@ function arePropsEqual(prev: PantryItemRowProps, next: PantryItemRowProps): bool
     prev.item.stockLevel === next.item.stockLevel &&
     prev.item.icon === next.item.icon &&
     prev.item.name === next.item.name &&
+    prev.item.defaultSize === next.item.defaultSize &&
+    prev.item.defaultUnit === next.item.defaultUnit &&
     prev.onSwipeDecrease === next.onSwipeDecrease &&
     prev.onSwipeIncrease === next.onSwipeIncrease &&
     prev.onRemove === next.onRemove &&
@@ -88,6 +128,10 @@ export const PantryItemRow = React.memo(function PantryItemRow({
         ? "Running low"
         : "Out of stock";
 
+  // Format display name with size if available
+  const sizeDisplay = formatSize(item.defaultSize, item.defaultUnit);
+  const displayName = sizeDisplay ? `${item.name} (${sizeDisplay})` : item.name;
+
   return (
     <Animated.View
       exiting={FadeOut.duration(150)}
@@ -101,7 +145,7 @@ export const PantryItemRow = React.memo(function PantryItemRow({
 
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName} numberOfLines={1}>
-                  {item.name}
+                  {displayName}
                 </Text>
                 <View style={styles.itemSubRow}>
                   <Text style={styles.stockLevelText}>{stockLabel}</Text>

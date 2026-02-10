@@ -21,6 +21,44 @@ import {
 import { getIconForItem } from "@/lib/icons/iconMatcher";
 import type { Id } from "@/convex/_generated/dataModel";
 
+/**
+ * Format size display for items
+ * Returns formatted size string or null if no size data
+ * Examples: "250g", "2pt", "500ml"
+ */
+function formatSize(size?: string, unit?: string): string | null {
+  if (!size) return null;
+  // If size already includes unit (e.g., "2pt", "500ml", "250g"), return as-is
+  if (/\d+\s*(ml|l|g|kg|pt|pint|oz|lb)/i.test(size)) return size;
+  // Otherwise combine: "2" + "pint" → "2pint" or abbreviate common units
+  if (unit) {
+    // Abbreviate common units for cleaner display
+    const unitAbbr: Record<string, string> = {
+      pint: "pt",
+      pints: "pt",
+      litre: "L",
+      litres: "L",
+      liter: "L",
+      liters: "L",
+      gram: "g",
+      grams: "g",
+      kilogram: "kg",
+      kilograms: "kg",
+      millilitre: "ml",
+      millilitres: "ml",
+      milliliter: "ml",
+      milliliters: "ml",
+      ounce: "oz",
+      ounces: "oz",
+      pound: "lb",
+      pounds: "lb",
+    };
+    const abbr = unitAbbr[unit.toLowerCase()] || unit;
+    return `${size}${abbr}`;
+  }
+  return size;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,6 +74,9 @@ export type ListItem = {
   autoAdded?: boolean;
   priority?: "must-have" | "should-have" | "nice-to-have";
   approvalStatus?: "pending" | "approved" | "rejected";
+  // Size fields for display (e.g., "250g", "2pt")
+  size?: string;
+  unit?: string;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -187,6 +228,10 @@ export const ShoppingListItem = memo(function ShoppingListItem({
 
   const iconResult = getIconForItem(item.name, item.category || "other");
 
+  // Format display name with size if available
+  const sizeDisplay = formatSize(item.size, item.unit);
+  const displayName = sizeDisplay ? `${item.name} (${sizeDisplay})` : item.name;
+
   return (
     <View style={itemStyles.swipeContainer}>
       {/* Left action (increase priority) */}
@@ -257,7 +302,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                       style={[itemStyles.itemName, item.isChecked && itemStyles.itemNameChecked]}
                       numberOfLines={1}
                     >
-                      {item.name}
+                      {displayName}
                     </Text>
                   </View>
 
