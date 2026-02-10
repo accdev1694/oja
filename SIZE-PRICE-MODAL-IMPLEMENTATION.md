@@ -507,12 +507,12 @@ const SIZE_ALIASES = {
 
 ### Phase 6: Voice Integration
 
-- [ ] **6.1** Update `add_items_to_list` voice tool - add size parameter
-- [ ] **6.2** Implement smart default size selection (history → common → middle)
-- [ ] **6.3** Voice feedback: "Added 2 pints of milk at £1.45"
-- [ ] **6.4** Add "change size of [item]" voice command
-- [ ] **6.5** Add "edit last item" voice command
-- [ ] **6.6** Update voice assistant prompts
+- [x] **6.1** Update `add_items_to_list` voice tool - add size parameter
+- [x] **6.2** Implement smart default size selection (history → common → middle)
+- [x] **6.3** Voice feedback: "Added 2 pints of milk at £1.45"
+- [x] **6.4** Add "change size of [item]" voice command
+- [x] **6.5** Add "edit last item" voice command
+- [x] **6.6** Update voice assistant prompts
 
 ### Phase 7: Testing
 
@@ -582,10 +582,10 @@ const SIZE_ALIASES = {
 | Phase 3: Edit Flow | ✅ Complete | 6/6 |
 | Phase 4: Store Comparison | ✅ Complete | 5/5 |
 | Phase 5: Store Switch | ✅ Complete | 8/8 |
-| Phase 6: Voice Integration | Not Started | 0/6 |
+| Phase 6: Voice Integration | ✅ Complete | 6/6 |
 | Phase 7: Testing | Not Started | 0/7 |
 | Phase 8: Polish | Not Started | 0/7 |
-| **Total** | **In Progress** | **35/55** |
+| **Total** | **In Progress** | **41/55** |
 
 ---
 

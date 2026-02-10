@@ -253,8 +253,9 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
   {
     name: "add_items_to_list",
     description:
-      "Add items to a shopping list. If no list is specified and user has multiple lists, " +
-      "ASK which list to add to — don't guess. If only one active list, use it.",
+      "Add items to a shopping list with size and price. If no list is specified and user has multiple lists, " +
+      "ASK which list to add to — don't guess. If only one active list, use it. " +
+      "Examples: 'add 2 pints of milk', 'add 500g butter', 'add 4 pack of eggs'.",
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
@@ -273,6 +274,7 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
             properties: {
               name: { type: SchemaType.STRING, description: "Item name" },
               quantity: { type: SchemaType.NUMBER, description: "Quantity, default 1" },
+              size: { type: SchemaType.STRING, description: "Size variant, e.g. '2pt', '500g', '6pk'. Omit to use user's usual size." },
               unit: { type: SchemaType.STRING, description: "Optional unit, e.g. 'pint', 'kg'" },
             },
             required: ["name"],
@@ -501,6 +503,58 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
       required: ["stores"],
     },
   },
+
+  // ── SIZE/PRICE EDITING TOOLS (Phase 6.4, 6.5) ────────────────────────────
+
+  {
+    name: "change_item_size",
+    description:
+      "Change the size of an item in the shopping list. " +
+      "Use when user says things like 'change milk to 4 pints' or 'make the butter 500g' or 'switch eggs to 12 pack'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        listId: {
+          type: SchemaType.STRING,
+          description: "The ID of the shopping list",
+        },
+        itemName: {
+          type: SchemaType.STRING,
+          description: "The name of the item to change (e.g., 'milk', 'butter')",
+        },
+        newSize: {
+          type: SchemaType.STRING,
+          description: "The new size (e.g., '4pt', '500g', '1L', '12pk')",
+        },
+      },
+      required: ["listId", "itemName", "newSize"],
+    },
+  },
+
+  {
+    name: "edit_last_item",
+    description:
+      "Edit the most recently added item in the shopping list. " +
+      "Use when user says 'actually make that 2' or 'change quantity to 3' or 'make it 4 pints instead' or 'update the last one'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        listId: {
+          type: SchemaType.STRING,
+          description: "The ID of the shopping list",
+        },
+        quantity: {
+          type: SchemaType.NUMBER,
+          description: "New quantity (optional)",
+        },
+        size: {
+          type: SchemaType.STRING,
+          description: "New size (optional, e.g., '4pt', '500g')",
+        },
+      },
+      required: ["listId"],
+    },
+  },
 ];
 
 // ─── Write tool names ───────────────────────────────────────────────────
@@ -517,6 +571,8 @@ const WRITE_TOOLS = new Set([
   "remove_pantry_item",
   "clear_checked_items",
   "set_preferred_stores",
+  "change_item_size",
+  "edit_last_item",
 ]);
 
 // ─── System Prompt ─────────────────────────────────────────────────────
@@ -575,7 +631,7 @@ READ Operations:
 
 WRITE Operations:
 - create_shopping_list: Create a new list (with optional name and budget)
-- add_items_to_list: Add items to a list
+- add_items_to_list: Add items to a list (accepts size like "2pt" or "500g")
 - update_list_budget: Change a list's budget
 - update_stock_level: Mark pantry items as stocked/low/out
 - check_off_item: Check off items while shopping
@@ -585,6 +641,8 @@ WRITE Operations:
 - remove_pantry_item: Remove an item from pantry
 - clear_checked_items: Clear all checked items from a list
 - set_preferred_stores: Set user's favorite stores (e.g., "Tesco and Aldi")
+- change_item_size: Change the size of an item (e.g., "change milk to 2 pints")
+- edit_last_item: Edit the most recently added item (size, quantity, or price)
 
 RULES FOR WRITE OPERATIONS (IMPORTANT):
 - NEVER ask "Would you like me to do X?" or "Shall I confirm?" — if user asks for something, just DO it.
@@ -598,6 +656,14 @@ RULES FOR WRITE OPERATIONS (IMPORTANT):
 RULES FOR READ OPERATIONS:
 - Call the function, then summarise the data conversationally.
 - If no data: "I don't have data for that yet — keep shopping and I'll learn!"
+
+SIZE & PRICE INTELLIGENCE:
+- When you add items, I'll use your usual size from past purchases (e.g., if you always buy 2pt milk, that's what I'll add)
+- You can specify sizes like "add 4 pints of milk" or "add 500g butter"
+- I'll tell you the price at your selected store for that size
+- Say "change milk to 2 pints" or "make the butter 500g" to adjust sizes
+- Say "edit last item" or "change that to 2" to modify what you just added
+- I remember your usual sizes so you don't have to repeat them
 
 CONTEXT AWARENESS:
 - When user says "this list" or "my list" or "the budget" — use the active list context below
@@ -1018,6 +1084,8 @@ async function executeWriteTool(
     case "add_items_to_list": {
       // If no listId provided, try to find the list by name or use the only active list
       let targetListId = args.listId as Id<"shoppingLists"> | undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let targetList: any = null;
 
       if (!targetListId && args.listName) {
         // Try to find list by name
@@ -1028,6 +1096,7 @@ async function executeWriteTool(
         );
         if (match) {
           targetListId = match._id;
+          targetList = match;
         }
       }
 
@@ -1036,6 +1105,7 @@ async function executeWriteTool(
         const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
         if (lists.length === 1) {
           targetListId = lists[0]._id;
+          targetList = lists[0];
         } else if (lists.length === 0) {
           return {
             type: "data",
@@ -1055,47 +1125,154 @@ async function executeWriteTool(
         }
       }
 
-      // Get current user for price estimation
-      const identity = await ctx.auth.getUserIdentity();
-      const currentUser = identity
-        ? await ctx.runQuery(api.users.getCurrent, {})
-        : null;
+      // Get store from target list for price lookups
+      const storeId = targetList?.normalizedStoreId || targetList?.storeName || "";
 
-      // Add each item with price estimate (Zero-Blank rule)
-      const addedItems: string[] = [];
+      // Add each item with size and price (Zero-Blank rule + Smart Size Selection)
+      interface AddedItemInfo {
+        name: string;
+        quantity: number;
+        size?: string;
+        price?: number;
+      }
+      const addedItems: AddedItemInfo[] = [];
+
       for (const item of args.items || []) {
-        // Get price estimate for the item
+        const quantity = item.quantity || 1;
+        let size: string | undefined = item.size;
+        let unit: string | undefined = item.unit;
         let estimatedPrice: number | undefined;
-        if (currentUser) {
+        let priceSource: "personal" | "crowdsourced" | "ai" | undefined;
+
+        // Smart default size selection if size not provided and store is set
+        if (!size && storeId) {
           try {
-            const priceResult = await ctx.runAction(api.ai.estimateItemPrice, {
+            const sizeData = await ctx.runQuery(api.itemVariants.getSizesForStore, {
               itemName: item.name,
-              userId: currentUser._id,
+              store: storeId,
             });
-            if (priceResult) {
-              estimatedPrice = priceResult.estimatedPrice;
+
+            if (sizeData && sizeData.defaultSize) {
+              // Use the default size (user's usual or most common)
+              size = sizeData.defaultSize;
+
+              // Find the price for this size
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const sizeInfo = sizeData.sizes.find((s: any) => s.size === size);
+              if (sizeInfo) {
+                estimatedPrice = sizeInfo.price ?? undefined;
+                priceSource = sizeInfo.source;
+                // Extract unit from parsed size if available
+                if (sizeInfo.sizeNormalized) {
+                  // Parse unit from normalized size (e.g., "2pt" -> "pt")
+                  const match = sizeInfo.sizeNormalized.match(/(\d+(?:\.\d+)?)\s*(.+)/);
+                  if (match) {
+                    unit = match[2];
+                  }
+                }
+              }
             }
           } catch {
-            // If price estimation fails, continue without price
+            console.warn(`[Voice] Could not get sizes for "${item.name}" at "${storeId}"`);
+          }
+        }
+
+        // If size was provided explicitly, look up the price for that size
+        if (size && !estimatedPrice && storeId) {
+          try {
+            const sizeData = await ctx.runQuery(api.itemVariants.getSizesForStore, {
+              itemName: item.name,
+              store: storeId,
+            });
+
+            if (sizeData && sizeData.sizes.length > 0) {
+              // Find the matching size (normalize for comparison)
+              const normalizedInputSize = size.toLowerCase().replace(/\s+/g, "");
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const sizeInfo = sizeData.sizes.find((s: any) => {
+                const normalizedSize = s.size?.toLowerCase().replace(/\s+/g, "") || "";
+                const normalizedDisplay = s.sizeNormalized?.toLowerCase().replace(/\s+/g, "") || "";
+                return normalizedSize === normalizedInputSize || normalizedDisplay === normalizedInputSize;
+              });
+
+              if (sizeInfo) {
+                estimatedPrice = sizeInfo.price ?? undefined;
+                priceSource = sizeInfo.source;
+              }
+            }
+          } catch {
+            console.warn(`[Voice] Could not get price for "${item.name}" size "${size}"`);
+          }
+        }
+
+        // Fallback to AI price estimation if we still don't have a price
+        if (!estimatedPrice) {
+          try {
+            const identity = await ctx.auth.getUserIdentity();
+            const currentUser = identity
+              ? await ctx.runQuery(api.users.getCurrent, {})
+              : null;
+            if (currentUser) {
+              const priceResult = await ctx.runAction(api.ai.estimateItemPrice, {
+                itemName: item.name,
+                userId: currentUser._id,
+              });
+              if (priceResult) {
+                estimatedPrice = priceResult.estimatedPrice;
+                priceSource = "ai";
+              }
+            }
+          } catch {
             console.warn(`[Voice] Could not estimate price for "${item.name}"`);
           }
         }
 
+        // Create the list item with size and price
         await ctx.runMutation(api.listItems.create, {
           listId: targetListId,
           name: item.name,
-          quantity: item.quantity || 1,
+          quantity,
+          size,
+          unit,
           estimatedPrice,
+          priceSource,
         });
-        addedItems.push(item.name);
+
+        addedItems.push({
+          name: item.name,
+          quantity,
+          size,
+          price: estimatedPrice,
+        });
+      }
+
+      // Build voice-friendly response message with size and price
+      // Format: "Added 2 pints of milk at £1.45" or "Added milk and bread to your list"
+      const formatItemMessage = (itemInfo: AddedItemInfo): string => {
+        const qty = itemInfo.quantity > 1 ? `${itemInfo.quantity} ` : "";
+        const sizeText = itemInfo.size ? `${qty}${itemInfo.size} of ` : (itemInfo.quantity > 1 ? `${itemInfo.quantity} ` : "");
+        const priceText = itemInfo.price ? ` at £${itemInfo.price.toFixed(2)}` : "";
+        return `${sizeText}${itemInfo.name}${priceText}`;
+      };
+
+      let message: string;
+      if (addedItems.length === 1) {
+        message = `Added ${formatItemMessage(addedItems[0])}`;
+      } else if (addedItems.length === 2) {
+        message = `Added ${formatItemMessage(addedItems[0])} and ${formatItemMessage(addedItems[1])}`;
+      } else {
+        // For 3+ items, list first few with prices, then summarize
+        const itemNames = addedItems.map((i) => i.name);
+        message = `Added ${itemNames.slice(0, -1).join(", ")} and ${itemNames[itemNames.length - 1]} to your list`;
       }
 
       return {
         type: "data",
         result: {
           success: true,
-          message: `Added ${addedItems.join(", ")} to your list`,
+          message,
           itemsAdded: addedItems.length,
+          items: addedItems, // Include detailed info for potential follow-up
         },
       };
     }
@@ -1508,6 +1685,185 @@ async function executeWriteTool(
           message,
           savedStores: savedStoreNames,
           unrecognizedStores: unrecognizedStores.length > 0 ? unrecognizedStores : undefined,
+        },
+      };
+    }
+
+    // ── SIZE/PRICE EDITING TOOLS (Phase 6.4, 6.5) ────────────────────────────
+
+    case "change_item_size": {
+      // Find the list
+      const list = await ctx.runQuery(api.shoppingLists.getById, {
+        id: args.listId as Id<"shoppingLists">,
+      });
+
+      if (!list) {
+        return {
+          type: "data",
+          result: { success: false, error: "List not found." },
+        };
+      }
+
+      // Get all items on the list
+      const listItems = await ctx.runQuery(api.listItems.getByList, {
+        listId: args.listId as Id<"shoppingLists">,
+      });
+
+      // Find the item by name (fuzzy match)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const itemMatch = listItems.find((i: any) =>
+        i.name.toLowerCase().includes(args.itemName.toLowerCase())
+      );
+
+      if (!itemMatch) {
+        return {
+          type: "data",
+          result: { success: false, error: `Couldn't find "${args.itemName}" on your list.` },
+        };
+      }
+
+      // Parse the new size
+      const normalizedItem = itemMatch.name.toLowerCase().trim();
+      const storeName = list.normalizedStoreId || list.storeName || "tesco";
+
+      // Get available sizes for this item at this store
+      const sizesResult = await ctx.runQuery(api.itemVariants.getSizesForStore, {
+        itemName: normalizedItem,
+        store: storeName,
+      });
+
+      // Find matching size from available sizes
+      const newSizeLower = args.newSize.toLowerCase().replace(/\s+/g, "");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const matchingSize = sizesResult.sizes.find((s: any) => {
+        const sizeLower = (s.size || "").toLowerCase().replace(/\s+/g, "");
+        const sizeNormLower = (s.sizeNormalized || "").toLowerCase().replace(/\s+/g, "");
+        return sizeLower === newSizeLower ||
+               sizeNormLower === newSizeLower ||
+               sizeLower.includes(newSizeLower) ||
+               newSizeLower.includes(sizeLower);
+      });
+
+      // Get price for the new size
+      let newPrice = itemMatch.estimatedPrice;
+      let sizeDisplay = args.newSize;
+
+      if (matchingSize) {
+        newPrice = matchingSize.price ?? itemMatch.estimatedPrice;
+        sizeDisplay = matchingSize.sizeNormalized || matchingSize.size || args.newSize;
+      }
+
+      // Update the item
+      await ctx.runMutation(api.listItems.update, {
+        id: itemMatch._id,
+        size: sizeDisplay,
+        estimatedPrice: newPrice,
+        sizeOverride: true,
+      });
+
+      const priceStr = newPrice ? `at £${newPrice.toFixed(2)}` : "";
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Changed ${itemMatch.name} to ${sizeDisplay} ${priceStr}`.trim(),
+          itemName: itemMatch.name,
+          newSize: sizeDisplay,
+          newPrice,
+        },
+      };
+    }
+
+    case "edit_last_item": {
+      // Get all items on the list, sorted by creation time
+      const listItems = await ctx.runQuery(api.listItems.getByList, {
+        listId: args.listId as Id<"shoppingLists">,
+      });
+
+      if (listItems.length === 0) {
+        return {
+          type: "data",
+          result: { success: false, error: "No items on this list to edit." },
+        };
+      }
+
+      // Find the most recently added item (by _creationTime)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sortedItems = [...listItems].sort((a: any, b: any) =>
+        (b._creationTime || 0) - (a._creationTime || 0)
+      );
+      const lastItem = sortedItems[0];
+
+      // Check if at least one update field is provided
+      if (args.quantity === undefined && args.size === undefined) {
+        return {
+          type: "data",
+          result: { success: false, error: "Please specify what to change (quantity or size)." },
+        };
+      }
+
+      // Build update object
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updates: Record<string, any> = {};
+      const changes: string[] = [];
+
+      if (args.quantity !== undefined) {
+        updates.quantity = args.quantity;
+        changes.push(`quantity to ${args.quantity}`);
+      }
+
+      // Handle size change with price lookup
+      if (args.size !== undefined) {
+        // Get the list to find store
+        const list = await ctx.runQuery(api.shoppingLists.getById, {
+          id: args.listId as Id<"shoppingLists">,
+        });
+        const storeName = list?.normalizedStoreId || list?.storeName || "tesco";
+
+        // Get available sizes for this item at this store
+        const sizesResult = await ctx.runQuery(api.itemVariants.getSizesForStore, {
+          itemName: lastItem.name.toLowerCase().trim(),
+          store: storeName,
+        });
+
+        // Find matching size from available sizes
+        const newSizeLower = args.size.toLowerCase().replace(/\s+/g, "");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const matchingSize = sizesResult.sizes.find((s: any) => {
+          const sizeLower = (s.size || "").toLowerCase().replace(/\s+/g, "");
+          const sizeNormLower = (s.sizeNormalized || "").toLowerCase().replace(/\s+/g, "");
+          return sizeLower === newSizeLower ||
+                 sizeNormLower === newSizeLower ||
+                 sizeLower.includes(newSizeLower) ||
+                 newSizeLower.includes(sizeLower);
+        });
+
+        if (matchingSize) {
+          updates.size = matchingSize.sizeNormalized || matchingSize.size;
+          updates.estimatedPrice = matchingSize.price;
+          updates.sizeOverride = true;
+          changes.push(`${matchingSize.sizeNormalized || matchingSize.size} at £${(matchingSize.price || 0).toFixed(2)}`);
+        } else {
+          // Use the size as-is if no match found
+          updates.size = args.size;
+          updates.sizeOverride = true;
+          changes.push(args.size);
+        }
+      }
+
+      // Apply updates
+      await ctx.runMutation(api.listItems.update, {
+        id: lastItem._id,
+        ...updates,
+      });
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Updated ${lastItem.name} to ${changes.join(", ")}`,
+          itemName: lastItem.name,
+          ...updates,
         },
       };
     }
