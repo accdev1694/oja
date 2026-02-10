@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { normalizeStoreName } from "./lib/storeNormalizer";
 
 /**
  * Generate a fingerprint for duplicate detection.
@@ -95,12 +96,14 @@ export const create = mutation({
     }
 
     const now = Date.now();
+    const initialStoreName = "Unknown Store"; // Will be filled by AI parsing
 
     const receiptId = await ctx.db.insert("receipts", {
       userId: user._id,
       listId: args.listId,
       imageStorageId: args.imageStorageId,
-      storeName: "Unknown Store", // Will be filled by AI parsing
+      storeName: initialStoreName,
+      // normalizedStoreId will be set when storeName is updated via AI parsing
       subtotal: 0,
       total: 0,
       items: [],
@@ -169,7 +172,14 @@ export const update = mutation({
 
     const updates: Record<string, unknown> = {};
 
-    if (args.storeName !== undefined) updates.storeName = args.storeName;
+    if (args.storeName !== undefined) {
+      updates.storeName = args.storeName;
+      // Normalize store name when it changes
+      const normalizedStoreId = normalizeStoreName(args.storeName);
+      if (normalizedStoreId) {
+        updates.normalizedStoreId = normalizedStoreId;
+      }
+    }
     if (args.storeAddress !== undefined) updates.storeAddress = args.storeAddress;
     if (args.purchaseDate !== undefined) updates.purchaseDate = args.purchaseDate;
     if (args.subtotal !== undefined) updates.subtotal = args.subtotal;

@@ -59,7 +59,9 @@ export const create = mutation({
     name: v.string(),
     category: v.optional(v.string()),
     quantity: v.number(),
-    unit: v.optional(v.string()),
+    // Size/Unit from variant selection (Zero-Blank: AI fills if not provided)
+    size: v.optional(v.string()),    // "2pt", "500ml", "250g"
+    unit: v.optional(v.string()),    // "pint", "ml", "g"
     estimatedPrice: v.optional(v.number()),
     priority: v.optional(
       v.union(
@@ -127,6 +129,7 @@ export const create = mutation({
       name: args.name,
       category: args.category,
       quantity: args.quantity,
+      size: args.size,
       unit: args.unit,
       estimatedPrice,
       priority: args.priority ?? "should-have",
@@ -402,6 +405,9 @@ export const addFromPantryOut = mutation({
         name: pantryItem.name,
         category: pantryItem.category,
         quantity: 1,
+        // Zero-Blank: Use pantryItem's defaultSize/defaultUnit when available
+        size: pantryItem.defaultSize,
+        unit: pantryItem.defaultUnit,
         estimatedPrice,
         priority: "must-have",
         isChecked: false,
@@ -465,6 +471,9 @@ export const addFromPantrySelected = mutation({
         name: pantryItem.name,
         category: pantryItem.category,
         quantity: 1,
+        // Zero-Blank: Use pantryItem's defaultSize/defaultUnit when available
+        size: pantryItem.defaultSize,
+        unit: pantryItem.defaultUnit,
         estimatedPrice,
         priority: "must-have",
         isChecked: false,

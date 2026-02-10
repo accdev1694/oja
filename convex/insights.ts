@@ -635,3 +635,374 @@ export const unlockAchievement = mutation({
     return await ctx.db.get(id);
   },
 });
+
+// =============================================================================
+// 6.4 — Store Achievements
+// =============================================================================
+
+/**
+ * Store achievement definitions
+ * Icons verified against MaterialCommunityIcons
+ */
+const STORE_ACHIEVEMENTS = {
+  store_explorer: {
+    type: "store_explorer",
+    title: "Store Explorer",
+    description: "Shop at 5 different stores",
+    icon: "map-marker-multiple", // map-marker-multiple exists in MaterialCommunityIcons
+    tier: "bronze",
+    threshold: 5,
+  },
+  price_detective: {
+    type: "price_detective",
+    title: "Price Detective",
+    description: "Find 10 items cheaper elsewhere",
+    icon: "magnify", // magnify exists in MaterialCommunityIcons
+    tier: "silver",
+    threshold: 10,
+  },
+  loyal_shopper: {
+    type: "loyal_shopper",
+    title: "Loyal Shopper",
+    description: "Make 10 trips to the same store",
+    icon: "heart-circle", // heart-circle exists in MaterialCommunityIcons
+    tier: "bronze",
+    threshold: 10,
+  },
+  budget_champion: {
+    type: "budget_champion",
+    title: "Budget Champion",
+    description: "Save £50 by switching stores",
+    icon: "trophy-award", // trophy-award exists in MaterialCommunityIcons
+    tier: "gold",
+    threshold: 50,
+  },
+} as const;
+
+/**
+ * Check and unlock store-related achievements for a user
+ * Called after receipt processing or when viewing store insights
+ */
+export const checkStoreAchievements = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    const now = Date.now();
+    const unlockedAchievements: string[] = [];
+
+    // Get all user receipts with normalized store IDs
+    const receipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .collect();
+
+    // Count unique stores and trips per store
+    const storeTrips: Record<string, number> = {};
+    for (const receipt of receipts) {
+      const storeId = receipt.normalizedStoreId;
+      if (storeId) {
+        storeTrips[storeId] = (storeTrips[storeId] || 0) + 1;
+      }
+    }
+
+    const uniqueStoreCount = Object.keys(storeTrips).length;
+    const maxTripsAtSingleStore = Math.max(...Object.values(storeTrips), 0);
+
+    // Check Store Explorer - 5 different stores
+    if (uniqueStoreCount >= STORE_ACHIEVEMENTS.store_explorer.threshold) {
+      const existing = await ctx.db
+        .query("achievements")
+        .withIndex("by_user_type", (q: any) =>
+          q.eq("userId", user._id).eq("type", STORE_ACHIEVEMENTS.store_explorer.type)
+        )
+        .unique();
+
+      if (!existing) {
+        await ctx.db.insert("achievements", {
+          userId: user._id,
+          type: STORE_ACHIEVEMENTS.store_explorer.type,
+          title: STORE_ACHIEVEMENTS.store_explorer.title,
+          description: STORE_ACHIEVEMENTS.store_explorer.description,
+          icon: STORE_ACHIEVEMENTS.store_explorer.icon,
+          unlockedAt: now,
+        });
+        await ctx.db.insert("notifications", {
+          userId: user._id,
+          type: "achievement_unlocked",
+          title: "Achievement Unlocked!",
+          body: `${STORE_ACHIEVEMENTS.store_explorer.title}: ${STORE_ACHIEVEMENTS.store_explorer.description}`,
+          data: { achievementType: STORE_ACHIEVEMENTS.store_explorer.type },
+          read: false,
+          createdAt: now,
+        });
+        unlockedAchievements.push(STORE_ACHIEVEMENTS.store_explorer.type);
+      }
+    }
+
+    // Check Loyal Shopper - 10 trips at same store
+    if (maxTripsAtSingleStore >= STORE_ACHIEVEMENTS.loyal_shopper.threshold) {
+      const existing = await ctx.db
+        .query("achievements")
+        .withIndex("by_user_type", (q: any) =>
+          q.eq("userId", user._id).eq("type", STORE_ACHIEVEMENTS.loyal_shopper.type)
+        )
+        .unique();
+
+      if (!existing) {
+        await ctx.db.insert("achievements", {
+          userId: user._id,
+          type: STORE_ACHIEVEMENTS.loyal_shopper.type,
+          title: STORE_ACHIEVEMENTS.loyal_shopper.title,
+          description: STORE_ACHIEVEMENTS.loyal_shopper.description,
+          icon: STORE_ACHIEVEMENTS.loyal_shopper.icon,
+          unlockedAt: now,
+        });
+        await ctx.db.insert("notifications", {
+          userId: user._id,
+          type: "achievement_unlocked",
+          title: "Achievement Unlocked!",
+          body: `${STORE_ACHIEVEMENTS.loyal_shopper.title}: ${STORE_ACHIEVEMENTS.loyal_shopper.description}`,
+          data: { achievementType: STORE_ACHIEVEMENTS.loyal_shopper.type },
+          read: false,
+          createdAt: now,
+        });
+        unlockedAchievements.push(STORE_ACHIEVEMENTS.loyal_shopper.type);
+      }
+    }
+
+    return { unlockedAchievements };
+  },
+});
+
+/**
+ * Check deal-based achievements (Price Detective & Budget Champion)
+ * Called when user views best deals or store recommendations
+ */
+export const checkDealAchievements = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    const now = Date.now();
+    const unlockedAchievements: string[] = [];
+
+    // Get price history for deal analysis (last 90 days)
+    const ninetyDaysAgo = now - 90 * 24 * 60 * 60 * 1000;
+    const priceHistory = await ctx.db
+      .query("priceHistory")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .collect();
+
+    const recentPriceHistory = priceHistory.filter(
+      (p: any) => p.purchaseDate >= ninetyDaysAgo
+    );
+
+    if (recentPriceHistory.length === 0) {
+      return { unlockedAchievements };
+    }
+
+    // Group purchases by normalized item name
+    const userPurchases = new Map<
+      string,
+      Array<{
+        price: number;
+        storeName: string;
+        normalizedStoreId?: string;
+        purchaseDate: number;
+      }>
+    >();
+
+    for (const ph of recentPriceHistory) {
+      const key = ph.normalizedName;
+      if (!userPurchases.has(key)) {
+        userPurchases.set(key, []);
+      }
+      userPurchases.get(key)!.push({
+        price: ph.unitPrice,
+        storeName: ph.storeName,
+        normalizedStoreId: ph.normalizedStoreId,
+        purchaseDate: ph.purchaseDate,
+      });
+    }
+
+    // Count items where cheaper price was found and calculate total savings
+    let itemsCheaperElsewhere = 0;
+    let totalSavings = 0;
+
+    for (const [normalizedName, purchases] of userPurchases) {
+      // Get the most recent purchase for this item
+      const sortedPurchases = purchases.sort(
+        (a, b) => b.purchaseDate - a.purchaseDate
+      );
+      const mostRecent = sortedPurchases[0];
+
+      // Get all current prices for this item
+      const currentPrices = await ctx.db
+        .query("currentPrices")
+        .withIndex("by_item", (q: any) => q.eq("normalizedName", normalizedName))
+        .collect();
+
+      if (currentPrices.length === 0) {
+        continue;
+      }
+
+      // Find the cheapest price from a different store
+      const cheapestFromOtherStore = currentPrices
+        .filter((cp: any) => {
+          if (cp.normalizedStoreId && mostRecent.normalizedStoreId) {
+            return cp.normalizedStoreId !== mostRecent.normalizedStoreId;
+          }
+          return cp.storeName.toLowerCase() !== mostRecent.storeName.toLowerCase();
+        })
+        .sort((a: any, b: any) => a.unitPrice - b.unitPrice)[0];
+
+      if (cheapestFromOtherStore && cheapestFromOtherStore.unitPrice < mostRecent.price) {
+        const savings = mostRecent.price - cheapestFromOtherStore.unitPrice;
+        const savingsPercent = (savings / mostRecent.price) * 100;
+
+        // Only count significant savings (>5%)
+        if (savingsPercent >= 5) {
+          itemsCheaperElsewhere++;
+          totalSavings += savings;
+        }
+      }
+    }
+
+    // Check Price Detective - 10 items cheaper elsewhere
+    if (itemsCheaperElsewhere >= STORE_ACHIEVEMENTS.price_detective.threshold) {
+      const existing = await ctx.db
+        .query("achievements")
+        .withIndex("by_user_type", (q: any) =>
+          q.eq("userId", user._id).eq("type", STORE_ACHIEVEMENTS.price_detective.type)
+        )
+        .unique();
+
+      if (!existing) {
+        await ctx.db.insert("achievements", {
+          userId: user._id,
+          type: STORE_ACHIEVEMENTS.price_detective.type,
+          title: STORE_ACHIEVEMENTS.price_detective.title,
+          description: STORE_ACHIEVEMENTS.price_detective.description,
+          icon: STORE_ACHIEVEMENTS.price_detective.icon,
+          unlockedAt: now,
+        });
+        await ctx.db.insert("notifications", {
+          userId: user._id,
+          type: "achievement_unlocked",
+          title: "Achievement Unlocked!",
+          body: `${STORE_ACHIEVEMENTS.price_detective.title}: ${STORE_ACHIEVEMENTS.price_detective.description}`,
+          data: { achievementType: STORE_ACHIEVEMENTS.price_detective.type },
+          read: false,
+          createdAt: now,
+        });
+        unlockedAchievements.push(STORE_ACHIEVEMENTS.price_detective.type);
+      }
+    }
+
+    // Check Budget Champion - £50 saved by store switching
+    if (totalSavings >= STORE_ACHIEVEMENTS.budget_champion.threshold) {
+      const existing = await ctx.db
+        .query("achievements")
+        .withIndex("by_user_type", (q: any) =>
+          q.eq("userId", user._id).eq("type", STORE_ACHIEVEMENTS.budget_champion.type)
+        )
+        .unique();
+
+      if (!existing) {
+        await ctx.db.insert("achievements", {
+          userId: user._id,
+          type: STORE_ACHIEVEMENTS.budget_champion.type,
+          title: STORE_ACHIEVEMENTS.budget_champion.title,
+          description: STORE_ACHIEVEMENTS.budget_champion.description,
+          icon: STORE_ACHIEVEMENTS.budget_champion.icon,
+          unlockedAt: now,
+        });
+        await ctx.db.insert("notifications", {
+          userId: user._id,
+          type: "achievement_unlocked",
+          title: "Achievement Unlocked!",
+          body: `${STORE_ACHIEVEMENTS.budget_champion.title}: ${STORE_ACHIEVEMENTS.budget_champion.description}`,
+          data: { achievementType: STORE_ACHIEVEMENTS.budget_champion.type },
+          read: false,
+          createdAt: now,
+        });
+        unlockedAchievements.push(STORE_ACHIEVEMENTS.budget_champion.type);
+      }
+    }
+
+    return { unlockedAchievements, itemsCheaperElsewhere, totalSavings: Math.round(totalSavings * 100) / 100 };
+  },
+});
+
+/**
+ * Get all possible store achievements with user's progress
+ */
+export const getStoreAchievementProgress = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await optionalUser(ctx);
+    if (!user) return null;
+
+    // Get all user receipts with normalized store IDs
+    const receipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .collect();
+
+    // Count unique stores and trips per store
+    const storeTrips: Record<string, number> = {};
+    for (const receipt of receipts) {
+      const storeId = receipt.normalizedStoreId;
+      if (storeId) {
+        storeTrips[storeId] = (storeTrips[storeId] || 0) + 1;
+      }
+    }
+
+    const uniqueStoreCount = Object.keys(storeTrips).length;
+    const maxTripsAtSingleStore = Math.max(...Object.values(storeTrips), 0);
+
+    // Get user's unlocked achievements
+    const userAchievements = await ctx.db
+      .query("achievements")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .collect();
+
+    const unlockedTypes = new Set(userAchievements.map((a: any) => a.type));
+
+    return {
+      storeExplorer: {
+        ...STORE_ACHIEVEMENTS.store_explorer,
+        progress: uniqueStoreCount,
+        unlocked: unlockedTypes.has(STORE_ACHIEVEMENTS.store_explorer.type),
+        progressPercent: Math.min(
+          (uniqueStoreCount / STORE_ACHIEVEMENTS.store_explorer.threshold) * 100,
+          100
+        ),
+      },
+      loyalShopper: {
+        ...STORE_ACHIEVEMENTS.loyal_shopper,
+        progress: maxTripsAtSingleStore,
+        unlocked: unlockedTypes.has(STORE_ACHIEVEMENTS.loyal_shopper.type),
+        progressPercent: Math.min(
+          (maxTripsAtSingleStore / STORE_ACHIEVEMENTS.loyal_shopper.threshold) * 100,
+          100
+        ),
+      },
+      priceDetective: {
+        ...STORE_ACHIEVEMENTS.price_detective,
+        // Progress for price detective requires analyzing deals (expensive)
+        // Return unlocked status only, progress calculated in checkDealAchievements
+        progress: null, // Calculated on-demand
+        unlocked: unlockedTypes.has(STORE_ACHIEVEMENTS.price_detective.type),
+        progressPercent: unlockedTypes.has(STORE_ACHIEVEMENTS.price_detective.type) ? 100 : null,
+      },
+      budgetChampion: {
+        ...STORE_ACHIEVEMENTS.budget_champion,
+        // Progress for budget champion requires analyzing deals (expensive)
+        // Return unlocked status only, progress calculated in checkDealAchievements
+        progress: null, // Calculated on-demand
+        unlocked: unlockedTypes.has(STORE_ACHIEVEMENTS.budget_champion.type),
+        progressPercent: unlockedTypes.has(STORE_ACHIEVEMENTS.budget_champion.type) ? 100 : null,
+      },
+    };
+  },
+});

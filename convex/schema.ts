@@ -15,6 +15,12 @@ export default defineSchema({
     country: v.optional(v.string()),
     cuisinePreferences: v.optional(v.array(v.string())),
 
+    // Store preferences
+    storePreferences: v.optional(v.object({
+      favorites: v.array(v.string()),      // ["tesco", "aldi", "lidl"]
+      defaultStore: v.optional(v.string()), // "tesco"
+    })),
+
     // Settings
     preferences: v.optional(
       v.object({
@@ -112,6 +118,7 @@ export default defineSchema({
 
     // Store
     storeName: v.optional(v.string()),
+    normalizedStoreId: v.optional(v.string()),  // Target store for this list (e.g., "tesco", "sainsburys")
 
     // Timestamps
     plannedDate: v.optional(v.number()),
@@ -153,7 +160,10 @@ export default defineSchema({
     name: v.string(),
     category: v.optional(v.string()),
     quantity: v.number(),
-    unit: v.optional(v.string()),
+
+    // Size/Unit from variant selection (Zero-Blank: AI fills if not provided)
+    size: v.optional(v.string()),   // "2pt", "500ml", "250g"
+    unit: v.optional(v.string()),   // "pint", "ml", "g"
 
     // Pricing
     estimatedPrice: v.optional(v.number()),
@@ -204,6 +214,7 @@ export default defineSchema({
     // Store info
     storeName: v.string(),
     storeAddress: v.optional(v.string()),
+    normalizedStoreId: v.optional(v.string()),  // Normalized store ID (e.g., "tesco", "sainsburys")
 
     // Totals
     subtotal: v.number(),
@@ -256,6 +267,7 @@ export default defineSchema({
     size: v.optional(v.string()), // "2 pints"
     unit: v.optional(v.string()), // "pint"
     storeName: v.string(),
+    normalizedStoreId: v.optional(v.string()),  // Normalized store ID (e.g., "tesco", "sainsburys")
     region: v.optional(v.string()), // Postcode area (Phase 2)
 
     // Price data
@@ -293,6 +305,7 @@ export default defineSchema({
     // Store info
     storeName: v.string(),
     storeAddress: v.optional(v.string()),
+    normalizedStoreId: v.optional(v.string()),  // Normalized store ID (e.g., "tesco", "sainsburys")
 
     // Purchase date
     purchaseDate: v.number(),

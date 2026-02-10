@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { normalizeStoreName } from "./lib/storeNormalizer";
 
 /**
  * Save price history from receipt items
@@ -35,6 +36,9 @@ export const savePriceHistoryFromReceipt = mutation({
     const now = Date.now();
     const priceHistoryIds: Id<"priceHistory">[] = [];
 
+    // Normalize store name once for all items
+    const normalizedStoreId = normalizeStoreName(receipt.storeName);
+
     for (const item of receipt.items) {
       const priceHistoryId = await ctx.db.insert("priceHistory", {
         userId: user._id,
@@ -49,6 +53,8 @@ export const savePriceHistoryFromReceipt = mutation({
         unitPrice: item.unitPrice,
         storeName: receipt.storeName,
         storeAddress: receipt.storeAddress,
+        // Include normalized store ID if available
+        ...(normalizedStoreId && { normalizedStoreId }),
         purchaseDate: receipt.purchaseDate,
         createdAt: now,
       });

@@ -83,6 +83,8 @@ export const AddItemForm = memo(function AddItemForm({
   const [newItemQuantity, setNewItemQuantity] = useState("1");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [selectedVariantName, setSelectedVariantName] = useState<string | null>(null);
+  const [selectedVariantSize, setSelectedVariantSize] = useState<string | null>(null);
+  const [selectedVariantUnit, setSelectedVariantUnit] = useState<string | null>(null);
   const [isEstimatingPrice, setIsEstimatingPrice] = useState(false);
 
   // ── Suggestions state ───────────────────────────────────────────────────────
@@ -120,7 +122,26 @@ export const AddItemForm = memo(function AddItemForm({
   // Reset selected variant when item name changes
   useEffect(() => {
     setSelectedVariantName(null);
+    setSelectedVariantSize(null);
+    setSelectedVariantUnit(null);
   }, [newItemName]);
+
+  // Pre-select "your usual" variant when variants load (if no variant already selected)
+  useEffect(() => {
+    if (!itemVariants || itemVariants.length === 0 || selectedVariantName) return;
+
+    // Find the user's usual variant (priceSource === "personal")
+    const usualVariant = itemVariants.find((v) => v.priceSource === "personal");
+    if (usualVariant) {
+      setSelectedVariantName(usualVariant.variantName);
+      setSelectedVariantSize(usualVariant.size);
+      setSelectedVariantUnit(usualVariant.unit);
+      setNewItemName(usualVariant.variantName);
+      if (usualVariant.price != null) {
+        setNewItemPrice(usualVariant.price.toFixed(2));
+      }
+    }
+  }, [itemVariants]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trigger AI price estimation for completely unknown items
   useEffect(() => {
@@ -194,15 +215,27 @@ export const AddItemForm = memo(function AddItemForm({
     setNewItemName("");
     setNewItemQuantity("1");
     setNewItemPrice("");
+    setSelectedVariantName(null);
+    setSelectedVariantSize(null);
+    setSelectedVariantUnit(null);
   }
 
-  async function addItemToList(name: string, quantity: number, price?: number) {
+  async function addItemToList(
+    name: string,
+    quantity: number,
+    price?: number,
+    size?: string | null,
+    unit?: string | null
+  ) {
     try {
       await addItem({
         listId,
         name,
         quantity,
         estimatedPrice: price,
+        // Pass size/unit from variant selection (Zero-Blank: ensures items have full context)
+        ...(size ? { size } : {}),
+        ...(unit ? { unit } : {}),
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -218,7 +251,13 @@ export const AddItemForm = memo(function AddItemForm({
     const quantity = parseInt(newItemQuantity) || 1;
     const price = newItemPrice ? parseFloat(newItemPrice) : 0;
 
-    await addItemToList(itemName, quantity, price || undefined);
+    await addItemToList(
+      itemName,
+      quantity,
+      price || undefined,
+      selectedVariantSize,
+      selectedVariantUnit
+    );
   }
 
   async function addToExistingItem(existingItem: ListItem) {
@@ -466,6 +505,8 @@ export const AddItemForm = memo(function AddItemForm({
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           setSelectedVariantName(variant.variantName);
+                          setSelectedVariantSize(variant.size);
+                          setSelectedVariantUnit(variant.unit);
                           setNewItemName(variant.variantName);
                           if (variant.price != null) {
                             setNewItemPrice(variant.price.toFixed(2));
@@ -497,6 +538,8 @@ export const AddItemForm = memo(function AddItemForm({
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setSelectedVariantName(null);
+                      setSelectedVariantSize(null);
+                      setSelectedVariantUnit(null);
                       // Use base-item average price if available
                       if (priceEstimate?.average) {
                         setNewItemPrice(priceEstimate.average.toFixed(2));

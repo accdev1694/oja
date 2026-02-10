@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { normalizeStoreName } from "./lib/storeNormalizer";
 
 /** Confidence score: higher reportCount + more recent = higher confidence (0-1) */
 function computeConfidence(reportCount: number, daysSinceLastSeen: number): number {
@@ -59,6 +60,9 @@ export const upsertFromReceipt = mutation({
     let upsertCount = 0;
     let variantsDiscovered = 0;
 
+    // Normalize store name once for all items
+    const normalizedStoreId = normalizeStoreName(receipt.storeName);
+
     for (const item of receipt.items) {
       const normalizedName = item.name.toLowerCase().trim();
 
@@ -84,6 +88,8 @@ export const upsertFromReceipt = mutation({
             // Pass through size/unit from receipt when available
             ...(item.size && { size: item.size }),
             ...(item.unit && { unit: item.unit }),
+            // Update normalized store ID if available
+            ...(normalizedStoreId && { normalizedStoreId }),
             // Update aggregated price data
             minPrice: existing.minPrice !== undefined
               ? Math.min(existing.minPrice, item.unitPrice)
@@ -110,6 +116,8 @@ export const upsertFromReceipt = mutation({
           normalizedName,
           itemName: item.name,
           storeName: receipt.storeName,
+          // Include normalized store ID if available
+          ...(normalizedStoreId && { normalizedStoreId }),
           // Pass through size/unit from receipt when available
           ...(item.size && { size: item.size }),
           ...(item.unit && { unit: item.unit }),
@@ -373,5 +381,90 @@ export const batchGetEstimates = query({
     }
 
     return results;
+  },
+});
+
+/**
+ * Compare prices for an item across specific stores.
+ * Returns price data for each requested store, useful for store comparison UI.
+ */
+export const getComparisonByStores = query({
+  args: {
+    itemName: v.string(),
+    size: v.optional(v.string()),
+    storeIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const normalizedName = args.itemName.toLowerCase().trim();
+
+    // Get all prices for this item
+    const allPrices = await ctx.db
+      .query("currentPrices")
+      .withIndex("by_item", (q) => q.eq("normalizedName", normalizedName))
+      .collect();
+
+    // Filter by size if provided
+    const sizeFilteredPrices = args.size
+      ? allPrices.filter((p) => p.size === args.size)
+      : allPrices;
+
+    // Build result map for requested stores
+    const result: Record<
+      string,
+      {
+        price: number;
+        confidence: number;
+        lastSeen: number;
+        size?: string;
+        unit?: string;
+      } | null
+    > = {};
+
+    for (const storeId of args.storeIds) {
+      // Find price for this store (by normalizedStoreId or storeName fallback)
+      const storePrice = sizeFilteredPrices.find(
+        (p) =>
+          p.normalizedStoreId === storeId ||
+          p.storeName.toLowerCase().includes(storeId.toLowerCase())
+      );
+
+      if (storePrice) {
+        result[storeId] = {
+          price: storePrice.unitPrice,
+          confidence: storePrice.confidence ?? 0,
+          lastSeen: storePrice.lastSeenDate,
+          size: storePrice.size,
+          unit: storePrice.unit,
+        };
+      } else {
+        result[storeId] = null;
+      }
+    }
+
+    // Add metadata: cheapest store and average
+    const availablePrices = Object.entries(result)
+      .filter(([, data]) => data !== null)
+      .map(([storeId, data]) => ({ storeId, ...data! }));
+
+    const cheapestStore =
+      availablePrices.length > 0
+        ? availablePrices.reduce((min, curr) =>
+            curr.price < min.price ? curr : min
+          )
+        : null;
+
+    const averagePrice =
+      availablePrices.length > 0
+        ? availablePrices.reduce((sum, p) => sum + p.price, 0) /
+          availablePrices.length
+        : null;
+
+    return {
+      byStore: result,
+      cheapestStore: cheapestStore?.storeId ?? null,
+      cheapestPrice: cheapestStore?.price ?? null,
+      averagePrice,
+      storesWithData: availablePrices.length,
+    };
   },
 });
