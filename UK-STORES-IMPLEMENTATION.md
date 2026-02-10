@@ -160,7 +160,7 @@ Store+Size Tagged Price Data
 
 **New file:** `convex/lib/storeNormalizer.ts`
 
-- [ ] Create UK_STORES constant with 20+ stores:
+- [x] Create UK_STORES constant with 20+ stores:
 
 | ID | Display Name | Type | Market Share | Color |
 |----|--------------|------|--------------|-------|
@@ -185,11 +185,11 @@ Store+Size Tagged Price Data
 | costco | Costco | Wholesale | <1% | #005DAA |
 | booker | Booker | Wholesale | <1% | #00529B |
 
-- [ ] Each store has: id, displayName, color, aliases array
-- [ ] `normalizeStoreName(raw: string): string | null` function
-- [ ] `getStoreInfo(id: string): StoreInfo` function
-- [ ] `getAllStores(): StoreInfo[]` function sorted by market share
-- [ ] Export types: `UKStoreId`, `StoreInfo`
+- [x] Each store has: id, displayName, color, aliases array
+- [x] `normalizeStoreName(raw: string): string | null` function
+- [x] `getStoreInfo(id: string): StoreInfo` function
+- [x] `getAllStores(): StoreInfo[]` function sorted by market share
+- [x] Export types: `UKStoreId`, `StoreInfo`
 
 ### Step B.2: Schema Changes
 
