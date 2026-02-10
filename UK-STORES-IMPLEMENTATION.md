@@ -290,16 +290,16 @@ Grid layout showing price per store per size:
 | Aldi | £0.55 | **£0.99** | £1.45 |
 | Sainsbury's | £0.70 | £1.20 | £1.60 |
 
-- [ ] Grid layout: rows=stores, cols=sizes
-- [ ] Highlight cheapest per size (bold)
-- [ ] Show "best value" indicator (lowest price-per-unit)
-- [ ] Store brand colors on row headers
+- [x] Grid layout: rows=stores, cols=sizes
+- [x] Highlight cheapest per size (bold)
+- [x] Show "best value" indicator (lowest price-per-unit)
+- [x] Store brand colors on row headers
 
 **New file:** `components/stores/StoreChip.tsx`
 
-- [ ] Colored pill with store name
-- [ ] Optional price display
-- [ ] Uses store brand color
+- [x] Colored pill with store name
+- [x] Optional price display
+- [x] Uses store brand color
 
 ---
 
