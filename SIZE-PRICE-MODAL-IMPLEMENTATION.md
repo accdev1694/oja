@@ -486,24 +486,24 @@ const SIZE_ALIASES = {
 - [x] **3.5** Show "was X" indicator for changed sizes
 - [x] **3.6** Visual indicator for manual price overrides
 
-### Phase 4: Store Comparison
+### Phase 4: Store Comparison ✅
 
-- [ ] **4.1** Create `shoppingLists.compareListAcrossStores` query
-- [ ] **4.2** Implement total calculation per store with size matching
-- [ ] **4.3** Create `components/lists/ListComparisonSummary.tsx`
-- [ ] **4.4** Integrate into list view (show after 3+ items)
-- [ ] **4.5** Add "Compare Prices" button/section
+- [x] **4.1** Create `shoppingLists.compareListAcrossStores` query
+- [x] **4.2** Implement total calculation per store with size matching
+- [x] **4.3** Create `components/lists/ListComparisonSummary.tsx`
+- [x] **4.4** Integrate into list view (show after 3+ items)
+- [x] **4.5** Add "Compare Prices" button/section
 
-### Phase 5: Store Switch
+### Phase 5: Store Switch ✅
 
-- [ ] **5.1** Create `components/lists/StoreSwitchPreview.tsx`
-- [ ] **5.2** Create `shoppingLists.switchStore` mutation
-- [ ] **5.3** Implement closest-size matching in switch
-- [ ] **5.4** Preserve user overrides (`priceOverride`, `sizeOverride`)
-- [ ] **5.5** Handle items with no data at new store
-- [ ] **5.6** Handle custom/manual items (keep price)
-- [ ] **5.7** Handle switch back to original store
-- [ ] **5.8** Recalculate list totals after switch
+- [x] **5.1** Create `components/lists/StoreSwitchPreview.tsx`
+- [x] **5.2** Create `shoppingLists.switchStore` mutation
+- [x] **5.3** Implement closest-size matching in switch
+- [x] **5.4** Preserve user overrides (`priceOverride`, `sizeOverride`)
+- [x] **5.5** Handle items with no data at new store
+- [x] **5.6** Handle custom/manual items (keep price)
+- [x] **5.7** Handle switch back to original store
+- [x] **5.8** Recalculate list totals after switch
 
 ### Phase 6: Voice Integration
 
@@ -580,12 +580,12 @@ const SIZE_ALIASES = {
 | Phase 1: Foundation | ✅ Complete | 8/8 |
 | Phase 2: Add Item Flow | ✅ Complete | 8/8 |
 | Phase 3: Edit Flow | ✅ Complete | 6/6 |
-| Phase 4: Store Comparison | Not Started | 0/5 |
-| Phase 5: Store Switch | Not Started | 0/8 |
+| Phase 4: Store Comparison | ✅ Complete | 5/5 |
+| Phase 5: Store Switch | ✅ Complete | 8/8 |
 | Phase 6: Voice Integration | Not Started | 0/6 |
 | Phase 7: Testing | Not Started | 0/7 |
 | Phase 8: Polish | Not Started | 0/7 |
-| **Total** | **In Progress** | **22/55** |
+| **Total** | **In Progress** | **35/55** |
 
 ---
 

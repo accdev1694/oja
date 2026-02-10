@@ -198,6 +198,18 @@ export default defineSchema({
     // Notes
     notes: v.optional(v.string()),
 
+    // Track size/price source and overrides
+    originalSize: v.optional(v.string()),       // Size before auto-match on store switch
+    priceOverride: v.optional(v.boolean()),     // User manually edited price
+    sizeOverride: v.optional(v.boolean()),      // User manually edited size
+    priceSource: v.optional(v.union(
+      v.literal("personal"),      // From user's own receipts
+      v.literal("crowdsourced"),  // From other users' receipts
+      v.literal("ai"),            // AI estimate
+      v.literal("manual")         // User typed it
+    )),
+    priceConfidence: v.optional(v.number()),    // 0-1 confidence score
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })

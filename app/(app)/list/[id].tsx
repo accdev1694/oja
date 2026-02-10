@@ -54,6 +54,9 @@ import {
   ListPickerModal,
 } from "@/components/list/modals";
 import { SizePriceModal, type SizeOption } from "@/components/lists/SizePriceModal";
+import { ListComparisonSummary } from "@/components/lists/ListComparisonSummary";
+import { StoreSwitchPreview, type StoreSwitchItem } from "@/components/lists/StoreSwitchPreview";
+import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
 
 export default function ListDetailScreen() {
   const params = useLocalSearchParams();
@@ -75,6 +78,7 @@ export default function ListDetailScreen() {
 
   const updateList = useMutation(api.shoppingLists.update);
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
+  const switchStore = useMutation(api.shoppingLists.switchStore);
 
   // Partner mode
   const { isOwner, isPartner, canEdit, canApprove, loading: roleLoading } = usePartnerRole(id);
@@ -83,6 +87,12 @@ export default function ListDetailScreen() {
   const rawCommentCounts = useQuery(api.partners.getCommentCounts, items ? { listItemIds } : "skip");
   const commentCounts = useStableValue(rawCommentCounts, shallowRecordEqual);
   const allActiveLists = useQuery(api.shoppingLists.getActive);
+
+  // Store comparison query - only fetch when list has 3+ items
+  const comparison = useQuery(
+    api.shoppingLists.compareListAcrossStores,
+    list && (items?.length ?? 0) >= 3 ? { listId: id } : "skip"
+  );
 
   // Add-to-list picker state
   const [addToListItem, setAddToListItem] = useState<{
@@ -140,6 +150,11 @@ export default function ListDetailScreen() {
     category?: string;
     quantity: number;
   } | null>(null);
+
+  // Store Switch Preview modal state (Phase 5)
+  const [switchPreviewVisible, setSwitchPreviewVisible] = useState(false);
+  const [switchTargetStore, setSwitchTargetStore] = useState<string | null>(null);
+  const [isSwitching, setIsSwitching] = useState(false);
 
   // Fetch sizes for the Size/Price Modal when item is pending
   const sizesData = useQuery(
@@ -501,6 +516,85 @@ export default function ListDetailScreen() {
     setAddToListItem(null);
   }
 
+  // Store switch handler - opens preview modal (Phase 5)
+  const handleSwitchStore = useCallback((storeId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSwitchTargetStore(storeId);
+    setSwitchPreviewVisible(true);
+  }, []);
+
+  // Confirm store switch - executes mutation and shows result
+  const handleConfirmSwitch = useCallback(async () => {
+    if (!switchTargetStore || !list) return;
+
+    setIsSwitching(true);
+    try {
+      const result = await switchStore({ listId: list._id, newStore: switchTargetStore });
+      setSwitchPreviewVisible(false);
+      setSwitchTargetStore(null);
+
+      const newStoreInfo = getStoreInfoSafe(result.newStore);
+      const storeName = newStoreInfo?.displayName ?? result.newStore;
+
+      if (result.savings > 0) {
+        showToast(
+          `Switched to ${storeName}! Saved £${result.savings.toFixed(2)}`,
+          "check-circle",
+          colors.semantic.success
+        );
+      } else {
+        showToast(`Switched to ${storeName}`, "check-circle", colors.accent.primary);
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("Failed to switch store:", error);
+      showToast("Failed to switch store", "alert-circle", colors.semantic.danger);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsSwitching(false);
+    }
+  }, [switchTargetStore, list, switchStore, showToast]);
+
+  // Close store switch preview
+  const handleCloseSwitchPreview = useCallback(() => {
+    setSwitchPreviewVisible(false);
+    setSwitchTargetStore(null);
+  }, []);
+
+  // Build preview items from comparison data for StoreSwitchPreview
+  const switchPreviewItems = useMemo((): StoreSwitchItem[] => {
+    if (!switchTargetStore || !comparison || !items) return [];
+
+    const targetAlternative = comparison.alternatives.find(
+      (alt) => alt.store === switchTargetStore
+    );
+    if (!targetAlternative) return [];
+
+    // Map list items to preview items with price changes
+    return items.map((item) => {
+      const oldPrice = (item.estimatedPrice ?? 0) * item.quantity;
+      // For now, calculate a proportional new price based on overall ratio
+      // In production, you'd have per-item price data from the comparison query
+      const priceRatio =
+        comparison.currentTotal > 0
+          ? targetAlternative.total / comparison.currentTotal
+          : 1;
+      const newPrice = oldPrice * priceRatio;
+
+      return {
+        id: item._id,
+        name: item.name,
+        oldSize: item.size,
+        newSize: item.size, // Size matching happens in mutation
+        oldPrice,
+        newPrice,
+        sizeChanged: false, // Will be determined by mutation
+        manualOverride: item.priceOverride === true,
+      };
+    });
+  }, [switchTargetStore, comparison, items]);
+
   async function handleStartShopping() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     clearSelection();
@@ -803,6 +897,30 @@ export default function ListDetailScreen() {
     </View>
   ), []);
 
+  // ─── FlashList ListFooterComponent ──────────────────────────────────────────
+  const listFooter = useMemo(() => {
+    const itemCount = items?.length ?? 0;
+    const showComparison = itemCount >= 3 && comparison && list?.status === "active";
+
+    return (
+      <View style={styles.footerContainer}>
+        {/* Store Comparison Summary - show when 3+ items and in planning mode */}
+        {showComparison && (
+          <ListComparisonSummary
+            currentStore={comparison.currentStore}
+            currentTotal={comparison.currentTotal}
+            alternatives={comparison.alternatives}
+            totalItems={itemCount}
+            onSwitchStore={handleSwitchStore}
+            isLoading={comparison === undefined}
+          />
+        )}
+        {/* Bottom spacer for safe scrolling */}
+        <View style={styles.bottomSpacer} />
+      </View>
+    );
+  }, [items?.length, comparison, list?.status, handleSwitchStore]);
+
   const keyExtractor = useCallback((item: ListItem) => item._id, []);
 
   // Loading state -- after all hooks to satisfy Rules of Hooks
@@ -911,7 +1029,7 @@ export default function ListDetailScreen() {
           keyExtractor={keyExtractor}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={listEmpty}
-          ListFooterComponent={<View style={styles.bottomSpacer} />}
+          ListFooterComponent={listFooter}
           contentContainerStyle={styles.flashListContent}
           keyboardShouldPersistTaps="handled"
           onScroll={handleScroll}
@@ -1009,6 +1127,35 @@ export default function ListDetailScreen() {
         category={pendingItem?.category}
       />
 
+      {/* Store Switch Preview Modal (Phase 5) */}
+      {switchPreviewVisible && switchTargetStore && comparison && (() => {
+        const currentStoreInfo = getStoreInfoSafe(comparison.currentStore);
+        const targetStoreInfo = getStoreInfoSafe(switchTargetStore);
+        const targetAlternative = comparison.alternatives.find(
+          (alt) => alt.store === switchTargetStore
+        );
+
+        return (
+          <StoreSwitchPreview
+            visible={switchPreviewVisible}
+            onClose={handleCloseSwitchPreview}
+            onConfirm={handleConfirmSwitch}
+            isLoading={isSwitching}
+            previousStore={comparison.currentStore}
+            previousStoreDisplayName={
+              currentStoreInfo?.displayName ?? comparison.currentStoreDisplayName ?? "Current Store"
+            }
+            newStore={switchTargetStore}
+            newStoreDisplayName={targetStoreInfo?.displayName ?? switchTargetStore}
+            newStoreColor={targetStoreInfo?.color ?? colors.accent.primary}
+            previousTotal={comparison.currentTotal}
+            newTotal={targetAlternative?.total ?? comparison.currentTotal}
+            savings={targetAlternative?.savings ?? 0}
+            items={switchPreviewItems}
+          />
+        );
+      })()}
+
       {/* Surprise delight toast */}
       <GlassToast
         message={toast.message}
@@ -1058,6 +1205,10 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 140,
+  },
+  footerContainer: {
+    gap: spacing.lg,
+    marginTop: spacing.lg,
   },
 
   // Action Buttons

@@ -100,12 +100,12 @@ Requires dev build (native modules).
 
 ## Active Implementation Plan
 
-**Current:** `UK-STORES-IMPLEMENTATION.md` - UK Stores + Size/Unit System
+**Current:** `size-price-modal-implementation.md` - Size/Price Modal with Store Comparison
 
 **Workflow:**
-1. User tells Claude which step number to implement (e.g., "implement A.2")
-2. Claude implements the step
-3. Claude checks off the checkbox in the plan file and pushes to git
+1. User tells Claude which phase to implement (e.g., "execute phase 4")
+2. Claude spawns multiple sub-agents for parallel execution
+3. Claude checks off completed items in the plan file
 
 ## Known Issues
 
