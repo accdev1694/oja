@@ -124,12 +124,12 @@ Store+Size Tagged Price Data
 
 **New file:** `components/items/VariantPicker.tsx`
 
-- [ ] Horizontal scroll of size options
-- [ ] Shows price for each size: `[1pt £0.65] [2pt £1.15] [4pt £1.55]`
-- [ ] Highlights "Your usual" variant (from priceHistory)
-- [ ] Calculates price-per-unit for comparison
-- [ ] Animated selection with haptics
-- [ ] Glassmorphic styling matching design system
+- [x] Horizontal scroll of size options
+- [x] Shows price for each size: `[1pt £0.65] [2pt £1.15] [4pt £1.55]`
+- [x] Highlights "Your usual" variant (from priceHistory)
+- [x] Calculates price-per-unit for comparison
+- [x] Animated selection with haptics
+- [x] Glassmorphic styling matching design system
 
 ### Step A.4: Integrate Variant Picker into List Flow
 
