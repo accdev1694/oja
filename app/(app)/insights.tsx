@@ -10,6 +10,7 @@ import {
 import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LineChart } from "react-native-chart-kit";
 import ConfettiCannon from "react-native-confetti-cannon";
@@ -59,6 +60,11 @@ export default function InsightsScreen() {
   const monthlyTrends = useQuery(api.insights.getMonthlyTrends);
   const activeChallenge = useQuery(api.insights.getActiveChallenge);
 
+  // Store analytics queries
+  const storeSpending = useQuery(api.stores.getSpendingByStore);
+  const storeVisits = useQuery(api.stores.getReceiptCountByStore);
+  const storeRecommendation = useQuery(api.stores.getStoreRecommendation);
+
   const generateChallenge = useMutation(api.insights.generateChallenge);
 
   const [challengeGenerating, setChallengeGenerating] = useState(false);
@@ -93,6 +99,36 @@ export default function InsightsScreen() {
   );
 
   const seasonalTip = useMemo(() => getSeasonalTip(), []);
+
+  // Step 3.3: Memoize store breakdown data
+  const storeBreakdownData = useMemo(() => {
+    if (!storeSpending || !storeVisits) return null;
+
+    const storeIds = Object.keys(storeSpending);
+    if (storeIds.length === 0) return null;
+
+    const totalSpending = Object.values(storeSpending).reduce((a, b) => a + b, 0);
+    const totalVisits = Object.values(storeVisits).reduce((a, b) => a + b, 0);
+
+    // Build store data with info
+    const stores = storeIds
+      .map((storeId) => {
+        const info = getStoreInfoSafe(storeId);
+        const spending = storeSpending[storeId] ?? 0;
+        const visits = storeVisits[storeId] ?? 0;
+        return {
+          storeId,
+          displayName: info?.displayName ?? storeId,
+          color: info?.color ?? "#6B7280",
+          spending,
+          spendingPercent: totalSpending > 0 ? (spending / totalSpending) * 100 : 0,
+          visits,
+        };
+      })
+      .sort((a, b) => b.spending - a.spending); // Sort by spending descending
+
+    return { stores, totalSpending, totalVisits };
+  }, [storeSpending, storeVisits]);
 
   const loading = digest === undefined;
 
@@ -547,6 +583,135 @@ export default function InsightsScreen() {
                 })}
               </View>
             </GlassCollapsible>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* ============ STORE BREAKDOWN ============ */}
+        {storeBreakdownData && storeBreakdownData.stores.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(525).duration(400)}>
+            <View style={styles.section}>
+              <GlassCollapsible
+                title="Store Breakdown"
+                icon="store"
+                iconColor={colors.accent.info}
+                badge={storeBreakdownData.stores.length}
+              >
+                {/* Spending by Store */}
+                <View style={styles.storeSpendingSection}>
+                  <Text style={styles.storeSubheading}>Spending by Store</Text>
+                  <View style={styles.storeSpendingList}>
+                    {storeBreakdownData.stores.slice(0, 6).map((store) => (
+                      <View key={store.storeId} style={styles.storeSpendingRow}>
+                        <View style={styles.storeSpendingLabelRow}>
+                          <View
+                            style={[
+                              styles.storeDot,
+                              { backgroundColor: store.color },
+                            ]}
+                          />
+                          <Text style={styles.storeName} numberOfLines={1}>
+                            {store.displayName}
+                          </Text>
+                          <Text style={styles.storeAmount}>
+                            £{store.spending.toFixed(2)}
+                          </Text>
+                          <Text style={styles.storePercent}>
+                            ({store.spendingPercent.toFixed(0)}%)
+                          </Text>
+                        </View>
+                        <View style={styles.storeBarTrack}>
+                          <View
+                            style={[
+                              styles.storeBarFill,
+                              {
+                                width: `${Math.max(store.spendingPercent, 2)}%`,
+                                backgroundColor: store.color,
+                              },
+                            ]}
+                          />
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Store Visits */}
+                <View style={styles.storeVisitsSection}>
+                  <Text style={styles.storeSubheading}>Store Visits</Text>
+                  <View style={styles.storeVisitsGrid}>
+                    {storeBreakdownData.stores.slice(0, 6).map((store) => (
+                      <View key={store.storeId} style={styles.storeVisitItem}>
+                        <View
+                          style={[
+                            styles.storeVisitIcon,
+                            { backgroundColor: `${store.color}20` },
+                          ]}
+                        >
+                          <MaterialCommunityIcons
+                            name="cart-outline"
+                            size={16}
+                            color={store.color}
+                          />
+                        </View>
+                        <Text style={styles.storeVisitCount}>{store.visits}</Text>
+                        <Text style={styles.storeVisitName} numberOfLines={1}>
+                          {store.displayName}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                  <Text style={styles.storeTotalVisits}>
+                    {storeBreakdownData.totalVisits} total trip
+                    {storeBreakdownData.totalVisits !== 1 ? "s" : ""}
+                  </Text>
+                </View>
+
+                {/* Savings Recommendation */}
+                {storeRecommendation && (
+                  <View style={styles.savingsRecommendation}>
+                    <View style={styles.savingsRecommendationHeader}>
+                      <MaterialCommunityIcons
+                        name="lightbulb-on"
+                        size={20}
+                        color={colors.accent.warning}
+                      />
+                      <Text style={styles.savingsRecommendationTitle}>
+                        Smart Suggestion
+                      </Text>
+                    </View>
+                    <Text style={styles.savingsRecommendationText}>
+                      {storeRecommendation.message}
+                    </Text>
+                    {storeRecommendation.alternativeStores &&
+                      storeRecommendation.alternativeStores.length > 0 && (
+                        <View style={styles.alternativeStoresRow}>
+                          <Text style={styles.alternativeStoresLabel}>
+                            Other options:
+                          </Text>
+                          {storeRecommendation.alternativeStores.map((alt) => (
+                            <View
+                              key={alt.storeId}
+                              style={[
+                                styles.alternativeStoreChip,
+                                { borderColor: alt.storeColor },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.alternativeStoreText,
+                                  { color: alt.storeColor },
+                                ]}
+                              >
+                                {alt.storeName} (£{alt.potentialSavings.toFixed(0)})
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                  </View>
+                )}
+              </GlassCollapsible>
             </View>
           </Animated.View>
         )}
@@ -1309,5 +1474,147 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     textAlign: "center",
     paddingVertical: spacing.sm,
+  },
+
+  // Store breakdown
+  storeSpendingSection: {
+    marginBottom: spacing.md,
+  },
+  storeSubheading: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    fontSize: 11,
+  },
+  storeSpendingList: {
+    gap: spacing.sm,
+  },
+  storeSpendingRow: {
+    gap: 4,
+  },
+  storeSpendingLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  storeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  storeName: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  storeAmount: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: "700",
+  },
+  storePercent: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    minWidth: 40,
+  },
+  storeBarTrack: {
+    height: 6,
+    backgroundColor: colors.glass.background,
+    borderRadius: 3,
+    marginLeft: 22,
+    overflow: "hidden",
+  },
+  storeBarFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  storeVisitsSection: {
+    marginBottom: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.glass.border,
+  },
+  storeVisitsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  storeVisitItem: {
+    width: "30%",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    gap: 4,
+  },
+  storeVisitIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  storeVisitCount: {
+    ...typography.bodyLarge,
+    color: colors.text.primary,
+    fontWeight: "700",
+  },
+  storeVisitName: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    fontSize: 10,
+    textAlign: "center",
+  },
+  storeTotalVisits: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    marginTop: spacing.sm,
+  },
+  savingsRecommendation: {
+    backgroundColor: `${colors.accent.warning}08`,
+    borderRadius: 12,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: `${colors.accent.warning}25`,
+  },
+  savingsRecommendationHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  savingsRecommendationTitle: {
+    ...typography.labelMedium,
+    color: colors.accent.warning,
+    fontWeight: "700",
+  },
+  savingsRecommendationText: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    lineHeight: 22,
+  },
+  alternativeStoresRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  alternativeStoresLabel: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  alternativeStoreChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    backgroundColor: "transparent",
+  },
+  alternativeStoreText: {
+    ...typography.bodySmall,
+    fontWeight: "600",
+    fontSize: 11,
   },
 });

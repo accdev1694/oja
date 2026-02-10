@@ -361,10 +361,20 @@ Grid layout showing price per store per size:
 
 **File:** `app/(app)/insights.tsx`
 
-- [ ] Add collapsible "Store Breakdown" section
-- [ ] Show spending by store (pie chart or bar)
-- [ ] Show store visit counts
-- [ ] Show potential savings recommendation
+- [x] Add collapsible "Store Breakdown" section
+- [x] Show spending by store (pie chart or bar)
+- [x] Show store visit counts
+- [x] Show potential savings recommendation
+
+**Implementation Notes (2026-02-10):**
+- Added `GlassCollapsible` "Store Breakdown" section with store icon and badge showing store count
+- Integrated three store analytics queries: `getSpendingByStore`, `getReceiptCountByStore`, `getStoreRecommendation`
+- **Spending by Store**: Progress bar visualization with store brand colors, showing amount and percentage for top 6 stores
+- **Store Visits**: Grid layout with cart icons in store colors, showing visit counts and total trips
+- **Savings Recommendation**: Highlighted card showing AI-generated store switch suggestion (e.g., "Shop at Aldi to save £12.50/month") with alternative store chips
+- Memoized `storeBreakdownData` computation for performance
+- Used `getStoreInfoSafe()` from storeNormalizer to get display names and brand colors
+- Matched existing glassmorphic styling: store brand color dots, progress bars, chips with store colors
 
 ---
 
