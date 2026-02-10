@@ -158,20 +158,38 @@ Store+Size Tagged Price Data
 
 **Files:** `app/(app)/list/[id].tsx`, add item modals
 
-- [ ] When adding hasVariants item, show variant picker
-- [ ] Pre-select "your usual" if available
-- [ ] Store selected variant (size/unit) with listItem
-- [ ] Update price based on variant selection
-- [ ] Ensure Zero-Blank: AI fills in if no user selection
+- [x] When adding hasVariants item, show variant picker
+- [x] Pre-select "your usual" if available
+- [x] Store selected variant (size/unit) with listItem
+- [x] Update price based on variant selection
+- [x] Ensure Zero-Blank: AI fills in if no user selection
+
+**Implementation Notes (2026-02-10):**
+- Added `size` field to `listItems` schema (convex/schema.ts)
+- Updated `listItems.create` mutation to accept and store `size` and `unit` parameters
+- Updated `AddItemForm.tsx` to track selected variant's size/unit in state
+- Added auto-selection of "your usual" variant when variants load (priceSource === "personal")
+- Variant selection now passes size/unit to mutation, ensuring items have full context
+- Updated `addFromPantryOut` and `addFromPantrySelected` mutations to use pantryItem's `defaultSize`/`defaultUnit`
+- Zero-Blank enforced: variant picker pre-fills price, pantry items carry their default sizes
 
 ### Step A.5: Price-Per-Unit Display
 
 **New file:** `components/items/PriceDisplay.tsx`
 
-- [ ] Calculate: `unitPrice / size` → "£0.575/pint"
-- [ ] Show alongside total price
-- [ ] Use for value comparison across sizes
-- [ ] Handle different unit types (g, ml, pint, each)
+- [x] Calculate: `unitPrice / size` → "£0.575/pint"
+- [x] Show alongside total price
+- [x] Use for value comparison across sizes
+- [x] Handle different unit types (g, ml, pint, each)
+
+**Implementation Notes (2026-02-10):**
+- Created `components/items/PriceDisplay.tsx` with memoized component
+- `calculatePricePerUnit()` normalizes small units (ml, g) to per-100 for easier comparison
+- Large units (pint, L, kg, pack) show per-single-unit pricing
+- Two display modes: compact (inline: "£1.15 (£0.58/pt)") and full (stacked)
+- AI estimate indicator using "auto-fix" icon from MaterialCommunityIcons
+- Supports left/center/right alignment
+- Exports `formatPrice()` and `calculatePricePerUnit()` helpers for reuse
 
 ---
 
@@ -235,30 +253,30 @@ Store+Size Tagged Price Data
 
 **New file:** `convex/stores.ts`
 
-- [ ] `getAll` query - returns all UK stores from normalizer
-- [ ] `getById` query - get single store info
-- [ ] `getUserPreferences` query - get user's favorite stores
-- [ ] `setUserPreferences` mutation - save favorite stores
-- [ ] `setDefaultStore` mutation - set primary store
-- [ ] `getReceiptCountByStore` query - count receipts per store
-- [ ] `getSpendingByStore` query - aggregate spending per store
+- [x] `getAll` query - returns all UK stores from normalizer
+- [x] `getById` query - get single store info
+- [x] `getUserPreferences` query - get user's favorite stores
+- [x] `setUserPreferences` mutation - save favorite stores
+- [x] `setDefaultStore` mutation - set primary store
+- [x] `getReceiptCountByStore` query - count receipts per store
+- [x] `getSpendingByStore` query - aggregate spending per store
 
 ### Step B.4: Integrate Normalization into Receipt Flow
 
 **File:** `convex/currentPrices.ts`
 
-- [ ] Import `normalizeStoreName` from lib
-- [ ] In `upsertFromReceipt`: populate `normalizedStoreId` field
-- [ ] Add `getComparisonByStores(itemName, size, stores[])` query
+- [x] Import `normalizeStoreName` from lib
+- [x] In `upsertFromReceipt`: populate `normalizedStoreId` field
+- [x] Add `getComparisonByStores(itemName, size, stores[])` query
 
 **File:** `convex/priceHistory.ts`
 
-- [ ] In `savePriceHistoryFromReceipt`: populate `normalizedStoreId`
+- [x] In `savePriceHistoryFromReceipt`: populate `normalizedStoreId`
 
 **File:** `convex/receipts.ts`
 
-- [ ] In `create` mutation: normalize storeName and save `normalizedStoreId`
-- [ ] In `update` mutation: re-normalize if storeName changes
+- [x] In `create` mutation: normalize storeName and save `normalizedStoreId`
+- [x] In `update` mutation: re-normalize if storeName changes
 
 ### Step B.5: Store+Size Comparison UI
 

@@ -5,3 +5,10 @@
  */
 
 export { VariantPicker, type VariantPickerProps, type VariantOption } from "./VariantPicker";
+export {
+  PriceDisplay,
+  formatPrice,
+  calculatePricePerUnit,
+  type PriceDisplayProps,
+  type PricePerUnitResult,
+} from "./PriceDisplay";
