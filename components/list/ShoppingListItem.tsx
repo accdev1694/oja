@@ -77,6 +77,11 @@ export type ListItem = {
   // Size fields for display (e.g., "250g", "2pt")
   size?: string;
   unit?: string;
+  // Phase 3: Size/Price Modal override tracking
+  originalSize?: string;
+  priceOverride?: boolean;
+  sizeOverride?: boolean;
+  priceSource?: "personal" | "crowdsourced" | "ai" | "manual";
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -442,6 +442,10 @@ export default function ListDetailScreen() {
     name?: string;
     quantity?: number;
     estimatedPrice?: number;
+    size?: string;
+    unit?: string;
+    priceOverride?: boolean;
+    sizeOverride?: boolean;
   }) => {
     await updateItem(updates);
   }, [updateItem]);

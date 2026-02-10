@@ -477,14 +477,14 @@ const SIZE_ALIASES = {
 - [x] **2.7** Update `listItems.create` mutation - require size, price, store
 - [x] **2.8** Handle "no variants found" - show manual size/price input
 
-### Phase 3: Edit Flow
+### Phase 3: Edit Flow ✅
 
-- [ ] **3.1** Create `components/lists/EditItemModal.tsx`
-- [ ] **3.2** Add edit button to list item rows
-- [ ] **3.3** Create `listItems.updateItem` mutation with override tracking
-- [ ] **3.4** List total recalculation on edit
-- [ ] **3.5** Show "was X" indicator for changed sizes
-- [ ] **3.6** Visual indicator for manual price overrides
+- [x] **3.1** Create `components/lists/EditItemModal.tsx`
+- [x] **3.2** Add edit button to list item rows
+- [x] **3.3** Create `listItems.updateItem` mutation with override tracking
+- [x] **3.4** List total recalculation on edit
+- [x] **3.5** Show "was X" indicator for changed sizes
+- [x] **3.6** Visual indicator for manual price overrides
 
 ### Phase 4: Store Comparison
 
@@ -579,13 +579,13 @@ const SIZE_ALIASES = {
 |-------|--------|------------|
 | Phase 1: Foundation | ✅ Complete | 8/8 |
 | Phase 2: Add Item Flow | ✅ Complete | 8/8 |
-| Phase 3: Edit Flow | Not Started | 0/6 |
+| Phase 3: Edit Flow | ✅ Complete | 6/6 |
 | Phase 4: Store Comparison | Not Started | 0/5 |
 | Phase 5: Store Switch | Not Started | 0/8 |
 | Phase 6: Voice Integration | Not Started | 0/6 |
 | Phase 7: Testing | Not Started | 0/7 |
 | Phase 8: Polish | Not Started | 0/7 |
-| **Total** | **In Progress** | **16/55** |
+| **Total** | **In Progress** | **22/55** |
 
 ---
 

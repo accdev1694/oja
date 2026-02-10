@@ -193,7 +193,41 @@ export const create = mutation({
 });
 
 /**
+ * Helper to recalculate list totals after item changes
+ */
+async function recalculateListTotal(
+  ctx: any,
+  listId: any
+): Promise<{ estimatedTotal: number; actualTotal: number }> {
+  const items = await ctx.db
+    .query("listItems")
+    .withIndex("by_list", (q: any) => q.eq("listId", listId))
+    .collect();
+
+  let estimatedTotal = 0;
+  let actualTotal = 0;
+
+  for (const item of items) {
+    const price = item.actualPrice ?? item.estimatedPrice ?? 0;
+    const quantity = item.quantity ?? 1;
+    if (item.actualPrice !== undefined) {
+      actualTotal += item.actualPrice * quantity;
+    }
+    estimatedTotal += (item.estimatedPrice ?? 0) * quantity;
+  }
+
+  // Update the list with new totals
+  await ctx.db.patch(listId, {
+    estimatedTotal,
+    updatedAt: Date.now(),
+  });
+
+  return { estimatedTotal, actualTotal };
+}
+
+/**
  * Update a list item
+ * Enhanced for Phase 3 Size/Price Modal - supports size/price editing with override tracking
  */
 export const update = mutation({
   args: {
@@ -210,6 +244,19 @@ export const update = mutation({
       )
     ),
     notes: v.optional(v.string()),
+    // Phase 3: Size/Price Modal fields
+    size: v.optional(v.string()),
+    unit: v.optional(v.string()),
+    priceOverride: v.optional(v.boolean()),
+    sizeOverride: v.optional(v.boolean()),
+    priceSource: v.optional(
+      v.union(
+        v.literal("personal"),
+        v.literal("crowdsourced"),
+        v.literal("ai"),
+        v.literal("manual")
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -239,12 +286,43 @@ export const update = mutation({
 
     if (args.name !== undefined) updates.name = args.name;
     if (args.quantity !== undefined) updates.quantity = args.quantity;
-    if (args.estimatedPrice !== undefined) updates.estimatedPrice = args.estimatedPrice;
-    if (args.actualPrice !== undefined) updates.actualPrice = args.actualPrice;
     if (args.priority !== undefined) updates.priority = args.priority;
     if (args.notes !== undefined) updates.notes = args.notes;
 
+    // Handle price updates with override tracking
+    if (args.estimatedPrice !== undefined) {
+      updates.estimatedPrice = args.estimatedPrice;
+      // If price is being manually edited, mark as override and set source to manual
+      if (args.priceOverride === true || args.estimatedPrice !== item.estimatedPrice) {
+        updates.priceOverride = true;
+        updates.priceSource = "manual";
+      }
+    }
+    if (args.actualPrice !== undefined) updates.actualPrice = args.actualPrice;
+
+    // Handle size updates with originalSize tracking
+    if (args.size !== undefined && args.size !== item.size) {
+      // If this is the first size change, store the original size
+      if (!item.originalSize && item.size) {
+        updates.originalSize = item.size;
+      }
+      updates.size = args.size;
+      updates.sizeOverride = true;
+    }
+    if (args.unit !== undefined) updates.unit = args.unit;
+
+    // Allow explicit override flag setting
+    if (args.priceOverride !== undefined) updates.priceOverride = args.priceOverride;
+    if (args.sizeOverride !== undefined) updates.sizeOverride = args.sizeOverride;
+    if (args.priceSource !== undefined) updates.priceSource = args.priceSource;
+
     await ctx.db.patch(args.id, updates);
+
+    // Recalculate list total if price or quantity changed
+    if (args.estimatedPrice !== undefined || args.quantity !== undefined) {
+      await recalculateListTotal(ctx, item.listId);
+    }
+
     return await ctx.db.get(args.id);
   },
 });
