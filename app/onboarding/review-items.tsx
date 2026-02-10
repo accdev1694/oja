@@ -360,7 +360,7 @@ export default function ReviewItemsScreen() {
           disabled={isSaving}
           icon="check-all"
         >
-          Save to Pantry ({selectedCount} items)
+          {`Save to Pantry (${selectedCount} items)`}
         </GlassButton>
       </View>
     </GlassScreen>

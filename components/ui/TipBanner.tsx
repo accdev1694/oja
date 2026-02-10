@@ -28,7 +28,7 @@ export function TipBanner({ context }: TipBannerProps) {
   const opacity = useSharedValue(1);
   const measuredHeight = useSharedValue(0);
   const animatedHeight = useSharedValue<number | null>(null);
-  const marginBottom = useSharedValue(spacing.md);
+  const marginBottom = useSharedValue<number>(spacing.md);
   const [isDismissing, setIsDismissing] = React.useState(false);
 
   const handleLayout = (event: LayoutChangeEvent) => {
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   body: {
-    ...typography.caption,
+    ...typography.bodySmall,
     color: colors.text.secondary,
     lineHeight: 18,
   },

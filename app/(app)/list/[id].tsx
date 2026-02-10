@@ -59,7 +59,7 @@ export default function ListDetailScreen() {
   const id = params.id as string as Id<"shoppingLists">;
   const router = useRouter();
   const { alert } = useGlassAlert();
-  const { toast, dismiss, onMundaneAction } = useDelightToast();
+  const { toast, dismiss, onMundaneAction, showToast } = useDelightToast();
 
   const list = useQuery(api.shoppingLists.getById, { id });
   const items = useQuery(api.listItems.getByList, { listId: id });
@@ -432,7 +432,7 @@ export default function ListDetailScreen() {
         quantity,
         estimatedPrice,
       });
-      toast(`${itemName} \u2192 ${listName}`);
+      showToast(`${itemName} \u2192 ${listName}`, "check-circle", "#00D4AA");
     } catch (e) {
       console.error("Failed to add to list:", e);
     }

@@ -32,7 +32,7 @@ type AdminTab = "overview" | "users" | "receipts" | "catalog" | "settings";
 
 export default function AdminScreen() {
   const router = useRouter();
-  const { alert } = useGlassAlert();
+  const { alert: showAlert } = useGlassAlert();
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
 
   const analytics = useQuery(api.admin.getAnalytics);
@@ -212,6 +212,7 @@ function OverviewTab() {
 // ============================================================================
 
 function UsersTab() {
+  const { alert: showAlert } = useGlassAlert();
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
 
@@ -237,12 +238,12 @@ function UsersTab() {
       await toggleAdmin({ userId: userId as any });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      alert("Error", "Failed to toggle admin status");
+      showAlert("Error", "Failed to toggle admin status");
     }
   };
 
   const handleExtendTrial = async (userId: string) => {
-    alert("Extend Trial", "Add 14 days to trial?", [
+    showAlert("Extend Trial", "Add 14 days to trial?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Extend",
@@ -251,7 +252,7 @@ function UsersTab() {
             await extendTrial({ userId: userId as any, days: 14 });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch {
-            alert("Error", "Failed to extend trial");
+            showAlert("Error", "Failed to extend trial");
           }
         },
       },
@@ -259,7 +260,7 @@ function UsersTab() {
   };
 
   const handleGrantAccess = async (userId: string) => {
-    alert("Grant Premium", "Give free premium annual access?", [
+    showAlert("Grant Premium", "Give free premium annual access?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Grant",
@@ -268,7 +269,7 @@ function UsersTab() {
             await grantAccess({ userId: userId as any });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch {
-            alert("Error", "Failed to grant access");
+            showAlert("Error", "Failed to grant access");
           }
         },
       },
@@ -280,7 +281,7 @@ function UsersTab() {
       await toggleSuspension({ userId: userId as any });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     } catch {
-      alert("Error", "Failed to toggle suspension");
+      showAlert("Error", "Failed to toggle suspension");
     }
   };
 
@@ -401,6 +402,7 @@ function UsersTab() {
 // ============================================================================
 
 function ReceiptsTab() {
+  const { alert: showAlert } = useGlassAlert();
   const recentReceipts = useQuery(api.admin.getRecentReceipts, { limit: 20 });
   const flaggedReceipts = useQuery(api.admin.getFlaggedReceipts);
   const priceAnomalies = useQuery(api.admin.getPriceAnomalies);
@@ -410,7 +412,7 @@ function ReceiptsTab() {
   const overridePrice = useMutation(api.admin.overridePrice);
 
   const handleDeleteReceipt = async (receiptId: string) => {
-    alert("Delete Receipt", "Are you sure?", [
+    showAlert("Delete Receipt", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -420,7 +422,7 @@ function ReceiptsTab() {
             await deleteReceipt({ receiptId: receiptId as any });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch {
-            alert("Error", "Failed to delete receipt");
+            showAlert("Error", "Failed to delete receipt");
           }
         },
       },
@@ -434,7 +436,7 @@ function ReceiptsTab() {
       await bulkAction({ receiptIds: ids, action: "approve" });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      alert("Error", "Failed to approve receipts");
+      showAlert("Error", "Failed to approve receipts");
     }
   };
 
@@ -443,7 +445,7 @@ function ReceiptsTab() {
       await overridePrice({ priceId: priceId as any, deleteEntry: true });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      alert("Error", "Failed to delete price");
+      showAlert("Error", "Failed to delete price");
     }
   };
 
@@ -537,12 +539,13 @@ function ReceiptsTab() {
 // ============================================================================
 
 function CatalogTab() {
+  const { alert: showAlert } = useGlassAlert();
   const categories = useQuery(api.admin.getCategories);
   const duplicateStores = useQuery(api.admin.getDuplicateStores);
   const mergeStores = useMutation(api.admin.mergeStoreNames);
 
   const handleMerge = async (variants: string[], suggested: string) => {
-    alert("Merge Stores", `Merge all variants to "${suggested}"?`, [
+    showAlert("Merge Stores", `Merge all variants to "${suggested}"?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Merge",
@@ -551,7 +554,7 @@ function CatalogTab() {
             await mergeStores({ fromNames: variants, toName: suggested });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch {
-            alert("Error", "Failed to merge stores");
+            showAlert("Error", "Failed to merge stores");
           }
         },
       },
@@ -613,6 +616,7 @@ function CatalogTab() {
 // ============================================================================
 
 function SettingsTab() {
+  const { alert: showAlert } = useGlassAlert();
   const featureFlags = useQuery(api.admin.getFeatureFlags);
   const announcements = useQuery(api.admin.getAnnouncements);
 
@@ -632,7 +636,7 @@ function SettingsTab() {
       await toggleFlag({ key, value: !currentValue });
       Haptics.selectionAsync();
     } catch {
-      alert("Error", "Failed to toggle flag");
+      showAlert("Error", "Failed to toggle flag");
     }
   };
 
@@ -643,7 +647,7 @@ function SettingsTab() {
       setNewFlagKey("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      alert("Error", "Failed to add flag");
+      showAlert("Error", "Failed to add flag");
     }
   };
 
@@ -656,7 +660,7 @@ function SettingsTab() {
       setAnnBody("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      alert("Error", "Failed to create announcement");
+      showAlert("Error", "Failed to create announcement");
     }
   };
 
@@ -665,7 +669,7 @@ function SettingsTab() {
       await toggleAnnouncement({ announcementId: id as any });
       Haptics.selectionAsync();
     } catch {
-      alert("Error", "Failed to toggle announcement");
+      showAlert("Error", "Failed to toggle announcement");
     }
   };
 

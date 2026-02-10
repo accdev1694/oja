@@ -94,7 +94,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
   const lastRequestTime = useRef(0);
   const ttsEnabled = options.ttsEnabled ?? true;
   const sheetOpenRef = useRef(false); // Track sheet state for continuous mode
-  const startListeningRef = useRef<(() => Promise<void>) | null>(null); // For auto-listen callback
+  const startListeningRef = useRef<((isAutoResume?: boolean) => Promise<void>) | null>(null); // For auto-listen callback
   const soundRef = useRef<any>(null); // For audio playback cleanup (expo-av Sound)
 
   // ── Neural TTS with fallback to device TTS ────────────────────────────
