@@ -134,7 +134,7 @@ export function MidShopModal({
           onPress={() => handleAdd("next_trip")}
           disabled={isAdding}
         >
-          <View style={[styles.optionIcon, { backgroundColor: `${colors.text.tertiary}15` }]}>
+          <View style={[styles.optionIcon, { backgroundColor: "rgba(255, 255, 255, 0.10)" }]}>
             <MaterialCommunityIcons
               name="clock-outline"
               size={24}

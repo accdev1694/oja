@@ -753,7 +753,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: `${colors.text.tertiary}15`,
+    backgroundColor: "rgba(255, 255, 255, 0.10)", // tertiary with reduced alpha
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: 12,
@@ -766,7 +766,7 @@ const styles = StyleSheet.create({
   tierProgressBar: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: `${colors.text.tertiary}30`,
+    backgroundColor: "rgba(255, 255, 255, 0.20)", // tertiary with reduced alpha
     overflow: "hidden",
   },
   tierProgressFill: {
@@ -802,15 +802,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent.primary,
   },
   scanDotEmpty: {
-    backgroundColor: `${colors.text.tertiary}20`,
+    backgroundColor: "rgba(255, 255, 255, 0.13)", // tertiary (0.65) * 0.2
     borderWidth: 1,
-    borderColor: `${colors.text.tertiary}40`,
+    borderColor: "rgba(255, 255, 255, 0.26)", // tertiary (0.65) * 0.4
   },
   creditProgressContainer: { marginBottom: spacing.sm },
   creditProgressTrack: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: `${colors.text.tertiary}20`,
+    backgroundColor: "rgba(255, 255, 255, 0.13)", // tertiary (0.65) * 0.2
     overflow: "hidden",
   },
   creditProgressFill: {

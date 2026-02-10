@@ -59,7 +59,7 @@ export default function PartnersScreen() {
       backgroundColor: interpolateColor(
         roleProgress.value,
         [0, 1, 2],
-        [`${colors.text.tertiary}25`, `${colors.accent.primary}25`, `${colors.semantic.warning}25`]
+        ["rgba(255, 255, 255, 0.16)", "rgba(0, 212, 170, 0.25)", "rgba(245, 158, 11, 0.25)"]
       ),
     };
   });

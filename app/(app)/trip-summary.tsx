@@ -345,7 +345,7 @@ export default function TripSummaryScreen() {
           )}
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Status</Text>
-            <View style={[styles.statusBadge, { backgroundColor: `${colors.text.tertiary}20` }]}>
+            <View style={[styles.statusBadge, { backgroundColor: "rgba(255, 255, 255, 0.13)" }]}>
               <Text style={[styles.statusText, { color: colors.text.tertiary }]}>
                 {list.status === "archived" ? "Archived" : "Completed"}
               </Text>
