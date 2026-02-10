@@ -449,6 +449,58 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
       },
     },
   },
+
+  // ── STORE + SIZE TOOLS (3) ─────────────────────────────────────────────
+
+  {
+    name: "compare_store_prices",
+    description:
+      "Compare prices for an item across different UK stores. " +
+      "Use when user asks 'where is X cheapest?' or 'compare prices for X' or 'compare Tesco and Aldi for butter'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        itemName: {
+          type: SchemaType.STRING,
+          description: "The item to compare (e.g., 'milk', 'bread', 'butter')",
+        },
+        size: {
+          type: SchemaType.STRING,
+          description: "Optional size variant (e.g., '2pt', '500ml', '1kg'). Omit to compare all sizes.",
+        },
+      },
+      required: ["itemName"],
+    },
+  },
+
+  {
+    name: "get_store_savings",
+    description:
+      "Get personalized store recommendations and potential savings. " +
+      "Use when user asks 'where should I shop?' or 'how can I save money?' or 'which store is cheapest for me?'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {},
+    },
+  },
+
+  {
+    name: "set_preferred_stores",
+    description:
+      "Set user's preferred/favorite stores. " +
+      "Use when user says 'I shop at Tesco and Aldi' or 'my favorite store is Lidl' or 'set my stores to Aldi and Lidl'.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        stores: {
+          type: SchemaType.ARRAY,
+          items: { type: SchemaType.STRING },
+          description: "List of store names (e.g., 'Tesco', 'Aldi', 'Lidl')",
+        },
+      },
+      required: ["stores"],
+    },
+  },
 ];
 
 // ─── Write tool names ───────────────────────────────────────────────────
@@ -464,6 +516,7 @@ const WRITE_TOOLS = new Set([
   "remove_list_item",
   "remove_pantry_item",
   "clear_checked_items",
+  "set_preferred_stores",
 ]);
 
 // ─── System Prompt ─────────────────────────────────────────────────────
@@ -517,6 +570,8 @@ READ Operations:
 - get_streaks: Activity streaks
 - get_achievements: Unlocked badges
 - get_monthly_trends: 6-month spending trends
+- compare_store_prices: Compare prices across UK stores for an item (optionally by size)
+- get_store_savings: Get personalized store recommendation and potential monthly savings
 
 WRITE Operations:
 - create_shopping_list: Create a new list (with optional name and budget)
@@ -529,6 +584,7 @@ WRITE Operations:
 - remove_list_item: Remove an item from a list
 - remove_pantry_item: Remove an item from pantry
 - clear_checked_items: Clear all checked items from a list
+- set_preferred_stores: Set user's favorite stores (e.g., "Tesco and Aldi")
 
 RULES FOR WRITE OPERATIONS (IMPORTANT):
 - NEVER ask "Would you like me to do X?" or "Shall I confirm?" — if user asks for something, just DO it.
@@ -822,6 +878,99 @@ export async function executeVoiceTool(
             totalSavings: savingsJar?.totalSaved || 0,
             thisWeekSpent: weeklyDigest?.thisWeekTotal || 0,
             thisWeekTrips: weeklyDigest?.tripsCount || 0,
+          },
+        };
+      }
+
+      // ── STORE + SIZE COMPARISON TOOLS ──────────────────────────────────
+
+      case "compare_store_prices": {
+        // Get all stores to compare
+        const allStores = await ctx.runQuery(api.stores.getAll, {});
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const storeIds = allStores.map((s: any) => s.id);
+
+        const comparison = await ctx.runQuery(api.currentPrices.getComparisonByStores, {
+          itemName: args.itemName,
+          size: args.size,
+          storeIds,
+        });
+
+        if (comparison.storesWithData === 0) {
+          return {
+            type: "data",
+            result: {
+              itemName: args.itemName,
+              size: args.size,
+              message: `I don't have price data for ${args.itemName} yet. Keep scanning receipts and I'll learn!`,
+              noData: true,
+            },
+          };
+        }
+
+        // Build a list of stores with prices, sorted cheapest first
+        const pricesWithStores = Object.entries(comparison.byStore)
+          .filter(([, data]) => data !== null)
+          .map(([storeId, data]) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const storeInfo = allStores.find((s: any) => s.id === storeId);
+            return {
+              storeId,
+              storeName: storeInfo?.displayName ?? storeId,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              price: (data as any).price,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              size: (data as any).size,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              unit: (data as any).unit,
+            };
+          })
+          .sort((a, b) => a.price - b.price);
+
+        const cheapest = pricesWithStores[0];
+        const mostExpensive = pricesWithStores[pricesWithStores.length - 1];
+        const savings = mostExpensive.price - cheapest.price;
+
+        return {
+          type: "data",
+          result: {
+            itemName: args.itemName,
+            size: args.size,
+            cheapestStore: cheapest.storeName,
+            cheapestPrice: cheapest.price,
+            averagePrice: comparison.averagePrice,
+            storesCompared: pricesWithStores.length,
+            allPrices: pricesWithStores.slice(0, 5), // Top 5 stores
+            potentialSavings: Math.round(savings * 100) / 100,
+            message: `${args.itemName} is cheapest at ${cheapest.storeName} for £${cheapest.price.toFixed(2)}${savings > 0 ? ` — you could save £${savings.toFixed(2)} compared to ${mostExpensive.storeName}` : ""}`,
+          },
+        };
+      }
+
+      case "get_store_savings": {
+        const recommendation = await ctx.runQuery(api.stores.getStoreRecommendation, {});
+
+        if (!recommendation) {
+          return {
+            type: "data",
+            result: {
+              message: "I need more shopping data to make recommendations. Keep scanning receipts!",
+              noData: true,
+            },
+          };
+        }
+
+        return {
+          type: "data",
+          result: {
+            recommendedStore: recommendation.storeName,
+            potentialMonthlySavings: recommendation.potentialMonthlySavings,
+            itemCount: recommendation.itemCount,
+            message: recommendation.message,
+            alternatives: recommendation.alternativeStores?.slice(0, 2).map((s) => ({
+              store: s.storeName,
+              savings: s.potentialSavings,
+            })),
           },
         };
       }
@@ -1289,6 +1438,76 @@ async function executeWriteTool(
           success: true,
           message: `Cleared ${checkedItems.length} checked item${checkedItems.length !== 1 ? "s" : ""} from ${targetList.name}`,
           itemsRemoved: checkedItems.length,
+        },
+      };
+    }
+
+    case "set_preferred_stores": {
+      // Normalize store names to store IDs
+      const allStores = await ctx.runQuery(api.stores.getAll, {});
+      const validStoreIds: string[] = [];
+      const unrecognizedStores: string[] = [];
+
+      for (const storeName of args.stores || []) {
+        // Find matching store by name (case-insensitive fuzzy match)
+        const normalizedInput = storeName.toLowerCase().trim();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const match = allStores.find((s: any) => {
+          const displayLower = s.displayName.toLowerCase();
+          const idLower = s.id.toLowerCase();
+          return (
+            displayLower === normalizedInput ||
+            idLower === normalizedInput ||
+            displayLower.includes(normalizedInput) ||
+            normalizedInput.includes(displayLower)
+          );
+        });
+
+        if (match) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          validStoreIds.push((match as any).id);
+        } else {
+          unrecognizedStores.push(storeName);
+        }
+      }
+
+      if (validStoreIds.length === 0) {
+        return {
+          type: "data",
+          result: {
+            success: false,
+            error: `I didn't recognise any of those stores. Try UK stores like Tesco, Aldi, Lidl, Sainsbury's, or Morrisons.`,
+            unrecognizedStores,
+          },
+        };
+      }
+
+      // Save the preferences
+      await ctx.runMutation(api.stores.setUserPreferences, {
+        favorites: validStoreIds,
+      });
+
+      // Get display names for response
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const savedStoreNames = validStoreIds.map((id) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const store = allStores.find((s: any) => s.id === id);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return store ? (store as any).displayName : id;
+      });
+
+      let message = `Lovely! I've set ${savedStoreNames.join(" and ")} as your preferred ${validStoreIds.length === 1 ? "store" : "stores"}.`;
+      if (unrecognizedStores.length > 0) {
+        message += ` (I didn't recognise: ${unrecognizedStores.join(", ")})`;
+      }
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message,
+          savedStores: savedStoreNames,
+          unrecognizedStores: unrecognizedStores.length > 0 ? unrecognizedStores : undefined,
         },
       };
     }

@@ -345,12 +345,17 @@ Grid layout showing price per store per size:
 
 ### Step D.1: Add Store Analytics
 
-**File:** `convex/insights.ts` or `convex/stores.ts`
+**File:** `convex/stores.ts`
 
-- [ ] `getSpendingByStore` query - aggregate spending per normalized store
-- [ ] `getStoreVisitCount` query - how many receipts per store
-- [ ] `getBestDealsFound` query - items found cheaper at other stores
-- [ ] `getStoreRecommendation` query - "Shop at X to save £Y"
+- [x] `getSpendingByStore` query - aggregate spending per normalized store (already existed)
+- [x] `getStoreVisitCount` query - how many receipts per store (as `getReceiptCountByStore`)
+- [x] `getBestDealsFound` query - items found cheaper at other stores
+- [x] `getStoreRecommendation` query - "Shop at X to save £Y"
+
+**Implementation Notes (2026-02-10):**
+- `getSpendingByStore` and `getReceiptCountByStore` were already implemented in Step B.3
+- Added `getBestDealsFound` - analyzes user's price history (last 90 days) against currentPrices to find items where user paid more than the cheapest available price. Returns top 20 deals sorted by savings amount, filtered to only include significant savings (>5%). Returns: itemName, paidPrice, paidStore, cheapestPrice, cheapestStore, savings, savingsPercent
+- Added `getStoreRecommendation` - analyzes last 30 days of purchases, aggregates potential savings by store, returns recommendation with message like "Shop at Aldi to save £12.50/month" plus up to 3 alternative stores with their potential savings
 
 ### Step D.2: Insights Screen Integration
 
@@ -369,14 +374,22 @@ Grid layout showing price per store per size:
 
 **File:** `convex/lib/voiceTools.ts`
 
-- [ ] Add `compare_store_prices` function declaration
-- [ ] Add `get_store_savings` function declaration
-- [ ] Add `set_preferred_stores` function declaration
-- [ ] Implement tool handlers in dispatcher
+- [x] Add `compare_store_prices` function declaration
+- [x] Add `get_store_savings` function declaration
+- [x] Add `set_preferred_stores` function declaration
+- [x] Implement tool handlers in dispatcher
 
-**File:** `lib/voice/voicePrompt.ts`
+**File:** `convex/lib/voiceTools.ts` (system prompt is in voiceTools.ts, not separate file)
 
-- [ ] Update system prompt to mention store + size comparison capabilities
+- [x] Update system prompt to mention store + size comparison capabilities
+
+**Implementation Notes (2026-02-10):**
+- Added 3 new voice function declarations for store + size tools
+- `compare_store_prices`: Compares prices for an item across UK stores, optionally filtered by size. Returns cheapest store, price, and potential savings vs most expensive store. Uses `currentPrices.getComparisonByStores` query
+- `get_store_savings`: Returns personalized store recommendation with potential monthly savings. Uses `stores.getStoreRecommendation` query
+- `set_preferred_stores`: Allows users to set favorite stores via voice. Normalizes store names to valid UK store IDs with fuzzy matching. Uses `stores.setUserPreferences` mutation
+- Updated system prompt READ/WRITE capabilities section to include new tools
+- Added `set_preferred_stores` to WRITE_TOOLS set
 
 ### Example Voice Commands:
 - "Where is 2 pint milk cheapest?" → Store+size comparison
