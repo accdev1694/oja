@@ -63,6 +63,16 @@ export const create = mutation({
     size: v.optional(v.string()),    // "2pt", "500ml", "250g"
     unit: v.optional(v.string()),    // "pint", "ml", "g"
     estimatedPrice: v.optional(v.number()),
+    // NEW: Price source tracking for Size/Price Modal
+    priceSource: v.optional(
+      v.union(
+        v.literal("personal"),
+        v.literal("crowdsourced"),
+        v.literal("ai"),
+        v.literal("manual")
+      )
+    ),
+    priceConfidence: v.optional(v.number()),
     priority: v.optional(
       v.union(
         v.literal("must-have"),
@@ -132,6 +142,8 @@ export const create = mutation({
       size: args.size,
       unit: args.unit,
       estimatedPrice,
+      priceSource: args.priceSource,
+      priceConfidence: args.priceConfidence,
       priority: args.priority ?? "should-have",
       isChecked: false,
       autoAdded: args.autoAdded ?? false,

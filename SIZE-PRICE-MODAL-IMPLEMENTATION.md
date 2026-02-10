@@ -455,27 +455,27 @@ const SIZE_ALIASES = {
 
 ## Implementation Phases
 
-### Phase 1: Foundation (Database + Utilities)
+### Phase 1: Foundation (Database + Utilities) ✅
 
-- [ ] **1.1** Update `listItems` schema - add `originalSize`, `priceOverride`, `sizeOverride`, `priceSource`, `priceConfidence`
-- [ ] **1.2** Update `shoppingLists.create` mutation - require `normalizedStoreId`
-- [ ] **1.3** Update list creation UI to show store selector
-- [ ] **1.4** Migration: existing lists without store get user's default store
-- [ ] **1.5** Create `lib/sizes/sizeNormalizer.ts` - parse "2pt" → {value: 2, unit: "pt", normalizedMl: 1136}
-- [ ] **1.6** Create `lib/sizes/sizeMatching.ts` - find closest size within 20% tolerance
-- [ ] **1.7** Unit tests for sizeNormalizer (pint/litre/ml conversions)
-- [ ] **1.8** Unit tests for sizeMatching (exact, close, no match scenarios)
+- [x] **1.1** Update `listItems` schema - add `originalSize`, `priceOverride`, `sizeOverride`, `priceSource`, `priceConfidence`
+- [x] **1.2** Update `shoppingLists.create` mutation - require `normalizedStoreId`
+- [x] **1.3** Update list creation UI to show store selector
+- [x] **1.4** Migration: existing lists without store get user's default store
+- [x] **1.5** Create `lib/sizes/sizeNormalizer.ts` - parse "2pt" → {value: 2, unit: "pt", normalizedMl: 1136}
+- [x] **1.6** Create `lib/sizes/sizeMatching.ts` - find closest size within 20% tolerance
+- [x] **1.7** Unit tests for sizeNormalizer (pint/litre/ml conversions)
+- [x] **1.8** Unit tests for sizeMatching (exact, close, no match scenarios)
 
-### Phase 2: Add Item Flow
+### Phase 2: Add Item Flow ✅
 
-- [ ] **2.1** Create `components/lists/SizePriceModal.tsx` - bottom sheet with size chips
-- [ ] **2.2** Create `components/lists/SizeOptionCard.tsx` - individual size card component
-- [ ] **2.3** Style with Glass UI tokens, add haptic feedback
-- [ ] **2.4** Create `convex/itemVariants.ts` - `getSizesForStore` query
-- [ ] **2.5** Implement price cascade: personal → crowdsourced → AI
-- [ ] **2.6** Integrate modal into `app/(app)/list/[id].tsx` add-item flow
-- [ ] **2.7** Update `listItems.create` mutation - require size, price, store
-- [ ] **2.8** Handle "no variants found" - show manual size/price input
+- [x] **2.1** Create `components/lists/SizePriceModal.tsx` - bottom sheet with size chips
+- [x] **2.2** Create `components/lists/SizeOptionCard.tsx` - individual size card component
+- [x] **2.3** Style with Glass UI tokens, add haptic feedback
+- [x] **2.4** Create `convex/itemVariants.ts` - `getSizesForStore` query
+- [x] **2.5** Implement price cascade: personal → crowdsourced → AI
+- [x] **2.6** Integrate modal into `app/(app)/list/[id].tsx` add-item flow
+- [x] **2.7** Update `listItems.create` mutation - require size, price, store
+- [x] **2.8** Handle "no variants found" - show manual size/price input
 
 ### Phase 3: Edit Flow
 
@@ -577,15 +577,15 @@ const SIZE_ALIASES = {
 
 | Phase | Status | Tasks Done |
 |-------|--------|------------|
-| Phase 1: Foundation | Not Started | 0/8 |
-| Phase 2: Add Item Flow | Not Started | 0/8 |
+| Phase 1: Foundation | ✅ Complete | 8/8 |
+| Phase 2: Add Item Flow | ✅ Complete | 8/8 |
 | Phase 3: Edit Flow | Not Started | 0/6 |
 | Phase 4: Store Comparison | Not Started | 0/5 |
 | Phase 5: Store Switch | Not Started | 0/8 |
 | Phase 6: Voice Integration | Not Started | 0/6 |
 | Phase 7: Testing | Not Started | 0/7 |
 | Phase 8: Polish | Not Started | 0/7 |
-| **Total** | **Not Started** | **0/55** |
+| **Total** | **In Progress** | **16/55** |
 
 ---
 

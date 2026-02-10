@@ -50,6 +50,8 @@ export interface AddItemFormProps {
   budget: number;
   /** Called when user wants to open the mid-shop modal with item details */
   onMidShopAdd: (name: string, quantity: number, price: number) => void;
+  /** Called when user wants to add an item (triggers Size/Price modal in parent) */
+  onPendingAdd?: (name: string, quantity: number, category?: string) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,6 +69,7 @@ export const AddItemForm = memo(function AddItemForm({
   canEdit,
   budget,
   onMidShopAdd,
+  onPendingAdd,
 }: AddItemFormProps) {
   const { alert } = useGlassAlert();
 
@@ -311,6 +314,9 @@ export const AddItemForm = memo(function AddItemForm({
               // If in shopping mode with budget, show mid-shop modal
               if (listStatus === "shopping" && budget > 0) {
                 openMidShopModal();
+              } else if (onPendingAdd && listStatus !== "shopping") {
+                // Open Size/Price modal for planning mode
+                openSizePriceModal();
               } else {
                 await addAsNewItem();
               }
@@ -328,9 +334,28 @@ export const AddItemForm = memo(function AddItemForm({
       return;
     }
 
+    // If onPendingAdd callback is provided and not in shopping mode, open Size/Price modal
+    if (onPendingAdd && listStatus !== "shopping") {
+      openSizePriceModal();
+      return;
+    }
+
     setIsAddingItem(true);
     await addAsNewItem();
     setIsAddingItem(false);
+  }
+
+  function openSizePriceModal() {
+    if (!onPendingAdd) return;
+
+    const itemName = newItemName.trim();
+    const quantity = parseInt(newItemQuantity) || 1;
+    // Category could be inferred from variants or left undefined
+    const category = itemVariants?.[0]?.category;
+
+    onPendingAdd(itemName, quantity, category);
+    // Reset form — the parent's Size/Price modal takes over from here
+    resetForm();
   }
 
   function openMidShopModal() {

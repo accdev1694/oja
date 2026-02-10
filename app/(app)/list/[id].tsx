@@ -53,6 +53,7 @@ import {
   EditItemModal,
   ListPickerModal,
 } from "@/components/list/modals";
+import { SizePriceModal, type SizeOption } from "@/components/lists/SizePriceModal";
 
 export default function ListDetailScreen() {
   const params = useLocalSearchParams();
@@ -132,6 +133,25 @@ export default function ListDetailScreen() {
   const [checkingItemName, setCheckingItemName] = useState("");
   const [checkingItemEstPrice, setCheckingItemEstPrice] = useState(0);
   const [checkingItemQuantity, setCheckingItemQuantity] = useState(1);
+
+  // Size/Price Modal state (for new add-item flow)
+  const [pendingItem, setPendingItem] = useState<{
+    name: string;
+    category?: string;
+    quantity: number;
+  } | null>(null);
+
+  // Fetch sizes for the Size/Price Modal when item is pending
+  const sizesData = useQuery(
+    api.itemVariants.getSizesForStore,
+    pendingItem
+      ? {
+          itemName: pendingItem.name,
+          store: list?.normalizedStoreId ?? "tesco",
+          category: pendingItem.category,
+        }
+      : "skip"
+  );
 
   // Category filter for items list
   const [listCategoryFilter, setListCategoryFilter] = useState<string | null>(null);
@@ -303,6 +323,44 @@ export default function ListDetailScreen() {
       alert("Error", "Failed to add item");
     }
   }, [addItemMidShop, id, midShopItemName, midShopItemPrice, midShopItemQuantity, alert]);
+
+  // Size/Price Modal handlers (for new add-item flow)
+  const handlePendingAdd = useCallback((name: string, quantity: number, category?: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPendingItem({ name, quantity, category });
+  }, []);
+
+  const closeSizePriceModal = useCallback(() => {
+    setPendingItem(null);
+  }, []);
+
+  const handleAddWithSize = useCallback(async (data: {
+    size: string;
+    price: number;
+    priceSource: "personal" | "crowdsourced" | "ai" | "manual";
+    confidence: number;
+  }) => {
+    if (!pendingItem) return;
+
+    try {
+      await addItem({
+        listId: id,
+        name: pendingItem.name,
+        quantity: pendingItem.quantity,
+        category: pendingItem.category,
+        size: data.size,
+        estimatedPrice: data.price,
+        priceSource: data.priceSource,
+        priceConfidence: data.confidence,
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setPendingItem(null);
+    } catch (error) {
+      console.error("Failed to add item with size:", error);
+      alert("Error", "Failed to add item");
+    }
+  }, [pendingItem, addItem, id, alert]);
 
   const handleRemoveItem = useCallback(async (itemId: Id<"listItems">, itemName: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -652,6 +710,7 @@ export default function ListDetailScreen() {
         canEdit={canEdit !== false}
         budget={budget}
         onMidShopAdd={handleMidShopFromForm}
+        onPendingAdd={handlePendingAdd}
       />
 
       {/* Items section header (only when items exist) */}
@@ -723,7 +782,7 @@ export default function ListDetailScreen() {
       list?.approvalNote, list?.userId, list?.storeName, hasPartners, id, approverName,
       isOwner, canApprove, hasApprovers, canEdit, addFormVisible, items,
       selectionVersion, listCategories, listCategoryFilter,
-      listCategoryCounts, pendingCount, handleMidShopFromForm]);
+      listCategoryCounts, pendingCount, handleMidShopFromForm, handlePendingAdd]);
 
   // ─── FlashList ListEmptyComponent ────────────────────────────────────────────
   const listEmpty = useMemo(() => (
@@ -931,6 +990,19 @@ export default function ListDetailScreen() {
         otherLists={otherActiveLists}
         onClose={() => setAddToListItem(null)}
         onPick={pickListForItem}
+      />
+
+      {/* Size/Price Modal (for add-item flow) */}
+      <SizePriceModal
+        visible={pendingItem !== null}
+        onClose={closeSizePriceModal}
+        itemName={pendingItem?.name ?? ""}
+        storeName={list?.storeName ?? "Tesco"}
+        sizes={(sizesData?.sizes ?? []) as SizeOption[]}
+        defaultSize={sizesData?.defaultSize ?? undefined}
+        onAddItem={handleAddWithSize}
+        isLoading={pendingItem !== null && sizesData === undefined}
+        category={pendingItem?.category}
       />
 
       {/* Surprise delight toast */}
