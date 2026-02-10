@@ -329,9 +329,15 @@ Grid layout showing price per store per size:
 
 ### Step C.2: Wire into Onboarding Flow
 
-- [ ] Add route for store-selection
-- [ ] Update cuisine-selection to navigate to store-selection
-- [ ] Update store-selection to navigate to pantry-seeding
+- [x] Add route for store-selection
+- [x] Update cuisine-selection to navigate to store-selection
+- [x] Update store-selection to navigate to pantry-seeding
+
+**Implementation Notes (2026-02-10):**
+- Route automatically exists via Expo Router's file-based routing (`app/onboarding/store-selection.tsx` → `/onboarding/store-selection`)
+- Updated `cuisine-selection.tsx` line 113: changed pathname from `/onboarding/pantry-seeding` to `/onboarding/store-selection`
+- `store-selection.tsx` already navigates to `/onboarding/pantry-seeding` with country/cuisines params passed through
+- New onboarding flow: welcome → cuisine-selection → store-selection → pantry-seeding → review
 
 ---
 

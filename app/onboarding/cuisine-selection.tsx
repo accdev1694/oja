@@ -110,7 +110,7 @@ export default function CuisineSelectionScreen() {
 
       safeHaptics.success();
       router.push({
-        pathname: "/onboarding/pantry-seeding",
+        pathname: "/onboarding/store-selection",
         params: {
           country,
           cuisines: selectedCuisines.join(","),
