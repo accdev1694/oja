@@ -172,7 +172,11 @@ function SizeOptionCardSkeletonItem() {
   }));
 
   return (
-    <Animated.View style={[styles.skeletonCard, shimmerStyle]}>
+    <Animated.View
+      style={[styles.skeletonCard, shimmerStyle]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
       <View style={styles.skeletonSize} />
       <View style={styles.skeletonPrice} />
       <View style={styles.skeletonPricePerUnit} />
@@ -182,7 +186,12 @@ function SizeOptionCardSkeletonItem() {
 
 export function SizeOptionCardSkeleton({ count = 3 }: SizeOptionCardSkeletonProps) {
   return (
-    <View style={styles.skeletonContainer}>
+    <View
+      style={styles.skeletonContainer}
+      accessible
+      accessibilityLabel="Loading size options"
+      accessibilityRole="progressbar"
+    >
       {Array.from({ length: count }).map((_, index) => (
         <SizeOptionCardSkeletonItem key={index} />
       ))}
@@ -296,8 +305,8 @@ export const SizeOptionCard = memo(function SizeOptionCard({
         accessibilityLabel={accessibilityLabel}
         accessibilityHint="Double tap to select this size option"
       >
-        {/* Badges Row (top-right corner) */}
-        <View style={styles.badgesRow}>
+        {/* Badges Row (top-right corner) - hidden from screen readers as info is in the main label */}
+        <View style={styles.badgesRow} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           {/* Your Usual Badge */}
           {isUsual && (
             <View style={styles.usualBadge}>
@@ -370,9 +379,9 @@ export const SizeOptionCard = memo(function SizeOptionCard({
           )}
         </View>
 
-        {/* Price Source Indicator (bottom-left) */}
+        {/* Price Source Indicator (bottom-left) - hidden from screen readers as info is in the main label */}
         {price !== null && (
-          <View style={styles.priceSourceContainer}>
+          <View style={styles.priceSourceContainer} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             <MaterialCommunityIcons
               name={getPriceSourceIcon(priceSource)}
               size={10}
@@ -384,8 +393,8 @@ export const SizeOptionCard = memo(function SizeOptionCard({
           </View>
         )}
 
-        {/* Selection Checkmark (bottom-center) */}
-        <Animated.View style={[styles.checkmarkContainer, animatedCheckmarkStyle]}>
+        {/* Selection Checkmark (bottom-center) - hidden as selection state is in accessibilityState */}
+        <Animated.View style={[styles.checkmarkContainer, animatedCheckmarkStyle]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <View style={styles.checkmarkCircle}>
             <MaterialCommunityIcons
               name="check"

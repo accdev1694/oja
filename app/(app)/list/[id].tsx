@@ -13,7 +13,7 @@ import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useState, useCallback, useMemo, useRef } from "react";
+import React, { useState, useCallback, useMemo, useRef } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -24,6 +24,7 @@ import {
   GlassButton,
   GlassHeader,
   CircularBudgetDial,
+  OfflineBanner,
   colors,
   typography,
   spacing,
@@ -167,6 +168,45 @@ export default function ListDetailScreen() {
         }
       : "skip"
   );
+
+  // Track if sizes query has been stuck loading too long (potential network issue)
+  const [sizesLoadError, setSizesLoadError] = useState<Error | null>(null);
+  const sizesLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Set up a timeout to show error if loading takes too long
+  React.useEffect(() => {
+    if (pendingItem && sizesData === undefined) {
+      // Clear any existing timeout
+      if (sizesLoadingTimeoutRef.current) {
+        clearTimeout(sizesLoadingTimeoutRef.current);
+      }
+      // Set a timeout - if still loading after 10 seconds, show error state
+      sizesLoadingTimeoutRef.current = setTimeout(() => {
+        setSizesLoadError(new Error("Request timed out"));
+      }, 10000);
+    } else {
+      // Data loaded or modal closed - clear timeout and error
+      if (sizesLoadingTimeoutRef.current) {
+        clearTimeout(sizesLoadingTimeoutRef.current);
+        sizesLoadingTimeoutRef.current = null;
+      }
+      if (sizesData !== undefined) {
+        setSizesLoadError(null);
+      }
+    }
+
+    return () => {
+      if (sizesLoadingTimeoutRef.current) {
+        clearTimeout(sizesLoadingTimeoutRef.current);
+      }
+    };
+  }, [pendingItem, sizesData]);
+
+  // Handler to retry fetching sizes - clears error state which allows re-render with loading
+  // Convex queries auto-retry on reconnection, so this just resets the UI state
+  const handleRetrySizesQuery = useCallback(() => {
+    setSizesLoadError(null);
+  }, []);
 
   // Category filter for items list
   const [listCategoryFilter, setListCategoryFilter] = useState<string | null>(null);
@@ -907,6 +947,7 @@ export default function ListDetailScreen() {
         {/* Store Comparison Summary - show when 3+ items and in planning mode */}
         {showComparison && (
           <ListComparisonSummary
+            listId={id}
             currentStore={comparison.currentStore}
             currentTotal={comparison.currentTotal}
             alternatives={comparison.alternatives}
@@ -956,6 +997,9 @@ export default function ListDetailScreen() {
 
   return (
     <GlassScreen>
+      {/* Offline banner - shows when disconnected from Convex */}
+      <OfflineBanner topOffset={0} />
+
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -1123,8 +1167,10 @@ export default function ListDetailScreen() {
         sizes={(sizesData?.sizes ?? []) as SizeOption[]}
         defaultSize={sizesData?.defaultSize ?? undefined}
         onAddItem={handleAddWithSize}
-        isLoading={pendingItem !== null && sizesData === undefined}
+        isLoading={pendingItem !== null && sizesData === undefined && !sizesLoadError}
         category={pendingItem?.category}
+        error={sizesLoadError}
+        onRetry={handleRetrySizesQuery}
       />
 
       {/* Store Switch Preview Modal (Phase 5) */}
@@ -1137,6 +1183,7 @@ export default function ListDetailScreen() {
 
         return (
           <StoreSwitchPreview
+            listId={id}
             visible={switchPreviewVisible}
             onClose={handleCloseSwitchPreview}
             onConfirm={handleConfirmSwitch}

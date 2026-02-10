@@ -34,6 +34,7 @@ import Animated, {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { haptic } from "@/lib/haptics/safeHaptics";
+import { trackStoreSwitchInitiated } from "@/lib/analytics";
 import { GlassCard } from "@/components/ui/glass/GlassCard";
 import {
   colors,
@@ -66,6 +67,8 @@ export interface StoreAlternative {
 }
 
 export interface ListComparisonSummaryProps {
+  /** List ID for analytics tracking */
+  listId: string;
   /** Current selected store ID */
   currentStore: string;
   /** Current store's total price */
@@ -127,7 +130,11 @@ function SkeletonItem() {
   }));
 
   return (
-    <Animated.View style={[styles.skeletonCard, shimmerStyle]}>
+    <Animated.View
+      style={[styles.skeletonCard, shimmerStyle]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
       <View style={styles.skeletonRow}>
         <View style={styles.skeletonStoreName} />
         <View style={styles.skeletonPrice} />
@@ -159,24 +166,30 @@ function LoadingSkeleton() {
 
   return (
     <GlassCard variant="standard" padding="lg">
-      {/* Header skeleton */}
-      <Animated.View style={[styles.skeletonHeader, shimmerStyle]} />
+      <View
+        accessible
+        accessibilityLabel="Loading store comparison"
+        accessibilityRole="progressbar"
+      >
+        {/* Header skeleton */}
+        <Animated.View style={[styles.skeletonHeader, shimmerStyle]} accessibilityElementsHidden />
 
-      {/* Current store skeleton */}
-      <View style={styles.currentStoreSection}>
-        <Animated.View style={[styles.skeletonCurrentStore, shimmerStyle]} />
-        <Animated.View style={[styles.skeletonCurrentTotal, shimmerStyle]} />
+        {/* Current store skeleton */}
+        <View style={styles.currentStoreSection} accessibilityElementsHidden>
+          <Animated.View style={[styles.skeletonCurrentStore, shimmerStyle]} />
+          <Animated.View style={[styles.skeletonCurrentTotal, shimmerStyle]} />
+        </View>
+
+        {/* Divider */}
+        <View style={styles.divider} accessibilityElementsHidden />
+
+        {/* Alternatives section skeleton */}
+        <Animated.View style={[styles.skeletonAlternativesHeader, shimmerStyle]} accessibilityElementsHidden />
+
+        {/* Alternative store skeletons */}
+        <SkeletonItem />
+        <SkeletonItem />
       </View>
-
-      {/* Divider */}
-      <View style={styles.divider} />
-
-      {/* Alternatives section skeleton */}
-      <Animated.View style={[styles.skeletonAlternativesHeader, shimmerStyle]} />
-
-      {/* Alternative store skeletons */}
-      <SkeletonItem />
-      <SkeletonItem />
     </GlassCard>
   );
 }
@@ -216,6 +229,14 @@ const AlternativeStoreCard = memo(function AlternativeStoreCard({
   const displayName = storeInfo?.displayName || alternative.storeDisplayName;
   const storeColor = storeInfo?.color || alternative.storeColor;
 
+  // Build accessibility label for the entire card
+  const cardAccessibilityLabel = [
+    displayName,
+    `total ${formatPrice(alternative.total)}`,
+    alternative.savings > 0 ? `save ${formatPrice(alternative.savings)}` : null,
+    isBestDeal ? "best deal" : null,
+  ].filter(Boolean).join(", ");
+
   return (
     <Animated.View style={animatedStyle}>
       <View
@@ -224,9 +245,12 @@ const AlternativeStoreCard = memo(function AlternativeStoreCard({
           { borderLeftColor: storeColor },
           isBestDeal && styles.alternativeCardBestDeal,
         ]}
+        accessible
+        accessibilityLabel={cardAccessibilityLabel}
+        accessibilityRole="summary"
       >
-        {/* Store info row */}
-        <View style={styles.alternativeHeader}>
+        {/* Store info row - hidden from screen reader as card has full label */}
+        <View style={styles.alternativeHeader} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <View style={styles.storeNameRow}>
             <View
               style={[styles.storeColorDot, { backgroundColor: storeColor }]}
@@ -269,7 +293,12 @@ const AlternativeStoreCard = memo(function AlternativeStoreCard({
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           accessibilityRole="button"
-          accessibilityLabel={`Switch to ${displayName}. Save ${formatPrice(alternative.savings)}`}
+          accessibilityLabel={
+            alternative.savings > 0
+              ? `Switch to ${displayName}. Save ${formatPrice(alternative.savings)}${isBestDeal ? ". Best deal" : ""}`
+              : `Switch to ${displayName}`
+          }
+          accessibilityHint="Double tap to switch your shopping list to this store"
         >
           <Text style={[styles.switchButtonText, { color: storeColor }]}>
             Switch to {displayName}
@@ -285,6 +314,7 @@ const AlternativeStoreCard = memo(function AlternativeStoreCard({
 // =============================================================================
 
 export const ListComparisonSummary = memo(function ListComparisonSummary({
+  listId,
   currentStore,
   currentTotal,
   alternatives,
@@ -296,6 +326,24 @@ export const ListComparisonSummary = memo(function ListComparisonSummary({
   const currentStoreInfo = useMemo(
     () => getStoreInfoSafe(currentStore),
     [currentStore]
+  );
+
+  // Handle switch store with analytics tracking
+  const handleSwitchStore = useCallback(
+    (alternative: StoreAlternative) => {
+      // Track store switch initiated
+      trackStoreSwitchInitiated(
+        listId,
+        currentStore,
+        alternative.store,
+        alternative.savings,
+        alternative.itemsCompared
+      );
+
+      // Call the original handler
+      onSwitchStore(alternative.store);
+    },
+    [listId, currentStore, onSwitchStore]
   );
 
   const currentDisplayName = currentStoreInfo?.displayName || currentStore;
@@ -339,17 +387,27 @@ export const ListComparisonSummary = memo(function ListComparisonSummary({
   if (alternatives.length === 0) {
     return (
       <GlassCard variant="standard" padding="lg">
-        <View style={styles.header}>
+        <View
+          style={styles.header}
+          accessible
+          accessibilityRole="header"
+          accessibilityLabel="Your list summary"
+        >
           <MaterialCommunityIcons
             name="chart-bar"
             size={20}
             color={colors.text.secondary}
+            accessibilityElementsHidden
           />
           <Text style={styles.headerTitle}>Your List Summary</Text>
         </View>
 
-        <View style={styles.currentStoreSection}>
-          <View style={styles.currentStoreRow}>
+        <View
+          style={styles.currentStoreSection}
+          accessible
+          accessibilityLabel={`Current store: ${currentDisplayName}. Total: ${formatPrice(currentTotal)}`}
+        >
+          <View style={styles.currentStoreRow} accessibilityElementsHidden>
             <Text style={styles.currentStoreLabel}>Current:</Text>
             <View
               style={[
@@ -359,18 +417,23 @@ export const ListComparisonSummary = memo(function ListComparisonSummary({
             />
             <Text style={styles.currentStoreName}>{currentDisplayName}</Text>
           </View>
-          <Text style={styles.currentStoreTotal}>
+          <Text style={styles.currentStoreTotal} accessibilityElementsHidden>
             Total: {formatPrice(currentTotal)}
           </Text>
         </View>
 
-        <View style={styles.divider} />
+        <View style={styles.divider} accessibilityElementsHidden />
 
-        <View style={styles.emptyStateContainer}>
+        <View
+          style={styles.emptyStateContainer}
+          accessible
+          accessibilityLabel="No other stores to compare. Scan more receipts to unlock price comparisons."
+        >
           <MaterialCommunityIcons
             name="store-search-outline"
             size={32}
             color={colors.text.tertiary}
+            accessibilityElementsHidden
           />
           <Text style={styles.emptyStateText}>
             No other stores to compare
@@ -386,18 +449,28 @@ export const ListComparisonSummary = memo(function ListComparisonSummary({
   return (
     <GlassCard variant="standard" padding="lg">
       {/* Header */}
-      <View style={styles.header}>
+      <View
+        style={styles.header}
+        accessible
+        accessibilityRole="header"
+        accessibilityLabel="Your list summary"
+      >
         <MaterialCommunityIcons
           name="chart-bar"
           size={20}
           color={colors.text.secondary}
+          accessibilityElementsHidden
         />
         <Text style={styles.headerTitle}>Your List Summary</Text>
       </View>
 
       {/* Current Store Section */}
-      <View style={styles.currentStoreSection}>
-        <View style={styles.currentStoreRow}>
+      <View
+        style={styles.currentStoreSection}
+        accessible
+        accessibilityLabel={`Current store: ${currentDisplayName}. Total: ${formatPrice(currentTotal)}`}
+      >
+        <View style={styles.currentStoreRow} accessibilityElementsHidden>
           <Text style={styles.currentStoreLabel}>Current:</Text>
           <View
             style={[
@@ -407,20 +480,26 @@ export const ListComparisonSummary = memo(function ListComparisonSummary({
           />
           <Text style={styles.currentStoreName}>{currentDisplayName}</Text>
         </View>
-        <Text style={styles.currentStoreTotal}>
+        <Text style={styles.currentStoreTotal} accessibilityElementsHidden>
           Total: {formatPrice(currentTotal)}
         </Text>
       </View>
 
       {/* Divider */}
-      <View style={styles.divider} />
+      <View style={styles.divider} accessibilityElementsHidden />
 
       {/* Alternatives Section Header */}
-      <View style={styles.alternativesHeader}>
+      <View
+        style={styles.alternativesHeader}
+        accessible
+        accessibilityRole="header"
+        accessibilityLabel={`${sortedAlternatives.length} alternative stores available`}
+      >
         <MaterialCommunityIcons
           name="lightbulb-outline"
           size={16}
           color={colors.accent.warm}
+          accessibilityElementsHidden
         />
         <Text style={styles.alternativesHeaderText}>
           Same items at other stores:
@@ -432,25 +511,35 @@ export const ListComparisonSummary = memo(function ListComparisonSummary({
         style={styles.alternativesList}
         contentContainerStyle={styles.alternativesContent}
         showsVerticalScrollIndicator={false}
+        accessibilityRole="list"
+        accessibilityLabel="Alternative store options"
       >
         {sortedAlternatives.map((alternative) => (
           <AlternativeStoreCard
             key={alternative.store}
             alternative={alternative}
             isBestDeal={alternative.store === bestDealStoreId}
-            onSwitch={() => onSwitchStore(alternative.store)}
+            onSwitch={() => handleSwitchStore(alternative)}
           />
         ))}
       </ScrollView>
 
       {/* Items Compared Note */}
       {itemsComparedStats && (
-        <View style={styles.itemsComparedContainer}>
-          <Text style={styles.itemsComparedText}>
+        <View
+          style={styles.itemsComparedContainer}
+          accessible
+          accessibilityLabel={
+            itemsComparedStats.issues > 0
+              ? `${itemsComparedStats.compared} of ${itemsComparedStats.total} items compared. ${itemsComparedStats.issues} items have no price data at other stores.`
+              : `${itemsComparedStats.compared} of ${itemsComparedStats.total} items compared`
+          }
+        >
+          <Text style={styles.itemsComparedText} accessibilityElementsHidden>
             {itemsComparedStats.compared}/{itemsComparedStats.total} items compared
           </Text>
           {itemsComparedStats.issues > 0 && (
-            <Text style={styles.itemsIssuesText}>
+            <Text style={styles.itemsIssuesText} accessibilityElementsHidden>
               ({itemsComparedStats.issues} items have no price data elsewhere)
             </Text>
           )}

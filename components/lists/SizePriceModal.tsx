@@ -12,7 +12,7 @@
  * - Glassmorphic styling with haptic feedback
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -24,6 +24,12 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { GlassModal, GlassButton, colors, typography, spacing, borderRadius } from "@/components/ui/glass";
 import { haptic } from "@/lib/haptics/safeHaptics";
+import {
+  trackSizePriceModalOpened,
+  trackSizeSelected,
+  type AnalyticsPriceSource,
+} from "@/lib/analytics";
+import { useNetworkStatus } from "@/lib/network/useNetworkStatus";
 import {
   SizeOptionCard,
   SizeOptionCardSkeleton,
@@ -54,6 +60,8 @@ export interface SizePriceModalProps {
   itemName: string;
   /** Store name for display (e.g., "Tesco") */
   storeName: string;
+  /** Store ID for analytics (e.g., "tesco") */
+  storeId?: string;
   /** Store color for branding */
   storeColor?: string;
   /** Available size options from getSizesForStore query */
@@ -71,6 +79,10 @@ export interface SizePriceModalProps {
   isLoading?: boolean;
   /** Category for manual entry AI estimation */
   category?: string;
+  /** Error state when fetching sizes fails */
+  error?: Error | null;
+  /** Callback to retry fetching sizes */
+  onRetry?: () => void;
 }
 
 // =============================================================================
@@ -98,16 +110,49 @@ function findBestValueIndex(sizes: SizeOption[]): number {
   return bestIdx;
 }
 
+
+/**
+ * Convert PriceSource to AnalyticsPriceSource
+ */
+function toAnalyticsPriceSource(source: PriceSource): AnalyticsPriceSource {
+  return source as AnalyticsPriceSource;
+}
+
+// =============================================================================
+// EMPTY STATE SUBCOMPONENT
+// =============================================================================
+
+interface EmptyStateProps {
+  itemName: string;
+}
+
+function EmptyState({ itemName }: EmptyStateProps) {
+  return (
+    <View style={styles.emptyState} accessible accessibilityRole="text">
+      <View style={styles.emptyStateIconContainer}>
+        <MaterialCommunityIcons
+          name="package-variant"
+          size={32}
+          color={colors.text.tertiary}
+        />
+      </View>
+      <Text style={styles.emptyStateTitle}>No size variants found</Text>
+      <Text style={styles.emptyStateSubtitle}>
+        We don't have size/price data for "{itemName}" at this store yet
+      </Text>
+    </View>
+  );
+}
+
 // =============================================================================
 // MANUAL ENTRY SUBCOMPONENT
 // =============================================================================
 
 interface ManualEntryProps {
   onSubmit: (size: string, price: number) => void;
-  itemName: string;
 }
 
-function ManualEntry({ onSubmit, itemName }: ManualEntryProps) {
+function ManualEntry({ onSubmit }: ManualEntryProps) {
   const [size, setSize] = useState("");
   const [price, setPrice] = useState("");
 
@@ -124,20 +169,15 @@ function ManualEntry({ onSubmit, itemName }: ManualEntryProps) {
       <View style={styles.manualEntryHeader}>
         <MaterialCommunityIcons
           name="pencil-plus"
-          size={20}
-          color={colors.text.secondary}
+          size={18}
+          color={colors.accent.primary}
         />
-        <Text style={styles.manualEntryTitle}>
-          No sizes found for {itemName}
-        </Text>
+        <Text style={styles.manualEntryTitle}>Enter size & price manually</Text>
       </View>
-      <Text style={styles.manualEntrySubtitle}>
-        Enter the size and price manually:
-      </Text>
 
       <View style={styles.manualInputRow}>
         <View style={[styles.inputGroup, { flex: 1 }]}>
-          <Text style={styles.inputLabel}>Size</Text>
+          <Text style={styles.inputLabel} nativeID="sizeInputLabel">Size</Text>
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.textInput}
@@ -145,14 +185,17 @@ function ManualEntry({ onSubmit, itemName }: ManualEntryProps) {
               onChangeText={setSize}
               placeholder="e.g., 500ml"
               placeholderTextColor={colors.text.tertiary}
+              accessibilityLabel="Size"
+              accessibilityHint="Enter the product size, for example 500ml or 2 pints"
+              accessibilityLabelledBy="sizeInputLabel"
             />
           </View>
         </View>
 
         <View style={[styles.inputGroup, { flex: 1 }]}>
-          <Text style={styles.inputLabel}>Price</Text>
+          <Text style={styles.inputLabel} nativeID="priceInputLabel">Price</Text>
           <View style={styles.inputContainer}>
-            <Text style={styles.currencyPrefix}>£</Text>
+            <Text style={styles.currencyPrefix} accessibilityElementsHidden>£</Text>
             <TextInput
               style={styles.textInput}
               value={price}
@@ -160,6 +203,9 @@ function ManualEntry({ onSubmit, itemName }: ManualEntryProps) {
               placeholder="0.00"
               placeholderTextColor={colors.text.tertiary}
               keyboardType="decimal-pad"
+              accessibilityLabel="Price in pounds"
+              accessibilityHint="Enter the price in pounds"
+              accessibilityLabelledBy="priceInputLabel"
             />
           </View>
         </View>
@@ -180,6 +226,64 @@ function ManualEntry({ onSubmit, itemName }: ManualEntryProps) {
 }
 
 // =============================================================================
+// ERROR STATE SUBCOMPONENT
+// =============================================================================
+
+interface ErrorStateProps {
+  onRetry?: () => void;
+  onManualEntry: () => void;
+}
+
+function ErrorState({ onRetry, onManualEntry }: ErrorStateProps) {
+  const handleRetry = useCallback(() => {
+    haptic("medium");
+    onRetry?.();
+  }, [onRetry]);
+
+  const handleManualEntry = useCallback(() => {
+    haptic("light");
+    onManualEntry();
+  }, [onManualEntry]);
+
+  return (
+    <View style={styles.errorState} accessible accessibilityRole="alert">
+      <View style={styles.errorIconContainer}>
+        <MaterialCommunityIcons
+          name="wifi-off"
+          size={32}
+          color={colors.accent.error}
+        />
+      </View>
+      <Text style={styles.errorTitle}>Couldn't load prices</Text>
+      <Text style={styles.errorSubtitle}>
+        Check your connection and try again
+      </Text>
+      <View style={styles.errorActions}>
+        {onRetry && (
+          <GlassButton
+            variant="primary"
+            size="md"
+            onPress={handleRetry}
+            icon="refresh"
+            style={styles.retryButton}
+          >
+            Try Again
+          </GlassButton>
+        )}
+        <GlassButton
+          variant="ghost"
+          size="md"
+          onPress={handleManualEntry}
+          icon="pencil"
+        >
+          Enter Manually
+        </GlassButton>
+      </View>
+    </View>
+  );
+}
+
+// =============================================================================
 // MAIN COMPONENT
 // =============================================================================
 
@@ -188,13 +292,46 @@ export function SizePriceModal({
   onClose,
   itemName,
   storeName,
+  storeId,
   storeColor,
   sizes,
   defaultSize,
   onAddItem,
   isLoading = false,
   category,
+  error = null,
+  onRetry,
 }: SizePriceModalProps) {
+  // Network status for offline handling
+  // Note: Convex automatically queues mutations when offline and syncs when reconnected
+  const { isConnected } = useNetworkStatus();
+
+  // State for showing manual entry after error
+  const [showManualAfterError, setShowManualAfterError] = useState(false);
+
+  // Track if we've already fired the modal opened event for this visibility session
+  const hasTrackedOpen = useRef(false);
+
+  // Reset manual entry state when modal opens/closes
+  useEffect(() => {
+    if (!visible) {
+      setShowManualAfterError(false);
+      hasTrackedOpen.current = false;
+    }
+  }, [visible]);
+
+  // Track modal opened event when modal becomes visible and sizes are loaded
+  useEffect(() => {
+    if (visible && !isLoading && !hasTrackedOpen.current) {
+      hasTrackedOpen.current = true;
+      trackSizePriceModalOpened(
+        itemName,
+        storeId || storeName.toLowerCase(),
+        sizes.length
+      );
+    }
+  }, [visible, isLoading, itemName, storeId, storeName, sizes.length]);
+
   // Find initial selection: defaultSize, or user's usual, or first option
   const initialSelection = useMemo(() => {
     if (defaultSize) {
@@ -219,11 +356,23 @@ export function SizePriceModal({
   // Selected option
   const selectedOption = selectedIndex >= 0 ? sizes[selectedIndex] : null;
 
-  // Handle selection
+  // Handle selection with analytics
   const handleSelect = useCallback((index: number) => {
     haptic("selection");
     setSelectedIndex(index);
-  }, []);
+
+    // Track size selection
+    const option = sizes[index];
+    if (option && option.price !== null) {
+      trackSizeSelected(
+        itemName,
+        option.size,
+        option.price,
+        toAnalyticsPriceSource(option.source),
+        storeId || storeName.toLowerCase()
+      );
+    }
+  }, [sizes, itemName, storeId, storeName]);
 
   // Handle add
   const handleAdd = useCallback(() => {
@@ -254,7 +403,22 @@ export function SizePriceModal({
     onClose();
   }, [onClose]);
 
-  const showNoVariants = !isLoading && sizes.length === 0;
+  // Handle switching to manual entry from error state
+  const handleSwitchToManualEntry = useCallback(() => {
+    haptic("light");
+    setShowManualAfterError(true);
+  }, []);
+
+  // Handle retry
+  const handleRetry = useCallback(() => {
+    haptic("medium");
+    setShowManualAfterError(false);
+    onRetry?.();
+  }, [onRetry]);
+
+  const hasError = error !== null && !showManualAfterError;
+  const showNoVariants = !isLoading && !hasError && sizes.length === 0;
+  const showManualEntry = showNoVariants || showManualAfterError;
   const canAdd = selectedOption !== null && selectedOption.price !== null;
 
   return (
@@ -266,8 +430,13 @@ export function SizePriceModal({
       animationType="slide"
     >
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerIcon}>
+      <View
+        style={styles.header}
+        accessible
+        accessibilityRole="header"
+        accessibilityLabel={`Adding ${itemName} to shopping list. ${storeName} prices.`}
+      >
+        <View style={styles.headerIcon} accessibilityElementsHidden>
           <MaterialCommunityIcons
             name="cart-plus"
             size={24}
@@ -278,23 +447,52 @@ export function SizePriceModal({
         <Text style={[styles.storeName, storeColor ? { color: storeColor } : null]}>
           {storeName} prices
         </Text>
+        {/* Offline indicator - Convex will queue the add and sync when connected */}
+        {!isConnected && (
+          <View style={styles.offlineIndicator} accessible accessibilityRole="alert">
+            <MaterialCommunityIcons
+              name="cloud-off-outline"
+              size={14}
+              color={colors.accent.warning}
+            />
+            <Text style={styles.offlineText}>
+              Offline - will sync when connected
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Loading state */}
       {isLoading && (
-        <View style={styles.sizesContainer}>
+        <View
+          style={styles.sizesContainer}
+          accessible
+          accessibilityLabel="Loading size options"
+          accessibilityRole="progressbar"
+        >
           <SizeOptionCardSkeleton count={3} />
         </View>
       )}
 
+      {/* Error state */}
+      {hasError && (
+        <ErrorState
+          onRetry={onRetry ? handleRetry : undefined}
+          onManualEntry={handleSwitchToManualEntry}
+        />
+      )}
+
       {/* Size options */}
-      {!isLoading && sizes.length > 0 && (
+      {!isLoading && !hasError && sizes.length > 0 && (
         <>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.sizesScrollContent}
             style={styles.sizesScroll}
+            accessible
+            accessibilityRole="radiogroup"
+            accessibilityLabel={`${sizes.length} size options available. Swipe left or right to browse.`}
           >
             {sizes.map((option, index) => (
               <SizeOptionCard
@@ -314,8 +512,8 @@ export function SizePriceModal({
           </ScrollView>
 
           {/* Legend */}
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
+          <View style={styles.legend} accessibilityRole="text" accessible accessibilityLabel="Legend: Green star means best value, orange star means your usual purchase">
+            <View style={styles.legendItem} accessibilityElementsHidden>
               <MaterialCommunityIcons
                 name="star"
                 size={12}
@@ -323,7 +521,7 @@ export function SizePriceModal({
               />
               <Text style={styles.legendText}>Best value</Text>
             </View>
-            <View style={styles.legendItem}>
+            <View style={styles.legendItem} accessibilityElementsHidden>
               <MaterialCommunityIcons
                 name="star"
                 size={12}
@@ -335,13 +533,17 @@ export function SizePriceModal({
         </>
       )}
 
-      {/* No variants - show manual entry */}
-      {showNoVariants && (
-        <ManualEntry onSubmit={handleManualEntry} itemName={itemName} />
+      {/* Empty state + Manual entry - shown when no variants OR user chose manual after error */}
+      {showManualEntry && (
+        <>
+          {showNoVariants && <EmptyState itemName={itemName} />}
+          <View style={styles.divider} />
+          <ManualEntry onSubmit={handleManualEntry} />
+        </>
       )}
 
-      {/* Actions */}
-      {!showNoVariants && (
+      {/* Actions - only shown when we have size options (not error, not manual entry) */}
+      {!showManualEntry && !hasError && (
         <View style={styles.actions}>
           <GlassButton
             variant="ghost"
@@ -397,6 +599,22 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
 
+  // Offline indicator
+  offlineIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    borderRadius: borderRadius.sm,
+  },
+  offlineText: {
+    ...typography.bodySmall,
+    color: colors.accent.warning,
+  },
+
   // Sizes
   sizesContainer: {
     marginBottom: spacing.lg,
@@ -440,6 +658,73 @@ const styles = StyleSheet.create({
     flex: 0.6,
   },
 
+  // Empty State
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: spacing.xl,
+  },
+  emptyStateIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.glass.background,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  emptyStateTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  emptyStateSubtitle: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    paddingHorizontal: spacing.lg,
+  },
+
+  // Divider
+  divider: {
+    height: 1,
+    backgroundColor: colors.glass.border,
+    marginVertical: spacing.md,
+  },
+
+  // Error State
+  errorState: {
+    alignItems: "center",
+    paddingVertical: spacing["2xl"],
+    gap: spacing.md,
+  },
+  errorIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.sm,
+  },
+  errorTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    textAlign: "center",
+  },
+  errorSubtitle: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  errorActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  retryButton: {
+    minWidth: 120,
+  },
+
   // Manual Entry
   manualEntry: {
     paddingVertical: spacing.md,
@@ -448,16 +733,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.md,
   },
   manualEntryTitle: {
-    ...typography.bodyMedium,
+    ...typography.labelMedium,
     color: colors.text.secondary,
-  },
-  manualEntrySubtitle: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-    marginBottom: spacing.md,
   },
   manualInputRow: {
     flexDirection: "row",

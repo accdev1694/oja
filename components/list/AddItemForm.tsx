@@ -6,6 +6,8 @@ import {
   Pressable,
   ActivityIndicator,
   StyleSheet,
+  type NativeSyntheticEvent,
+  type TextInputFocusEventData,
 } from "react-native";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -25,6 +27,7 @@ import {
 } from "@/components/ui/glass";
 import { areItemsSimilar, getPriceLabel } from "@/lib/list/helpers";
 import type { ListItem } from "@/components/list/ShoppingListItem";
+import { useVariantPrefetch } from "@/hooks/useVariantPrefetch";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -79,6 +82,12 @@ export const AddItemForm = memo(function AddItemForm({
   const setPreferredVariant = useMutation(api.pantryItems.setPreferredVariant);
   const generateSuggestions = useAction(api.ai.generateListSuggestions);
   const estimateItemPrice = useAction(api.ai.estimateItemPrice);
+
+  // ── Variant prefetch for Size/Price modal performance ─────────────────────
+  // Pre-warms the Convex query cache as user types, so the modal opens instantly
+  const { triggerPrefetch } = useVariantPrefetch({
+    store: listStoreName ?? "tesco",
+  });
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [isAddingItem, setIsAddingItem] = useState(false);
@@ -423,6 +432,17 @@ export const AddItemForm = memo(function AddItemForm({
     }
   }
 
+  // ── Item name change handler with prefetch ─────────────────────────────────
+  // Triggers variant prefetch as user types for faster Size/Price modal loading
+  const handleItemNameChange = useCallback((text: string) => {
+    setNewItemName(text);
+    // Trigger prefetch for variants (debounced internally)
+    // This pre-warms the Convex cache so SizePriceModal opens with data ready
+    if (onPendingAdd && listStatus !== "shopping") {
+      triggerPrefetch(text);
+    }
+  }, [triggerPrefetch, onPendingAdd, listStatus]);
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   if (!canEdit) return null;
@@ -466,7 +486,7 @@ export const AddItemForm = memo(function AddItemForm({
             <GlassInput
               placeholder="Item name"
               value={newItemName}
-              onChangeText={setNewItemName}
+              onChangeText={handleItemNameChange}
               editable={!isAddingItem}
               style={styles.nameInput}
             />

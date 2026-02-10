@@ -142,13 +142,18 @@ export function EditItemModal({ item, onClose, onSave }: EditItemModalProps) {
       maxWidth={360}
       avoidKeyboard
     >
-      <View style={styles.header}>
-        <MaterialCommunityIcons name="pencil" size={28} color={colors.accent.primary} />
+      <View
+        style={styles.header}
+        accessible
+        accessibilityRole="header"
+        accessibilityLabel={`Edit item: ${item?.name || "item"}`}
+      >
+        <MaterialCommunityIcons name="pencil" size={28} color={colors.accent.primary} accessibilityElementsHidden />
         <Text style={styles.title}>Edit Item</Text>
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Name</Text>
+        <Text style={styles.inputLabel} nativeID="editNameLabel">Name</Text>
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.textInput}
@@ -157,6 +162,9 @@ export function EditItemModal({ item, onClose, onSave }: EditItemModalProps) {
             placeholder="Item name"
             placeholderTextColor={colors.text.tertiary}
             autoFocus
+            accessibilityLabel="Item name"
+            accessibilityHint="Enter the name of this item"
+            accessibilityLabelledBy="editNameLabel"
           />
         </View>
       </View>
@@ -164,13 +172,18 @@ export function EditItemModal({ item, onClose, onSave }: EditItemModalProps) {
       {/* Size input with "was X" indicator */}
       <View style={styles.inputGroup}>
         <View style={styles.labelRow}>
-          <Text style={styles.inputLabel}>Size</Text>
+          <Text style={styles.inputLabel} nativeID="editSizeLabel">Size</Text>
           {hasOriginalSize && (
-            <View style={styles.wasIndicator}>
+            <View
+              style={styles.wasIndicator}
+              accessible
+              accessibilityLabel={`Size was changed from ${item?.originalSize}`}
+            >
               <MaterialCommunityIcons
                 name="arrow-left-right"
                 size={12}
                 color={colors.accent.warning}
+                accessibilityElementsHidden
               />
               <Text style={styles.wasText}>was {item?.originalSize}</Text>
             </View>
@@ -183,13 +196,16 @@ export function EditItemModal({ item, onClose, onSave }: EditItemModalProps) {
             onChangeText={handleSizeChange}
             placeholder="e.g., 500ml, 2pt, 250g"
             placeholderTextColor={colors.text.tertiary}
+            accessibilityLabel={hasOriginalSize ? `Size, was ${item?.originalSize}` : "Size"}
+            accessibilityHint="Enter the product size, for example 500ml, 2 pints, or 250 grams"
+            accessibilityLabelledBy="editSizeLabel"
           />
         </View>
       </View>
 
       <View style={styles.inputRow}>
         <View style={[styles.inputGroup, { flex: 1 }]}>
-          <Text style={styles.inputLabel}>Quantity</Text>
+          <Text style={styles.inputLabel} nativeID="editQuantityLabel">Quantity</Text>
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.textInput}
@@ -198,19 +214,27 @@ export function EditItemModal({ item, onClose, onSave }: EditItemModalProps) {
               placeholder="1"
               placeholderTextColor={colors.text.tertiary}
               keyboardType="number-pad"
+              accessibilityLabel="Quantity"
+              accessibilityHint="Enter how many of this item you need"
+              accessibilityLabelledBy="editQuantityLabel"
             />
           </View>
         </View>
 
         <View style={[styles.inputGroup, { flex: 1 }]}>
           <View style={styles.labelRow}>
-            <Text style={styles.inputLabel}>Price ({"\u00A3"})</Text>
+            <Text style={styles.inputLabel} nativeID="editPriceLabel">Price ({"\u00A3"})</Text>
             {isPriceManual && (
-              <View style={styles.manualBadge}>
+              <View
+                style={styles.manualBadge}
+                accessible
+                accessibilityLabel="Price was manually set"
+              >
                 <MaterialCommunityIcons
                   name="pencil"
                   size={10}
                   color={colors.accent.warm}
+                  accessibilityElementsHidden
                 />
                 <Text style={styles.manualBadgeText}>Manual</Text>
               </View>
@@ -224,6 +248,9 @@ export function EditItemModal({ item, onClose, onSave }: EditItemModalProps) {
               placeholder="0.00"
               placeholderTextColor={colors.text.tertiary}
               keyboardType="decimal-pad"
+              accessibilityLabel={isPriceManual ? "Price in pounds, manually set" : "Price in pounds"}
+              accessibilityHint="Enter the price for this item. Changing this marks it as a manual override."
+              accessibilityLabelledBy="editPriceLabel"
             />
           </View>
         </View>
@@ -231,13 +258,25 @@ export function EditItemModal({ item, onClose, onSave }: EditItemModalProps) {
 
       {/* Info text for manual price */}
       {priceWasEdited && (
-        <Text style={styles.infoText}>
+        <Text
+          style={styles.infoText}
+          accessible
+          accessibilityRole="text"
+          accessibilityLiveRegion="polite"
+        >
           Editing the price will mark it as a manual override
         </Text>
       )}
 
-      <View style={styles.actions}>
-        <GlassButton variant="ghost" size="md" onPress={handleClose} style={{ flex: 1 }}>
+      <View style={styles.actions} accessibilityRole="toolbar">
+        <GlassButton
+          variant="ghost"
+          size="md"
+          onPress={handleClose}
+          style={{ flex: 1 }}
+          accessibilityLabel="Cancel editing"
+          accessibilityRole="button"
+        >
           Cancel
         </GlassButton>
         <GlassButton
@@ -247,6 +286,9 @@ export function EditItemModal({ item, onClose, onSave }: EditItemModalProps) {
           onPress={handleSave}
           style={{ flex: 1 }}
           disabled={!editName.trim()}
+          accessibilityLabel={editName.trim() ? `Save changes to ${editName}` : "Enter a name to save"}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !editName.trim() }}
         >
           Save
         </GlassButton>

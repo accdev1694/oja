@@ -40,6 +40,11 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { GlassModal } from "@/components/ui/glass/GlassModal";
 import { haptic } from "@/lib/haptics/safeHaptics";
 import {
+  trackStoreSwitchCompleted,
+  trackStoreSwitchCancelled,
+} from "@/lib/analytics";
+import { useNetworkStatus } from "@/lib/network/useNetworkStatus";
+import {
   colors,
   typography,
   spacing,
@@ -71,6 +76,8 @@ export interface StoreSwitchItem {
 }
 
 export interface StoreSwitchPreviewProps {
+  /** List ID for analytics tracking */
+  listId: string;
   /** Whether the modal is visible */
   visible: boolean;
   /** Called when the modal is dismissed */
@@ -188,9 +195,29 @@ const ItemRow = memo(function ItemRow({ item, index }: ItemRowProps) {
     return "";
   }, [item.sizeChanged, item.oldSize, item.newSize]);
 
+  // Build accessibility label for the item
+  const accessibilityLabel = useMemo(() => {
+    const parts = [item.name];
+    if (item.newSize) parts.push(item.newSize);
+    parts.push(`${formatPrice(item.oldPrice)} to ${formatPrice(item.newPrice)}`);
+    if (isPriceCheaper) {
+      parts.push(`saves ${formatPrice(item.oldPrice - item.newPrice)}`);
+    } else if (item.newPrice > item.oldPrice) {
+      parts.push(`costs ${formatPrice(item.newPrice - item.oldPrice)} more`);
+    }
+    if (item.sizeChanged) parts.push("size auto-matched");
+    if (item.manualOverride) parts.push("manual price kept");
+    return parts.join(", ");
+  }, [item, isPriceCheaper]);
+
   return (
-    <Animated.View style={[styles.itemRow, animatedStyle]}>
-      <View style={styles.itemLeft}>
+    <Animated.View
+      style={[styles.itemRow, animatedStyle]}
+      accessible
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="text"
+    >
+      <View style={styles.itemLeft} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <MaterialCommunityIcons
           name={icon.name}
           size={18}
@@ -214,7 +241,7 @@ const ItemRow = memo(function ItemRow({ item, index }: ItemRowProps) {
         </View>
       </View>
 
-      <View style={styles.itemRight}>
+      <View style={styles.itemRight} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Text style={styles.oldPrice}>{formatPrice(item.oldPrice)}</Text>
         <MaterialCommunityIcons
           name="arrow-right"
@@ -235,6 +262,7 @@ const ItemRow = memo(function ItemRow({ item, index }: ItemRowProps) {
 // =============================================================================
 
 export const StoreSwitchPreview = memo(function StoreSwitchPreview({
+  listId,
   visible,
   onClose,
   onConfirm,
@@ -249,6 +277,10 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
   savings,
   items,
 }: StoreSwitchPreviewProps) {
+  // Network status for offline handling
+  // Note: Convex automatically queues mutations when offline and syncs when reconnected
+  const { isConnected } = useNetworkStatus();
+
   // Animation values
   const confirmScale = useSharedValue(1);
   const cancelScale = useSharedValue(1);
@@ -262,18 +294,42 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
     transform: [{ scale: cancelScale.value }],
   }));
 
-  // Handle close with haptic
+  // Calculate stats for analytics
+  const analyticsStats = useMemo(() => {
+    const sizeChangedCount = items.filter((i) => i.sizeChanged).length;
+    const manualOverrideCount = items.filter((i) => i.manualOverride).length;
+    return { sizeChangedCount, manualOverrideCount };
+  }, [items]);
+
+  // Handle close with haptic and analytics
   const handleClose = useCallback(() => {
     haptic("light");
+    // Track store switch cancelled
+    trackStoreSwitchCancelled(
+      listId,
+      previousStore,
+      newStore,
+      savings
+    );
     onClose();
-  }, [onClose]);
+  }, [listId, previousStore, newStore, savings, onClose]);
 
-  // Handle confirm with haptic
+  // Handle confirm with haptic and analytics
   const handleConfirm = useCallback(() => {
     if (isLoading) return;
     haptic("success");
+    // Track store switch completed
+    trackStoreSwitchCompleted(
+      listId,
+      previousStore,
+      newStore,
+      savings,
+      items.length,
+      analyticsStats.sizeChangedCount,
+      analyticsStats.manualOverrideCount
+    );
     onConfirm();
-  }, [isLoading, onConfirm]);
+  }, [listId, previousStore, newStore, savings, items.length, analyticsStats, isLoading, onConfirm]);
 
   // Button press handlers
   const handleConfirmPressIn = useCallback(() => {
@@ -318,8 +374,13 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
       animationType="slide"
     >
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerIconContainer}>
+      <View
+        style={styles.header}
+        accessible
+        accessibilityRole="header"
+        accessibilityLabel={`Switch from ${previousStoreDisplayName} to ${newStoreDisplayName}? ${items.length} items will be updated.`}
+      >
+        <View style={styles.headerIconContainer} accessibilityElementsHidden>
           <MaterialCommunityIcons
             name="swap-horizontal"
             size={24}
@@ -329,6 +390,19 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
         <Text style={styles.headerTitle}>
           Switch to {newStoreDisplayName}?
         </Text>
+        {/* Offline indicator - Convex will queue the switch and sync when connected */}
+        {!isConnected && (
+          <View style={styles.offlineIndicator} accessible accessibilityRole="alert">
+            <MaterialCommunityIcons
+              name="cloud-off-outline"
+              size={14}
+              color={colors.accent.warning}
+            />
+            <Text style={styles.offlineText}>
+              Offline - will sync when connected
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Items List */}
@@ -336,6 +410,8 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
         style={styles.itemsList}
         contentContainerStyle={styles.itemsListContent}
         showsVerticalScrollIndicator={false}
+        accessibilityRole="list"
+        accessibilityLabel={`${items.length} items with price changes`}
       >
         {items.map((item, index) => (
           <ItemRow key={item.id} item={item} index={index} />
@@ -343,12 +419,23 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
       </ScrollView>
 
       {/* Divider */}
-      <View style={styles.divider} />
+      <View style={styles.divider} accessibilityElementsHidden />
 
       {/* Summary Section */}
-      <View style={styles.summary}>
+      <View
+        style={styles.summary}
+        accessible
+        accessibilityLabel={
+          hasSavings
+            ? `${previousStoreDisplayName} total ${formatPrice(previousTotal)}. ${newStoreDisplayName} total ${formatPrice(newTotal)}. You save ${formatPrice(savings)}.`
+            : savings === 0
+              ? `${previousStoreDisplayName} total ${formatPrice(previousTotal)}. ${newStoreDisplayName} total ${formatPrice(newTotal)}. Same total price at both stores.`
+              : `${previousStoreDisplayName} total ${formatPrice(previousTotal)}. ${newStoreDisplayName} total ${formatPrice(newTotal)}. Warning: This will cost ${formatPrice(Math.abs(savings))} more.`
+        }
+        accessibilityRole="summary"
+      >
         {/* Previous store total */}
-        <View style={styles.summaryRow}>
+        <View style={styles.summaryRow} accessibilityElementsHidden>
           <Text style={styles.summaryLabel}>
             {previousStoreDisplayName} Total:
           </Text>
@@ -356,7 +443,7 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
         </View>
 
         {/* New store total */}
-        <View style={styles.summaryRow}>
+        <View style={styles.summaryRow} accessibilityElementsHidden>
           <Text style={[styles.summaryLabel, { color: newStoreColor }]}>
             {newStoreDisplayName} Total:
           </Text>
@@ -367,18 +454,18 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
 
         {/* Savings */}
         {hasSavings && (
-          <View style={[styles.summaryRow, styles.savingsRow]}>
+          <View style={[styles.summaryRow, styles.savingsRow]} accessibilityElementsHidden>
             <Text style={styles.savingsLabel}>You Save:</Text>
             <View style={styles.savingsValueContainer}>
               <Text style={styles.savingsValue}>{formatPrice(savings)}</Text>
-              <Text style={styles.savingsEmoji}> ✨</Text>
+              <Text style={styles.savingsEmoji}> </Text>
             </View>
           </View>
         )}
 
         {/* No savings / price increase warning */}
         {savings <= 0 && (
-          <View style={styles.warningContainer}>
+          <View style={styles.warningContainer} accessibilityElementsHidden>
             <MaterialCommunityIcons
               name="alert-circle-outline"
               size={16}
@@ -394,7 +481,7 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
       </View>
 
       {/* Action Buttons */}
-      <View style={styles.actions}>
+      <View style={styles.actions} accessibilityRole="toolbar">
         {/* Cancel Button */}
         <Animated.View style={[styles.cancelButtonWrapper, cancelAnimatedStyle]}>
           <Pressable
@@ -403,6 +490,9 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
             onPressIn={handleCancelPressIn}
             onPressOut={handleCancelPressOut}
             disabled={isLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel store switch"
+            accessibilityState={{ disabled: isLoading }}
           >
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </Pressable>
@@ -422,9 +512,19 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
             onPressIn={handleConfirmPressIn}
             onPressOut={handleConfirmPressOut}
             disabled={isLoading}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isLoading
+                ? "Switching stores..."
+                : hasSavings
+                  ? `Switch to ${newStoreDisplayName} and save ${formatPrice(savings)}`
+                  : `Switch to ${newStoreDisplayName}`
+            }
+            accessibilityState={{ disabled: isLoading, busy: isLoading }}
+            accessibilityHint="Double tap to confirm switching to this store"
           >
             {isLoading ? (
-              <ActivityIndicator size="small" color={colors.text.inverse} />
+              <ActivityIndicator size="small" color={colors.text.inverse} accessibilityElementsHidden />
             ) : (
               <>
                 <MaterialCommunityIcons
@@ -432,6 +532,7 @@ export const StoreSwitchPreview = memo(function StoreSwitchPreview({
                   size={20}
                   color={colors.text.inverse}
                   style={styles.confirmButtonIcon}
+                  accessibilityElementsHidden
                 />
                 <Text style={styles.confirmButtonText}>
                   Switch to {newStoreDisplayName}
@@ -468,6 +569,22 @@ const styles = StyleSheet.create({
     ...typography.headlineMedium,
     color: colors.text.primary,
     textAlign: "center",
+  },
+
+  // Offline indicator
+  offlineIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    borderRadius: borderRadius.sm,
+  },
+  offlineText: {
+    ...typography.bodySmall,
+    color: colors.accent.warning,
   },
 
   // Items List

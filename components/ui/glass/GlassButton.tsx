@@ -15,6 +15,8 @@ import {
   type StyleProp,
   type ViewStyle,
   type TextStyle,
+  type AccessibilityRole,
+  type AccessibilityState,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, {
@@ -66,6 +68,14 @@ export interface GlassButtonProps {
   style?: StyleProp<ViewStyle>;
   /** Custom text styles */
   textStyle?: StyleProp<TextStyle>;
+  /** Accessibility label for screen readers */
+  accessibilityLabel?: string;
+  /** Accessibility hint for screen readers */
+  accessibilityHint?: string;
+  /** Accessibility role override (defaults to "button") */
+  accessibilityRole?: AccessibilityRole;
+  /** Accessibility state (selected, disabled, etc.) */
+  accessibilityState?: AccessibilityState;
 }
 
 // =============================================================================
@@ -160,6 +170,10 @@ export function GlassButton({
   disableHaptics = false,
   style,
   textStyle,
+  accessibilityLabel,
+  accessibilityHint,
+  accessibilityRole = "button",
+  accessibilityState,
 }: GlassButtonProps) {
   // Support `icon` as an alias for `iconLeft`
   const leadingIcon = iconLeft || icon;
@@ -196,12 +210,22 @@ export function GlassButton({
   const isDisabled = disabled || loading;
   const opacity = isDisabled ? 0.5 : 1;
 
+  // Merge accessibility state with disabled state
+  const mergedAccessibilityState: AccessibilityState = {
+    ...accessibilityState,
+    disabled: isDisabled,
+  };
+
   return (
     <AnimatedPressable
       onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={isDisabled}
+      accessibilityLabel={accessibilityLabel || children}
+      accessibilityHint={accessibilityHint}
+      accessibilityRole={accessibilityRole}
+      accessibilityState={mergedAccessibilityState}
       style={[
         styles.button,
         {

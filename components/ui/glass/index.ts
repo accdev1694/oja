@@ -238,3 +238,13 @@ export {
   type GlassSpacing,
   type GlassBorderRadius as BorderRadiusScale,
 } from "@/lib/design/glassTokens";
+
+// =============================================================================
+// NETWORK STATUS COMPONENTS
+// =============================================================================
+
+export {
+  OfflineBanner,
+  type OfflineBannerProps,
+} from "./OfflineBanner";
+
