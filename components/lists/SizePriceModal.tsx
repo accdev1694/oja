@@ -496,7 +496,7 @@ export function SizePriceModal({
           >
             {sizes.map((option, index) => (
               <SizeOptionCard
-                key={option.size}
+                key={`${option.size}-${option.source}-${index}`}
                 size={option.sizeNormalized || option.size}
                 price={option.price}
                 pricePerUnit={option.pricePerUnit}
