@@ -353,8 +353,10 @@ export function SizePriceModal({
   // Find best value option
   const bestValueIndex = useMemo(() => findBestValueIndex(sizes), [sizes]);
 
-  // Selected option
-  const selectedOption = selectedIndex >= 0 ? sizes[selectedIndex] : null;
+  // Selected option (with bounds check)
+  const selectedOption = selectedIndex >= 0 && selectedIndex < sizes.length
+    ? sizes[selectedIndex]
+    : null;
 
   // Handle selection with analytics
   const handleSelect = useCallback((index: number) => {
