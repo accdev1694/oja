@@ -5,6 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { useState } from "react";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { SafeSafeKeyboardAwareScrollView } from "@/lib/keyboard/safeKeyboardController";
 import {
   GlassScreen,
   GlassCard,
@@ -51,7 +52,13 @@ export default function JoinListScreen() {
     <GlassScreen>
       <GlassHeader title="Join a List" showBack onBack={() => router.back()} />
 
-      <View style={styles.content}>
+      <SafeKeyboardAwareScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bottomOffset={20}
+      >
         <View style={styles.iconContainer}>
           <MaterialCommunityIcons name="ticket-confirmation-outline" size={64} color={colors.accent.primary} />
         </View>
@@ -81,15 +88,16 @@ export default function JoinListScreen() {
           disabled={loading || code.length < 6}
           style={styles.joinButton}
         >
-          Join List
+          Accept Invite
         </GlassButton>
-      </View>
+      </SafeKeyboardAwareScrollView>
     </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flex: 1, paddingHorizontal: spacing.xl, alignItems: "center", paddingTop: 40 },
+  scrollView: { flex: 1 },
+  content: { flexGrow: 1, paddingHorizontal: spacing.xl, alignItems: "center", paddingTop: 40 },
   iconContainer: { marginBottom: spacing.lg },
   heading: { ...typography.headlineMedium, color: colors.text.primary, marginBottom: spacing.xs },
   subtitle: { ...typography.bodyMedium, color: colors.text.tertiary, marginBottom: spacing.xl },

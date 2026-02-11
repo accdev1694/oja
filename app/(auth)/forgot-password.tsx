@@ -5,13 +5,12 @@ import {
   View,
   Text,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeSafeKeyboardAwareScrollView } from "@/lib/keyboard/safeKeyboardController";
 
 import {
   GlassScreen,
@@ -93,11 +92,13 @@ export default function ForgotPasswordScreen() {
   if (step === "reset") {
     return (
       <GlassScreen>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        <SafeKeyboardAwareScrollView
           style={styles.flex}
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bottomOffset={20}
         >
-          <View style={[styles.content, { paddingTop: insets.top + spacing.xl }]}>
             <View style={styles.iconContainer}>
               <MaterialCommunityIcons name="lock-reset" size={48} color={colors.accent.primary} />
             </View>
@@ -154,19 +155,20 @@ export default function ForgotPasswordScreen() {
             <Pressable style={styles.backButton} onPress={() => router.back()}>
               <Text style={styles.linkText}>Back to sign in</Text>
             </Pressable>
-          </View>
-        </KeyboardAvoidingView>
+        </SafeKeyboardAwareScrollView>
       </GlassScreen>
     );
   }
 
   return (
     <GlassScreen>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      <SafeKeyboardAwareScrollView
         style={styles.flex}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bottomOffset={20}
       >
-        <View style={[styles.content, { paddingTop: insets.top + spacing.xl }]}>
           <View style={styles.iconContainer}>
             <MaterialCommunityIcons name="email-lock-outline" size={48} color={colors.accent.primary} />
           </View>
@@ -206,8 +208,7 @@ export default function ForgotPasswordScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.linkText}>Back to sign in</Text>
           </Pressable>
-        </View>
-      </KeyboardAvoidingView>
+      </SafeKeyboardAwareScrollView>
     </GlassScreen>
   );
 }

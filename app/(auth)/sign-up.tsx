@@ -5,17 +5,16 @@ import {
   View,
   Text,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Pressable,
-  ScrollView,
   Image,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeSafeKeyboardAwareScrollView } from "@/lib/keyboard/safeKeyboardController";
 
 import {
   GlassScreen,
@@ -123,11 +122,13 @@ export default function SignUpScreen() {
   if (pendingVerification) {
     return (
       <GlassScreen>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        <SafeKeyboardAwareScrollView
           style={styles.flex}
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bottomOffset={20}
         >
-          <View style={[styles.content, { paddingTop: insets.top + spacing.xl }]}>
             <View style={styles.iconContainer}>
               <MaterialCommunityIcons name="email-check-outline" size={48} color={colors.accent.primary} />
             </View>
@@ -161,26 +162,23 @@ export default function SignUpScreen() {
             >
               Verify
             </GlassButton>
-          </View>
-        </KeyboardAvoidingView>
+        </SafeKeyboardAwareScrollView>
       </GlassScreen>
     );
   }
 
   return (
     <GlassScreen>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      <SafeKeyboardAwareScrollView
         style={styles.flex}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + spacing["2xl"], paddingBottom: insets.bottom + spacing.lg },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bottomOffset={20}
       >
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            { paddingTop: insets.top + spacing["2xl"], paddingBottom: insets.bottom + spacing.lg },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
           <Image
             source={require("@/assets/logo.png")}
             style={styles.logo}
@@ -269,8 +267,7 @@ export default function SignUpScreen() {
               </Pressable>
             </Link>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </SafeKeyboardAwareScrollView>
     </GlassScreen>
   );
 }

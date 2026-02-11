@@ -1,10 +1,19 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this repository.
+
+## Model Configuration (IMPORTANT)
+
+**Required model:** `claude-opus-4-6` (Opus 4.6)
+
+If user reports degraded performance or asks about the model:
+1. Check `~/.claude/settings.json` - the `"model"` field MUST be `"claude-opus-4-6"`
+2. If it shows `"opus"` or `"claude-opus-4-5"`, fix it immediately
+3. Claude Code auto-migrations can reset this setting after updates
 
 ## Quick Reference
 
-**What is Oja?** Budget-first shopping app for UK shoppers - track pantry, create shopping lists with budgets, scan receipts, voice assistant.
+**What is Oja?** Budget-first shopping app for UK shoppers - pantry tracking, shopping lists with budgets, receipt scanning, voice assistant (Tobi), gamification.
 
 **Tech Stack:** Expo SDK 54 + TypeScript + Expo Router + Convex (backend) + Clerk (auth) + Stripe (payments)
 
@@ -13,112 +22,184 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Development
 npx expo start                    # Start dev server
-npx expo start --ios              # iOS simulator
-npx expo start --android          # Android emulator
-npx convex dev                    # Start Convex backend (required for app to work)
-
-# Building (requires dev build for native modules like voice)
-npx expo run:ios                  # iOS dev build
-npx expo run:android              # Android dev build
+npx convex dev                    # Start Convex backend (required)
 
 # Testing
-npm test                          # Jest unit tests
+npm test                          # Jest unit tests (31 test files)
 npm run test:watch                # Watch mode
-npm run e2e                       # Playwright E2E (requires Convex + Expo web at localhost:8081)
+npm run e2e                       # Playwright E2E (16 specs, 398 cases)
 npm run e2e:ui                    # Playwright UI mode
 
 # Code Quality
-npm run lint                      # ESLint
+npm run lint                      # ESLint (flat config)
 npm run typecheck                 # TypeScript check
 ```
 
+## Dev Build & Native Modules
+
+**This project uses a dev build (development client), NOT Expo Go.**
+
+**How it works:**
+- `npx expo start` runs **Metro bundler** which bundles JS/TS code and serves it to the phone
+- The **APK on phone** contains the native code (Java/Kotlin) and connects to Metro via QR code
+- Metro can hot-reload JS instantly, but **native modules live in the APK**
+
+**When adding native modules:**
+1. Native modules (e.g., `react-native-keyboard-controller`, `expo-speech-recognition`) require rebuilding the APK
+2. If you see "package doesn't seem to be linked" errors, the APK needs to be rebuilt
+3. Rebuild with: `npx expo run:android` (or `eas build --profile development --platform android`)
+4. Reinstall the new APK on the phone
+
+**Safe wrappers for native modules:**
+- `lib/keyboard/safeKeyboardController.tsx` - Wraps `react-native-keyboard-controller` with fallback to `KeyboardAvoidingView` if native module isn't linked
+- Always use `SafeKeyboardProvider` and `SafeKeyboardAwareScrollView` instead of importing directly from `react-native-keyboard-controller`
+- This allows development to continue even if the APK hasn't been rebuilt yet
+
 ## Architecture
 
-### Navigation (Expo Router - file-based)
+### Navigation (Expo Router)
 
 ```
 app/
-├── _layout.tsx          # Root: providers (Clerk, Convex)
-├── (auth)/              # Sign in/up flows
-├── onboarding/          # Welcome → Cuisine → Seeding → Review
-└── (app)/               # Protected (requires auth)
-    ├── (tabs)/          # Bottom tabs: Pantry, Lists, Scan, Profile
-    ├── list/[id].tsx    # Shopping list detail (3000+ lines - needs refactoring)
-    ├── insights.tsx     # Gamification/stats
-    └── receipt/[id]/    # Receipt confirmation flow
+├── _layout.tsx              # Root: Clerk + Convex providers
+├── +not-found.tsx           # Catch-all for OAuth callbacks
+├── (auth)/                  # Sign in/up/forgot-password
+├── onboarding/              # welcome → cuisine → pantry-seeding → store-selection → review
+└── (app)/                   # Protected routes
+    ├── _layout.tsx          # PersistentTabBar + VoiceFAB
+    ├── (tabs)/              # Bottom tabs: Pantry, Lists, Scan, Profile
+    │   ├── index.tsx        # Pantry (1,084 lines)
+    │   ├── lists.tsx        # Shopping lists
+    │   ├── scan.tsx         # Receipt scanning
+    │   └── profile.tsx      # User profile
+    ├── list/[id].tsx        # Shopping list detail (1,279 lines)
+    ├── receipt/[id]/        # confirm.tsx + reconciliation.tsx
+    ├── insights.tsx         # Gamification/analytics (1,620 lines)
+    ├── subscription.tsx     # Stripe payment flow
+    ├── ai-usage.tsx         # Voice/scan usage tracking
+    ├── admin.tsx            # Admin panel (feature-gated)
+    └── ...                  # partners, notifications, price-history, etc.
 ```
 
 ### Backend (Convex)
 
-All backend in `convex/`. Key files:
-- `schema.ts` - Database schema (23 tables)
-- `pantryItems.ts`, `shoppingLists.ts`, `listItems.ts` - Core CRUD
-- `receipts.ts` - Receipt scanning + parsing
-- `ai.ts` - Gemini + OpenAI fallback for parsing/estimates
-- `lib/voiceTools.ts` - Voice assistant (25 Gemini function tools)
-- `lib/featureGating.ts` - Plan limits (free vs premium)
+All backend in `convex/`. **28 tables** in schema.ts:
+- **Core:** users, pantryItems, shoppingLists, listItems, receipts
+- **Pricing:** currentPrices, priceHistory, itemVariants
+- **Collaboration:** listPartners, inviteCodes, listMessages, itemComments
+- **Gamification:** achievements, streaks, weeklyChallenges, loyaltyPoints
+- **Subscriptions:** subscriptions, scanCredits, aiUsage
+
+**Key files:**
+- `ai.ts` - Gemini 2.0 Flash + OpenAI fallback
+- `lib/voiceTools.ts` - **30 voice tools** for Tobi assistant
+- `lib/featureGating.ts` - Free (3 lists, 50 pantry, 20 voice/mo) vs Premium
+- `stores.ts` - 13 UK stores with brand colors
 
 **Pattern:** Every mutation must call `requireCurrentUser(ctx)` for auth.
 
 ### Price Intelligence (Zero-Blank Prices)
 
 Every item shows a price. Three-layer cascade:
-1. **Personal History** - User's own receipts
-2. **Crowdsourced** - All users' receipt data by region
+1. **Personal History** - User's own receipts (highest trust)
+2. **Crowdsourced** - All users' receipt data by store/region
 3. **AI Estimate** - Gemini with OpenAI fallback
 
-Key files: `convex/itemVariants.ts`, `convex/currentPrices.ts`, `convex/priceHistory.ts`
+Key files: `itemVariants.ts`, `currentPrices.ts`, `priceHistory.ts`
 
 ### Glass UI Design System
 
-Import from `@/components/ui/glass/`. Design tokens in `@/lib/design/glassTokens.ts`.
+Import from `@/components/ui/glass/`. Tokens in `@/lib/design/glassTokens.ts`.
 
-Colors:
-- Background gradient: #0D1528 → #1B2845 → #101A2B
-- Primary accent (CTAs only): #00D4AA (teal)
-- Warm accent (celebrations): #FFB088
-- Reserve teal for primary actions; secondary elements use white/gray/indigo
+**Colors:**
+- Background: #0D1528 → #1B2845 → #101A2B (gradient)
+- Primary accent: #00D4AA (teal) - **CTAs only**
+- Warm accent: #FFB088 (celebrations)
+- Secondary: white/gray/indigo
+
+**Key components:** GlassCard, GlassButton, GlassInput, CircularBudgetDial, GlassAnimations
 
 ### Voice Assistant (Tobi)
 
-Uses Gemini 2.0 Flash with function calling. 25 tools for full CRUD.
-- STT: `expo-speech-recognition` (on-device, free)
-- TTS cascade: Azure → Google Cloud → expo-speech
-- Key files: `hooks/useVoiceAssistant.ts`, `convex/lib/voiceTools.ts`
+**30 function tools** for full CRUD via Gemini 2.0 Flash.
+- STT: `expo-speech-recognition` (on-device)
+- TTS cascade: Google Cloud Neural2 → expo-speech
+- Hook: `hooks/useVoiceAssistant.ts` (523 lines)
+- Tools: `convex/lib/voiceTools.ts`
 
 Requires dev build (native modules).
+
+### Key Hooks & Utilities
+
+| Hook/Utility | Purpose |
+|--------------|---------|
+| `useVoiceAssistant` | Voice assistant lifecycle |
+| `useVariantPrefetch` | Size/Price modal cache warming |
+| `usePartnerRole` | List permissions (viewer/editor/approver) |
+| `useDelightToast` | Gamification celebrations |
+| `lib/haptics/safeHaptics` | Safe haptic feedback |
+| `lib/sizes/sizeNormalizer` | UK size parsing (pints, ml, kg) |
+| `lib/icons/iconMatcher` | Validated MaterialCommunityIcons |
+| `lib/keyboard/safeKeyboardController` | Safe keyboard wrapper (dev build fallback) |
 
 ## Critical Rules
 
 1. **Read `project-context.md` first** - If it exists, always read before implementation
 2. **Use indexes** - Never scan full Convex tables
 3. **Optimistic updates** - For instant UX feedback
-4. **Haptic feedback** - On all user interactions via `@/lib/haptics/safeHaptics.ts`
+4. **Haptic feedback** - On all interactions via `safeHaptics.ts`
 5. **Handle all states** - Loading, error, empty, success
-6. **Zero-Blank Prices** - Every item must show a price estimate
-7. **Validated icons only** - Use `@/lib/icons/iconMatcher.ts` for MaterialCommunityIcons
+6. **Zero-Blank Prices** - Every item must show a price
+7. **Validated icons only** - Use `iconMatcher.ts` for MaterialCommunityIcons
 
-## Active Implementation Plan
+## Feature Development Workflow
 
-**Current:** `size-price-modal-implementation.md` - Size/Price Modal with Store Comparison
+For every new feature, follow this workflow:
 
-**Workflow:**
-1. User tells Claude which phase to implement (e.g., "execute phase 4")
-2. Claude spawns multiple sub-agents for parallel execution
-3. Claude checks off completed items in the plan file
+### 1. Planning Phase
+- Run an **ultrathink session in party mode** (`/party-mode`) with all relevant BMAD agents
+- Discuss architecture, edge cases, and implementation approach
+- Identify affected files and potential risks
 
-## Known Issues
+### 2. Create Implementation Plan
+- Create a new `.md` file in the **project root** named `FEATURE-NAME-IMPLEMENTATION.md`
+- Structure the file with **numbered phases** (e.g., Phase 1, Phase 2, etc.)
+- Each phase should have **checkboxes** for tracking progress:
 
-### E2E Tests (Playwright + React Native Web)
+```markdown
+## Phase 1: Foundation
+- [ ] Task 1 description
+- [ ] Task 2 description
+- [x] Completed task (check when done)
 
-- `AnimatedPressable` clicks don't trigger `onPress` - use `page.evaluate()` JS click
-- `networkidle` never fires (Convex WebSocket) - use custom `waitForConvex()` helper
-- `/scan` tab requires camera - skip in headless tests
+## Phase 2: Core Logic
+- [ ] Task 1 description
+...
+```
 
-### God Components Needing Refactoring
+### 3. Execution
+- User tells Claude which phase to execute (e.g., "execute phase 3")
+- Claude spawns **parallel sub-agents** where possible for efficiency
+- Claude checks off completed items in the plan file as work progresses
+- Run tests after each phase before moving to the next
 
-- `app/(app)/list/[id].tsx` (3000+ lines)
-- `app/(app)/(tabs)/index.tsx` (1800+ lines)
+### 4. Cleanup
+- Delete the implementation `.md` file once feature is complete
+- Update this CLAUDE.md if the feature adds new patterns or conventions
+
+## Testing
+
+**Unit Tests (31 files in `__tests__/`):**
+- Admin, insights, partners, subscriptions, sizes, components
+
+**E2E Tests (16 specs in `e2e/tests/`):**
+- Full user journeys: auth → onboarding → pantry → lists → receipts → insights
+- Playwright with shared Clerk auth state
+- 19 real UK receipt images for scanning tests
+
+**Known E2E quirks:**
+- `AnimatedPressable` clicks need `page.evaluate()` JS click
+- `networkidle` never fires (Convex WebSocket) - use `waitForConvex()` helper
 
 ## Environment Variables
 
@@ -130,12 +211,18 @@ EXPO_PUBLIC_CONVEX_URL=https://...
 
 **Server (Convex Dashboard):**
 ```
-GEMINI_API_KEY=...
-OPENAI_API_KEY=sk_...
-STRIPE_SECRET_KEY=sk_...
-CLERK_SECRET_KEY=sk_...
+GEMINI_API_KEY, OPENAI_API_KEY, STRIPE_SECRET_KEY, CLERK_SECRET_KEY
 ```
 
-## BMAD Workflow (if using)
+## Large Files (Refactoring Candidates)
+
+| File | Lines | Notes |
+|------|-------|-------|
+| insights.tsx | 1,620 | Gamification + trends + achievements |
+| list/[id].tsx | 1,279 | Shopping list detail (improved from 3000+) |
+| (tabs)/index.tsx | 1,084 | Pantry screen (improved from 1800+) |
+| admin.tsx | 1,032 | Admin dashboard |
+
+## BMAD Workflow
 
 Artifacts in `_bmad-output/`. Sprint status in `_bmad-output/implementation-artifacts/sprint-status.yaml`.

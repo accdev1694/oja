@@ -5,17 +5,16 @@ import {
   View,
   Text,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Pressable,
-  ScrollView,
   Image,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeSafeKeyboardAwareScrollView } from "@/lib/keyboard/safeKeyboardController";
 
 import {
   GlassScreen,
@@ -141,68 +140,67 @@ export default function SignInScreen() {
   if (pendingVerification) {
     return (
       <GlassScreen>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        <SafeKeyboardAwareScrollView
           style={styles.flex}
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bottomOffset={20}
         >
-          <View style={[styles.content, { paddingTop: insets.top + spacing.xl }]}>
-            <View style={styles.iconContainer}>
-              <MaterialCommunityIcons name="email-check-outline" size={48} color={colors.accent.primary} />
-            </View>
-            <Text style={styles.title}>Verify your email</Text>
-            <Text style={styles.subtitle}>
-              We sent a verification code to {emailAddress}
-            </Text>
-
-            {error ? (
-              <GlassCard variant="bordered" accentColor={colors.accent.error} style={styles.errorCard}>
-                <Text style={styles.errorText}>{error}</Text>
-              </GlassCard>
-            ) : null}
-
-            <GlassInput
-              placeholder="Verification code"
-              value={code}
-              onChangeText={setCode}
-              keyboardType="number-pad"
-              iconLeft="shield-key-outline"
-            />
-
-            <View style={styles.spacer} />
-
-            <GlassButton
-              variant="primary"
-              size="lg"
-              onPress={onVerifyPress}
-              loading={isLoading}
-              disabled={isLoading || !code}
-            >
-              Verify
-            </GlassButton>
-
-            <Pressable style={styles.backButton} onPress={() => setPendingVerification(false)}>
-              <Text style={styles.linkText}>Back to sign in</Text>
-            </Pressable>
+          <View style={styles.iconContainer}>
+            <MaterialCommunityIcons name="email-check-outline" size={48} color={colors.accent.primary} />
           </View>
-        </KeyboardAvoidingView>
+          <Text style={styles.title}>Verify your email</Text>
+          <Text style={styles.subtitle}>
+            We sent a verification code to {emailAddress}
+          </Text>
+
+          {error ? (
+            <GlassCard variant="bordered" accentColor={colors.accent.error} style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
+            </GlassCard>
+          ) : null}
+
+          <GlassInput
+            placeholder="Verification code"
+            value={code}
+            onChangeText={setCode}
+            keyboardType="number-pad"
+            iconLeft="shield-key-outline"
+          />
+
+          <View style={styles.spacer} />
+
+          <GlassButton
+            variant="primary"
+            size="lg"
+            onPress={onVerifyPress}
+            loading={isLoading}
+            disabled={isLoading || !code}
+          >
+            Verify
+          </GlassButton>
+
+          <Pressable style={styles.backButton} onPress={() => setPendingVerification(false)}>
+            <Text style={styles.linkText}>Back to sign in</Text>
+          </Pressable>
+        </SafeKeyboardAwareScrollView>
       </GlassScreen>
     );
   }
 
   return (
     <GlassScreen>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      <SafeKeyboardAwareScrollView
         style={styles.flex}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + spacing["2xl"], paddingBottom: insets.bottom + spacing.lg },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bottomOffset={20}
       >
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            { paddingTop: insets.top + spacing["2xl"], paddingBottom: insets.bottom + spacing.lg },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
           <Image
             source={require("@/assets/logo.png")}
             style={styles.logo}
@@ -299,8 +297,7 @@ export default function SignInScreen() {
               </Pressable>
             </Link>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </SafeKeyboardAwareScrollView>
     </GlassScreen>
   );
 }
