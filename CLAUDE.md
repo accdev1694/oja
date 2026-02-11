@@ -142,6 +142,12 @@ Requires dev build (native modules).
 | `lib/icons/iconMatcher` | Validated MaterialCommunityIcons |
 | `lib/keyboard/safeKeyboardController` | Safe keyboard wrapper (dev build fallback) |
 
+## Keyboard Awareness Pattern
+
+Use `react-native-keyboard-controller` (NOT Reanimated's `useAnimatedKeyboard`). See `list/[id].tsx` for the reference implementation: dynamic overlap algorithm using `useReanimatedKeyboardAnimation` + `useReanimatedFocusedInput` + `useKeyboardHandler({ onEnd })`. Never call `Dimensions.get()` inside a worklet — capture on JS thread and close over it.
+
+**Windows build:** `android/app/build.gradle` has `buildStagingDirectory = file("C:/b")` to avoid 260-char path limit.
+
 ## Critical Rules
 
 1. **Read `project-context.md` first** - If it exists, always read before implementation
@@ -151,6 +157,8 @@ Requires dev build (native modules).
 5. **Handle all states** - Loading, error, empty, success
 6. **Zero-Blank Prices** - Every item must show a price
 7. **Validated icons only** - Use `iconMatcher.ts` for MaterialCommunityIcons
+8. **NEVER kill node.exe** - `taskkill //F //IM node.exe` kills Claude Code itself. To kill other Node processes (e.g., Metro), use `npx kill-port <port>` or find the specific PID with `netstat -ano | findstr :<port>` and kill only that PID
+9. **No `any` types** - Never use `any` type annotations. Use proper types, generics, or `unknown` with type guards
 
 ## Feature Development Workflow
 

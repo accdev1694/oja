@@ -4,12 +4,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
+  Dimensions,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from "react-native";
-import { FlashList } from "@shopify/flash-list";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -17,7 +16,16 @@ import React, { useState, useCallback, useMemo, useRef } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useSharedValue } from "react-native-reanimated";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  runOnJS,
+} from "react-native-reanimated";
+import {
+  useReanimatedKeyboardAnimation,
+  useReanimatedFocusedInput,
+  useKeyboardHandler,
+} from "react-native-keyboard-controller";
 
 import {
   GlassScreen,
@@ -54,7 +62,6 @@ import {
   EditItemModal,
   ListPickerModal,
 } from "@/components/list/modals";
-import { SizePriceModal, type SizeOption } from "@/components/lists/SizePriceModal";
 import { ListComparisonSummary } from "@/components/lists/ListComparisonSummary";
 import { StoreSwitchPreview, type StoreSwitchItem } from "@/components/lists/StoreSwitchPreview";
 import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
@@ -145,68 +152,10 @@ export default function ListDetailScreen() {
   const [checkingItemEstPrice, setCheckingItemEstPrice] = useState(0);
   const [checkingItemQuantity, setCheckingItemQuantity] = useState(1);
 
-  // Size/Price Modal state (for new add-item flow)
-  const [pendingItem, setPendingItem] = useState<{
-    name: string;
-    category?: string;
-    quantity: number;
-  } | null>(null);
-
   // Store Switch Preview modal state (Phase 5)
   const [switchPreviewVisible, setSwitchPreviewVisible] = useState(false);
   const [switchTargetStore, setSwitchTargetStore] = useState<string | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
-
-  // Fetch sizes for the Size/Price Modal when item is pending
-  const sizesData = useQuery(
-    api.itemVariants.getSizesForStore,
-    pendingItem
-      ? {
-          itemName: pendingItem.name,
-          store: list?.normalizedStoreId ?? "tesco",
-          category: pendingItem.category,
-        }
-      : "skip"
-  );
-
-  // Track if sizes query has been stuck loading too long (potential network issue)
-  const [sizesLoadError, setSizesLoadError] = useState<Error | null>(null);
-  const sizesLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Set up a timeout to show error if loading takes too long
-  React.useEffect(() => {
-    if (pendingItem && sizesData === undefined) {
-      // Clear any existing timeout
-      if (sizesLoadingTimeoutRef.current) {
-        clearTimeout(sizesLoadingTimeoutRef.current);
-      }
-      // Set a timeout - if still loading after 10 seconds, show error state
-      sizesLoadingTimeoutRef.current = setTimeout(() => {
-        setSizesLoadError(new Error("Request timed out"));
-      }, 10000);
-    } else {
-      // Data loaded or modal closed - clear timeout and error
-      if (sizesLoadingTimeoutRef.current) {
-        clearTimeout(sizesLoadingTimeoutRef.current);
-        sizesLoadingTimeoutRef.current = null;
-      }
-      if (sizesData !== undefined) {
-        setSizesLoadError(null);
-      }
-    }
-
-    return () => {
-      if (sizesLoadingTimeoutRef.current) {
-        clearTimeout(sizesLoadingTimeoutRef.current);
-      }
-    };
-  }, [pendingItem, sizesData]);
-
-  // Handler to retry fetching sizes - clears error state which allows re-render with loading
-  // Convex queries auto-retry on reconnection, so this just resets the UI state
-  const handleRetrySizesQuery = useCallback(() => {
-    setSizesLoadError(null);
-  }, []);
 
   // Category filter for items list
   const [listCategoryFilter, setListCategoryFilter] = useState<string | null>(null);
@@ -214,6 +163,16 @@ export default function ListDetailScreen() {
   // Bulk selection state (ref + version counter to avoid full re-renders)
   const selectedItemsRef = useRef(new Set<Id<"listItems">>());
   const [selectionVersion, setSelectionVersion] = useState(0);
+  const flashListRef = useRef<FlashListRef<ListItem>>(null);
+
+  // Keyboard tracking via react-native-keyboard-controller — reports full IME frame including toolbar
+  const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
+  const { input: focusedInput } = useReanimatedFocusedInput();
+
+  const keyboardContainerStyle = useAnimatedStyle(() => ({
+    flex: 1,
+    paddingBottom: keyboardHeight.value,
+  }));
 
   // Progressive disclosure states (Criterion 1: Simplicity)
   const [addFormVisible, setAddFormVisible] = useState(false);
@@ -378,44 +337,6 @@ export default function ListDetailScreen() {
       alert("Error", "Failed to add item");
     }
   }, [addItemMidShop, id, midShopItemName, midShopItemPrice, midShopItemQuantity, alert]);
-
-  // Size/Price Modal handlers (for new add-item flow)
-  const handlePendingAdd = useCallback((name: string, quantity: number, category?: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPendingItem({ name, quantity, category });
-  }, []);
-
-  const closeSizePriceModal = useCallback(() => {
-    setPendingItem(null);
-  }, []);
-
-  const handleAddWithSize = useCallback(async (data: {
-    size: string;
-    price: number;
-    priceSource: "personal" | "crowdsourced" | "ai" | "manual";
-    confidence: number;
-  }) => {
-    if (!pendingItem) return;
-
-    try {
-      await addItem({
-        listId: id,
-        name: pendingItem.name,
-        quantity: pendingItem.quantity,
-        category: pendingItem.category,
-        size: data.size,
-        estimatedPrice: data.price,
-        priceSource: data.priceSource,
-        priceConfidence: data.confidence,
-      });
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setPendingItem(null);
-    } catch (error) {
-      console.error("Failed to add item with size:", error);
-      alert("Error", "Failed to add item");
-    }
-  }, [pendingItem, addItem, id, alert]);
 
   const handleRemoveItem = useCallback(async (itemId: Id<"listItems">, itemName: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -693,6 +614,46 @@ export default function ListDetailScreen() {
     setAddFormVisible((prev) => !prev);
   }
 
+  // Helper to scroll the FlashList by a calculated overlap amount
+  const scrollByOverlap = useCallback((overlap: number) => {
+    const currentOffset = scrollY.value;
+    flashListRef.current?.scrollToOffset({
+      offset: currentOffset + overlap,
+      animated: true,
+    });
+  }, [scrollY]);
+
+  // Capture screen height on JS thread (stable for portrait-locked app)
+  const screenHeight = Dimensions.get("window").height;
+
+  // When keyboard finishes appearing, dynamically scroll to keep focused input visible
+  useKeyboardHandler({
+    onEnd: (e) => {
+      "worklet";
+      if (e.height > 0 && focusedInput.value) {
+        const inputBottom = focusedInput.value.layout.absoluteY + focusedInput.value.layout.height;
+        const keyboardTop = screenHeight - e.height;
+        const VISUAL_BUFFER = 80; // generous space above keyboard for context
+        const overlap = inputBottom - keyboardTop + VISUAL_BUFFER;
+
+        if (overlap > 0) {
+          runOnJS(scrollByOverlap)(overlap);
+        }
+      }
+    },
+  }, [focusedInput, scrollByOverlap]);
+
+  // Simplified pre-scroll: just scroll past the dial when form gets focus
+  const handleAddItemFocus = useCallback(() => {
+    const currentOffset = scrollY.value;
+    if (currentOffset < DIAL_SCROLL_THRESHOLD) {
+      flashListRef.current?.scrollToOffset({
+        offset: DIAL_SCROLL_THRESHOLD,
+        animated: true,
+      });
+    }
+  }, [scrollY, DIAL_SCROLL_THRESHOLD]);
+
   // Partner mode handlers
   const handleApproveItem = useCallback(async (itemId: Id<"listItems">) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -848,7 +809,7 @@ export default function ListDetailScreen() {
         canEdit={canEdit !== false}
         budget={budget}
         onMidShopAdd={handleMidShopFromForm}
-        onPendingAdd={handlePendingAdd}
+        onInputFocus={handleAddItemFocus}
       />
 
       {/* Items section header (only when items exist) */}
@@ -920,7 +881,7 @@ export default function ListDetailScreen() {
       list?.approvalNote, list?.userId, list?.storeName, hasPartners, id, approverName,
       isOwner, canApprove, hasApprovers, canEdit, addFormVisible, items,
       selectionVersion, listCategories, listCategoryFilter,
-      listCategoryCounts, pendingCount, handleMidShopFromForm, handlePendingAdd]);
+      listCategoryCounts, pendingCount, handleMidShopFromForm, handleAddItemFocus]);
 
   // ─── FlashList ListEmptyComponent ────────────────────────────────────────────
   const listEmpty = useMemo(() => (
@@ -1000,10 +961,7 @@ export default function ListDetailScreen() {
       {/* Offline banner - shows when disconnected from Convex */}
       <OfflineBanner topOffset={0} />
 
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+      <Animated.View style={keyboardContainerStyle}>
         {/* Header */}
         <GlassHeader
           title={list.name}
@@ -1068,6 +1026,7 @@ export default function ListDetailScreen() {
         )}
 
         <FlashList
+          ref={flashListRef}
           data={displayItems}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
@@ -1082,7 +1041,7 @@ export default function ListDetailScreen() {
           extraData={selectionVersion}
           drawDistance={250}
         />
-      </KeyboardAvoidingView>
+      </Animated.View>
 
       {/* Edit Budget Modal */}
       <EditBudgetModal
@@ -1158,21 +1117,6 @@ export default function ListDetailScreen() {
         onPick={pickListForItem}
       />
 
-      {/* Size/Price Modal (for add-item flow) */}
-      <SizePriceModal
-        visible={pendingItem !== null}
-        onClose={closeSizePriceModal}
-        itemName={pendingItem?.name ?? ""}
-        storeName={list?.storeName ?? "Tesco"}
-        sizes={(sizesData?.sizes ?? []) as SizeOption[]}
-        defaultSize={sizesData?.defaultSize ?? undefined}
-        onAddItem={handleAddWithSize}
-        isLoading={pendingItem !== null && sizesData === undefined && !sizesLoadError}
-        category={pendingItem?.category}
-        error={sizesLoadError}
-        onRetry={handleRetrySizesQuery}
-      />
-
       {/* Store Switch Preview Modal (Phase 5) */}
       {switchPreviewVisible && switchTargetStore && comparison && (() => {
         const currentStoreInfo = getStoreInfoSafe(comparison.currentStore);
@@ -1220,9 +1164,6 @@ export default function ListDetailScreen() {
 // =============================================================================
 
 const styles = StyleSheet.create({
-  keyboardView: {
-    flex: 1,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
