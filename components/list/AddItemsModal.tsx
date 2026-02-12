@@ -2,26 +2,22 @@ import React, { useState, useCallback, useRef, useMemo, memo } from "react";
 import {
   View,
   Text,
+  TextInput,
   FlatList,
   Pressable,
   ActivityIndicator,
   StyleSheet,
+  ScrollView,
   type ListRenderItemInfo,
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  interpolateColor,
-} from "react-native-reanimated";
 
 import {
   GlassModal,
-  GlassSearchInput,
+  GlassInput,
   GlassButton,
   colors,
   typography,
@@ -29,6 +25,12 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 import { haptic } from "@/lib/haptics/safeHaptics";
+import { useItemSuggestions } from "@/hooks/useItemSuggestions";
+import type { ItemSuggestion } from "@/hooks/useItemSuggestions";
+import { ItemSuggestionsDropdown } from "@/components/list/ItemSuggestionsDropdown";
+import { VariantPicker } from "@/components/items/VariantPicker";
+import type { VariantOption } from "@/components/items/VariantPicker";
+import { useVariantPrefetch } from "@/hooks/useVariantPrefetch";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -50,11 +52,9 @@ interface SelectedItem {
   unit?: string;
   estimatedPrice?: number;
   quantity: number;
-  source: "search" | "pantry";
+  source: "search" | "pantry" | "manual";
   pantryItemId?: Id<"pantryItems">;
 }
-
-type ActiveTab = "search" | "pantry";
 
 interface PantryItemData {
   _id: Id<"pantryItems">;
@@ -67,146 +67,11 @@ interface PantryItemData {
   defaultUnit?: string;
 }
 
-interface SearchSuggestion {
-  name: string;
-  source: "pantry" | "known" | "variant";
-  similarity: number;
-  isExactMatch: boolean;
-  pantryItemId?: string;
-  stockLevel?: string;
-  estimatedPrice?: number;
-  priceSource?: string;
-  storeName?: string;
-  size?: string;
-  unit?: string;
-  category?: string;
-}
+type ActiveView = "suggestions" | "variants" | "pantry";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Row Components (memoized)
+// Pantry Row Component (memoized)
 // ─────────────────────────────────────────────────────────────────────────────
-
-interface SearchRowProps {
-  item: SearchSuggestion;
-  isSelected: boolean;
-  isOnList: boolean;
-  onToggle: (item: SearchSuggestion) => void;
-}
-
-const SearchRow = memo(function SearchRow({
-  item,
-  isSelected,
-  isOnList,
-  onToggle,
-}: SearchRowProps) {
-  const priceText =
-    item.estimatedPrice != null ? `£${item.estimatedPrice.toFixed(2)}` : null;
-
-  const confidenceDots = useMemo(() => {
-    if (!item.priceSource) return null;
-    const filled =
-      item.priceSource === "personal"
-        ? 3
-        : item.priceSource === "crowdsourced"
-          ? 2
-          : 1;
-    return (
-      <View style={styles.confidenceDots}>
-        {[1, 2, 3].map((dot) => (
-          <View
-            key={dot}
-            style={[
-              styles.dot,
-              dot <= filled ? styles.dotFilled : styles.dotEmpty,
-            ]}
-          />
-        ))}
-      </View>
-    );
-  }, [item.priceSource]);
-
-  const subtitle = useMemo(() => {
-    const parts: string[] = [];
-    if (item.size) parts.push(item.size);
-    if (item.storeName) parts.push(item.storeName);
-    return parts.join(" \u00B7 ");
-  }, [item.size, item.storeName]);
-
-  return (
-    <Pressable
-      style={[styles.row, isSelected && styles.rowSelected]}
-      onPress={() => {
-        if (!isOnList) onToggle(item);
-      }}
-      disabled={isOnList}
-    >
-      <View style={styles.rowLeft}>
-        {isOnList ? (
-          <View style={styles.onListBadge}>
-            <MaterialCommunityIcons
-              name="check"
-              size={14}
-              color={colors.text.tertiary}
-            />
-          </View>
-        ) : isSelected ? (
-          <Pressable
-            style={styles.checkButton}
-            onPress={() => onToggle(item)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons
-              name="check-circle"
-              size={22}
-              color={colors.accent.primary}
-            />
-          </Pressable>
-        ) : (
-          <Pressable
-            style={styles.addButton}
-            onPress={() => onToggle(item)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons
-              name="plus-circle-outline"
-              size={22}
-              color={colors.text.secondary}
-            />
-          </Pressable>
-        )}
-        <View style={styles.rowTextContainer}>
-          <Text
-            style={[
-              styles.rowName,
-              isOnList && styles.rowNameOnList,
-            ]}
-            numberOfLines={1}
-          >
-            {item.name}
-          </Text>
-          {(subtitle || isOnList) && (
-            <View style={styles.subtitleRow}>
-              {isOnList && (
-                <Text style={styles.onListText}>(on list)</Text>
-              )}
-              {subtitle ? (
-                <Text style={styles.rowSubtitle} numberOfLines={1}>
-                  {subtitle}
-                </Text>
-              ) : null}
-              {confidenceDots}
-            </View>
-          )}
-        </View>
-      </View>
-      {priceText && (
-        <Text style={[styles.rowPrice, isOnList && styles.rowPriceOnList]}>
-          {priceText}
-        </Text>
-      )}
-    </Pressable>
-  );
-});
 
 interface PantryRowProps {
   item: PantryItemData;
@@ -319,51 +184,69 @@ export function AddItemsModal({
   existingItems,
 }: AddItemsModalProps) {
   // ── State ───────────────────────────────────────────────────────────────────
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<ActiveTab>("search");
+  const [itemName, setItemName] = useState("");
+  const [manualSize, setManualSize] = useState("");
+  const [manualQty, setManualQty] = useState("1");
+  const [manualPrice, setManualPrice] = useState("");
+  const [editingField, setEditingField] = useState<"size" | "qty" | "price" | null>(null);
+  const [activeView, setActiveView] = useState<ActiveView>("suggestions");
+  const [selectedSuggestion, setSelectedSuggestion] = useState<ItemSuggestion | null>(null);
+  const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>(undefined);
   const [selectedItems, setSelectedItems] = useState<Map<string, SelectedItem>>(
     new Map()
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sizeInputRef = useRef<TextInput>(null);
+  const qtyInputRef = useRef<TextInput>(null);
+  const priceInputRef = useRef<TextInput>(null);
 
-  // ── Tab animation ───────────────────────────────────────────────────────────
-  const tabProgress = useSharedValue(0);
-  const tabPillWidth = useSharedValue(0);
+  // ── Item search via useItemSuggestions hook ─────────────────────────────────
+  const {
+    suggestions,
+    isLoading: isSuggestionsLoading,
+    search: searchItems,
+    acceptSuggestion,
+    clear: clearSuggestions,
+  } = useItemSuggestions({ storeName: listStoreName });
 
-  const onTabContainerLayout = useCallback(
-    (e: { nativeEvent: { layout: { width: number } } }) => {
-      tabPillWidth.value = (e.nativeEvent.layout.width - 8) / 2;
-    },
-    [tabPillWidth]
+  const { triggerPrefetch } = useVariantPrefetch({
+    store: listNormalizedStoreId ?? listStoreName ?? "tesco",
+  });
+
+  const priceEstimate = useQuery(
+    api.currentPrices.getEstimate,
+    itemName.trim().length >= 2 ? { itemName: itemName.trim() } : "skip"
   );
 
-  const slidingPillStyle = useAnimatedStyle(() => ({
-    width: tabPillWidth.value,
-    transform: [{ translateX: tabProgress.value * tabPillWidth.value }],
-    backgroundColor: interpolateColor(
-      tabProgress.value,
-      [0, 1],
-      [`${colors.accent.primary}25`, `${colors.accent.primary}25`]
-    ),
-  }));
-
-  // ── Convex queries ──────────────────────────────────────────────────────────
-  const searchArgs = useMemo(() => {
-    if (debouncedQuery.trim().length < 2) return "skip" as const;
+  // ── Variant sizes query (fires when a suggestion is selected) ──────────────
+  const variantArgs = useMemo(() => {
+    if (!selectedSuggestion || !listNormalizedStoreId) return "skip" as const;
     return {
-      searchTerm: debouncedQuery.trim(),
-      ...(listStoreName ? { storeName: listStoreName } : {}),
-      limit: 20,
+      itemName: selectedSuggestion.name,
+      store: listNormalizedStoreId,
+      ...(selectedSuggestion.category ? { category: selectedSuggestion.category } : {}),
     };
-  }, [debouncedQuery, listStoreName]);
+  }, [selectedSuggestion, listNormalizedStoreId]);
 
-  const searchResults = useQuery(api.itemSearch.searchItems, searchArgs);
+  const variantResult = useQuery(api.itemVariants.getSizesForStore, variantArgs);
+  const isVariantsLoading = variantArgs !== "skip" && variantResult === undefined;
+
+  // Map variant results to VariantOption[]
+  const variantOptions: VariantOption[] = useMemo(() => {
+    if (!variantResult?.sizes) return [];
+    return variantResult.sizes.map((s) => ({
+      variantName: `${selectedSuggestion?.name ?? ""} ${s.size}`,
+      size: s.sizeNormalized || s.size,
+      unit: s.unitLabel.replace("/", ""),
+      price: s.price,
+      priceSource: s.source as "personal" | "crowdsourced" | "ai_estimate",
+      isUsual: s.isUsual,
+    }));
+  }, [variantResult, selectedSuggestion]);
+
+  // ── Convex queries & mutations ────────────────────────────────────────────
   const pantryItems = useQuery(api.pantryItems.getByUser);
-
-  // ── Convex mutations ────────────────────────────────────────────────────────
   const addFromPantryBulk = useMutation(api.listItems.addFromPantryBulk);
   const createItem = useMutation(api.listItems.create);
   const addAndSeedPantry = useMutation(api.listItems.addAndSeedPantry);
@@ -378,6 +261,11 @@ export function AddItemsModal({
     }
     return names;
   }, [existingItems]);
+
+  const existingItemNamesList = useMemo(
+    () => existingItems?.map((i) => i.name) ?? [],
+    [existingItems]
+  );
 
   const isItemOnList = useCallback(
     (name: string) => existingItemNames.has(name.toLowerCase().trim()),
@@ -409,7 +297,6 @@ export function AddItemsModal({
     return { outOfStock: out, runningLow: low };
   }, [pantryItems]);
 
-  // Combined pantry list with section headers
   const pantryListData = useMemo(() => {
     type SectionHeader = { type: "header"; title: string; count: number };
     type PantryEntry = { type: "item"; data: PantryItemData };
@@ -417,86 +304,75 @@ export function AddItemsModal({
 
     if (outOfStock.length > 0) {
       entries.push({ type: "header", title: "Out of Stock", count: outOfStock.length });
-      for (const item of outOfStock) {
-        entries.push({ type: "item", data: item });
-      }
+      for (const item of outOfStock) entries.push({ type: "item", data: item });
     }
     if (runningLow.length > 0) {
       entries.push({ type: "header", title: "Running Low", count: runningLow.length });
-      for (const item of runningLow) {
-        entries.push({ type: "item", data: item });
-      }
+      for (const item of runningLow) entries.push({ type: "item", data: item });
     }
 
     return entries;
   }, [outOfStock, runningLow]);
 
-  const searchSuggestions: SearchSuggestion[] = searchResults?.suggestions ?? [];
-  const isSearchLoading = searchArgs !== "skip" && searchResults === undefined;
   const isPantryLoading = pantryItems === undefined;
+  const pantryNeedCount = outOfStock.length + runningLow.length;
+
+  // Whether suggestions dropdown should be visible
+  const showSuggestions =
+    activeView === "suggestions" &&
+    !selectedSuggestion &&
+    itemName.trim().length >= 2;
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
-  const handleSearchChange = useCallback(
+  const handleNameChange = useCallback(
     (text: string) => {
-      setSearchQuery(text);
-
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
+      setItemName(text);
+      if (selectedSuggestion) {
+        setSelectedSuggestion(null);
+        setSelectedVariantName(undefined);
       }
-
-      if (text.trim().length < 2) {
-        setDebouncedQuery("");
-        return;
-      }
-
-      debounceTimerRef.current = setTimeout(() => {
-        setDebouncedQuery(text);
-      }, 300);
+      if (activeView !== "suggestions") setActiveView("suggestions");
+      searchItems(text);
+      triggerPrefetch(text);
     },
-    []
+    [activeView, selectedSuggestion, searchItems, triggerPrefetch]
   );
 
-  const handleTabSwitch = useCallback(
-    (tab: ActiveTab) => {
-      if (tab === activeTab) return;
-      haptic("selection");
-      setActiveTab(tab);
-      tabProgress.value = withSpring(tab === "pantry" ? 1 : 0, {
-        damping: 18,
-        stiffness: 180,
-      });
-    },
-    [activeTab, tabProgress]
-  );
-
-  const toggleSearchItem = useCallback(
-    (item: SearchSuggestion) => {
+  const handleSelectSuggestion = useCallback(
+    (suggestion: ItemSuggestion) => {
       haptic("light");
-      setSelectedItems((prev) => {
-        const next = new Map(prev);
-        const key = item.name.toLowerCase().trim();
+      const name = acceptSuggestion(suggestion);
+      setItemName(name);
+      setSelectedSuggestion(suggestion);
+      setActiveView("variants");
 
-        if (next.has(key)) {
-          next.delete(key);
-        } else {
-          next.set(key, {
-            name: item.name,
-            category: item.category,
-            size: item.size,
-            unit: item.unit,
-            estimatedPrice: item.estimatedPrice,
-            quantity: 1,
-            source: "search",
-            pantryItemId: item.pantryItemId
-              ? (item.pantryItemId as Id<"pantryItems">)
-              : undefined,
-          });
-        }
-        return next;
-      });
+      // Pre-fill fields from suggestion
+      if (suggestion.estimatedPrice != null) {
+        setManualPrice(suggestion.estimatedPrice.toFixed(2));
+      }
+      if (suggestion.size) {
+        setManualSize(suggestion.size);
+      }
     },
-    []
+    [acceptSuggestion]
+  );
+
+  const handleVariantSelect = useCallback(
+    (variantName: string) => {
+      haptic("light");
+      setSelectedVariantName(variantName);
+
+      // Find the selected variant and populate fields
+      const variant = variantOptions.find((v) => v.variantName === variantName);
+      if (variant) {
+        setManualSize(variant.size);
+        if (variant.price != null) {
+          setManualPrice(variant.price.toFixed(2));
+        }
+      }
+    },
+    [variantOptions]
   );
 
   const togglePantryItem = useCallback(
@@ -526,12 +402,21 @@ export function AddItemsModal({
     []
   );
 
-  const handleAddCustomItem = useCallback(() => {
-    const trimmed = searchQuery.trim();
+  const handleAddManualItem = useCallback(() => {
+    const trimmed = itemName.trim();
     if (!trimmed) return;
 
     haptic("light");
     const key = trimmed.toLowerCase();
+    const qty = parseInt(manualQty, 10) || 1;
+    const price = manualPrice
+      ? parseFloat(manualPrice)
+      : (priceEstimate?.cheapest?.price ?? undefined);
+
+    // Find unit from selected variant
+    const selectedVariant = variantOptions.find(
+      (v) => v.variantName === selectedVariantName
+    );
 
     setSelectedItems((prev) => {
       const next = new Map(prev);
@@ -540,25 +425,73 @@ export function AddItemsModal({
       } else {
         next.set(key, {
           name: trimmed,
-          quantity: 1,
-          source: "search",
+          quantity: qty,
+          size: manualSize || undefined,
+          unit: selectedVariant?.unit || undefined,
+          estimatedPrice: price,
+          category: selectedSuggestion?.category,
+          source: "manual",
+          pantryItemId: selectedSuggestion?.pantryItemId
+            ? (selectedSuggestion.pantryItemId as Id<"pantryItems">)
+            : undefined,
         });
       }
       return next;
     });
-  }, [searchQuery]);
+
+    // Reset fields
+    setItemName("");
+    setManualSize("");
+    setManualQty("1");
+    setManualPrice("");
+    setEditingField(null);
+    setSelectedSuggestion(null);
+    setSelectedVariantName(undefined);
+    setActiveView("suggestions");
+    clearSuggestions();
+  }, [
+    itemName,
+    manualSize,
+    manualQty,
+    manualPrice,
+    priceEstimate,
+    selectedSuggestion,
+    selectedVariantName,
+    variantOptions,
+    clearSuggestions,
+  ]);
+
+  const handleFieldToggle = useCallback(
+    (field: "size" | "qty" | "price") => {
+      haptic("light");
+      setEditingField((prev) => (prev === field ? null : field));
+      setTimeout(() => {
+        if (field === "size") sizeInputRef.current?.focus();
+        else if (field === "qty") qtyInputRef.current?.focus();
+        else if (field === "price") priceInputRef.current?.focus();
+      }, 100);
+    },
+    []
+  );
+
+  const handleShowPantry = useCallback(() => {
+    haptic("light");
+    setActiveView("pantry");
+  }, []);
 
   const handleClose = useCallback(() => {
-    setSearchQuery("");
-    setDebouncedQuery("");
+    setItemName("");
+    setManualSize("");
+    setManualQty("1");
+    setManualPrice("");
+    setEditingField(null);
     setSelectedItems(new Map());
-    setActiveTab("search");
-    tabProgress.value = 0;
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
+    setSelectedSuggestion(null);
+    setSelectedVariantName(undefined);
+    setActiveView("suggestions");
+    clearSuggestions();
     onClose();
-  }, [onClose, tabProgress]);
+  }, [onClose, clearSuggestions]);
 
   const handleSubmit = useCallback(async () => {
     if (selectedItems.size === 0) return;
@@ -567,33 +500,27 @@ export function AddItemsModal({
     haptic("medium");
 
     try {
-      // Separate items by type
       const pantryItemIds: Id<"pantryItems">[] = [];
       const searchItemsToCreate: SelectedItem[] = [];
       const customItemsToSeed: SelectedItem[] = [];
 
       for (const [, item] of selectedItems) {
         if (item.pantryItemId) {
-          // Item has a pantry link -- use bulk pantry add
           pantryItemIds.push(item.pantryItemId);
-        } else if (item.source === "search" && !item.category) {
-          // Custom item typed by user (no category = new item) -- seed pantry
+        } else if (
+          (item.source === "search" || item.source === "manual") &&
+          !item.category
+        ) {
           customItemsToSeed.push(item);
         } else {
-          // Known search result without pantry link -- use create
           searchItemsToCreate.push(item);
         }
       }
 
-      // 1. Bulk add pantry items
       if (pantryItemIds.length > 0) {
-        await addFromPantryBulk({
-          listId,
-          pantryItemIds,
-        });
+        await addFromPantryBulk({ listId, pantryItemIds });
       }
 
-      // 2. Add search-result items one by one
       for (const item of searchItemsToCreate) {
         await createItem({
           listId,
@@ -606,7 +533,6 @@ export function AddItemsModal({
         });
       }
 
-      // 3. Add and seed pantry for brand-new custom items
       for (const item of customItemsToSeed) {
         await addAndSeedPantry({
           listId,
@@ -637,21 +563,6 @@ export function AddItemsModal({
   ]);
 
   // ── Render helpers ──────────────────────────────────────────────────────────
-
-  const renderSearchItem = useCallback(
-    ({ item }: ListRenderItemInfo<SearchSuggestion>) => {
-      const key = item.name.toLowerCase().trim();
-      return (
-        <SearchRow
-          item={item}
-          isSelected={selectedItems.has(key)}
-          isOnList={isItemOnList(item.name)}
-          onToggle={toggleSearchItem}
-        />
-      );
-    },
-    [selectedItems, isItemOnList, toggleSearchItem]
-  );
 
   const renderPantryEntry = useCallback(
     ({
@@ -684,12 +595,6 @@ export function AddItemsModal({
     [selectedItems, isItemOnList, togglePantryItem]
   );
 
-  const searchKeyExtractor = useCallback(
-    (item: SearchSuggestion, index: number) =>
-      `search-${item.name}-${item.source}-${index}`,
-    []
-  );
-
   const pantryKeyExtractor = useCallback(
     (
       item:
@@ -704,13 +609,6 @@ export function AddItemsModal({
   );
 
   const selectedCount = selectedItems.size;
-  const hasCustomQuery =
-    searchQuery.trim().length > 0 &&
-    !searchSuggestions.some(
-      (s) => s.name.toLowerCase().trim() === searchQuery.toLowerCase().trim()
-    );
-  const customQueryKey = searchQuery.trim().toLowerCase();
-  const isCustomSelected = selectedItems.has(customQueryKey);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -742,67 +640,202 @@ export function AddItemsModal({
         </Pressable>
       </View>
 
-      {/* Search Input */}
-      <View style={styles.searchContainer}>
-        <GlassSearchInput
-          placeholder="Search items..."
-          value={searchQuery}
-          onChangeText={handleSearchChange}
-          autoFocus
-        />
-      </View>
-
-      {/* Tab Toggle */}
-      <View style={styles.tabContainer} onLayout={onTabContainerLayout}>
-        <Animated.View style={[styles.slidingPill, slidingPillStyle]} />
-        <Pressable
-          style={styles.tab}
-          onPress={() => handleTabSwitch("search")}
-        >
-          <MaterialCommunityIcons
-            name="magnify"
-            size={16}
-            color={
-              activeTab === "search"
-                ? colors.accent.primary
-                : colors.text.tertiary
-            }
-          />
-          <Text
+      {/* Input Section */}
+      <View style={styles.inputSection}>
+        <View style={styles.nameInputRow}>
+          <View style={styles.nameInputWrapper}>
+            <GlassInput
+              placeholder="Item name"
+              value={itemName}
+              onChangeText={handleNameChange}
+              autoFocus
+              size="md"
+            />
+          </View>
+          <Pressable
             style={[
-              styles.tabText,
-              activeTab === "search" && styles.tabTextActive,
+              styles.addIconButton,
+              itemName.trim().length > 0
+                ? styles.addIconButtonActive
+                : styles.addIconButtonDisabled,
             ]}
+            onPress={handleAddManualItem}
+            disabled={itemName.trim().length === 0}
           >
-            Search
+            <MaterialCommunityIcons
+              name="plus"
+              size={22}
+              color={
+                itemName.trim().length > 0
+                  ? colors.text.primary
+                  : colors.text.disabled
+              }
+            />
+          </Pressable>
+        </View>
+
+        {/* Size / Qty / Price buttons */}
+        <View style={styles.fieldButtonRow}>
+          <Pressable
+            style={[
+              styles.fieldButton,
+              editingField === "size" && styles.fieldButtonActive,
+              manualSize.length > 0 && styles.fieldButtonFilled,
+            ]}
+            onPress={() => handleFieldToggle("size")}
+          >
+            <MaterialCommunityIcons
+              name="ruler"
+              size={14}
+              color={
+                manualSize.length > 0
+                  ? colors.accent.primary
+                  : colors.text.secondary
+              }
+            />
+            <Text
+              style={[
+                styles.fieldButtonText,
+                manualSize.length > 0 && styles.fieldButtonTextFilled,
+              ]}
+            >
+              {manualSize || "Size"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[
+              styles.fieldButton,
+              editingField === "qty" && styles.fieldButtonActive,
+              manualQty !== "1" && styles.fieldButtonFilled,
+            ]}
+            onPress={() => handleFieldToggle("qty")}
+          >
+            <MaterialCommunityIcons
+              name="numeric"
+              size={14}
+              color={
+                manualQty !== "1"
+                  ? colors.accent.primary
+                  : colors.text.secondary
+              }
+            />
+            <Text
+              style={[
+                styles.fieldButtonText,
+                manualQty !== "1" && styles.fieldButtonTextFilled,
+              ]}
+            >
+              {manualQty !== "1" ? `x${manualQty}` : "Qty"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[
+              styles.fieldButton,
+              editingField === "price" && styles.fieldButtonActive,
+              manualPrice.length > 0 && styles.fieldButtonFilled,
+            ]}
+            onPress={() => handleFieldToggle("price")}
+          >
+            <MaterialCommunityIcons
+              name="currency-gbp"
+              size={14}
+              color={
+                manualPrice.length > 0
+                  ? colors.accent.primary
+                  : colors.text.secondary
+              }
+            />
+            <Text
+              style={[
+                styles.fieldButtonText,
+                manualPrice.length > 0 && styles.fieldButtonTextFilled,
+              ]}
+            >
+              {manualPrice ? `£${manualPrice}` : "Price"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Inline field editor */}
+        {editingField && (
+          <View style={styles.fieldEditorRow}>
+            {editingField === "size" && (
+              <TextInput
+                ref={sizeInputRef}
+                style={styles.fieldEditorInput}
+                placeholder="e.g. 500ml, 1kg"
+                placeholderTextColor={colors.text.disabled}
+                value={manualSize}
+                onChangeText={setManualSize}
+                onSubmitEditing={() => setEditingField(null)}
+                returnKeyType="done"
+              />
+            )}
+            {editingField === "qty" && (
+              <TextInput
+                ref={qtyInputRef}
+                style={styles.fieldEditorInput}
+                placeholder="Quantity"
+                placeholderTextColor={colors.text.disabled}
+                value={manualQty}
+                onChangeText={setManualQty}
+                keyboardType="number-pad"
+                onSubmitEditing={() => setEditingField(null)}
+                returnKeyType="done"
+              />
+            )}
+            {editingField === "price" && (
+              <TextInput
+                ref={priceInputRef}
+                style={styles.fieldEditorInput}
+                placeholder="Estimated price"
+                placeholderTextColor={colors.text.disabled}
+                value={manualPrice}
+                onChangeText={setManualPrice}
+                keyboardType="decimal-pad"
+                onSubmitEditing={() => setEditingField(null)}
+                returnKeyType="done"
+              />
+            )}
+          </View>
+        )}
+
+        {!manualPrice && priceEstimate?.cheapest && (
+          <Text style={styles.priceHint}>
+            ~£{priceEstimate.cheapest.price.toFixed(2)} est.
           </Text>
-        </Pressable>
+        )}
+
+        {/* Add from Pantry button */}
         <Pressable
-          style={styles.tab}
-          onPress={() => handleTabSwitch("pantry")}
+          style={[
+            styles.pantryButton,
+            activeView === "pantry" && styles.pantryButtonActive,
+          ]}
+          onPress={handleShowPantry}
         >
           <MaterialCommunityIcons
             name="fridge-outline"
-            size={16}
+            size={18}
             color={
-              activeTab === "pantry"
+              activeView === "pantry"
                 ? colors.accent.primary
-                : colors.text.tertiary
+                : colors.text.secondary
             }
           />
           <Text
             style={[
-              styles.tabText,
-              activeTab === "pantry" && styles.tabTextActive,
+              styles.pantryButtonText,
+              activeView === "pantry" && styles.pantryButtonTextActive,
             ]}
           >
-            Pantry
+            Add from Pantry
           </Text>
-          {outOfStock.length + runningLow.length > 0 && (
-            <View style={styles.tabBadge}>
-              <Text style={styles.tabBadgeText}>
-                {outOfStock.length + runningLow.length}
-              </Text>
+          {pantryNeedCount > 0 && (
+            <View style={styles.pantryBadge}>
+              <Text style={styles.pantryBadgeText}>{pantryNeedCount}</Text>
             </View>
           )}
         </Pressable>
@@ -810,89 +843,12 @@ export function AddItemsModal({
 
       {/* Content Area */}
       <View style={styles.contentArea}>
-        {activeTab === "search" ? (
-          <>
-            {isSearchLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator
-                  size="small"
-                  color={colors.accent.primary}
-                />
-                <Text style={styles.loadingText}>Searching...</Text>
-              </View>
-            ) : debouncedQuery.trim().length < 2 ? (
-              <View style={styles.emptyContainer}>
-                <MaterialCommunityIcons
-                  name="magnify"
-                  size={48}
-                  color={colors.text.disabled}
-                />
-                <Text style={styles.emptyText}>
-                  Type at least 2 characters to search
-                </Text>
-              </View>
-            ) : searchSuggestions.length === 0 && !hasCustomQuery ? (
-              <View style={styles.emptyContainer}>
-                <MaterialCommunityIcons
-                  name="magnify-close"
-                  size={48}
-                  color={colors.text.disabled}
-                />
-                <Text style={styles.emptyText}>No results found</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={searchSuggestions}
-                renderItem={renderSearchItem}
-                keyExtractor={searchKeyExtractor}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                ListFooterComponent={
-                  hasCustomQuery ? (
-                    <Pressable
-                      style={[
-                        styles.row,
-                        styles.customItemRow,
-                        isCustomSelected && styles.rowSelected,
-                      ]}
-                      onPress={handleAddCustomItem}
-                    >
-                      <View style={styles.rowLeft}>
-                        <View style={styles.customItemIcon}>
-                          <MaterialCommunityIcons
-                            name={isCustomSelected ? "check" : "plus"}
-                            size={16}
-                            color={
-                              isCustomSelected
-                                ? colors.accent.primary
-                                : colors.text.primary
-                            }
-                          />
-                        </View>
-                        <View style={styles.rowTextContainer}>
-                          <Text style={styles.rowName}>
-                            {`Add "${searchQuery.trim()}"`}
-                          </Text>
-                          <Text style={styles.rowSubtitle}>
-                            Not found? Add as new item
-                          </Text>
-                        </View>
-                      </View>
-                    </Pressable>
-                  ) : null
-                }
-              />
-            )}
-          </>
-        ) : (
+        {activeView === "pantry" ? (
+          /* ── Pantry view ─────────────────────────────────── */
           <>
             {isPantryLoading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator
-                  size="small"
-                  color={colors.accent.primary}
-                />
+                <ActivityIndicator size="small" color={colors.accent.primary} />
                 <Text style={styles.loadingText}>Loading pantry...</Text>
               </View>
             ) : pantryListData.length === 0 ? (
@@ -902,12 +858,9 @@ export function AddItemsModal({
                   size={48}
                   color={colors.text.disabled}
                 />
-                <Text style={styles.emptyText}>
-                  No items need restocking
-                </Text>
+                <Text style={styles.emptyText}>No items need restocking</Text>
                 <Text style={styles.emptySubtext}>
-                  Items marked as &quot;Out&quot; or &quot;Low&quot; in your pantry will appear
-                  here
+                  Items marked as &quot;Out&quot; or &quot;Low&quot; in your pantry will appear here
                 </Text>
               </View>
             ) : (
@@ -919,6 +872,73 @@ export function AddItemsModal({
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
               />
+            )}
+          </>
+        ) : activeView === "variants" && selectedSuggestion ? (
+          /* ── Variant picker view ────────────────────────── */
+          <ScrollView
+            style={styles.variantScrollView}
+            contentContainerStyle={styles.variantScrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {isVariantsLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={colors.accent.primary} />
+                <Text style={styles.loadingText}>Loading sizes...</Text>
+              </View>
+            ) : variantOptions.length === 0 ? (
+              <View style={styles.variantEmptyContainer}>
+                <MaterialCommunityIcons
+                  name="information-outline"
+                  size={24}
+                  color={colors.text.tertiary}
+                />
+                <Text style={styles.variantEmptyText}>
+                  No size options found for {selectedSuggestion.name}
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  You can set the size manually using the buttons above
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.variantSectionTitle}>Pick a size</Text>
+                <VariantPicker
+                  baseItem={selectedSuggestion.name}
+                  variants={variantOptions}
+                  selectedVariant={selectedVariantName}
+                  onSelect={handleVariantSelect}
+                  showPricePerUnit
+                  isLoading={isVariantsLoading}
+                />
+              </>
+            )}
+          </ScrollView>
+        ) : (
+          /* ── Suggestions view (default) ─────────────────── */
+          <>
+            {showSuggestions ? (
+              <View style={styles.suggestionsContainer}>
+                <ItemSuggestionsDropdown
+                  suggestions={suggestions}
+                  isLoading={isSuggestionsLoading}
+                  onSelect={handleSelectSuggestion}
+                  onDismiss={() => {}}
+                  visible
+                  existingItemNames={existingItemNamesList}
+                />
+              </View>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <MaterialCommunityIcons
+                  name="text-box-search-outline"
+                  size={48}
+                  color={colors.text.disabled}
+                />
+                <Text style={styles.emptyText}>
+                  Type an item name to search or add manually
+                </Text>
+              </View>
             )}
           </>
         )}
@@ -979,49 +999,119 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // Search
-  searchContainer: {
+  // Input section
+  inputSection: {
     paddingHorizontal: spacing.xl,
-    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+    gap: spacing.sm,
   },
-
-  // Tab toggle (matches lists.tsx pattern)
-  tabContainer: {
+  nameInputRow: {
     flexDirection: "row",
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.md,
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  nameInputWrapper: {
+    flex: 1,
+  },
+  addIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  addIconButtonActive: {
+    backgroundColor: colors.accent.primary,
+  },
+  addIconButtonDisabled: {
     backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.lg,
-    padding: 4,
     borderWidth: 1,
     borderColor: colors.glass.border,
-    overflow: "hidden",
   },
-  tab: {
+
+  // Field buttons row (Size / Qty / Price)
+  fieldButtonRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  fieldButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.xs,
     paddingVertical: spacing.sm,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
     borderRadius: borderRadius.md,
   },
-  slidingPill: {
-    position: "absolute",
-    top: 4,
-    bottom: 4,
-    left: 4,
-    borderRadius: borderRadius.md,
+  fieldButtonActive: {
+    borderColor: colors.accent.primary,
+    backgroundColor: "rgba(0, 212, 170, 0.08)",
   },
-  tabText: {
+  fieldButtonFilled: {
+    borderColor: "rgba(0, 212, 170, 0.3)",
+  },
+  fieldButtonText: {
     ...typography.labelMedium,
-    color: colors.text.tertiary,
+    color: colors.text.secondary,
   },
-  tabTextActive: {
+  fieldButtonTextFilled: {
     color: colors.accent.primary,
     fontWeight: "600",
   },
-  tabBadge: {
+
+  // Inline field editor
+  fieldEditorRow: {
+    flexDirection: "row",
+  },
+  fieldEditorInput: {
+    flex: 1,
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  priceHint: {
+    ...typography.bodySmall,
+    color: colors.accent.primary,
+    marginTop: 4,
+    opacity: 0.8,
+    paddingHorizontal: spacing.xl,
+  },
+
+  // Add from Pantry button
+  pantryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    borderRadius: borderRadius.md,
+  },
+  pantryButtonActive: {
+    borderColor: colors.accent.primary,
+    backgroundColor: "rgba(0, 212, 170, 0.08)",
+  },
+  pantryButtonText: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+  },
+  pantryButtonTextActive: {
+    color: colors.accent.primary,
+    fontWeight: "600",
+  },
+  pantryBadge: {
     backgroundColor: colors.accent.primary,
     borderRadius: borderRadius.sm,
     minWidth: 20,
@@ -1030,7 +1120,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: spacing.sm,
   },
-  tabBadgeText: {
+  pantryBadgeText: {
     ...typography.labelSmall,
     color: colors.text.primary,
     fontWeight: "700",
@@ -1045,6 +1135,39 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
+  },
+
+  // Suggestions container
+  suggestionsContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    flex: 1,
+  },
+
+  // Variant picker
+  variantScrollView: {
+    flex: 1,
+  },
+  variantScrollContent: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+  },
+  variantSectionTitle: {
+    ...typography.labelLarge,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+  variantEmptyContainer: {
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing["3xl"],
+    paddingHorizontal: spacing.xl,
+  },
+  variantEmptyText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    textAlign: "center",
   },
 
   // Loading
@@ -1149,9 +1272,6 @@ const styles = StyleSheet.create({
     color: colors.accent.primary,
     fontWeight: "700",
   },
-  rowPriceOnList: {
-    color: colors.text.disabled,
-  },
   rowSubtitle: {
     ...typography.bodySmall,
     color: colors.text.tertiary,
@@ -1200,38 +1320,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: borderRadius.sm,
     backgroundColor: colors.glass.backgroundActive,
-  },
-
-  // Confidence dots
-  confidenceDots: {
-    flexDirection: "row",
-    gap: 3,
-    marginLeft: spacing.xs,
-  },
-  dot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-  },
-  dotFilled: {
-    backgroundColor: colors.accent.primary,
-  },
-  dotEmpty: {
-    backgroundColor: colors.glass.backgroundActive,
-  },
-
-  // Custom item (add new) row
-  customItemRow: {
-    borderStyle: "dashed" as unknown as undefined,
-    opacity: 0.9,
-  },
-  customItemIcon: {
-    width: 28,
-    height: 28,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: borderRadius.full,
-    backgroundColor: `${colors.accent.primary}20`,
   },
 
   // Bottom bar
