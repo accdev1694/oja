@@ -54,7 +54,7 @@ export interface StorePriceGridProps {
   /** Item name for display and accessibility */
   itemName: string;
   /** Available size variants */
-  variants: Array<{ size: string; unit: string }>;
+  variants: { size: string; unit: string }[];
   /** Price data: storeId -> size -> price (null if unavailable) */
   priceData: Record<string, Record<string, number | null>>;
   /** Callback when a store row is selected */
@@ -147,7 +147,7 @@ function getUnitAbbreviation(unit: string): string {
  */
 function analyzePrices(
   priceData: Record<string, Record<string, number | null>>,
-  variants: Array<{ size: string; unit: string }>
+  variants: { size: string; unit: string }[]
 ): PriceAnalysis {
   const cheapestPerSize: Record<string, { storeId: string; price: number }> = {};
   let bestValue: PriceAnalysis["bestValue"] = null;

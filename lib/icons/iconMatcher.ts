@@ -167,7 +167,7 @@ export function getIconForItem(
   const cat = (category || "other").toLowerCase().trim();
 
   // Simple keyword matching for common items
-  const keywordMatches: Array<[string, ValidIcon]> = [
+  const keywordMatches: [string, ValidIcon][] = [
     ["chicken", "food-drumstick"],
     ["turkey", "food-drumstick"],
     ["beef", "cow"],

@@ -17,13 +17,15 @@ import {
 
 // Try to import the native module, fallback to null if unavailable
 let NativeKeyboardProvider: React.ComponentType<{ children: React.ReactNode }> | null = null;
-let NativeKeyboardAwareScrollView: React.ComponentType<any> | null = null;
+let NativeKeyboardAwareScrollView: React.ComponentType<Record<string, unknown>> | null = null;
+let NativeKeyboardAvoidingView: React.ComponentType<Record<string, unknown>> | null = null;
 
 try {
   // Dynamic require to catch linking errors
   const keyboardController = require("react-native-keyboard-controller");
   NativeKeyboardProvider = keyboardController.KeyboardProvider;
   NativeKeyboardAwareScrollView = keyboardController.KeyboardAwareScrollView;
+  NativeKeyboardAvoidingView = keyboardController.KeyboardAvoidingView;
 } catch {
   // Native module not available (e.g., Expo Go)
   console.log("[Keyboard] react-native-keyboard-controller not available, using fallbacks");
@@ -84,11 +86,11 @@ export function SafeKeyboardAwareScrollView({
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior="padding"
       keyboardVerticalOffset={bottomOffset}
     >
       <ScrollView
-        style={style}
+        style={[{ flex: 1 }, style]}
         contentContainerStyle={contentContainerStyle}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -96,6 +98,50 @@ export function SafeKeyboardAwareScrollView({
       >
         {children}
       </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+/**
+ * Safe KeyboardAvoidingView - uses react-native-keyboard-controller's version
+ * (works with edge-to-edge mode) when available, falls back to RN's built-in.
+ */
+export interface SafeKeyboardAvoidingViewProps extends ViewProps {
+  style?: any;
+  behavior?: "padding" | "height" | "position";
+  keyboardVerticalOffset?: number;
+  children: React.ReactNode;
+}
+
+export function SafeKeyboardAvoidingView({
+  children,
+  style,
+  behavior = "padding",
+  keyboardVerticalOffset,
+  ...rest
+}: SafeKeyboardAvoidingViewProps) {
+  if (NativeKeyboardAvoidingView) {
+    return (
+      <NativeKeyboardAvoidingView
+        style={style}
+        behavior={behavior}
+        keyboardVerticalOffset={keyboardVerticalOffset}
+        {...rest}
+      >
+        {children}
+      </NativeKeyboardAvoidingView>
+    );
+  }
+
+  // Fallback: RN's built-in KeyboardAvoidingView
+  return (
+    <KeyboardAvoidingView
+      style={style}
+      behavior={behavior}
+      keyboardVerticalOffset={keyboardVerticalOffset}
+      {...rest}
+    >
+      {children}
     </KeyboardAvoidingView>
   );
 }

@@ -18,6 +18,12 @@ import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type {
+  ConversationMessage,
+  PendingAction,
+  VoiceAssistantState,
+} from "@/lib/voice/voiceTypes";
+import type { Id } from "@/convex/_generated/dataModel";
 
 // ── Safe dynamic import of expo-av ─────────────────────────────────────
 // The native module crashes if not in the dev build, so we try/catch.
@@ -33,12 +39,6 @@ try {
 
 const AUDIO_AVAILABLE = AudioModule != null;
 console.log("[Voice] expo-av available:", AUDIO_AVAILABLE);
-import type {
-  ConversationMessage,
-  PendingAction,
-  VoiceAssistantState,
-} from "@/lib/voice/voiceTypes";
-import type { Id } from "@/convex/_generated/dataModel";
 
 // ── Safe dynamic import of expo-speech-recognition ──────────────────
 // The native module crashes in Expo Go, so we try/catch the require.

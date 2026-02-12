@@ -39,6 +39,9 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { animations } from "@/lib/design/glassTokens";
 
+// Need to import withRepeat
+import { withRepeat } from "react-native-reanimated";
+
 // =============================================================================
 // ANIMATED PRESSABLE COMPONENT
 // =============================================================================
@@ -329,9 +332,6 @@ export function ShimmerEffect({
     </Animated.View>
   );
 }
-
-// Need to import withRepeat
-import { withRepeat } from "react-native-reanimated";
 
 // =============================================================================
 // PULSE ANIMATION COMPONENT

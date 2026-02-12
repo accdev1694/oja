@@ -41,11 +41,13 @@ export const StockFilterModal = React.memo(function StockFilterModal({
     <GlassModal
       visible={visible}
       onClose={onClose}
-      maxWidth={340}
+      maxWidth={380}
       contentStyle={styles.filterModal}
     >
       <Text style={styles.filterTitle}>Filter by Stock Level</Text>
-      <Text style={styles.filterSubtitle}>Select which levels to show</Text>
+      <Text style={styles.filterSubtitle}>
+        {stockFilters.size === 0 ? "Showing all items" : `Showing ${stockFilters.size} level${stockFilters.size !== 1 ? "s" : ""}`}
+      </Text>
 
       <View style={styles.filterOptions}>
         {STOCK_LEVELS.map((option) => (
@@ -72,9 +74,11 @@ export const StockFilterModal = React.memo(function StockFilterModal({
       </View>
 
       <View style={styles.filterActions}>
-        <GlassButton variant="ghost" size="md" onPress={onShowAll}>
-          Show All
-        </GlassButton>
+        {stockFilters.size > 0 && (
+          <GlassButton variant="ghost" size="md" onPress={onShowAll}>
+            Clear
+          </GlassButton>
+        )}
         <GlassButton variant="primary" size="md" onPress={onClose}>
           Done
         </GlassButton>
@@ -101,16 +105,19 @@ const styles = StyleSheet.create({
   },
   filterOptions: {
     gap: spacing.md,
+    width: "100%",
   },
   filterOption: {
     flexDirection: "row",
     alignItems: "center",
     padding: spacing.md,
+    paddingHorizontal: spacing.lg,
     backgroundColor: colors.glass.background,
     borderRadius: borderRadius.md,
     borderWidth: 2,
     borderColor: "transparent",
     gap: spacing.md,
+    width: "100%",
   },
   filterOptionSelected: {
     backgroundColor: "rgba(255, 255, 255, 0.08)",

@@ -106,7 +106,7 @@ const PRIORITY_CONFIG = {
   },
 };
 
-const PRIORITY_ORDER: Array<"must-have" | "should-have" | "nice-to-have"> = [
+const PRIORITY_ORDER: ("must-have" | "should-have" | "nice-to-have")[] = [
   "must-have",
   "should-have",
   "nice-to-have",
