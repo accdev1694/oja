@@ -161,9 +161,8 @@ export default function PantryScreen() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [filterVisible, setFilterVisible] = useState(false);
-  const [stockFilters, setStockFilters] = useState<Set<StockLevel>>(
-    new Set<StockLevel>(["stocked", "low", "out"])
-  );
+  // Amazon-style: empty = show all, selected = show only those
+  const [stockFilters, setStockFilters] = useState<Set<StockLevel>>(new Set());
 
   // Add item modal
   const [addModalVisible, setAddModalVisible] = useState(false);
@@ -243,15 +242,20 @@ export default function PantryScreen() {
     };
   });
 
-  // Filter items based on view mode, search, stock level
+  // Filter items based on view mode, search, stock level (Amazon-style)
   const filteredItems = useMemo(() => {
     if (!items) return [];
 
     return items.filter((item) => {
+      const level = item.stockLevel as StockLevel;
       if (viewMode === "attention") {
-        if (item.stockLevel !== "low" && item.stockLevel !== "out") return false;
+        // Attention mode: only low/out items
+        if (level !== "low" && level !== "out") return false;
+        // If filters selected, also apply them within attention items
+        if (stockFilters.size > 0 && !stockFilters.has(level)) return false;
       } else {
-        if (!stockFilters.has(item.stockLevel as StockLevel)) return false;
+        // Amazon-style: empty = show all, otherwise show only selected
+        if (stockFilters.size > 0 && !stockFilters.has(level)) return false;
       }
       if (searchQuery.trim()) {
         return item.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -275,7 +279,8 @@ export default function PantryScreen() {
     }));
   }, [filteredItems]);
 
-  const activeFilterCount = useMemo(() => 5 - stockFilters.size, [stockFilters]);
+  // Amazon-style: show how many filters are selected (0 = show all, no badge)
+  const activeFilterCount = useMemo(() => stockFilters.size, [stockFilters]);
 
   // Step 1.1: Memoize hasExpandedCategory (was computed twice inline)
   const hasExpandedCategory = useMemo(
@@ -300,8 +305,9 @@ export default function PantryScreen() {
     });
   }, []);
 
+  // Amazon-style: clear filters = show all
   const showAllFilters = useCallback(() => {
-    setStockFilters(new Set<StockLevel>(["stocked", "low", "out"]));
+    setStockFilters(new Set<StockLevel>());
     impactAsync(ImpactFeedbackStyle.Light);
   }, []);
 

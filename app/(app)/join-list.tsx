@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { useState } from "react";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { SafeSafeKeyboardAwareScrollView } from "@/lib/keyboard/safeKeyboardController";
+import { SafeKeyboardAwareScrollView } from "@/lib/keyboard/safeKeyboardController";
 import {
   GlassScreen,
   GlassCard,

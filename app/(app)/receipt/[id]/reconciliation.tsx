@@ -45,13 +45,13 @@ export default function ReconciliationScreen() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [restockResult, setRestockResult] = useState<{
     restockedCount: number;
-    fuzzyMatches: Array<{
+    fuzzyMatches: {
       receiptItemName: string;
       pantryItemName: string;
       pantryItemId: string;
       similarity: number;
-    }>;
-    itemsToAdd: Array<{ name: string; category?: string }>;
+    }[];
+    itemsToAdd: { name: string; category?: string }[];
   } | null>(null);
 
   if (receipt === undefined || (listId && (list === undefined || listItems === undefined))) {

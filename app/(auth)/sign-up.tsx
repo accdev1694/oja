@@ -14,7 +14,7 @@ import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { SafeSafeKeyboardAwareScrollView } from "@/lib/keyboard/safeKeyboardController";
+import { SafeKeyboardAwareScrollView } from "@/lib/keyboard/safeKeyboardController";
 
 import {
   GlassScreen,

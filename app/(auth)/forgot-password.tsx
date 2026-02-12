@@ -10,7 +10,7 @@ import {
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { SafeSafeKeyboardAwareScrollView } from "@/lib/keyboard/safeKeyboardController";
+import { SafeKeyboardAwareScrollView } from "@/lib/keyboard/safeKeyboardController";
 
 import {
   GlassScreen,
