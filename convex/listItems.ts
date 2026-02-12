@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getUserListPermissions } from "./partners";
+import { resolveVariantWithPrice } from "./lib/priceResolver";
+import { getIconForItem } from "./iconMapping";
+import { canAddPantryItem } from "./lib/featureGating";
 
 /**
  * Helper to get price estimate from currentPrices table
@@ -208,7 +211,6 @@ async function recalculateListTotal(
   let actualTotal = 0;
 
   for (const item of items) {
-    const price = item.actualPrice ?? item.estimatedPrice ?? 0;
     const quantity = item.quantity ?? 1;
     if (item.actualPrice !== undefined) {
       actualTotal += item.actualPrice * quantity;
@@ -654,6 +656,217 @@ export const addItemMidShop = mutation({
     }
 
     throw new Error("Invalid source");
+  },
+});
+
+/**
+ * Add multiple pantry items to a shopping list in bulk.
+ *
+ * For each pantry item, resolves the best variant and price using:
+ *   Priority 1: Highest commonality variant at store -> price cascade
+ *   Priority 2: Cheapest variant -> price cascade
+ *   Priority 3: Pantry item defaultSize + defaultUnit -> lastPrice
+ *   Priority 4: Name only, no size, AI estimate or null price
+ *
+ * Each created listItem links back to its pantryItemId.
+ */
+export const addFromPantryBulk = mutation({
+  args: {
+    listId: v.id("shoppingLists"),
+    pantryItemIds: v.array(v.id("pantryItems")),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const list = await ctx.db.get(args.listId);
+    if (!list) {
+      throw new Error("List not found");
+    }
+
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canEdit) {
+      throw new Error("You don't have permission to add items to this list");
+    }
+
+    const normalizedStoreId = list.normalizedStoreId ?? undefined;
+    const now = Date.now();
+    const itemIds: string[] = [];
+
+    for (const pantryItemId of args.pantryItemIds) {
+      const pantryItem = await ctx.db.get(pantryItemId);
+      if (!pantryItem || pantryItem.userId !== user._id) continue;
+
+      let size: string | undefined;
+      let unit: string | undefined;
+      let estimatedPrice: number | undefined;
+      let priceSource: "personal" | "crowdsourced" | "ai" | "manual" | undefined;
+      let priceConfidence: number | undefined;
+
+      // Priority 1 & 2: Try variant resolution (handles store-aware pricing)
+      const variantResult = await resolveVariantWithPrice(
+        ctx,
+        pantryItem.name,
+        normalizedStoreId,
+        user._id,
+      );
+
+      if (variantResult && variantResult.price !== null) {
+        size = variantResult.variant.size;
+        unit = variantResult.variant.unit;
+        estimatedPrice = variantResult.price;
+        priceSource = variantResult.priceSource;
+        priceConfidence = variantResult.confidence;
+      } else if (variantResult) {
+        // Variant found but no price -- use variant size anyway
+        size = variantResult.variant.size;
+        unit = variantResult.variant.unit;
+      }
+
+      // Priority 3: Fall back to pantry item defaults
+      if (!size && pantryItem.defaultSize) {
+        size = pantryItem.defaultSize;
+        unit = pantryItem.defaultUnit;
+        if (pantryItem.lastPrice != null) {
+          estimatedPrice = pantryItem.lastPrice;
+          priceSource = "personal";
+          priceConfidence = 0.8;
+        }
+      }
+
+      // Priority 4: Name-only fallback -- try currentPrices or leave undefined
+      if (estimatedPrice === undefined) {
+        const fallbackPrice = await getPriceFromCurrentPrices(ctx, pantryItem.name);
+        if (fallbackPrice !== undefined) {
+          estimatedPrice = fallbackPrice;
+          priceSource = "crowdsourced";
+          priceConfidence = 0.6;
+        }
+      }
+
+      const itemId = await ctx.db.insert("listItems", {
+        listId: args.listId,
+        userId: user._id,
+        pantryItemId,
+        name: pantryItem.name,
+        category: pantryItem.category,
+        quantity: 1,
+        size,
+        unit,
+        estimatedPrice,
+        priceSource,
+        priceConfidence,
+        priority: "should-have",
+        isChecked: false,
+        autoAdded: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      itemIds.push(itemId);
+    }
+
+    return { count: itemIds.length, itemIds };
+  },
+});
+
+/**
+ * Add a new item to a shopping list AND seed a corresponding pantry item.
+ *
+ * Used when the user types a brand-new item that doesn't exist in their pantry.
+ * Creates both:
+ *   1. A pantryItem with stockLevel: "out" (they need it, so it's out of stock)
+ *   2. A listItem linked to the new pantryItem
+ *
+ * This ensures the pantry stays in sync with what the user shops for.
+ */
+export const addAndSeedPantry = mutation({
+  args: {
+    listId: v.id("shoppingLists"),
+    name: v.string(),
+    category: v.string(),
+    size: v.optional(v.string()),
+    unit: v.optional(v.string()),
+    estimatedPrice: v.optional(v.number()),
+    quantity: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const list = await ctx.db.get(args.listId);
+    if (!list) {
+      throw new Error("List not found");
+    }
+
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canEdit) {
+      throw new Error("You don't have permission to add items to this list");
+    }
+
+    // Check pantry item limit for free tier
+    const pantryAccess = await canAddPantryItem(ctx, user._id);
+    if (!pantryAccess.allowed) {
+      throw new Error(pantryAccess.reason ?? "Pantry item limit reached");
+    }
+
+    const now = Date.now();
+
+    // 1. Create pantry item
+    const icon = getIconForItem(args.name, args.category);
+    const pantryItemId = await ctx.db.insert("pantryItems", {
+      userId: user._id,
+      name: args.name,
+      category: args.category,
+      icon,
+      stockLevel: "out",
+      autoAddToList: false,
+      ...(args.size ? { defaultSize: args.size } : {}),
+      ...(args.unit ? { defaultUnit: args.unit } : {}),
+      ...(args.estimatedPrice != null ? {
+        lastPrice: args.estimatedPrice,
+        priceSource: "user" as const,
+      } : {}),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 2. Create list item linked to the new pantry item
+    const listItemId = await ctx.db.insert("listItems", {
+      listId: args.listId,
+      userId: user._id,
+      pantryItemId,
+      name: args.name,
+      category: args.category,
+      quantity: args.quantity ?? 1,
+      size: args.size,
+      unit: args.unit,
+      estimatedPrice: args.estimatedPrice,
+      priceSource: args.estimatedPrice != null ? "manual" : undefined,
+      priority: "should-have",
+      isChecked: false,
+      autoAdded: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return { listItemId, pantryItemId };
   },
 });
 

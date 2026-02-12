@@ -6,6 +6,7 @@ import {
   calculatePricePerUnit,
   getUnitLabel,
 } from "./lib/sizeUtils";
+import { resolvePrice } from "./lib/priceResolver";
 
 /**
  * Get all variants for a base item (e.g., "milk" → [1pt, 2pt, 4pt]).
@@ -50,14 +51,14 @@ export const getWithPrices = query({
     if (variants.length === 0) return [];
 
     // Layer 1: Personal priceHistory (if userId provided)
-    let personalHistory: Array<{
+    let personalHistory: {
       normalizedName: string;
       size?: string;
       unit?: string;
       unitPrice: number;
       storeName: string;
       purchaseDate: number;
-    }> = [];
+    }[] = [];
 
     if (args.userId) {
       personalHistory = await ctx.db
@@ -201,90 +202,45 @@ export const getSizesForStore = query({
       };
     }
 
-    // Get personal price history if user exists
-    let personalHistory: Array<{
-      normalizedName: string;
-      size?: string;
-      unit?: string;
-      unitPrice: number;
-      storeName: string;
-      purchaseDate: number;
-    }> = [];
-
+    // Find user's usual size (most frequently purchased at this store)
+    let usualSize: string | undefined;
     if (user) {
-      personalHistory = await ctx.db
+      const personalHistory = await ctx.db
         .query("priceHistory")
         .withIndex("by_user_item", (q) =>
           q.eq("userId", user!._id).eq("normalizedName", normalizedItem)
         )
         .collect();
+
+      const usualSizeAtStore = personalHistory
+        .filter((h) => h.storeName.toLowerCase() === normalizedStore)
+        .reduce((acc, h) => {
+          const size = h.size ?? "";
+          acc[size] = (acc[size] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+      usualSize = Object.entries(usualSizeAtStore)
+        .sort((a, b) => b[1] - a[1])[0]?.[0];
     }
 
-    // Find user's usual size (most frequently purchased at this store)
-    const usualSizeAtStore = personalHistory
-      .filter((h) => h.storeName.toLowerCase() === normalizedStore)
-      .reduce((acc, h) => {
-        const size = h.size ?? "";
-        acc[size] = (acc[size] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-    const usualSize = Object.entries(usualSizeAtStore)
-      .sort((a, b) => b[1] - a[1])[0]?.[0];
-
-    // Process each variant with price cascade
+    // Process each variant with shared price cascade
     const sizes = await Promise.all(
       variants.map(async (variant) => {
-        let price: number | null = null;
-        let priceSource: "personal" | "crowdsourced" | "ai" = "ai";
-        let confidence = 0.5;
-
-        // Layer 1: Personal priceHistory at this store
-        const personalMatch = personalHistory
-          .filter(
-            (h) =>
-              h.storeName.toLowerCase() === normalizedStore &&
-              (h.size === variant.size || h.unit === variant.unit)
-          )
-          .sort((a, b) => b.purchaseDate - a.purchaseDate)[0];
-
-        if (personalMatch) {
-          price = personalMatch.unitPrice;
-          priceSource = "personal";
-          confidence = 1.0;
-        }
-
-        // Layer 2: Crowdsourced currentPrices
-        if (price === null) {
-          const currentPrice = await ctx.db
-            .query("currentPrices")
-            .withIndex("by_item", (q) => q.eq("normalizedName", normalizedItem))
-            .collect()
-            .then((prices) =>
-              prices.find(
-                (p) =>
-                  p.storeName?.toLowerCase() === normalizedStore &&
-                  (p.size === variant.size || p.variantName === variant.variantName)
-              )
-            );
-
-          if (currentPrice) {
-            price = currentPrice.averagePrice ?? currentPrice.unitPrice;
-            priceSource = "crowdsourced";
-            confidence = Math.min(0.9, 0.6 + (currentPrice.reportCount * 0.05));
-          }
-        }
-
-        // Layer 3: AI estimate from variant
-        if (price === null && variant.estimatedPrice != null) {
-          price = variant.estimatedPrice;
-          priceSource = "ai";
-          confidence = 0.5;
-        }
+        const resolved = await resolvePrice(
+          ctx,
+          normalizedItem,
+          variant.size,
+          variant.unit,
+          variant.variantName,
+          normalizedStore,
+          user?._id,
+          variant.estimatedPrice,
+        );
 
         // Calculate price per unit
-        const pricePerUnit = price !== null
-          ? calculatePricePerUnit(price, variant.size)
+        const pricePerUnit = resolved.price !== null
+          ? calculatePricePerUnit(resolved.price, variant.size)
           : null;
 
         const unitLabel = getUnitLabel(variant.size);
@@ -292,11 +248,11 @@ export const getSizesForStore = query({
         return {
           size: variant.size,
           sizeNormalized: normalizeSize(variant.size),
-          price,
+          price: resolved.price,
           pricePerUnit,
           unitLabel,
-          source: priceSource,
-          confidence,
+          source: resolved.priceSource,
+          confidence: resolved.confidence,
           isUsual: variant.size === usualSize,
         };
       })

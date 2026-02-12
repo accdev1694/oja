@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { canCreateList } from "./lib/featureGating";
-import { getAllStores, getStoreInfoSafe, UKStoreId } from "./lib/storeNormalizer";
+import { getAllStores, getStoreInfoSafe, isValidStoreId, UKStoreId } from "./lib/storeNormalizer";
 import { parseSize } from "./lib/sizeUtils";
 
 /**
@@ -511,6 +511,64 @@ export const getTripSummary = query({
   },
 });
 
+/**
+ * Set the store for a shopping list (without re-pricing items).
+ *
+ * Used during list creation flow when the user selects a store.
+ * Does NOT trigger item re-pricing -- that's what switchStore does.
+ * This is a lightweight store assignment for initial setup or simple changes.
+ */
+export const setStore = mutation({
+  args: {
+    id: v.id("shoppingLists"),
+    normalizedStoreId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const list = await ctx.db.get(args.id);
+    if (!list) {
+      throw new Error("List not found");
+    }
+
+    // Verify ownership
+    if (list.userId !== user._id) {
+      throw new Error("Unauthorized");
+    }
+
+    // Validate store ID
+    if (!isValidStoreId(args.normalizedStoreId)) {
+      throw new Error(`Invalid store ID: ${args.normalizedStoreId}`);
+    }
+
+    // Get store display name
+    const storeInfo = getStoreInfoSafe(args.normalizedStoreId);
+    if (!storeInfo) {
+      throw new Error(`Store not found: ${args.normalizedStoreId}`);
+    }
+
+    await ctx.db.patch(args.id, {
+      normalizedStoreId: args.normalizedStoreId,
+      storeName: storeInfo.displayName,
+      updatedAt: Date.now(),
+    });
+
+    return await ctx.db.get(args.id);
+  },
+});
+
 // -----------------------------------------------------------------------------
 // Size Matching Helpers (for store comparison)
 // -----------------------------------------------------------------------------
@@ -524,7 +582,7 @@ const SIZE_MATCH_TOLERANCE = 0.2;
  */
 function findClosestSizeMatch(
   targetSize: string,
-  availableSizes: Array<{ size: string; price: number }>
+  availableSizes: { size: string; price: number }[]
 ): { size: string; price: number; isExact: boolean; percentDiff: number } | null {
   const targetParsed = parseSize(targetSize);
   if (!targetParsed) return null;
@@ -813,18 +871,18 @@ export const switchStore = mutation({
     previousStore: string;
     newStore: string;
     itemsUpdated: number;
-    sizeChanges: Array<{
+    sizeChanges: {
       itemId: Id<"listItems">;
       itemName: string;
       oldSize: string;
       newSize: string;
-    }>;
-    priceChanges: Array<{
+    }[];
+    priceChanges: {
       itemId: Id<"listItems">;
       itemName: string;
       oldPrice: number;
       newPrice: number;
-    }>;
+    }[];
     manualOverridesPreserved: number;
     newTotal: number;
     savings: number;
@@ -879,18 +937,18 @@ export const switchStore = mutation({
       .collect();
 
     // Track changes
-    const sizeChanges: Array<{
+    const sizeChanges: {
       itemId: Id<"listItems">;
       itemName: string;
       oldSize: string;
       newSize: string;
-    }> = [];
-    const priceChanges: Array<{
+    }[] = [];
+    const priceChanges: {
       itemId: Id<"listItems">;
       itemName: string;
       oldPrice: number;
       newPrice: number;
-    }> = [];
+    }[] = [];
     let manualOverridesPreserved = 0;
     let itemsUpdated = 0;
 

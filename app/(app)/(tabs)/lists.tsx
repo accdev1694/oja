@@ -63,7 +63,6 @@ export default function ListsScreen() {
   // Create list modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newListName, setNewListName] = useState("");
-  const [newListBudget, setNewListBudget] = useState("50");
 
   // Sliding pill animation: 0 = active (left), 1 = history (right)
   const tabProgress = useSharedValue(0);
@@ -160,14 +159,12 @@ export default function ListsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // Default to "Shopping List" — footer date+time differentiates
     setNewListName("Shopping List");
-    setNewListBudget("50");
     setShowCreateModal(true);
   }
 
   function handleCloseCreateModal() {
     setShowCreateModal(false);
     setNewListName("");
-    setNewListBudget("50");
   }
 
   async function handleCreateList() {
@@ -176,18 +173,12 @@ export default function ListsScreen() {
       return;
     }
 
-    const budget = parseFloat(newListBudget) || 0;
-    if (budget < 0) {
-      alert("Error", "Budget cannot be negative");
-      return;
-    }
-
     setIsCreating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const listId = await createList({
         name: newListName.trim(),
-        budget: budget > 0 ? budget : undefined,
+        budget: 50,
       });
 
       handleCloseCreateModal();
@@ -345,7 +336,7 @@ export default function ListsScreen() {
             />
             <Text style={styles.emptyHistoryTitle}>No trips yet</Text>
             <Text style={styles.emptyHistorySubtitle}>
-              Complete a shopping trip and it'll show up here — great for tracking your spending over time.
+              Complete a shopping trip and it&apos;ll show up here — great for tracking your spending over time.
             </Text>
           </View>
         </View>
@@ -481,25 +472,6 @@ export default function ListsScreen() {
               autoFocus
             />
           </View>
-        </View>
-
-        {/* Budget Input */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Budget (£)</Text>
-          <View style={styles.inputContainer}>
-            <MaterialCommunityIcons name="wallet-outline" size={20} color={colors.text.tertiary} />
-            <TextInput
-              style={styles.textInput}
-              value={newListBudget}
-              onChangeText={setNewListBudget}
-              placeholder="50"
-              placeholderTextColor={colors.text.tertiary}
-              keyboardType="decimal-pad"
-            />
-          </View>
-          <Text style={styles.inputHint}>
-            Set to 0 for no budget tracking
-          </Text>
         </View>
 
         {/* Action Buttons */}
@@ -724,11 +696,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     paddingVertical: spacing.md,
   },
-  inputHint: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-    marginTop: spacing.xs,
-  },
   modalActions: {
     flexDirection: "row",
     gap: spacing.sm,
@@ -737,4 +704,5 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
   },
+
 });

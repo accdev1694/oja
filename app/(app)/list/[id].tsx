@@ -55,6 +55,9 @@ import { ShoppingListItem, type ListItem } from "@/components/list/ShoppingListI
 import { ShoppingTypewriterHint } from "@/components/list/ShoppingTypewriterHint";
 import { AddItemForm } from "@/components/list/AddItemForm";
 import { StickyBudgetBar } from "@/components/list/BudgetSection";
+import { ListActionRow } from "@/components/list/ListActionRow";
+import { StoreDropdownSheet } from "@/components/list/StoreDropdownSheet";
+import { AddItemsModal } from "@/components/list/AddItemsModal";
 import {
   EditBudgetModal,
   MidShopModal,
@@ -87,6 +90,11 @@ export default function ListDetailScreen() {
   const updateList = useMutation(api.shoppingLists.update);
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
   const switchStore = useMutation(api.shoppingLists.switchStore);
+  const setStore = useMutation(api.shoppingLists.setStore);
+
+  // Current user for store preferences
+  const currentUser = useQuery(api.users.getCurrent);
+  const userFavorites = (currentUser?.storePreferences?.favorites ?? []) as string[];
 
   // Partner mode
   const { isOwner, isPartner, canEdit, canApprove, loading: roleLoading } = usePartnerRole(id);
@@ -138,6 +146,12 @@ export default function ListDetailScreen() {
 
   // Edit budget modal state
   const [showEditBudgetModal, setShowEditBudgetModal] = useState(false);
+
+  // Store dropdown sheet state
+  const [showStoreSheet, setShowStoreSheet] = useState(false);
+
+  // Add Items modal state
+  const [showAddItemsModal, setShowAddItemsModal] = useState(false);
 
   // Mid-shop add flow state
   const [showMidShopModal, setShowMidShopModal] = useState(false);
@@ -477,6 +491,18 @@ export default function ListDetailScreen() {
     setAddToListItem(null);
   }
 
+  // Store selection handler - sets store via dropdown sheet
+  const handleSelectStore = useCallback(async (storeId: string) => {
+    try {
+      await setStore({ id, normalizedStoreId: storeId });
+      setShowStoreSheet(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("Failed to set store:", error);
+      alert("Error", "Failed to set store");
+    }
+  }, [setStore, id, alert]);
+
   // Store switch handler - opens preview modal (Phase 5)
   const handleSwitchStore = useCallback((storeId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -746,6 +772,19 @@ export default function ListDetailScreen() {
         />
       )}
 
+      {/* Action Row: Budget / Store / Add Items (planning mode) */}
+      {list?.status === "active" && (
+        <ListActionRow
+          budget={budget}
+          storeName={list.storeName}
+          storeColor={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
+          hasStore={!!list.normalizedStoreId}
+          onBudgetPress={handleOpenEditBudget}
+          onStorePress={() => setShowStoreSheet(true)}
+          onAddItemsPress={() => setShowAddItemsModal(true)}
+        />
+      )}
+
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
         {list?.status === "active" && (
@@ -878,7 +917,8 @@ export default function ListDetailScreen() {
       )}
     </View>
   ), [budget, estimatedTotal, checkedTotal, list?.status, list?.approvalStatus,
-      list?.approvalNote, list?.userId, list?.storeName, hasPartners, id, approverName,
+      list?.approvalNote, list?.userId, list?.storeName, list?.normalizedStoreId,
+      hasPartners, id, approverName,
       isOwner, canApprove, hasApprovers, canEdit, addFormVisible, items,
       selectionVersion, listCategories, listCategoryFilter,
       listCategoryCounts, pendingCount, handleMidShopFromForm, handleAddItemFocus]);
@@ -1115,6 +1155,25 @@ export default function ListDetailScreen() {
         otherLists={otherActiveLists}
         onClose={() => setAddToListItem(null)}
         onPick={pickListForItem}
+      />
+
+      {/* Add Items Modal */}
+      <AddItemsModal
+        visible={showAddItemsModal}
+        onClose={() => setShowAddItemsModal(false)}
+        listId={id}
+        listStoreName={list.storeName}
+        listNormalizedStoreId={list.normalizedStoreId}
+        existingItems={items?.map((i) => ({ name: i.name })) ?? []}
+      />
+
+      {/* Store Dropdown Sheet */}
+      <StoreDropdownSheet
+        visible={showStoreSheet}
+        onClose={() => setShowStoreSheet(false)}
+        onSelect={handleSelectStore}
+        currentStoreId={list.normalizedStoreId}
+        userFavorites={userFavorites}
       />
 
       {/* Store Switch Preview Modal (Phase 5) */}

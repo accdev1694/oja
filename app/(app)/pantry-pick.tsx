@@ -21,12 +21,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   STOCK_LEVEL_SHORT,
   type StockLevel,
-  STOCK_LEVEL_ORDER,
 } from "@/components/pantry";
 import { getSafeIcon } from "@/lib/icons/iconMatcher";
 import {
   GlassScreen,
-  GlassCard,
   colors,
   typography,
   spacing,
@@ -53,7 +51,7 @@ export default function PantryPickScreen() {
   const insets = useSafeAreaInsets();
   const { alert } = useGlassAlert();
   const items = useQuery(api.pantryItems.getByUser);
-  const addFromPantrySelected = useMutation(api.listItems.addFromPantrySelected);
+  const addFromPantryBulk = useMutation(api.listItems.addFromPantryBulk);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
@@ -154,7 +152,7 @@ export default function PantryPickScreen() {
     setIsAdding(true);
     try {
       const pantryItemIds = Array.from(selectedIds) as Id<"pantryItems">[];
-      const result = await addFromPantrySelected({
+      await addFromPantryBulk({
         listId: listId as Id<"shoppingLists">,
         pantryItemIds,
       });
