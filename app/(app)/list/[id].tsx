@@ -15,7 +15,7 @@ import { api } from "@/convex/_generated/api";
 import React, { useState, useCallback, useMemo, useRef } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { haptic } from "@/lib/haptics/safeHaptics";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -53,10 +53,8 @@ import { useDelightToast } from "@/hooks/useDelightToast";
 import { useStableValue, shallowRecordEqual } from "@/hooks/useStableValue";
 import { ShoppingListItem, type ListItem } from "@/components/list/ShoppingListItem";
 import { ShoppingTypewriterHint } from "@/components/list/ShoppingTypewriterHint";
-import { AddItemForm } from "@/components/list/AddItemForm";
 import { StickyBudgetBar } from "@/components/list/BudgetSection";
 import { ListActionRow } from "@/components/list/ListActionRow";
-import { StoreDropdownSheet } from "@/components/list/StoreDropdownSheet";
 import { AddItemsModal } from "@/components/list/AddItemsModal";
 import {
   EditBudgetModal,
@@ -124,9 +122,11 @@ export default function ListDetailScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
 
   // Comment thread state
-  const [showCommentThread, setShowCommentThread] = useState(false);
-  const [commentItemId, setCommentItemId] = useState<Id<"listItems"> | null>(null);
-  const [commentItemName, setCommentItemName] = useState("");
+  const [commentState, setCommentState] = useState<{
+    visible: boolean;
+    itemId: Id<"listItems"> | null;
+    itemName: string;
+  }>({ visible: false, itemId: null, itemName: "" });
 
   // List chat state
   const [showListChat, setShowListChat] = useState(false);
@@ -147,24 +147,25 @@ export default function ListDetailScreen() {
   // Edit budget modal state
   const [showEditBudgetModal, setShowEditBudgetModal] = useState(false);
 
-  // Store dropdown sheet state
-  const [showStoreSheet, setShowStoreSheet] = useState(false);
-
   // Add Items modal state
   const [showAddItemsModal, setShowAddItemsModal] = useState(false);
 
   // Mid-shop add flow state
-  const [showMidShopModal, setShowMidShopModal] = useState(false);
-  const [midShopItemName, setMidShopItemName] = useState("");
-  const [midShopItemPrice, setMidShopItemPrice] = useState(0);
-  const [midShopItemQuantity, setMidShopItemQuantity] = useState(1);
+  const [midShopState, setMidShopState] = useState<{
+    visible: boolean;
+    name: string;
+    price: number;
+    quantity: number;
+  }>({ visible: false, name: "", price: 0, quantity: 1 });
 
   // Check-off with actual price state (Story 3.8)
-  const [showActualPriceModal, setShowActualPriceModal] = useState(false);
-  const [checkingItemId, setCheckingItemId] = useState<Id<"listItems"> | null>(null);
-  const [checkingItemName, setCheckingItemName] = useState("");
-  const [checkingItemEstPrice, setCheckingItemEstPrice] = useState(0);
-  const [checkingItemQuantity, setCheckingItemQuantity] = useState(1);
+  const [actualPriceState, setActualPriceState] = useState<{
+    visible: boolean;
+    itemId: Id<"listItems"> | null;
+    name: string;
+    estPrice: number;
+    quantity: number;
+  }>({ visible: false, itemId: null, name: "", estPrice: 0, quantity: 1 });
 
   // Store Switch Preview modal state (Phase 5)
   const [switchPreviewVisible, setSwitchPreviewVisible] = useState(false);
@@ -187,9 +188,6 @@ export default function ListDetailScreen() {
     flex: 1,
     paddingBottom: keyboardHeight.value,
   }));
-
-  // Progressive disclosure states (Criterion 1: Simplicity)
-  const [addFormVisible, setAddFormVisible] = useState(false);
 
   // Scroll tracking for sticky mini budget bar (hooks must be before early returns)
   const scrollY = useSharedValue(0);
@@ -270,7 +268,7 @@ export default function ListDetailScreen() {
 
   // Edit budget handlers
   function handleOpenEditBudget() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic("light");
     setShowEditBudgetModal(true);
   }
 
@@ -279,7 +277,20 @@ export default function ListDetailScreen() {
   }, [updateList, id]);
 
   const handleToggleItem = useCallback(async (itemId: Id<"listItems">) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic("light");
+    const item = safeItems.find((i) => i._id === itemId);
+
+    if (isShopping && item && !item.isChecked) {
+      setActualPriceState({
+        visible: true,
+        itemId,
+        name: item.name,
+        estPrice: item.estimatedPrice ?? 0,
+        quantity: item.quantity,
+      });
+      return;
+    }
+
     try {
       await toggleChecked({ id: itemId });
       onMundaneAction();
@@ -287,62 +298,47 @@ export default function ListDetailScreen() {
       console.error("Failed to toggle item:", error);
       alert("Error", "Failed to update item");
     }
-  }, [toggleChecked, onMundaneAction, alert]);
+  }, [toggleChecked, onMundaneAction, alert, isShopping, safeItems]);
 
   // Actual price modal handlers (Story 3.8)
   function closeActualPriceModal() {
-    setShowActualPriceModal(false);
-    setCheckingItemId(null);
-    setCheckingItemName("");
-    setCheckingItemEstPrice(0);
-    setCheckingItemQuantity(1);
+    setActualPriceState({ visible: false, itemId: null, name: "", estPrice: 0, quantity: 1 });
   }
 
   const handleConfirmActualPrice = useCallback(async (itemId: Id<"listItems">, actualPrice: number) => {
     await updateItem({ id: itemId, actualPrice });
     await toggleChecked({ id: itemId });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    haptic("success");
     onMundaneAction();
   }, [updateItem, toggleChecked, onMundaneAction]);
 
   const handleSkipActualPrice = useCallback(async (itemId: Id<"listItems">) => {
     await toggleChecked({ id: itemId });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    haptic("success");
   }, [toggleChecked]);
 
-  // Mid-shop callback for AddItemForm — sets modal state from child values
-  const handleMidShopFromForm = useCallback((name: string, quantity: number, price: number) => {
-    setMidShopItemName(name);
-    setMidShopItemQuantity(quantity);
-    setMidShopItemPrice(price);
-    setShowMidShopModal(true);
-  }, []);
-
   function closeMidShopModal() {
-    setShowMidShopModal(false);
-    setMidShopItemName("");
-    setMidShopItemPrice(0);
-    setMidShopItemQuantity(1);
+    setMidShopState({ visible: false, name: "", price: 0, quantity: 1 });
   }
 
   const handleMidShopAdd = useCallback(async (source: "add" | "next_trip") => {
-    if (!midShopItemName) return;
+    if (!midShopState.name) return;
 
     try {
       await addItemMidShop({
         listId: id,
-        name: midShopItemName,
-        estimatedPrice: midShopItemPrice,
-        quantity: midShopItemQuantity,
+        name: midShopState.name,
+        estimatedPrice: midShopState.price,
+        quantity: midShopState.quantity,
         source,
       });
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic("success");
 
       if (source === "add") {
-        alert("Added to List", `"${midShopItemName}" added to your list`);
+        showToast(`"${midShopState.name}" added to list`, "check-circle", colors.semantic.success);
       } else {
-        alert("Saved for Later", `"${midShopItemName}" added to stock for next trip`);
+        showToast(`"${midShopState.name}" saved for next trip`, "clock-outline", colors.accent.secondary);
       }
 
       closeMidShopModal();
@@ -350,14 +346,14 @@ export default function ListDetailScreen() {
       console.error("Failed to add mid-shop item:", error);
       alert("Error", "Failed to add item");
     }
-  }, [addItemMidShop, id, midShopItemName, midShopItemPrice, midShopItemQuantity, alert]);
+  }, [addItemMidShop, id, midShopState, alert, showToast]);
 
   const handleRemoveItem = useCallback(async (itemId: Id<"listItems">, itemName: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic("medium");
     const doRemove = async () => {
       try {
         await removeItem({ id: itemId });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        haptic("success");
       } catch (error) {
         console.error("Failed to remove item:", error);
         alert("Error", "Failed to remove item");
@@ -372,7 +368,7 @@ export default function ListDetailScreen() {
 
   // Selection mode functions
   const toggleItemSelection = useCallback((itemId: Id<"listItems">) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic("light");
     const next = new Set(selectedItemsRef.current);
     if (next.has(itemId)) {
       next.delete(itemId);
@@ -384,7 +380,7 @@ export default function ListDetailScreen() {
   }, []);
 
   function selectAllItems() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic("light");
     if (items) {
       selectedItemsRef.current = new Set(items.map((i) => i._id));
       setSelectionVersion(v => v + 1);
@@ -399,13 +395,13 @@ export default function ListDetailScreen() {
   async function handleBulkDelete() {
     if (selectedItemsRef.current.size === 0) return;
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic("medium");
     const count = selectedItemsRef.current.size;
 
     const doDelete = async () => {
       try {
         await removeMultipleItems({ ids: Array.from(selectedItemsRef.current) });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        haptic("success");
         clearSelection();
       } catch (error) {
         console.error("Failed to delete items:", error);
@@ -444,7 +440,7 @@ export default function ListDetailScreen() {
     itemId: Id<"listItems">,
     newPriority: "must-have" | "should-have" | "nice-to-have"
   ) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic("medium");
     try {
       await updateItem({ id: itemId, priority: newPriority });
     } catch (error) {
@@ -495,8 +491,7 @@ export default function ListDetailScreen() {
   const handleSelectStore = useCallback(async (storeId: string) => {
     try {
       await setStore({ id, normalizedStoreId: storeId });
-      setShowStoreSheet(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic("success");
     } catch (error) {
       console.error("Failed to set store:", error);
       alert("Error", "Failed to set store");
@@ -505,7 +500,7 @@ export default function ListDetailScreen() {
 
   // Store switch handler - opens preview modal (Phase 5)
   const handleSwitchStore = useCallback((storeId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic("medium");
     setSwitchTargetStore(storeId);
     setSwitchPreviewVisible(true);
   }, []);
@@ -533,11 +528,11 @@ export default function ListDetailScreen() {
         showToast(`Switched to ${storeName}`, "check-circle", colors.accent.primary);
       }
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic("success");
     } catch (error) {
       console.error("Failed to switch store:", error);
       showToast("Failed to switch store", "alert-circle", colors.semantic.danger);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      haptic("error");
     } finally {
       setIsSwitching(false);
     }
@@ -583,7 +578,7 @@ export default function ListDetailScreen() {
   }, [switchTargetStore, comparison, items]);
 
   async function handleStartShopping() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic("medium");
     clearSelection();
     try {
       await startShopping({ id });
@@ -594,7 +589,7 @@ export default function ListDetailScreen() {
   }
 
   async function handleCompleteShopping() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic("medium");
 
     const doComplete = async () => {
       try {
@@ -602,7 +597,7 @@ export default function ListDetailScreen() {
 
         // Restock pantry items that were checked off
         const result = await restockFromCheckedItems({ listId: id });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        haptic("success");
 
         const restockMsg = result.restockedCount > 0
           ? `${result.restockedCount} pantry item${result.restockedCount !== 1 ? "s" : ""} restocked.`
@@ -627,17 +622,6 @@ export default function ListDetailScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Complete", onPress: doComplete },
     ]);
-  }
-
-  function handleAddFromPantry() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(`/pantry-pick?listId=${id}`);
-  }
-
-  // Progressive disclosure handler
-  function handleToggleAddForm() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setAddFormVisible((prev) => !prev);
   }
 
   // Helper to scroll the FlashList by a calculated overlap amount
@@ -669,23 +653,12 @@ export default function ListDetailScreen() {
     },
   }, [focusedInput, scrollByOverlap]);
 
-  // Simplified pre-scroll: just scroll past the dial when form gets focus
-  const handleAddItemFocus = useCallback(() => {
-    const currentOffset = scrollY.value;
-    if (currentOffset < DIAL_SCROLL_THRESHOLD) {
-      flashListRef.current?.scrollToOffset({
-        offset: DIAL_SCROLL_THRESHOLD,
-        animated: true,
-      });
-    }
-  }, [scrollY, DIAL_SCROLL_THRESHOLD]);
-
   // Partner mode handlers
   const handleApproveItem = useCallback(async (itemId: Id<"listItems">) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic("medium");
     try {
       await handleApproval({ listItemId: itemId, decision: "approved" });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic("success");
     } catch (error) {
       console.error("Failed to approve item:", error);
       alert("Error", "Failed to approve item");
@@ -693,10 +666,10 @@ export default function ListDetailScreen() {
   }, [handleApproval, alert]);
 
   const handleRejectItem = useCallback(async (itemId: Id<"listItems">) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic("medium");
     try {
       await handleApproval({ listItemId: itemId, decision: "rejected" });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic("success");
     } catch (error) {
       console.error("Failed to reject item:", error);
       alert("Error", "Failed to reject item");
@@ -704,10 +677,8 @@ export default function ListDetailScreen() {
   }, [handleApproval, alert]);
 
   const openCommentThread = useCallback((itemId: Id<"listItems">, itemName: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCommentItemId(itemId);
-    setCommentItemName(itemName);
-    setShowCommentThread(true);
+    haptic("light");
+    setCommentState({ visible: true, itemId, itemName });
   }, []);
 
   const stableOpenComments = useMemo(
@@ -779,8 +750,10 @@ export default function ListDetailScreen() {
           storeName={list.storeName}
           storeColor={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
           hasStore={!!list.normalizedStoreId}
-          onBudgetPress={handleOpenEditBudget}
-          onStorePress={() => setShowStoreSheet(true)}
+          currentStoreId={list.normalizedStoreId}
+          userFavorites={userFavorites}
+          onBudgetChange={handleSaveBudget}
+          onStoreSelect={handleSelectStore}
           onAddItemsPress={() => setShowAddItemsModal(true)}
         />
       )}
@@ -788,26 +761,15 @@ export default function ListDetailScreen() {
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
         {list?.status === "active" && (
-          <>
-            <GlassButton
-              variant="secondary"
-              size="md"
-              icon="package-variant"
-              onPress={handleAddFromPantry}
-              style={styles.actionButton}
-            >
-              Add from Pantry
-            </GlassButton>
-            <GlassButton
-              variant="primary"
-              size="md"
-              icon="cart-outline"
-              onPress={handleStartShopping}
-              style={styles.actionButton}
-            >
-              Go Shopping
-            </GlassButton>
-          </>
+          <GlassButton
+            variant="primary"
+            size="md"
+            icon="cart-outline"
+            onPress={handleStartShopping}
+            style={styles.actionButton}
+          >
+            Go Shopping
+          </GlassButton>
         )}
         {list?.status === "shopping" && (
           <View style={styles.shoppingModeContainer}>
@@ -817,7 +779,7 @@ export default function ListDetailScreen() {
                 variant="secondary"
                 size="md"
                 icon="plus"
-                onPress={handleToggleAddForm}
+                onPress={() => setShowAddItemsModal(true)}
                 style={styles.shoppingRowButton}
               >
                 Add Item
@@ -835,21 +797,6 @@ export default function ListDetailScreen() {
           </View>
         )}
       </View>
-
-      {/* Add Item Form (extracted component) */}
-      <AddItemForm
-        listId={id}
-        listUserId={list?.userId}
-        listStoreName={list?.storeName}
-        listStatus={list?.status}
-        existingItems={items}
-        isVisible={addFormVisible}
-        onToggleVisible={handleToggleAddForm}
-        canEdit={canEdit !== false}
-        budget={budget}
-        onMidShopAdd={handleMidShopFromForm}
-        onInputFocus={handleAddItemFocus}
-      />
 
       {/* Items section header (only when items exist) */}
       {(items?.length ?? 0) > 0 && (
@@ -919,9 +866,9 @@ export default function ListDetailScreen() {
   ), [budget, estimatedTotal, checkedTotal, list?.status, list?.approvalStatus,
       list?.approvalNote, list?.userId, list?.storeName, list?.normalizedStoreId,
       hasPartners, id, approverName,
-      isOwner, canApprove, hasApprovers, canEdit, addFormVisible, items,
+      isOwner, canApprove, hasApprovers, items,
       selectionVersion, listCategories, listCategoryFilter,
-      listCategoryCounts, pendingCount, handleMidShopFromForm, handleAddItemFocus]);
+      listCategoryCounts, pendingCount]);
 
   // ─── FlashList ListEmptyComponent ────────────────────────────────────────────
   const listEmpty = useMemo(() => (
@@ -1012,7 +959,7 @@ export default function ListDetailScreen() {
               {hasPartners && (
                 <Pressable
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    haptic("light");
                     setShowListChat(true);
                   }}
                   hitSlop={8}
@@ -1035,7 +982,7 @@ export default function ListDetailScreen() {
               <NotificationBell onPress={() => setShowNotifications(true)} />
               <Pressable
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  haptic("light");
                   router.push(`/partners?listId=${id}`);
                 }}
                 hitSlop={8}
@@ -1093,10 +1040,10 @@ export default function ListDetailScreen() {
 
       {/* Mid-Shop Add Flow Modal */}
       <MidShopModal
-        visible={showMidShopModal}
-        itemName={midShopItemName}
-        itemPrice={midShopItemPrice}
-        itemQuantity={midShopItemQuantity}
+        visible={midShopState.visible}
+        itemName={midShopState.name}
+        itemPrice={midShopState.price}
+        itemQuantity={midShopState.quantity}
         currentTotal={currentTotal}
         budget={budget}
         remainingBudget={remainingBudget}
@@ -1112,13 +1059,11 @@ export default function ListDetailScreen() {
 
       {/* Comment Thread (Partner Mode) */}
       <CommentThread
-        visible={showCommentThread}
-        itemId={commentItemId}
-        itemName={commentItemName}
+        visible={commentState.visible}
+        itemId={commentState.itemId}
+        itemName={commentState.itemName}
         onClose={() => {
-          setShowCommentThread(false);
-          setCommentItemId(null);
-          setCommentItemName("");
+          setCommentState({ visible: false, itemId: null, itemName: "" });
         }}
       />
 
@@ -1132,11 +1077,11 @@ export default function ListDetailScreen() {
 
       {/* Actual Price Modal (Story 3.8) */}
       <ActualPriceModal
-        visible={showActualPriceModal}
-        itemId={checkingItemId}
-        itemName={checkingItemName}
-        estimatedPrice={checkingItemEstPrice}
-        quantity={checkingItemQuantity}
+        visible={actualPriceState.visible}
+        itemId={actualPriceState.itemId}
+        itemName={actualPriceState.name}
+        estimatedPrice={actualPriceState.estPrice}
+        quantity={actualPriceState.quantity}
         onClose={closeActualPriceModal}
         onConfirm={handleConfirmActualPrice}
         onSkip={handleSkipActualPrice}
@@ -1165,15 +1110,6 @@ export default function ListDetailScreen() {
         listStoreName={list.storeName}
         listNormalizedStoreId={list.normalizedStoreId}
         existingItems={items?.map((i) => ({ name: i.name })) ?? []}
-      />
-
-      {/* Store Dropdown Sheet */}
-      <StoreDropdownSheet
-        visible={showStoreSheet}
-        onClose={() => setShowStoreSheet(false)}
-        onSelect={handleSelectStore}
-        currentStoreId={list.normalizedStoreId}
-        userFavorites={userFavorites}
       />
 
       {/* Store Switch Preview Modal (Phase 5) */}
@@ -1266,6 +1202,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+    marginTop: spacing.md,
   },
   // Shopping Mode Container
   shoppingModeContainer: {
