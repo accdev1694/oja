@@ -654,12 +654,12 @@ RULES:
       hasVariants: boolean;
       defaultSize?: string | null;
       defaultUnit?: string | null;
-      variants: Array<{
+      variants: {
         variantName: string;
         size: string;
         unit: string;
         estimatedPrice: number;
-      }>;
+      }[];
     }
 
     function parseEstimateResponse(text: string): EstimateResult {
@@ -970,10 +970,10 @@ export const voiceAssistant = action({
       const chat = model.startChat({ history });
       let response = await chat.sendMessage(args.transcript);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       let pendingAction: {
         action: string;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         params: Record<string, any>;
         confirmLabel: string;
       } | null = null;
@@ -1093,7 +1093,7 @@ export const executeVoiceAction = action({
         if (!targetListId && args.params.listName) {
           const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
           const match = lists.find(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             (l: any) =>
               l.name.toLowerCase().includes(args.params.listName.toLowerCase())
           );
@@ -1127,7 +1127,7 @@ export const executeVoiceAction = action({
         // Find pantry item by name
         const pantryItems = await ctx.runQuery(api.pantryItems.getByUser, {});
         const match = pantryItems.find(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           (p: any) =>
             p.name.toLowerCase().includes(args.params.itemName.toLowerCase())
         );
@@ -1151,7 +1151,7 @@ export const executeVoiceAction = action({
           listId,
         });
         const match = listItems.find(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           (i: any) =>
             i.name.toLowerCase().includes(args.params.itemName.toLowerCase())
         );

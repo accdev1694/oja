@@ -241,13 +241,13 @@ export const checkPriceAlerts = mutation({
       return [];
     }
 
-    const alerts: Array<{
+    const alerts: {
       itemName: string;
       type: "increase" | "decrease";
       percentChange: number;
       oldPrice: number;
       newPrice: number;
-    }> = [];
+    }[] = [];
 
     for (const item of receipt.items) {
       const normalizedName = item.name.toLowerCase().trim();

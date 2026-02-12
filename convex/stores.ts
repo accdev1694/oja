@@ -190,13 +190,13 @@ export const getBestDealsFound = query({
     // Group user's purchases by normalized item name
     const userPurchases = new Map<
       string,
-      Array<{
+      {
         itemName: string;
         price: number;
         storeName: string;
         normalizedStoreId?: string;
         purchaseDate: number;
-      }>
+      }[]
     >();
 
     for (const ph of recentPriceHistory) {
@@ -214,7 +214,7 @@ export const getBestDealsFound = query({
     }
 
     // For each item, find if there's a cheaper price in currentPrices
-    const deals: Array<{
+    const deals: {
       itemName: string;
       paidPrice: number;
       paidStore: string;
@@ -224,7 +224,7 @@ export const getBestDealsFound = query({
       cheapestStoreId: string | null;
       savings: number;
       savingsPercent: number;
-    }> = [];
+    }[] = [];
 
     for (const [normalizedName, purchases] of userPurchases) {
       // Get the most recent purchase for this item

@@ -367,7 +367,7 @@ export const getUsersForNurture = internalQuery({
       ...trialUserIds,
     ]);
 
-    const users: Array<{
+    const users: {
       userId: Id<"users">;
       createdAt: number;
       onboardingComplete: boolean;
@@ -375,7 +375,7 @@ export const getUsersForNurture = internalQuery({
       expoPushToken: string | undefined;
       trialEndsAt: number | undefined;
       trialStatus: string | undefined;
-    }> = [];
+    }[] = [];
 
     for (const userId of allUserIds) {
       const user = await ctx.db.get(userId);
@@ -502,7 +502,7 @@ export const sendNurtureMessage = internalMutation({
 export const processNurtureSequence = internalMutation({
   args: {},
   handler: async (ctx): Promise<{ processed: number; sent: number }> => {
-    const users = await ctx.runQuery(internal.nurture.getUsersForNurture, {}) as Array<{
+    const users = await ctx.runQuery(internal.nurture.getUsersForNurture, {}) as {
       userId: Id<"users">;
       createdAt: number;
       onboardingComplete: boolean;
@@ -510,7 +510,7 @@ export const processNurtureSequence = internalMutation({
       expoPushToken: string | undefined;
       trialEndsAt: number | undefined;
       trialStatus: string | undefined;
-    }>;
+    }[];
 
     let sentCount = 0;
 

@@ -687,14 +687,14 @@ CURRENT CONTEXT:
 
 export interface ToolResult {
   type: "data" | "confirm";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   result: any;
 }
 
 export async function executeVoiceTool(
   ctx: ActionCtx,
   functionName: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   args: Record<string, any>
 ): Promise<ToolResult> {
   // ── Execute operations and return results ──
@@ -709,13 +709,13 @@ export async function executeVoiceTool(
       case "get_pantry_items": {
         const items = await ctx.runQuery(api.pantryItems.getByUser, {});
         const filtered = args.stockFilter
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           ? items.filter((i: any) => i.stockLevel === args.stockFilter)
           : items;
         return {
           type: "data",
           result: filtered.map(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             (i: any) => ({
               name: i.name,
               category: i.category,
@@ -732,7 +732,7 @@ export async function executeVoiceTool(
         const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
         return {
           type: "data",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           result: lists.map((l: any) => ({
             id: l._id,
             name: l.name,
@@ -750,7 +750,7 @@ export async function executeVoiceTool(
         });
         return {
           type: "data",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           result: items.map((i: any) => ({
             name: i.name,
             quantity: i.quantity,
@@ -819,11 +819,11 @@ export async function executeVoiceTool(
 
       case "get_budget_status": {
         const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         let targetList: any = null;
 
         if (args.listName) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           targetList = lists.find((l: any) =>
             l.name.toLowerCase().includes(args.listName.toLowerCase())
           );
@@ -831,7 +831,7 @@ export async function executeVoiceTool(
           targetList = lists[0];
         } else if (lists.length > 1) {
           // Find in-progress list first, then most recent
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
         }
 
@@ -862,18 +862,18 @@ export async function executeVoiceTool(
 
       case "get_list_details": {
         const allLists = await ctx.runQuery(api.shoppingLists.getActive, {});
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         let list: any = null;
 
         if (args.listName) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           list = allLists.find((l: any) =>
             l.name.toLowerCase().includes(args.listName.toLowerCase())
           );
         } else if (allLists.length === 1) {
           list = allLists[0];
         } else if (allLists.length > 1) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           list = allLists.find((l: any) => l.status === "shopping") || allLists[0];
         }
 
@@ -890,7 +890,7 @@ export async function executeVoiceTool(
 
         const budget = list.budget || 0;
         const spent = list.totalEstimatedCost || 0;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const checkedCount = listItems.filter((i: any) => i.isChecked).length;
 
         return {
@@ -905,7 +905,7 @@ export async function executeVoiceTool(
             checkedCount,
             uncheckedCount: listItems.length - checkedCount,
             storeName: list.storeName,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             items: listItems.slice(0, 10).map((i: any) => ({
               name: i.name,
               quantity: i.quantity,
@@ -922,24 +922,24 @@ export async function executeVoiceTool(
         const savingsJar = await ctx.runQuery(api.insights.getSavingsJar, {});
         const weeklyDigest = await ctx.runQuery(api.insights.getWeeklyDigest, {});
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const lowStockItems = pantryItems.filter((i: any) => i.stockLevel === "low" || i.stockLevel === "out");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const totalBudget = activeLists.reduce((sum: number, l: any) => sum + (l.budget || 0), 0);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const totalEstimated = activeLists.reduce((sum: number, l: any) => sum + (l.totalEstimatedCost || 0), 0);
 
         return {
           type: "data",
           result: {
             activeListsCount: activeLists.length,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             activeListNames: activeLists.map((l: any) => l.name),
             totalBudgetAcrossLists: totalBudget,
             totalEstimatedSpend: totalEstimated,
             pantryItemsCount: pantryItems.length,
             lowStockCount: lowStockItems.length,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             lowStockItems: lowStockItems.slice(0, 5).map((i: any) => i.name),
             totalSavings: savingsJar?.totalSaved || 0,
             thisWeekSpent: weeklyDigest?.thisWeekTotal || 0,
@@ -953,7 +953,7 @@ export async function executeVoiceTool(
       case "compare_store_prices": {
         // Get all stores to compare
         const allStores = await ctx.runQuery(api.stores.getAll, {});
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const storeIds = allStores.map((s: any) => s.id);
 
         const comparison = await ctx.runQuery(api.currentPrices.getComparisonByStores, {
@@ -978,16 +978,16 @@ export async function executeVoiceTool(
         const pricesWithStores = Object.entries(comparison.byStore)
           .filter(([, data]) => data !== null)
           .map(([storeId, data]) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             const storeInfo = allStores.find((s: any) => s.id === storeId);
             return {
               storeId,
               storeName: storeInfo?.displayName ?? storeId,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+               
               price: (data as any).price,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+               
               size: (data as any).size,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+               
               unit: (data as any).unit,
             };
           })
@@ -1058,7 +1058,7 @@ export async function executeVoiceTool(
 async function executeWriteTool(
   ctx: ActionCtx,
   functionName: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   args: Record<string, any>
 ): Promise<ToolResult> {
   switch (functionName) {
@@ -1084,13 +1084,13 @@ async function executeWriteTool(
     case "add_items_to_list": {
       // If no listId provided, try to find the list by name or use the only active list
       let targetListId = args.listId as Id<"shoppingLists"> | undefined;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       let targetList: any = null;
 
       if (!targetListId && args.listName) {
         // Try to find list by name
         const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const match = lists.find((l: any) =>
           l.name.toLowerCase().includes(args.listName.toLowerCase())
         );
@@ -1118,7 +1118,7 @@ async function executeWriteTool(
             result: {
               success: false,
               error: "Multiple lists found. Please specify which list.",
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+               
               availableLists: lists.map((l: any) => l.name),
             },
           };
@@ -1157,7 +1157,7 @@ async function executeWriteTool(
               size = sizeData.defaultSize;
 
               // Find the price for this size
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+               
               const sizeInfo = sizeData.sizes.find((s: any) => s.size === size);
               if (sizeInfo) {
                 estimatedPrice = sizeInfo.price ?? undefined;
@@ -1188,7 +1188,7 @@ async function executeWriteTool(
             if (sizeData && sizeData.sizes.length > 0) {
               // Find the matching size (normalize for comparison)
               const normalizedInputSize = size.toLowerCase().replace(/\s+/g, "");
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+               
               const sizeInfo = sizeData.sizes.find((s: any) => {
                 const normalizedSize = s.size?.toLowerCase().replace(/\s+/g, "") || "";
                 const normalizedDisplay = s.sizeNormalized?.toLowerCase().replace(/\s+/g, "") || "";
@@ -1280,7 +1280,7 @@ async function executeWriteTool(
     case "update_stock_level": {
       // Find the pantry item
       const items = await ctx.runQuery(api.pantryItems.getByUser, {});
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const match = items.find((i: any) =>
         i.name.toLowerCase().includes(args.itemName.toLowerCase())
       );
@@ -1312,7 +1312,7 @@ async function executeWriteTool(
 
       if (!targetListId) {
         const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const inProgress = lists.find((l: any) => l.status === "in_progress");
         if (inProgress) {
           targetListId = inProgress._id;
@@ -1328,7 +1328,7 @@ async function executeWriteTool(
 
       // Find and check off the item
       const listItems = await ctx.runQuery(api.listItems.getByList, { listId: targetListId });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const itemMatch = listItems.find((i: any) =>
         i.name.toLowerCase().includes(args.itemName.toLowerCase())
       );
@@ -1393,18 +1393,18 @@ async function executeWriteTool(
 
     case "update_list_budget": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       let targetList: any = null;
 
       if (args.listName) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         targetList = lists.find((l: any) =>
           l.name.toLowerCase().includes(args.listName.toLowerCase())
         );
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
       }
 
@@ -1435,7 +1435,7 @@ async function executeWriteTool(
       if (!args.confirmed) {
         // Return info for confirmation - Gemini should ask user to confirm
         const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const targetList = lists.find((l: any) =>
           l.name.toLowerCase().includes(args.listName.toLowerCase())
         );
@@ -1467,7 +1467,7 @@ async function executeWriteTool(
 
       // User confirmed - proceed with deletion
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const targetList = lists.find((l: any) =>
         l.name.toLowerCase().includes(args.listName.toLowerCase())
       );
@@ -1492,18 +1492,18 @@ async function executeWriteTool(
 
     case "remove_list_item": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       let targetList: any = null;
 
       if (args.listName) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         targetList = lists.find((l: any) =>
           l.name.toLowerCase().includes(args.listName.toLowerCase())
         );
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
       }
 
@@ -1518,7 +1518,7 @@ async function executeWriteTool(
         listId: targetList._id,
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const itemToRemove = listItems.find((i: any) =>
         i.name.toLowerCase().includes(args.itemName.toLowerCase())
       );
@@ -1543,7 +1543,7 @@ async function executeWriteTool(
 
     case "remove_pantry_item": {
       const items = await ctx.runQuery(api.pantryItems.getByUser, {});
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const itemToRemove = items.find((i: any) =>
         i.name.toLowerCase().includes(args.itemName.toLowerCase())
       );
@@ -1568,18 +1568,18 @@ async function executeWriteTool(
 
     case "clear_checked_items": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       let targetList: any = null;
 
       if (args.listName) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         targetList = lists.find((l: any) =>
           l.name.toLowerCase().includes(args.listName.toLowerCase())
         );
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
       }
 
@@ -1594,7 +1594,7 @@ async function executeWriteTool(
         listId: targetList._id,
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const checkedItems = listItems.filter((i: any) => i.isChecked);
 
       if (checkedItems.length === 0) {
@@ -1628,7 +1628,7 @@ async function executeWriteTool(
       for (const storeName of args.stores || []) {
         // Find matching store by name (case-insensitive fuzzy match)
         const normalizedInput = storeName.toLowerCase().trim();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const match = allStores.find((s: any) => {
           const displayLower = s.displayName.toLowerCase();
           const idLower = s.id.toLowerCase();
@@ -1641,7 +1641,7 @@ async function executeWriteTool(
         });
 
         if (match) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           validStoreIds.push((match as any).id);
         } else {
           unrecognizedStores.push(storeName);
@@ -1665,11 +1665,11 @@ async function executeWriteTool(
       });
 
       // Get display names for response
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const savedStoreNames = validStoreIds.map((id) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const store = allStores.find((s: any) => s.id === id);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         return store ? (store as any).displayName : id;
       });
 
@@ -1710,7 +1710,7 @@ async function executeWriteTool(
       });
 
       // Find the item by name (fuzzy match)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const itemMatch = listItems.find((i: any) =>
         i.name.toLowerCase().includes(args.itemName.toLowerCase())
       );
@@ -1734,7 +1734,7 @@ async function executeWriteTool(
 
       // Find matching size from available sizes
       const newSizeLower = args.newSize.toLowerCase().replace(/\s+/g, "");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const matchingSize = sizesResult.sizes.find((s: any) => {
         const sizeLower = (s.size || "").toLowerCase().replace(/\s+/g, "");
         const sizeNormLower = (s.sizeNormalized || "").toLowerCase().replace(/\s+/g, "");
@@ -1788,7 +1788,7 @@ async function executeWriteTool(
       }
 
       // Find the most recently added item (by _creationTime)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const sortedItems = [...listItems].sort((a: any, b: any) =>
         (b._creationTime || 0) - (a._creationTime || 0)
       );
@@ -1803,7 +1803,7 @@ async function executeWriteTool(
       }
 
       // Build update object
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const updates: Record<string, any> = {};
       const changes: string[] = [];
 
@@ -1828,7 +1828,7 @@ async function executeWriteTool(
 
         // Find matching size from available sizes
         const newSizeLower = args.size.toLowerCase().replace(/\s+/g, "");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const matchingSize = sizesResult.sizes.find((s: any) => {
           const sizeLower = (s.size || "").toLowerCase().replace(/\s+/g, "");
           const sizeNormLower = (s.sizeNormalized || "").toLowerCase().replace(/\s+/g, "");

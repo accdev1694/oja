@@ -803,12 +803,12 @@ export const checkDealAchievements = mutation({
     // Group purchases by normalized item name
     const userPurchases = new Map<
       string,
-      Array<{
+      {
         price: number;
         storeName: string;
         normalizedStoreId?: string;
         purchaseDate: number;
-      }>
+      }[]
     >();
 
     for (const ph of recentPriceHistory) {
