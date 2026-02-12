@@ -158,7 +158,7 @@ export const getWithPrices = query({
 });
 
 /**
- * Get sizes for an item at a specific store, formatted for the SizePriceModal.
+ * Get sizes for an item at a specific store.
  *
  * Uses the 3-layer price cascade:
  * 1. Personal priceHistory (user's own receipts) — highest trust

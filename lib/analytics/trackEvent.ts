@@ -28,9 +28,7 @@ export type AnalyticsPriceSource =
  * All supported analytics event names
  */
 export type AnalyticsEventName =
-  // Size/Price Modal Events
-  | "size_price_modal_opened"
-  | "size_selected"
+  // Item Events
   | "item_added_with_size"
   | "item_edited"
   // Store Comparison Events
@@ -40,22 +38,8 @@ export type AnalyticsEventName =
   | "store_switch_cancelled";
 
 /**
- * Event properties for Size/Price Modal events
+ * Event properties for Item events
  */
-export interface SizePriceModalOpenedProps {
-  item_name: string;
-  store_id: string;
-  sizes_count: number;
-}
-
-export interface SizeSelectedProps {
-  item_name: string;
-  size: string;
-  price: number;
-  source: AnalyticsPriceSource;
-  store_id: string;
-}
-
 export interface ItemAddedWithSizeProps {
   item_name: string;
   size: string;
@@ -114,8 +98,6 @@ export interface StoreSwitchCancelledProps {
  * Map of event names to their property types
  */
 export interface AnalyticsEventMap {
-  size_price_modal_opened: SizePriceModalOpenedProps;
-  size_selected: SizeSelectedProps;
   item_added_with_size: ItemAddedWithSizeProps;
   item_edited: ItemEditedProps;
   store_comparison_viewed: StoreComparisonViewedProps;
@@ -190,40 +172,6 @@ export function trackEvent<E extends AnalyticsEventName>(
 // =============================================================================
 // CONVENIENCE FUNCTIONS
 // =============================================================================
-
-/**
- * Track when Size/Price modal opens
- */
-export function trackSizePriceModalOpened(
-  itemName: string,
-  storeId: string,
-  sizesCount: number
-): void {
-  trackEvent("size_price_modal_opened", {
-    item_name: itemName,
-    store_id: storeId,
-    sizes_count: sizesCount,
-  });
-}
-
-/**
- * Track when user selects a size option
- */
-export function trackSizeSelected(
-  itemName: string,
-  size: string,
-  price: number,
-  source: AnalyticsPriceSource,
-  storeId: string
-): void {
-  trackEvent("size_selected", {
-    item_name: itemName,
-    size,
-    price,
-    source,
-    store_id: storeId,
-  });
-}
 
 /**
  * Track when item is added with size selection

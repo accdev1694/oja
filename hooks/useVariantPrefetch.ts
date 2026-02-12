@@ -138,7 +138,7 @@ export function useVariantPrefetch(
         cleanupCache();
       } catch (error) {
         // Silently fail - prefetch is best-effort
-        // The actual query in SizePriceModal will handle errors
+        // The actual query will handle errors
         if (__DEV__) {
           console.debug("[useVariantPrefetch] Prefetch failed:", error);
         }

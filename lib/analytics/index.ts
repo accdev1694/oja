@@ -8,8 +8,6 @@ export {
   // Core tracking function
   trackEvent,
   // Convenience functions
-  trackSizePriceModalOpened,
-  trackSizeSelected,
   trackItemAddedWithSize,
   trackItemEdited,
   trackStoreComparisonViewed,
@@ -20,8 +18,6 @@ export {
   type AnalyticsPriceSource,
   type AnalyticsEventName,
   type AnalyticsEventMap,
-  type SizePriceModalOpenedProps,
-  type SizeSelectedProps,
   type ItemAddedWithSizeProps,
   type ItemEditedProps,
   type StoreComparisonViewedProps,
