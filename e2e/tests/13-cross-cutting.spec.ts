@@ -159,7 +159,7 @@ test.describe("13. Cross-Cutting Concerns", () => {
     }) => {
       test.setTimeout(120_000);
       // NOTE: Skip Scan tab — camera not available in headless Chromium, causes timeout
-      const tabs: Array<"Pantry" | "Lists" | "Profile"> = [
+      const tabs: ("Pantry" | "Lists" | "Profile")[] = [
         "Pantry",
         "Lists",
         "Profile",
@@ -230,7 +230,7 @@ test.describe("13. Cross-Cutting Concerns", () => {
       page,
     }) => {
       // NOTE: Skip Scan tab — camera not available in headless Chromium, causes timeout
-      const tabs: Array<"Pantry" | "Lists" | "Profile"> = [
+      const tabs: ("Pantry" | "Lists" | "Profile")[] = [
         "Pantry",
         "Lists",
         "Profile",
@@ -411,7 +411,7 @@ test.describe("13. Cross-Cutting Concerns", () => {
       page.on("pageerror", (err) => errors.push(err.message));
 
       // NOTE: Skip Scan tab — camera not available in headless Chromium, causes timeout
-      const tabs: Array<"Pantry" | "Lists" | "Profile"> = [
+      const tabs: ("Pantry" | "Lists" | "Profile")[] = [
         "Pantry",
         "Lists",
         "Profile",

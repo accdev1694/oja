@@ -47,18 +47,18 @@ interface SwitchStoreResponse {
   previousStore: string;
   newStore: string;
   itemsUpdated: number;
-  sizeChanges: Array<{
+  sizeChanges: {
     itemId: string;
     itemName: string;
     oldSize: string;
     newSize: string;
-  }>;
-  priceChanges: Array<{
+  }[];
+  priceChanges: {
     itemId: string;
     itemName: string;
     oldPrice: number;
     newPrice: number;
-  }>;
+  }[];
   manualOverridesPreserved: number;
   newTotal: number;
   savings: number;
@@ -74,7 +74,7 @@ interface SwitchStoreResponse {
  */
 function findClosestSizeMatch(
   targetSize: string,
-  availableSizes: Array<{ size: string; price: number }>
+  availableSizes: { size: string; price: number }[]
 ): { size: string; price: number; isExact: boolean; percentDiff: number } | null {
   const targetParsed = parseSize(targetSize);
   if (!targetParsed) return null;
@@ -122,7 +122,7 @@ function findClosestSizeMatch(
  * Simulates the calculateListTotal helper from shoppingLists.ts
  */
 function calculateListTotal(
-  items: Array<{ estimatedPrice?: number; quantity: number }>
+  items: { estimatedPrice?: number; quantity: number }[]
 ): number {
   return items.reduce((sum, item) => {
     const price = item.estimatedPrice ?? 0;
@@ -136,13 +136,13 @@ function calculateListTotal(
 function buildSizesResponse(
   itemName: string,
   store: string,
-  variants: Array<{
+  variants: {
     size: string;
     price: number | null;
     source?: "personal" | "crowdsourced" | "ai";
     confidence?: number;
     isUsual?: boolean;
-  }>,
+  }[],
   usualSize?: string
 ): SizesForStoreResponse {
   const sizes: SizeOption[] = variants.map((v) => ({
@@ -545,7 +545,7 @@ describe("switchStore mutation logic", () => {
       };
 
       // No prices at new store
-      const newStorePrices: Array<{ size: string; price: number }> = [];
+      const newStorePrices: { size: string; price: number }[] = [];
       const match = findClosestSizeMatch(item.size, newStorePrices);
 
       // When no match, item keeps original price

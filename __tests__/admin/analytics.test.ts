@@ -52,7 +52,7 @@ describe("Admin Analytics", () => {
   }
 
   function calculateRevenueMetrics(
-    subscriptions: Array<{ plan: string; status: string }>
+    subscriptions: { plan: string; status: string }[]
   ): { mrr: number; activeCount: number; churnCount: number } {
     const PRICES: Record<string, number> = {
       premium_monthly: 2.99,

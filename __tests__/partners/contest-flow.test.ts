@@ -12,7 +12,7 @@ describe("Partner Contest Flow", () => {
     reason: string;
     createdBy: string;
     status: ContestStatus;
-    votes: Array<{ userId: string; vote: ContestVote }>;
+    votes: { userId: string; vote: ContestVote }[];
     resolution?: string;
   }
 

@@ -318,7 +318,7 @@ test.describe("6. Receipt Scanning", () => {
     const allReceipts = getAllReceiptPaths();
     let successCount = 0;
     let failCount = 0;
-    const results: Array<{ file: string; status: string; items?: number }> = [];
+    const results: { file: string; status: string; items?: number }[] = [];
 
     for (const receiptPath of allReceipts) {
       const fileName = receiptPath.split(/[\\/]/).pop()!;

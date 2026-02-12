@@ -20,7 +20,7 @@ describe("Monthly Trends", () => {
   }
 
   function aggregateByMonth(
-    receipts: Array<{ date: string; total: number; items: Array<{ category: string; totalPrice: number }> }>
+    receipts: { date: string; total: number; items: { category: string; totalPrice: number }[] }[]
   ): MonthlyData[] {
     const months: Record<string, MonthlyData> = {};
 
@@ -64,7 +64,7 @@ describe("Monthly Trends", () => {
   }
 
   function getBudgetAdherence(
-    lists: Array<{ budget: number; actualTotal: number }>
+    lists: { budget: number; actualTotal: number }[]
   ): { underBudget: number; overBudget: number; noBudget: number } {
     let underBudget = 0;
     let overBudget = 0;
