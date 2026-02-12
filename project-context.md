@@ -383,18 +383,47 @@ npm test -- --coverage
 
 ---
 
-## Migration Notes (v1 → v2)
+## Known Issues & Warnings
 
-| v1 (Next.js PWA) | v2 (Expo/Convex) |
-|------------------|------------------|
-| Supabase Auth | Clerk |
-| Supabase Postgres | Convex Documents |
-| Supabase Edge Functions | Convex Actions |
-| TanStack Query | Convex useQuery |
-| Zustand | Local state + Convex |
-| Tailwind CSS | StyleSheet + Liquid Glass |
-| IndexedDB | Convex + Local Cache |
+### Native Module Packages (e.g., react-native-keyboard-controller)
+
+**CRITICAL**: When adding packages with native modules:
+
+1. **ALWAYS use `npx expo install <package>`** instead of `npm install` - ensures version compatibility
+2. **Native modules require a dev build** - they won't work in Expo Go
+3. **Don't import native modules in shared/barrel files** (like `components/ui/glass/index.ts`) - if the import fails before the app loads, it will cascade and break ALL providers including Clerk
+4. **After installing, rebuild the app**: `npx expo run:ios` or `npx expo run:android`
+
+**Symptoms of native module linking issues:**
+- "The package 'X' doesn't seem to be linked"
+- "Cannot read property 'Y' of undefined"
+- Unrelated errors like "useAuth can only be used within ClerkProvider" (cascading failure)
+
+**Solution:**
+```bash
+# Clean reinstall
+npm uninstall <package>
+npx expo install <package>
+npx expo run:ios --no-build-cache  # or run:android
+```
+
+### Provider Order in Root Layout
+
+The root layout (`app/_layout.tsx`) has a specific provider order that MUST be maintained:
+
+```
+GestureHandlerRootView
+  └── ClerkProvider
+        └── ClerkLoaded
+              └── ConvexProviderWithClerk
+                    └── GlassAlertProvider
+                          └── Slot
+```
+
+**Never add providers outside ClerkProvider** that import native modules - the import failure will prevent Clerk from mounting, causing "useAuth outside ClerkProvider" errors.
 
 ---
+
+**Never use typescript 'any' types** 
 
 *This document is the single source of truth for implementation patterns. When in doubt, check here first.*
