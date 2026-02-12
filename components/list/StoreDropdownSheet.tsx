@@ -1,27 +1,25 @@
 /**
- * StoreDropdownSheet - Bottom sheet for selecting a store for a shopping list.
+ * StoreDropdownSheet - Centered modal dropdown for selecting a store for a shopping list.
  *
- * Displays two sections:
- *  1. YOUR STORES - The user's favourite stores (preserved order)
- *  2. ALL STORES  - Remaining stores sorted by market share
+ * Renders as a centered overlay modal:
+ *  1. User's favourite stores (flat list with header)
+ *  2. Collapsible "Other Shops" section for remaining stores
  *
- * Uses GlassModal in bottom-anchored mode since @gorhom/bottom-sheet is not
- * installed. Each row shows a brand-colour dot, store name, and a checkmark
- * if the store is currently selected.
+ * Tap outside or select a store to dismiss.
  */
 
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useState } from "react";
 import {
   View,
   Text,
-  FlatList,
+  Pressable,
+  ScrollView,
   StyleSheet,
-  type ListRenderItemInfo,
+  Modal,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import {
-  GlassModal,
   AnimatedPressable,
   colors,
   spacing,
@@ -35,31 +33,55 @@ import type { StoreInfo } from "@/convex/lib/storeNormalizer";
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface StoreDropdownSheetProps {
-  /** Whether the sheet is visible */
+  /** Whether the dropdown is visible */
   visible: boolean;
-  /** Called when the user requests close (backdrop tap or close button) */
+  /** Called when the user requests close (backdrop tap or selection) */
   onClose: () => void;
   /** Called when a store is selected */
   onSelect: (storeId: string) => void;
   /** Currently selected store ID (shows checkmark) */
   currentStoreId?: string;
-  /** User's favourite store IDs (shown in "YOUR STORES" section) */
+  /** User's favourite store IDs (shown at top) */
   userFavorites: string[];
 }
 
-// ── Section item discriminated union ─────────────────────────────────────────
+// ── Store row sub-component ─────────────────────────────────────────────────
 
-interface StoreRow {
-  type: "store";
+function StoreRow({
+  store,
+  isSelected,
+  onPress,
+}: {
   store: StoreInfo;
+  isSelected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      enableHaptics={false}
+      style={{
+        ...styles.storeRow,
+        ...(isSelected ? styles.storeRowSelected : undefined),
+      }}
+    >
+      <View style={[styles.brandDot, { backgroundColor: store.color }]} />
+      <Text
+        style={[styles.storeName, isSelected && styles.storeNameSelected]}
+        numberOfLines={1}
+      >
+        {store.displayName}
+      </Text>
+      {isSelected && (
+        <MaterialCommunityIcons
+          name="check"
+          size={18}
+          color={colors.accent.primary}
+        />
+      )}
+    </AnimatedPressable>
+  );
 }
-
-interface SectionHeader {
-  type: "header";
-  title: string;
-}
-
-type ListItem = StoreRow | SectionHeader;
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -70,41 +92,23 @@ export function StoreDropdownSheet({
   currentStoreId,
   userFavorites,
 }: StoreDropdownSheetProps) {
-  // ── Compute sections ──────────────────────────────────────────────────────
+  const [otherExpanded, setOtherExpanded] = useState(false);
 
-  const sections = useMemo<ListItem[]>(() => {
+  // ── Compute store lists ──────────────────────────────────────────────────
+
+  const { userStores, otherStores } = useMemo(() => {
     const allStores = getAllStores();
     const favSet = new Set(userFavorites);
 
-    // User stores: preserve the order of userFavorites
-    const userStores: StoreInfo[] = [];
+    const user: StoreInfo[] = [];
     for (const favId of userFavorites) {
       const info = getStoreInfoSafe(favId);
-      if (info) {
-        userStores.push(info);
-      }
+      if (info) user.push(info);
     }
 
-    // Other stores: remaining stores (already sorted by market share from getAllStores)
-    const otherStores = allStores.filter((s) => !favSet.has(s.id));
+    const other = allStores.filter((s) => !favSet.has(s.id));
 
-    const items: ListItem[] = [];
-
-    if (userStores.length > 0) {
-      items.push({ type: "header", title: "YOUR STORES" });
-      for (const store of userStores) {
-        items.push({ type: "store", store });
-      }
-    }
-
-    if (otherStores.length > 0) {
-      items.push({ type: "header", title: "ALL STORES" });
-      for (const store of otherStores) {
-        items.push({ type: "store", store });
-      }
-    }
-
-    return items;
+    return { userStores: user, otherStores: other };
   }, [userFavorites]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -117,156 +121,146 @@ export function StoreDropdownSheet({
     [onSelect],
   );
 
-  // ── Key extractor ─────────────────────────────────────────────────────────
-
-  const keyExtractor = useCallback((item: ListItem, index: number) => {
-    if (item.type === "header") {
-      return `header-${item.title}-${index}`;
-    }
-    return `store-${item.store.id}`;
+  const toggleOther = useCallback(() => {
+    haptic("light");
+    setOtherExpanded((prev) => !prev);
   }, []);
 
-  // ── Render item ───────────────────────────────────────────────────────────
+  if (!visible) return null;
 
-  const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<ListItem>) => {
-      if (item.type === "header") {
-        return (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionHeaderText}>{item.title}</Text>
-          </View>
-        );
-      }
-
-      const { store } = item;
-      const isSelected = store.id === currentStoreId;
-
-      return (
-        <AnimatedPressable
-          onPress={() => handleSelect(store.id)}
-          enableHaptics={false}
-          style={{
-            ...styles.storeRow,
-            ...(isSelected ? styles.storeRowSelected : undefined),
-          }}
-        >
-          <View style={[styles.brandDot, { backgroundColor: store.color }]} />
-          <Text
-            style={[styles.storeName, isSelected && styles.storeNameSelected]}
-            numberOfLines={1}
-          >
-            {store.displayName}
-          </Text>
-          {isSelected && (
-            <MaterialCommunityIcons
-              name="check"
-              size={20}
-              color={colors.accent.primary}
-            />
-          )}
-        </AnimatedPressable>
-      );
-    },
-    [currentStoreId, handleSelect],
-  );
-
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <GlassModal
+    <Modal
       visible={visible}
-      onClose={onClose}
-      animationType="slide"
-      position="bottom"
-      maxWidth="full"
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
       statusBarTranslucent
-      contentStyle={styles.sheetContent}
     >
-      {/* Header row with title and close button */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Select Store</Text>
-        <AnimatedPressable
-          onPress={onClose}
-          style={styles.closeButton}
-          enableHaptics
-          hapticStyle="light"
+      {/* Backdrop – tap to dismiss */}
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        {/* Dropdown panel – stop propagation so taps inside don't dismiss */}
+        <Pressable
+          style={styles.dropdownContainer}
+          onPress={(e) => e.stopPropagation()}
         >
-          <MaterialCommunityIcons
-            name="close"
-            size={22}
-            color={colors.text.secondary}
-          />
-        </AnimatedPressable>
-      </View>
+          <View style={styles.dropdown}>
+            <View style={styles.dropdownHeader}>
+              <Text style={styles.dropdownHeaderText}>Select Store</Text>
+            </View>
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              nestedScrollEnabled
+            >
+              {/* ── User's stores ──────────────────────────────────── */}
+              {userStores.length > 0 && (
+                <>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionHeaderText}>YOUR STORES</Text>
+                  </View>
+                  {userStores.map((store) => (
+                    <StoreRow
+                      key={store.id}
+                      store={store}
+                      isSelected={store.id === currentStoreId}
+                      onPress={() => handleSelect(store.id)}
+                    />
+                  ))}
+                </>
+              )}
 
-      {/* Store list */}
-      <FlatList<ListItem>
-        data={sections}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      />
-    </GlassModal>
+              {/* ── Other shops (collapsible) ──────────────────────── */}
+              {otherStores.length > 0 && (
+                <>
+                  <Pressable
+                    style={styles.otherShopsToggle}
+                    onPress={toggleOther}
+                  >
+                    <Text style={styles.otherShopsText}>Other Shops</Text>
+                    <MaterialCommunityIcons
+                      name={otherExpanded ? "chevron-up" : "chevron-down"}
+                      size={20}
+                      color={colors.text.tertiary}
+                    />
+                  </Pressable>
+
+                  {otherExpanded &&
+                    otherStores.map((store) => (
+                      <StoreRow
+                        key={store.id}
+                        store={store}
+                        isSelected={store.id === currentStoreId}
+                        onPress={() => handleSelect(store.id)}
+                      />
+                    ))}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  sheetContent: {
-    maxHeight: "70%",
-    paddingBottom: spacing["3xl"],
-    paddingHorizontal: 0,
-  },
-  header: {
-    flexDirection: "row",
+  backdrop: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  dropdownContainer: {
+    maxHeight: 420,
+    width: "88%",
+  },
+  dropdown: {
+    backgroundColor: "rgba(15, 23, 42, 0.97)",
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    borderRadius: borderRadius.lg,
+    overflow: "hidden",
+  },
+  scrollView: {
+    maxHeight: 370,
+  },
+  scrollContent: {
+    paddingVertical: spacing.xs,
+  },
+  dropdownHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.glass.border,
   },
-  title: {
+  dropdownHeaderText: {
     ...typography.headlineSmall,
     color: colors.text.primary,
   },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.glass.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  list: {
-    flex: 1,
-  },
-  listContent: {
-    paddingBottom: spacing.lg,
-  },
   sectionHeader: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
   },
   sectionHeaderText: {
     ...typography.labelMedium,
     color: colors.text.tertiary,
     textTransform: "uppercase",
     letterSpacing: 1,
+    fontSize: 11,
   },
   storeRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.glass.border,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
     backgroundColor: "transparent",
   },
   storeRowSelected: {
@@ -282,9 +276,25 @@ const styles = StyleSheet.create({
     ...typography.bodyLarge,
     color: colors.text.primary,
     flex: 1,
+    fontSize: 15,
   },
   storeNameSelected: {
     color: colors.accent.primary,
     fontWeight: "600",
+  },
+  otherShopsToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.glass.border,
+    marginTop: spacing.xs,
+  },
+  otherShopsText: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    fontSize: 13,
   },
 });
