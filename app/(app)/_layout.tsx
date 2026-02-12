@@ -172,14 +172,14 @@ const PersistentTabBar = React.memo(function PersistentTabBar() {
   const show = shouldShowTabBar(pathname);
   const activeTab = getActiveTab(pathname);
 
-  if (!show) return null;
-
   const handleTabPress = React.useCallback(
     (tabName: string) => {
       router.navigate(TAB_ROUTES[tabName] as any);
     },
     [router]
   );
+
+  if (!show) return null;
 
   const tabBarContent = (
     <View style={[tabStyles.tabBarInner, { paddingBottom: bottomPadding }]}>

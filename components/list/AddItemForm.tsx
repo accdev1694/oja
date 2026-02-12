@@ -28,6 +28,9 @@ import {
 import { areItemsSimilar, getPriceLabel } from "@/lib/list/helpers";
 import type { ListItem } from "@/components/list/ShoppingListItem";
 import { useVariantPrefetch } from "@/hooks/useVariantPrefetch";
+import { useItemSuggestions } from "@/hooks/useItemSuggestions";
+import { ItemSuggestionsDropdown } from "./ItemSuggestionsDropdown";
+import { DidYouMeanChip } from "./DidYouMeanChip";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -53,8 +56,8 @@ export interface AddItemFormProps {
   budget: number;
   /** Called when user wants to open the mid-shop modal with item details */
   onMidShopAdd: (name: string, quantity: number, price: number) => void;
-  /** Called when user wants to add an item (triggers Size/Price modal in parent) */
-  onPendingAdd?: (name: string, quantity: number, category?: string) => void;
+  /** Called when an input is focused — parent can scroll to keep form visible */
+  onInputFocus?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,7 +75,7 @@ export const AddItemForm = memo(function AddItemForm({
   canEdit,
   budget,
   onMidShopAdd,
-  onPendingAdd,
+  onInputFocus,
 }: AddItemFormProps) {
   const { alert } = useGlassAlert();
 
@@ -104,6 +107,19 @@ export const AddItemForm = memo(function AddItemForm({
   const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+
+  // ── Fuzzy item suggestions (autocomplete + "Did you mean?") ───────────────
+  const [showSuggestionsDropdown, setShowSuggestionsDropdown] = useState(false);
+  const {
+    suggestions: itemSuggestions,
+    didYouMean,
+    isLoading: isSuggestionsSearchLoading,
+    search: searchItemSuggestions,
+    acceptSuggestion,
+    acceptDidYouMean,
+    dismissDidYouMean,
+    clear: clearItemSuggestions,
+  } = useItemSuggestions({ storeName: listStoreName });
 
   // ── Convex queries (reactive, skip when no input) ──────────────────────────
   const priceEstimate = useQuery(
@@ -230,6 +246,8 @@ export const AddItemForm = memo(function AddItemForm({
     setSelectedVariantName(null);
     setSelectedVariantSize(null);
     setSelectedVariantUnit(null);
+    setShowSuggestionsDropdown(false);
+    clearItemSuggestions();
   }
 
   async function addItemToList(
@@ -323,9 +341,6 @@ export const AddItemForm = memo(function AddItemForm({
               // If in shopping mode with budget, show mid-shop modal
               if (listStatus === "shopping" && budget > 0) {
                 openMidShopModal();
-              } else if (onPendingAdd && listStatus !== "shopping") {
-                // Open Size/Price modal for planning mode
-                openSizePriceModal();
               } else {
                 await addAsNewItem();
               }
@@ -343,28 +358,10 @@ export const AddItemForm = memo(function AddItemForm({
       return;
     }
 
-    // If onPendingAdd callback is provided and not in shopping mode, open Size/Price modal
-    if (onPendingAdd && listStatus !== "shopping") {
-      openSizePriceModal();
-      return;
-    }
-
+    // Add item directly - variant selection happens inline via chips
     setIsAddingItem(true);
     await addAsNewItem();
     setIsAddingItem(false);
-  }
-
-  function openSizePriceModal() {
-    if (!onPendingAdd) return;
-
-    const itemName = newItemName.trim();
-    const quantity = parseInt(newItemQuantity) || 1;
-    // Category could be inferred from variants or left undefined
-    const category = itemVariants?.[0]?.category;
-
-    onPendingAdd(itemName, quantity, category);
-    // Reset form — the parent's Size/Price modal takes over from here
-    resetForm();
   }
 
   function openMidShopModal() {
@@ -432,16 +429,17 @@ export const AddItemForm = memo(function AddItemForm({
     }
   }
 
-  // ── Item name change handler with prefetch ─────────────────────────────────
-  // Triggers variant prefetch as user types for faster Size/Price modal loading
+  // ── Item name change handler ───────────────────────────────────────────────
   const handleItemNameChange = useCallback((text: string) => {
     setNewItemName(text);
-    // Trigger prefetch for variants (debounced internally)
-    // This pre-warms the Convex cache so SizePriceModal opens with data ready
-    if (onPendingAdd && listStatus !== "shopping") {
+    // Trigger fuzzy autocomplete search
+    searchItemSuggestions(text);
+    setShowSuggestionsDropdown(text.trim().length >= 2);
+    // Pre-warm the Convex cache for variant data (helps inline chips load faster)
+    if (listStatus !== "shopping") {
       triggerPrefetch(text);
     }
-  }, [triggerPrefetch, onPendingAdd, listStatus]);
+  }, [triggerPrefetch, listStatus, searchItemSuggestions]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -489,7 +487,51 @@ export const AddItemForm = memo(function AddItemForm({
               onChangeText={handleItemNameChange}
               editable={!isAddingItem}
               style={styles.nameInput}
+              onFocus={onInputFocus}
             />
+
+            {/* "Did you mean?" inline correction chip */}
+            {didYouMean && !showSuggestionsDropdown && (
+              <DidYouMeanChip
+                original={didYouMean.original}
+                suggestion={didYouMean.suggestion}
+                similarity={didYouMean.similarity}
+                onAccept={() => {
+                  const corrected = acceptDidYouMean();
+                  setNewItemName(corrected);
+                  setShowSuggestionsDropdown(false);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                onDismiss={dismissDidYouMean}
+              />
+            )}
+
+            {/* Fuzzy autocomplete suggestions dropdown */}
+            <ItemSuggestionsDropdown
+              suggestions={itemSuggestions}
+              isLoading={isSuggestionsSearchLoading}
+              onSelect={(suggestion) => {
+                const name = acceptSuggestion(suggestion);
+                setNewItemName(name);
+                setShowSuggestionsDropdown(false);
+                // Pre-fill price if available and user hasn't entered one
+                if (suggestion.estimatedPrice && !newItemPrice) {
+                  setNewItemPrice(suggestion.estimatedPrice.toFixed(2));
+                }
+                // Pre-fill size/unit if available
+                if (suggestion.size) {
+                  setSelectedVariantSize(suggestion.size);
+                }
+                if (suggestion.unit) {
+                  setSelectedVariantUnit(suggestion.unit);
+                }
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              onDismiss={() => setShowSuggestionsDropdown(false)}
+              visible={showSuggestionsDropdown}
+              existingItemNames={existingItems?.map((i) => i.name)}
+            />
+
             <View style={styles.smallInputRow}>
               <GlassInput
                 placeholder="Qty"
@@ -498,6 +540,7 @@ export const AddItemForm = memo(function AddItemForm({
                 keyboardType="numeric"
                 editable={!isAddingItem}
                 style={styles.smallInput}
+                onFocus={onInputFocus}
               />
               <GlassInput
                 placeholder="£ Est."
@@ -506,6 +549,7 @@ export const AddItemForm = memo(function AddItemForm({
                 keyboardType="decimal-pad"
                 editable={!isAddingItem}
                 style={styles.smallInput}
+                onFocus={onInputFocus}
               />
               <GlassButton
                 variant="primary"

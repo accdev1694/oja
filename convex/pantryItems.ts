@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
+import { calculateSimilarity } from "./lib/fuzzyMatch";
 
 /**
  * Bulk create pantry items for a user
@@ -436,7 +437,7 @@ export const migrateIcons = mutation({
       .collect();
 
     let updated = 0;
-    const debugInfo: Array<{ name: string; category: string; oldIcon: string | undefined; newIcon: string }> = [];
+    const debugInfo: { name: string; category: string; oldIcon: string | undefined; newIcon: string }[] = [];
 
     for (const item of items) {
       // Update if no icon OR if forceAll is true
@@ -462,48 +463,6 @@ export const migrateIcons = mutation({
     return { updated, total: items.length };
   },
 });
-
-/**
- * Calculate Levenshtein distance between two strings (for fuzzy matching)
- */
-function levenshteinDistance(str1: string, str2: string): number {
-  const m = str1.length;
-  const n = str2.length;
-  const dp: number[][] = Array(m + 1)
-    .fill(null)
-    .map(() => Array(n + 1).fill(0));
-
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (str1[i - 1] === str2[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1];
-      } else {
-        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-      }
-    }
-  }
-
-  return dp[m][n];
-}
-
-/**
- * Calculate similarity percentage between two strings
- */
-function calculateSimilarity(str1: string, str2: string): number {
-  const normalized1 = str1.toLowerCase().trim();
-  const normalized2 = str2.toLowerCase().trim();
-
-  if (normalized1 === normalized2) return 100;
-
-  const maxLen = Math.max(normalized1.length, normalized2.length);
-  if (maxLen === 0) return 100;
-
-  const distance = levenshteinDistance(normalized1, normalized2);
-  return ((maxLen - distance) / maxLen) * 100;
-}
 
 /**
  * Auto-restock pantry items from receipt
@@ -539,8 +498,8 @@ export const autoRestockFromReceipt = mutation({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
-    const restockedItems: Array<{ pantryItemId: string; name: string }> = [];
-    const fuzzyMatches: Array<{
+    const restockedItems: { pantryItemId: string; name: string }[] = [];
+    const fuzzyMatches: {
       receiptItemName: string;
       pantryItemName: string;
       pantryItemId: string;
@@ -548,14 +507,14 @@ export const autoRestockFromReceipt = mutation({
       price?: number;
       size?: string;
       unit?: string;
-    }> = [];
-    const itemsToAdd: Array<{
+    }[] = [];
+    const itemsToAdd: {
       name: string;
       category?: string;
       price?: number;
       size?: string;
       unit?: string;
-    }> = [];
+    }[] = [];
 
     const now = Date.now();
 
