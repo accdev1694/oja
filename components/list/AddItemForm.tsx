@@ -1,8 +1,7 @@
-import { memo, useState, useEffect, useCallback } from "react";
+import { memo, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
-  ScrollView,
   Pressable,
   ActivityIndicator,
   StyleSheet,
@@ -13,7 +12,7 @@ import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { haptic } from "@/lib/haptics/safeHaptics";
 
 import {
   GlassCard,
@@ -25,12 +24,14 @@ import {
   borderRadius,
   useGlassAlert,
 } from "@/components/ui/glass";
-import { areItemsSimilar, getPriceLabel } from "@/lib/list/helpers";
+import { areItemsSimilar } from "@/lib/list/helpers";
 import type { ListItem } from "@/components/list/ShoppingListItem";
 import { useVariantPrefetch } from "@/hooks/useVariantPrefetch";
 import { useItemSuggestions } from "@/hooks/useItemSuggestions";
 import { ItemSuggestionsDropdown } from "./ItemSuggestionsDropdown";
 import { DidYouMeanChip } from "./DidYouMeanChip";
+import { VariantPicker } from "@/components/items/VariantPicker";
+import type { VariantOption } from "@/components/items/VariantPicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -107,6 +108,7 @@ export const AddItemForm = memo(function AddItemForm({
   const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const hasLoadedInitialSuggestions = useRef(false);
 
   // ── Fuzzy item suggestions (autocomplete + "Did you mean?") ───────────────
   const [showSuggestionsDropdown, setShowSuggestionsDropdown] = useState(false);
@@ -195,6 +197,37 @@ export const AddItemForm = memo(function AddItemForm({
       .finally(() => setIsEstimatingPrice(false));
   }, [newItemName, priceEstimate, itemVariants, listUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Variant mapping for VariantPicker ─────────────────────────────────────
+  const variantOptions: VariantOption[] = useMemo(() => {
+    if (!itemVariants || itemVariants.length === 0) return [];
+    return itemVariants.map((v) => ({
+      variantName: v.variantName,
+      size: v.size,
+      unit: v.unit,
+      price: v.price ?? null,
+      priceSource: v.priceSource as VariantOption["priceSource"],
+      isUsual: v.priceSource === "personal",
+    }));
+  }, [itemVariants]);
+
+  const handleVariantSelect = useCallback((variantName: string) => {
+    const variant = itemVariants?.find((v) => v.variantName === variantName);
+    if (!variant) return;
+
+    setSelectedVariantName(variant.variantName);
+    setSelectedVariantSize(variant.size);
+    setSelectedVariantUnit(variant.unit);
+    setNewItemName(variant.variantName);
+    setShowSuggestionsDropdown(false);
+    if (variant.price != null) {
+      setNewItemPrice(variant.price.toFixed(2));
+    }
+    setPreferredVariant({
+      itemName: variant.baseItem,
+      preferredVariant: variant.variantName,
+    }).catch(console.error);
+  }, [itemVariants, setPreferredVariant]);
+
   // Load suggestions when items change
   const loadSuggestions = useCallback(async () => {
     if (!existingItems || existingItems.length === 0 || !showSuggestions) {
@@ -221,10 +254,13 @@ export const AddItemForm = memo(function AddItemForm({
     }
   }, [existingItems, dismissedSuggestions, showSuggestions, generateSuggestions]);
 
-  // Fetch suggestions when items change (debounced)
+  // Fetch suggestions once on initial load (debounced)
   useEffect(() => {
+    if (hasLoadedInitialSuggestions.current) return;
+
     const timeoutId = setTimeout(() => {
       if (existingItems && existingItems.length > 0 && showSuggestions) {
+        hasLoadedInitialSuggestions.current = true;
         loadSuggestions();
       }
     }, 500);
@@ -268,7 +304,7 @@ export const AddItemForm = memo(function AddItemForm({
         ...(unit ? { unit } : {}),
       });
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic("success");
       resetForm();
     } catch (error) {
       console.error("Failed to add item:", error);
@@ -300,7 +336,7 @@ export const AddItemForm = memo(function AddItemForm({
         quantity: newQuantity,
       });
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic("success");
       alert("Quantity Updated", `"${existingItem.name}" quantity increased to ${newQuantity}`);
 
       resetForm();
@@ -319,7 +355,7 @@ export const AddItemForm = memo(function AddItemForm({
     const similarItem = findSimilarItem(newItemName.trim());
 
     if (similarItem) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptic("medium");
 
       alert(
         "Similar Item Found",
@@ -377,7 +413,7 @@ export const AddItemForm = memo(function AddItemForm({
   // ── Suggestion handlers ─────────────────────────────────────────────────────
 
   async function handleAddSuggestion(suggestionName: string) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic("light");
 
     // Remove from suggestions
     setSuggestions((prev) => prev.filter((s) => s !== suggestionName));
@@ -400,7 +436,7 @@ export const AddItemForm = memo(function AddItemForm({
         quantity: 1,
         estimatedPrice: price,
       });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic("success");
     } catch (error) {
       console.error("Failed to add suggestion:", error);
       // Add back to suggestions if failed
@@ -410,18 +446,18 @@ export const AddItemForm = memo(function AddItemForm({
   }
 
   function handleDismissSuggestion(suggestionName: string) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic("light");
     setSuggestions((prev) => prev.filter((s) => s !== suggestionName));
     setDismissedSuggestions((prev) => [...prev, suggestionName]);
   }
 
   function handleRefreshSuggestions() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic("light");
     loadSuggestions();
   }
 
   function handleToggleSuggestions() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic("light");
     setShowSuggestions((prev) => !prev);
     if (!showSuggestions) {
       // Clear dismissed when toggling back on
@@ -449,20 +485,7 @@ export const AddItemForm = memo(function AddItemForm({
 
   return (
     <>
-      {/* Collapsed: "+ Add Item" button (hidden during shopping — button is in the row above) */}
-      {!isVisible && itemCount > 0 && listStatus !== "shopping" && (
-        <GlassButton
-          variant="secondary"
-          size="md"
-          icon="plus"
-          onPress={onToggleVisible}
-          style={styles.addItemCollapsedButton}
-        >
-          Add Item
-        </GlassButton>
-      )}
-
-      {/* Expanded: Full add form with inline suggestions */}
+      {/* Add form (always visible when no items, toggleable otherwise) */}
       {(isVisible || itemCount === 0) && (
         <GlassCard variant="standard" style={styles.addItemCard}>
           <View style={styles.addItemHeader}>
@@ -500,7 +523,7 @@ export const AddItemForm = memo(function AddItemForm({
                   const corrected = acceptDidYouMean();
                   setNewItemName(corrected);
                   setShowSuggestionsDropdown(false);
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  haptic("light");
                 }}
                 onDismiss={dismissDidYouMean}
               />
@@ -525,7 +548,7 @@ export const AddItemForm = memo(function AddItemForm({
                 if (suggestion.unit) {
                   setSelectedVariantUnit(suggestion.unit);
                 }
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                haptic("light");
               }}
               onDismiss={() => setShowSuggestionsDropdown(false)}
               visible={showSuggestionsDropdown}
@@ -572,72 +595,30 @@ export const AddItemForm = memo(function AddItemForm({
               </Text>
             )}
 
-            {/* Variant picker chips */}
-            {itemVariants && itemVariants.length > 0 && (
+            {/* Variant picker */}
+            {variantOptions.length > 0 && (
               <View style={styles.variantPickerContainer}>
-                <Text style={styles.variantPickerLabel}>Choose a size:</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.variantChipsList}
+                <VariantPicker
+                  baseItem={newItemName.trim()}
+                  variants={variantOptions}
+                  selectedVariant={selectedVariantName ?? undefined}
+                  onSelect={handleVariantSelect}
+                  compact
+                />
+                <Pressable
+                  style={styles.notSureButton}
+                  onPress={() => {
+                    haptic("light");
+                    setSelectedVariantName(null);
+                    setSelectedVariantSize(null);
+                    setSelectedVariantUnit(null);
+                    if (priceEstimate?.average) {
+                      setNewItemPrice(priceEstimate.average.toFixed(2));
+                    }
+                  }}
                 >
-                  {itemVariants.map((variant) => {
-                    const isSelected = selectedVariantName === variant.variantName;
-                    const label = variant.price != null
-                      ? getPriceLabel(variant.price, variant.priceSource, variant.reportCount, variant.storeName)
-                      : null;
-
-                    return (
-                      <Pressable
-                        key={variant._id}
-                        style={[styles.variantChip, isSelected && styles.variantChipSelected]}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setSelectedVariantName(variant.variantName);
-                          setSelectedVariantSize(variant.size);
-                          setSelectedVariantUnit(variant.unit);
-                          setNewItemName(variant.variantName);
-                          if (variant.price != null) {
-                            setNewItemPrice(variant.price.toFixed(2));
-                          }
-                          // Persist preferred variant on pantry item (fire-and-forget)
-                          setPreferredVariant({
-                            itemName: variant.baseItem,
-                            preferredVariant: variant.variantName,
-                          }).catch(console.error);
-                        }}
-                      >
-                        <Text style={[styles.variantChipName, isSelected && styles.variantChipNameSelected]} numberOfLines={1}>
-                          {variant.variantName}
-                        </Text>
-                        {variant.price != null && label && (
-                          <Text style={[styles.variantChipPrice, isSelected && styles.variantChipPriceSelected]}>
-                            {label.prefix}£{variant.price.toFixed(2)}{label.suffix ? ` ${label.suffix}` : ""}
-                          </Text>
-                        )}
-                        {variant.priceSource === "personal" && (
-                          <Text style={styles.variantChipBadge}>Your usual</Text>
-                        )}
-                      </Pressable>
-                    );
-                  })}
-                  {/* "Other / not sure" option */}
-                  <Pressable
-                    style={[styles.variantChip, styles.variantChipOther]}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setSelectedVariantName(null);
-                      setSelectedVariantSize(null);
-                      setSelectedVariantUnit(null);
-                      // Use base-item average price if available
-                      if (priceEstimate?.average) {
-                        setNewItemPrice(priceEstimate.average.toFixed(2));
-                      }
-                    }}
-                  >
-                    <Text style={styles.variantChipName}>Not sure</Text>
-                  </Pressable>
-                </ScrollView>
+                  <Text style={styles.notSureText}>Not sure</Text>
+                </Pressable>
               </View>
             )}
 
@@ -752,9 +733,6 @@ export const AddItemForm = memo(function AddItemForm({
 
 const styles = StyleSheet.create({
   // Add Item Card
-  addItemCollapsedButton: {
-    marginBottom: spacing.lg,
-  },
   addItemCard: {
     marginBottom: spacing.lg,
   },
@@ -795,56 +773,21 @@ const styles = StyleSheet.create({
   variantPickerContainer: {
     marginTop: spacing.sm,
   },
-  variantPickerLabel: {
-    ...typography.labelSmall,
-    color: colors.text.secondary,
-    marginBottom: spacing.xs,
-  },
-  variantChipsList: {
-    gap: spacing.sm,
-    paddingVertical: 2,
-  },
-  variantChip: {
-    backgroundColor: colors.glass.background,
+  notSureButton: {
+    alignSelf: "flex-start",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.glass.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    alignItems: "center",
-    minWidth: 90,
+    borderStyle: "dashed" as const,
+    opacity: 0.7,
+    marginTop: spacing.xs,
   },
-  variantChipName: {
+  notSureText: {
     ...typography.labelSmall,
     color: colors.text.primary,
     fontWeight: "600",
-    marginBottom: 2,
-  },
-  variantChipPrice: {
-    ...typography.labelSmall,
-    color: colors.accent.primary,
-    fontWeight: "700",
-  },
-  variantChipSelected: {
-    borderColor: colors.accent.primary,
-    backgroundColor: "rgba(0, 212, 170, 0.15)",
-  },
-  variantChipNameSelected: {
-    color: colors.accent.primary,
-  },
-  variantChipPriceSelected: {
-    color: colors.accent.primary,
-  },
-  variantChipBadge: {
-    ...typography.labelSmall,
-    fontSize: 9,
-    color: colors.accent.secondary,
-    marginTop: 2,
-    fontWeight: "600",
-  },
-  variantChipOther: {
-    borderStyle: "dashed" as any,
-    opacity: 0.7,
   },
   estimatingContainer: {
     flexDirection: "row" as const,
