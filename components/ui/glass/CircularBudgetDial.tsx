@@ -285,7 +285,7 @@ export function CircularBudgetDial({
         {/* Center text overlay */}
         <View style={[styles.centerText, { width: size, height: size }]}>
           {/* Budget label + amount */}
-          <Text style={styles.budgetLabel}>Budgeted:</Text>
+          <Text style={styles.budgetLabel}>Edit Budget</Text>
           <Text
             style={styles.budgetAmount}
             numberOfLines={1}
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    marginBottom: -2,
+    marginBottom: 4,
   },
   budgetAmount: {
     ...typography.numberMedium,
