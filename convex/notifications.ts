@@ -1,7 +1,9 @@
 import { v } from "convex/values";
-import { mutation, query, internalQuery, internalAction } from "./_generated/server";
+import { mutation, query, internalQuery, internalAction, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
+
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const getByUser = query({
   args: {},
@@ -146,6 +148,60 @@ export const markAllAsRead = mutation({
     }
 
     return { count: unread.length };
+  },
+});
+
+// ─── Dismiss & Prune ────────────────────────────────────────────────────────
+
+/**
+ * Dismiss (delete) a single notification
+ */
+export const dismiss = mutation({
+  args: { id: v.id("notifications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const notification = await ctx.db.get(args.id);
+    if (!notification) return { success: true };
+    if (notification.userId !== user._id) throw new Error("Not authorized");
+
+    await ctx.db.delete(args.id);
+    return { success: true };
+  },
+});
+
+/**
+ * Internal: prune notifications older than 30 days (all users)
+ */
+export const pruneOld = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - THIRTY_DAYS_MS;
+    // Scan in batches to avoid timeouts
+    let deleted = 0;
+    let batch = await ctx.db.query("notifications").take(500);
+    while (batch.length > 0) {
+      const toDelete = batch.filter((n) => n.createdAt < cutoff);
+      for (const n of toDelete) {
+        await ctx.db.delete(n._id);
+        deleted++;
+      }
+      // If entire batch was old, there may be more
+      if (toDelete.length === batch.length) {
+        batch = await ctx.db.query("notifications").take(500);
+      } else {
+        break;
+      }
+    }
+    console.log(`[pruneOld] Deleted ${deleted} notifications older than 30 days`);
+    return { deleted };
   },
 });
 

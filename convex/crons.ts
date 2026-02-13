@@ -18,4 +18,11 @@ crons.daily(
   internal.nurture.processNurtureSequence
 );
 
+// Prune notifications older than 30 days — runs daily at 4am UTC
+crons.daily(
+  "prune-old-notifications",
+  { hourUTC: 4, minuteUTC: 0 },
+  internal.notifications.pruneOld
+);
+
 export default crons;

@@ -11,6 +11,7 @@ export function useNotifications() {
   const unreadCount = useQuery(api.notifications.getUnreadCount) ?? 0;
   const markAsReadMutation = useMutation(api.notifications.markAsRead);
   const markAllAsReadMutation = useMutation(api.notifications.markAllAsRead);
+  const dismissMutation = useMutation(api.notifications.dismiss);
 
   const markAsRead = async (id: Id<"notifications">) => {
     await markAsReadMutation({ id });
@@ -30,6 +31,7 @@ export function useNotifications() {
     switch (notification.type) {
       case "partner_joined":
       case "partner_left":
+        return "/(app)/partners";
       case "approval_requested":
       case "item_approved":
       case "item_rejected":
@@ -38,10 +40,20 @@ export function useNotifications() {
       case "list_approved":
       case "list_rejected":
       case "list_message":
-        return data.listId ? `/list/${data.listId}` : null;
+        return data.listId ? `/(app)/list/${data.listId}` : null;
+      case "achievement_unlocked":
+      case "challenge_completed":
+        return "/(app)/insights";
+      case "tier_upgrade":
+      case "trial_started":
+        return "/(app)/subscription";
       default:
         return null;
     }
+  };
+
+  const dismiss = async (id: Id<"notifications">) => {
+    await dismissMutation({ id });
   };
 
   return {
@@ -49,6 +61,7 @@ export function useNotifications() {
     unreadCount,
     markAsRead,
     markAllAsRead,
+    dismiss,
     getRoute,
   };
 }

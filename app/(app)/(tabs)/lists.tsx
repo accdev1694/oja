@@ -39,6 +39,7 @@ import {
 import { NotificationDropdown } from "@/components/partners";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useNotifications } from "@/hooks/useNotifications";
 import { ListCard } from "@/components/lists/ListCard";
 import { HistoryCard } from "@/components/lists/HistoryCard";
 import { SharedListCard } from "@/components/lists/SharedListCard";
@@ -59,6 +60,7 @@ export default function ListsScreen() {
   const deleteList = useMutation(api.shoppingLists.remove);
   const [isCreating, setIsCreating] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const { unreadCount } = useNotifications();
 
   // Create list modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -178,7 +180,6 @@ export default function ListsScreen() {
     try {
       const listId = await createList({
         name: newListName.trim(),
-        budget: 50,
       });
 
       handleCloseCreateModal();
@@ -227,16 +228,39 @@ export default function ListsScreen() {
               : undefined
         }
         rightElement={
-          tabMode === "active" ? (
-            <GlassButton
-              variant="primary"
-              size="sm"
-              icon="plus"
-              onPress={handleOpenCreateModal}
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowNotifications(true);
+              }}
+              style={styles.bellButton}
+              hitSlop={8}
             >
-              New List
-            </GlassButton>
-          ) : undefined
+              <MaterialCommunityIcons
+                name="bell-outline"
+                size={22}
+                color={colors.text.secondary}
+              />
+              {unreadCount > 0 && (
+                <View style={styles.bellBadge}>
+                  <Text style={styles.bellBadgeText}>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+            {tabMode === "active" && (
+              <GlassButton
+                variant="primary"
+                size="sm"
+                icon="plus"
+                onPress={handleOpenCreateModal}
+              >
+                New List
+              </GlassButton>
+            )}
+          </View>
         }
       />
 
@@ -705,4 +729,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  // Header actions (bell + New List)
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  bellButton: {
+    position: "relative",
+    padding: spacing.xs,
+  },
+  bellBadge: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    backgroundColor: colors.accent.error,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  bellBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#fff",
+  },
 });

@@ -23,7 +23,7 @@ export const TIPS = {
   pantry_tap_add_list: {
     context: "pantry",
     title: "Quick add to list",
-    body: "Tap the list-add icon on any low-stock item to add it to your shopping list.",
+    body: "Tap the {{icon:plus}} icon on any low-stock item to add it to your shopping list.",
     showAfterSessions: 2,
     showIfCondition: "has_low_stock",
     priority: 2,
@@ -51,7 +51,7 @@ export const TIPS = {
   lists_share_partner: {
     context: "lists",
     title: "Shop together",
-    body: "Tap the share icon to invite a partner. They can add items and see your progress in real-time.",
+    body: "Tap the {{icon:account-group}} icon to invite a partner. They can add items and see your progress in real-time.",
     showAfterSessions: 2,
     showIfCondition: "no_partners",
     priority: 2,

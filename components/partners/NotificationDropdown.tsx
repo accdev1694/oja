@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -6,7 +6,9 @@ import {
   Pressable,
   FlatList,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
+import { GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -46,9 +48,10 @@ export function NotificationDropdown({
   visible,
   onClose,
 }: NotificationDropdownProps) {
-  const { notifications, markAsRead, markAllAsRead, getRoute, unreadCount } =
+  const { notifications, markAsRead, markAllAsRead, dismiss, getRoute, unreadCount } =
     useNotifications();
   const router = useRouter();
+  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
 
   const handleTap = async (notification: (typeof notifications)[0]) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -62,13 +65,25 @@ export function NotificationDropdown({
     }
   };
 
+  const handleDismiss = useCallback(async (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await dismiss(id as any).catch(console.warn);
+  }, [dismiss]);
+
   const handleMarkAllRead = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await markAllAsRead();
   };
 
+  const renderLeftActions = useCallback(() => (
+    <TouchableOpacity style={styles.dismissAction} activeOpacity={0.7}>
+      <MaterialCommunityIcons name="trash-can-outline" size={20} color="#fff" />
+    </TouchableOpacity>
+  ), []);
+
   return (
     <Modal visible={visible} transparent animationType="fade">
+      <GestureHandlerRootView style={styles.gestureRoot}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.dropdown} onPress={(e) => e.stopPropagation()}>
           {/* Header */}
@@ -80,6 +95,14 @@ export function NotificationDropdown({
               </Pressable>
             )}
           </View>
+
+          {/* Swipe hint */}
+          {notifications.length > 0 && (
+            <View style={styles.swipeHint}>
+              <MaterialCommunityIcons name="gesture-swipe-right" size={14} color={colors.text.tertiary} />
+              <Text style={styles.swipeHintText}>Swipe right to dismiss</Text>
+            </View>
+          )}
 
           {/* List */}
           <FlatList
@@ -102,54 +125,69 @@ export function NotificationDropdown({
                 color: colors.text.secondary,
               };
               return (
-                <Pressable
-                  style={[
-                    styles.notification,
-                    !item.read && styles.notificationUnread,
-                  ]}
-                  onPress={() => handleTap(item)}
+                <Swipeable
+                  ref={(ref) => {
+                    if (ref) swipeableRefs.current.set(item._id, ref);
+                    else swipeableRefs.current.delete(item._id);
+                  }}
+                  renderLeftActions={renderLeftActions}
+                  onSwipeableOpen={() => handleDismiss(item._id)}
+                  overshootLeft={false}
+                  friction={2}
                 >
-                  <View
+                  <Pressable
                     style={[
-                      styles.iconCircle,
-                      { backgroundColor: `${typeConfig.color}20` },
+                      styles.notification,
+                      !item.read && styles.notificationUnread,
                     ]}
+                    onPress={() => handleTap(item)}
                   >
-                    <MaterialCommunityIcons
-                      name={typeConfig.icon as any}
-                      size={18}
-                      color={typeConfig.color}
-                    />
-                  </View>
-                  <View style={styles.notifContent}>
-                    <Text
+                    <View
                       style={[
-                        styles.notifTitle,
-                        !item.read && styles.notifTitleUnread,
+                        styles.iconCircle,
+                        { backgroundColor: `${typeConfig.color}20` },
                       ]}
-                      numberOfLines={1}
                     >
-                      {item.title}
+                      <MaterialCommunityIcons
+                        name={typeConfig.icon as any}
+                        size={18}
+                        color={typeConfig.color}
+                      />
+                    </View>
+                    <View style={styles.notifContent}>
+                      <Text
+                        style={[
+                          styles.notifTitle,
+                          !item.read && styles.notifTitleUnread,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.title}
+                      </Text>
+                      <Text style={styles.notifBody} numberOfLines={2}>
+                        {item.body}
+                      </Text>
+                    </View>
+                    <Text style={styles.notifTime}>
+                      {timeAgo(item.createdAt)}
                     </Text>
-                    <Text style={styles.notifBody} numberOfLines={2}>
-                      {item.body}
-                    </Text>
-                  </View>
-                  <Text style={styles.notifTime}>
-                    {timeAgo(item.createdAt)}
-                  </Text>
-                  {!item.read && <View style={styles.unreadDot} />}
-                </Pressable>
+                    {!item.read && <View style={styles.unreadDot} />}
+                  </Pressable>
+                </Swipeable>
               );
             }}
           />
         </Pressable>
       </Pressable>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.4)",
@@ -204,6 +242,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.glass.border,
+    backgroundColor: colors.background.secondary,
   },
   notificationUnread: {
     backgroundColor: "rgba(255, 255, 255, 0.04)",
@@ -242,5 +281,24 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.accent.primary,
+  },
+  dismissAction: {
+    backgroundColor: colors.accent.error,
+    justifyContent: "center",
+    alignItems: "center",
+    width: 72,
+  },
+  swipeHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.glass.border,
+  },
+  swipeHintText: {
+    fontSize: 11,
+    color: colors.text.tertiary,
   },
 });

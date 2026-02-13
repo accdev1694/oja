@@ -13,6 +13,35 @@ import Animated, {
 
 import { colors, spacing, borderRadius, typography } from "@/components/ui/glass";
 
+const ICON_TOKEN_RE = /\{\{icon:([a-z0-9-]+)\}\}/g;
+
+/** Splits tip body text on {{icon:name}} tokens, rendering inline icons. */
+function renderBodyWithIcons(body: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  ICON_TOKEN_RE.lastIndex = 0;
+  while ((match = ICON_TOKEN_RE.exec(body)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(body.slice(lastIndex, match.index));
+    }
+    parts.push(
+      <MaterialCommunityIcons
+        key={match.index}
+        name={match[1] as keyof typeof MaterialCommunityIcons.glyphMap}
+        size={14}
+        color={colors.accent.warm}
+      />,
+    );
+    lastIndex = ICON_TOKEN_RE.lastIndex;
+  }
+  if (lastIndex < body.length) {
+    parts.push(body.slice(lastIndex));
+  }
+  return parts.length > 1 ? parts : body;
+}
+
 interface TipBannerProps {
   context: "pantry" | "lists" | "list_detail" | "scan" | "profile" | "voice";
 }
@@ -76,7 +105,7 @@ export function TipBanner({ context }: TipBannerProps) {
 
       <View style={styles.content}>
         <Text style={styles.title}>{tip.title}</Text>
-        <Text style={styles.body}>{tip.body}</Text>
+        <Text style={styles.body}>{renderBodyWithIcons(tip.body)}</Text>
       </View>
 
       <Pressable onPress={handleDismiss} style={styles.dismissButton} hitSlop={12}>
