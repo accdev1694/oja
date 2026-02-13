@@ -130,7 +130,6 @@ export default function PantryScreen() {
   const updateStockLevel = useMutation(api.pantryItems.updateStockLevel);
   const createList = useMutation(api.shoppingLists.create);
   const addListItem = useMutation(api.listItems.create);
-  const addFromPantryOut = useMutation(api.listItems.addFromPantryOut);
   const migrateIcons = useMutation(api.pantryItems.migrateIcons);
   const removePantryItem = useMutation(api.pantryItems.remove);
 
@@ -223,11 +222,6 @@ export default function PantryScreen() {
     return items.filter(
       (item) => item.stockLevel === "low" || item.stockLevel === "out"
     ).length;
-  }, [items]);
-
-  const outCount = useMemo(() => {
-    if (!items) return 0;
-    return items.filter((item) => item.stockLevel === "out").length;
   }, [items]);
 
   const slidingPillStyle = useAnimatedStyle(() => {
@@ -542,25 +536,6 @@ export default function PantryScreen() {
     setAddToListItem(null);
   }, []);
 
-  // Journey prompt handler
-  const handleJourneyPress = useCallback(async () => {
-    impactAsync(ImpactFeedbackStyle.Light);
-    try {
-      let listId;
-      if (activeLists && activeLists.length > 0) {
-        listId = activeLists[0]._id;
-      } else {
-        const listName = `Shopping List ${new Date().toLocaleDateString()}`;
-        listId = await createList({ name: listName, budget: 50 });
-      }
-      await addFromPantryOut({ listId });
-      notificationAsync(NotificationFeedbackType.Success);
-      router.navigate(`/(app)/list/${listId}` as any);
-    } catch (error) {
-      console.error("Failed to add out items:", error);
-    }
-  }, [activeLists, createList, addFromPantryOut, router]);
-
   // ── Step 1.5: SectionList renderers ───────────────────────────────────
 
   const renderSectionHeader = useCallback(({ section }: { section: { title: string; data: any[] } }) => {
@@ -616,30 +591,10 @@ export default function PantryScreen() {
           </View>
         )}
 
-        {viewMode === "attention" && outCount > 0 && (
-          <Pressable onPress={handleJourneyPress}>
-            <GlassCard style={styles.journeyBanner}>
-              <View style={styles.journeyRow}>
-                <MaterialCommunityIcons
-                  name="cart-arrow-right"
-                  size={20}
-                  color={colors.accent.primary}
-                />
-                <Text style={styles.journeyText}>
-                  {outCount} item{outCount !== 1 ? "s" : ""} out — add to your next list?
-                </Text>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={18}
-                  color={colors.text.tertiary}
-                />
-              </View>
-            </GlassCard>
-          </Pressable>
-        )}
+
       </>
     );
-  }, [filteredItems.length, viewMode, hasExpandedCategory, outCount, handleJourneyPress]);
+  }, [filteredItems.length, viewMode, hasExpandedCategory]);
 
   // ── Loading & empty states ────────────────────────────────────────────
 
@@ -1044,21 +999,6 @@ const styles = StyleSheet.create({
   categoryCount: {
     ...typography.labelSmall,
     color: colors.text.secondary,
-  },
-  journeyBanner: {
-    marginBottom: spacing.xs,
-    borderColor: `${colors.accent.primary}30`,
-    borderWidth: 1,
-  },
-  journeyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  journeyText: {
-    ...typography.bodyMedium,
-    color: colors.text.secondary,
-    flex: 1,
   },
   headerButtons: {
     flexDirection: "row",

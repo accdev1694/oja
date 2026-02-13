@@ -93,23 +93,7 @@ export const ListCard = React.memo(function ListCard({ list, onPress, onDelete, 
               </Text>
             </View>
 
-            <View style={styles.headerActions}>
-              <View style={[styles.statusBadge, { backgroundColor: `${status.color}20` }]}>
-                <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-              </View>
 
-              <Pressable
-                style={styles.deleteButton}
-                onPress={handleDelete}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <MaterialCommunityIcons
-                  name="trash-can-outline"
-                  size={20}
-                  color={colors.semantic.danger}
-                />
-              </Pressable>
-            </View>
           </View>
 
           {/* Budget info */}
@@ -147,23 +131,29 @@ export const ListCard = React.memo(function ListCard({ list, onPress, onDelete, 
             </View>
           )}
 
-          {/* Item count and date */}
+          {/* Item count, date, status and delete */}
           <View style={styles.metaRow}>
-            {list.itemCount !== undefined && (
+            <View style={styles.metaLeft}>
               <View style={styles.metaItem}>
-                <MaterialCommunityIcons
-                  name="format-list-checks"
-                  size={14}
-                  color={colors.text.tertiary}
-                />
-                <Text style={styles.metaText}>
-                  {list.itemCount} item{list.itemCount !== 1 ? "s" : ""}
-                </Text>
+                <MaterialCommunityIcons name="clock-outline" size={14} color={colors.text.tertiary} />
+                <Text style={styles.metaText}>{formatDateTime(list.createdAt)}</Text>
               </View>
-            )}
-            <View style={styles.metaItem}>
-              <MaterialCommunityIcons name="clock-outline" size={14} color={colors.text.tertiary} />
-              <Text style={styles.metaText}>{formatDateTime(list.createdAt)}</Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: `${status.color}20` }]}>
+              <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+            </View>
+            <View style={styles.metaRight}>
+              <Pressable
+                style={styles.deleteButton}
+                onPress={handleDelete}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialCommunityIcons
+                  name="trash-can-outline"
+                  size={20}
+                  color={colors.semantic.danger}
+                />
+              </Pressable>
             </View>
           </View>
         </GlassCard>
@@ -238,7 +228,18 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  metaLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.md,
+  },
+  metaRight: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
   },
   metaItem: {
     flexDirection: "row",

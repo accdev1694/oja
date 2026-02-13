@@ -126,6 +126,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  screenContent: {
+    paddingTop: 12,
+  },
 });
 
 // =============================================================================
@@ -146,7 +149,7 @@ export function GlassScreen({
 }) {
   return (
     <GradientBackground safeArea edges={edges}>
-      <View style={[styles.gradient, style]}>{children}</View>
+      <View style={[styles.gradient, styles.screenContent, style]}>{children}</View>
     </GradientBackground>
   );
 }

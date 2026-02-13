@@ -378,6 +378,7 @@ export function GlassSearchInput({
       onChangeText={handleChangeText}
       placeholder={props.placeholder || "Search..."}
       returnKeyType="search"
+      inputContainerStyle={{ backgroundColor: "transparent", borderWidth: 0 }}
     />
   );
 }

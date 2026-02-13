@@ -56,9 +56,9 @@ export function areItemsSimilar(name1: string, name2: string): boolean {
  * e.g., "Today's Shop", "Yesterday's Shop", "Monday's Shop"
  */
 export function getRelativeListName(createdAt: number, customName?: string): string {
-  // If user has set a custom name (not the default pattern), use it
-  const defaultPattern = /^Shopping List\s+\d{1,2}\/\d{1,2}\/\d{2,4}$/;
-  if (customName && !defaultPattern.test(customName)) {
+  // If user has set a custom name (not the legacy default), use it as-is
+  const legacyDefault = /^Shopping List\s+\d{1,2}\/\d{1,2}\/\d{2,4}$/;
+  if (customName && !legacyDefault.test(customName)) {
     return customName;
   }
 

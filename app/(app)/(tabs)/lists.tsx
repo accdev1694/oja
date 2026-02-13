@@ -137,16 +137,10 @@ export default function ListsScreen() {
 
   const stableFormatDateTime = useCallback((timestamp: number) => {
     const date = new Date(timestamp);
-    const dateStr = date.toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-    const timeStr = date.toLocaleTimeString("en-GB", {
+    return date.toLocaleTimeString("en-GB", {
       hour: "2-digit",
       minute: "2-digit",
     });
-    return `${dateStr} at ${timeStr}`;
   }, []);
 
   const renderHistoryCard = useCallback(({ item }: { item: typeof displayList[number] }) => (
@@ -159,8 +153,15 @@ export default function ListsScreen() {
 
   function handleOpenCreateModal() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Default to "Shopping List" — footer date+time differentiates
-    setNewListName("Shopping List");
+    const now = new Date();
+    const day = now.getDate();
+    const ordinal =
+      day % 10 === 1 && day !== 11 ? "st" :
+      day % 10 === 2 && day !== 12 ? "nd" :
+      day % 10 === 3 && day !== 13 ? "rd" : "th";
+    const month = now.toLocaleDateString("en-GB", { month: "long" });
+    const year = now.getFullYear();
+    setNewListName(`${day}${ordinal} ${month} ${year} Shopping`);
     setShowCreateModal(true);
   }
 

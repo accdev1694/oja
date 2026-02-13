@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   },
   simpleHeaderContent: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
   },
   simpleHeaderText: {
@@ -369,6 +369,8 @@ const styles = StyleSheet.create({
   },
   simpleSubtitle: {
     ...typography.bodyMedium,
+    fontSize: 12,
+    lineHeight: 16,
     color: colors.text.secondary,
     marginTop: spacing.xs,
   },
@@ -408,19 +410,12 @@ export function SimpleHeader({
       ]}
     >
       <View style={styles.simpleHeaderContent}>
-        <View style={styles.simpleHeaderText}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {accentColor && (
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accentColor }} />
-            )}
-            <Text style={styles.simpleTitle}>{title}</Text>
-          </View>
-          {subtitle && (
-            <Text style={[styles.simpleSubtitle, accentColor ? { marginLeft: 14 } : undefined]}>{subtitle}</Text>
-          )}
-        </View>
+        <Text style={[styles.simpleTitle, { flex: 1 }]}>{title}</Text>
         {rightElement}
       </View>
+      {subtitle && (
+        <Text style={styles.simpleSubtitle}>{subtitle}</Text>
+      )}
     </View>
   );
 }
@@ -433,21 +428,27 @@ Object.assign(styles, {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
+    marginBottom: spacing.xl,
+    backgroundColor: `${colors.background.secondary}F5`,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
   },
   simpleHeaderContent: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
   },
   simpleHeaderText: {
     flex: 1,
   },
   simpleTitle: {
-    ...typography.headlineLarge,
+    ...typography.displaySmall,
     color: colors.text.primary,
   },
   simpleSubtitle: {
     ...typography.bodyMedium,
+    fontSize: 12,
+    lineHeight: 16,
     color: colors.text.secondary,
     marginTop: spacing.xs,
   },
