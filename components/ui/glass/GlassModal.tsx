@@ -32,8 +32,13 @@ export interface GlassModalProps {
   onClose: () => void;
   /** Animation type (default: "fade") */
   animationType?: "fade" | "slide" | "none";
-  /** Content position within the overlay (default: "center") */
-  position?: "center" | "bottom";
+  /**
+   * Content position within the overlay (default: "center")
+   * - "center": Centered card with padding
+   * - "bottom": Bottom sheet with top-only border-radius
+   * - "custom": Caller controls positioning via overlayStyle / contentStyle
+   */
+  position?: "center" | "bottom" | "custom";
   /** Wrap content in KeyboardAvoidingView for screens with text inputs (default: false) */
   avoidKeyboard?: boolean;
   /** Make the status bar translucent on Android (default: false) */
@@ -42,10 +47,18 @@ export interface GlassModalProps {
   overlayOpacity?: number;
   /** Max width of the content card. Pass "full" for full-width bottom sheets. (default: 340) */
   maxWidth?: number | "full";
+  /** Additional styles applied to the overlay (useful with position="custom") */
+  overlayStyle?: StyleProp<ViewStyle>;
   /** Additional styles applied to the content card View */
   contentStyle?: StyleProp<ViewStyle>;
   /** Bottom offset in px — lifts the sheet above tab bars or nav bars */
   bottomOffset?: number;
+  /**
+   * When true, the glass card (background, border, padding, border-radius)
+   * is NOT rendered — children are placed directly in the overlay.
+   * Useful for dropdowns that manage their own card styling.
+   */
+  bare?: boolean;
   /** Modal content */
   children: React.ReactNode;
 }
@@ -61,29 +74,38 @@ export function GlassModal({
   statusBarTranslucent = false,
   overlayOpacity = 0.6,
   maxWidth = 340,
+  overlayStyle: overlayStyleProp,
   contentStyle,
   bottomOffset = 0,
+  bare = false,
   children,
 }: GlassModalProps) {
   const isBottom = position === "bottom";
+  const isCustom = position === "custom";
   const isFull = maxWidth === "full";
 
   // ── Overlay style ──────────────────────────────────────────────────
 
-  const overlayStyle: ViewStyle = {
+  const baseOverlayStyle: ViewStyle = {
     flex: 1,
     backgroundColor: `rgba(0, 0, 0, ${overlayOpacity})`,
-    justifyContent: isBottom ? "flex-end" : "center",
-    alignItems: "center",
-    padding: isBottom ? 0 : spacing.xl,
+    ...(isCustom
+      ? {}
+      : {
+          justifyContent: isBottom ? "flex-end" : "center",
+          alignItems: "center",
+          padding: isBottom ? 0 : spacing.xl,
+        }),
   };
 
   // ── Wrapper style (sizing lives here so % resolves against overlay) ─
 
-  const wrapperStyle: ViewStyle = {
-    width: isFull || isBottom ? "100%" : "85%",
-    ...(isFull || isBottom ? {} : { maxWidth: maxWidth as number }),
-  };
+  const wrapperStyle: ViewStyle = isCustom
+    ? {}
+    : {
+        width: isFull || isBottom ? "100%" : "85%",
+        ...(isFull || isBottom ? {} : { maxWidth: maxWidth as number }),
+      };
 
   // ── Content card style ─────────────────────────────────────────────
 
@@ -107,7 +129,11 @@ export function GlassModal({
 
   // ── Inner content (card + stop-propagation wrapper) ────────────────
 
-  const contentNode = (
+  const contentNode = bare ? (
+    <Pressable onPress={(e) => e.stopPropagation()} style={[wrapperStyle, contentStyle]}>
+      {children}
+    </Pressable>
+  ) : (
     <Pressable onPress={(e) => e.stopPropagation()} style={wrapperStyle}>
       <View style={[cardStyle, contentStyle]}>{children}</View>
     </Pressable>
@@ -120,9 +146,11 @@ export function GlassModal({
 
   // ── Rendered tree ──────────────────────────────────────────────────
 
+  const composedOverlay = [baseOverlayStyle, overlayStyleProp];
+
   const inner = avoidKeyboard ? (
     <KeyboardAvoidingView
-      style={overlayStyle}
+      style={composedOverlay}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       {/* Backdrop behind KAV content */}
@@ -131,7 +159,7 @@ export function GlassModal({
       {bottomSpacer}
     </KeyboardAvoidingView>
   ) : (
-    <Pressable style={overlayStyle} onPress={onClose}>
+    <Pressable style={composedOverlay} onPress={onClose}>
       {contentNode}
       {bottomSpacer}
     </Pressable>

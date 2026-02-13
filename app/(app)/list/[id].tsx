@@ -743,16 +743,14 @@ export default function ListDetailScreen() {
         />
       )}
 
-      {/* Action Row: Budget / Store / Add Items (planning mode) */}
+      {/* Action Row: Store / Add Items (planning mode) */}
       {list?.status === "active" && (
         <ListActionRow
-          budget={budget}
           storeName={list.storeName}
           storeColor={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
           hasStore={!!list.normalizedStoreId}
           currentStoreId={list.normalizedStoreId}
           userFavorites={userFavorites}
-          onBudgetChange={handleSaveBudget}
           onStoreSelect={handleSelectStore}
           onAddItemsPress={() => setShowAddItemsModal(true)}
         />

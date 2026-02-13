@@ -158,7 +158,7 @@ export const create = mutation({
       userId: user._id,
       name: args.name,
       status: "active",
-      budget: args.budget,
+      budget: args.budget ?? 50,
       storeName: args.storeName,
       normalizedStoreId: args.normalizedStoreId,
       plannedDate: args.plannedDate,

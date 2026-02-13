@@ -1,14 +1,12 @@
 /**
- * ListActionRow - Budget input, Store dropdown, and Add Items button for list header.
+ * ListActionRow - Store dropdown and Add Items button for list header.
  */
 
-import { memo, useCallback, useState, useMemo, useEffect } from "react";
+import { memo, useCallback, useState, useMemo } from "react";
 import {
   View,
   Text,
-  TextInput,
   Pressable,
-  Modal,
   ScrollView,
   StyleSheet,
 } from "react-native";
@@ -28,13 +26,11 @@ import type { StoreInfo } from "@/convex/lib/storeNormalizer";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ListActionRowProps {
-  budget: number;
   storeName?: string;
   storeColor?: string;
   hasStore: boolean;
   currentStoreId?: string;
   userFavorites: string[];
-  onBudgetChange: (newBudget: number | undefined) => Promise<void>;
   onStoreSelect: (storeId: string) => void;
   onAddItemsPress: () => void;
 }
@@ -44,44 +40,15 @@ export interface ListActionRowProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const ListActionRow = memo(function ListActionRow({
-  budget,
   storeName,
   storeColor,
   hasStore,
   currentStoreId,
   userFavorites,
-  onBudgetChange,
   onStoreSelect,
   onAddItemsPress,
 }: ListActionRowProps) {
-  // ── Budget input state ──────────────────────────────────────────────────────
-  const [budgetText, setBudgetText] = useState(budget > 0 ? String(budget) : "");
-  const [budgetFocused, setBudgetFocused] = useState(false);
-
-  // Sync from parent when budget changes externally (e.g. from CircularBudgetDial modal)
-  useEffect(() => {
-    if (!budgetFocused) {
-      setBudgetText(budget > 0 ? String(budget) : "");
-    }
-  }, [budget, budgetFocused]);
-
-  const handleBudgetBlur = useCallback(() => {
-    setBudgetFocused(false);
-    const parsed = parseFloat(budgetText);
-    if (budgetText.trim() === "" || isNaN(parsed) || parsed <= 0) {
-      onBudgetChange(undefined);
-      setBudgetText("");
-    } else {
-      onBudgetChange(parsed);
-      setBudgetText(String(parsed));
-    }
-  }, [budgetText, onBudgetChange]);
-
-  const handleBudgetSubmit = useCallback(() => {
-    handleBudgetBlur();
-  }, [handleBudgetBlur]);
-
-  // ── Store dropdown state ────────────────────────────────────────────────────
+  // ── Store dropdown state ──────────────────────────────────────────────────
   const [showStoreDropdown, setShowStoreDropdown] = useState(false);
 
   const { favStores, otherStores } = useMemo(() => {
@@ -119,28 +86,10 @@ export const ListActionRow = memo(function ListActionRow({
   }, [hasStore, onAddItemsPress]);
 
   return (
-    <>
-      <View style={styles.wrapper}>
-        <View style={styles.row}>
-          {/* Budget Input */}
-          <View style={[styles.inputContainer, budgetFocused && styles.inputContainerFocused]}>
-            <Text style={styles.currencyPrefix}>£</Text>
-            <TextInput
-              style={styles.budgetInput}
-              value={budgetText}
-              onChangeText={setBudgetText}
-              onFocus={() => setBudgetFocused(true)}
-              onBlur={handleBudgetBlur}
-              onSubmitEditing={handleBudgetSubmit}
-              placeholder="Budget"
-              placeholderTextColor={colors.text.disabled}
-              keyboardType="decimal-pad"
-              returnKeyType="done"
-              accessibilityLabel="Budget amount"
-            />
-          </View>
-
-          {/* Store Selector */}
+    <View style={styles.wrapper}>
+      <View style={styles.row}>
+        {/* Store Selector */}
+        <View style={styles.storeAnchor}>
           <Pressable
             style={({ pressed }) => [
               styles.button,
@@ -163,144 +112,137 @@ export const ListActionRow = memo(function ListActionRow({
               {hasStore && storeName ? storeName : "Store"}
             </Text>
             <MaterialCommunityIcons
-              name="chevron-down"
+              name={showStoreDropdown ? "chevron-up" : "chevron-down"}
               size={16}
               color={colors.text.tertiary}
             />
           </Pressable>
 
-          {/* Add Items Button */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              hasStore ? styles.buttonActive : styles.buttonDisabled,
-              hasStore && pressed && styles.buttonActivePressed,
-            ]}
-            onPress={handleAddItemsPress}
-            disabled={!hasStore}
-            accessibilityLabel="Add items"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !hasStore }}
-          >
-            {hasStore ? (
-              <MaterialCommunityIcons
-                name="plus"
-                size={18}
-                color={colors.accent.primary}
+          {/* Inline Store Dropdown */}
+          {showStoreDropdown && (
+            <>
+              <Pressable
+                style={styles.backdrop}
+                onPress={() => setShowStoreDropdown(false)}
               />
-            ) : null}
-            <Text
-              style={[
-                styles.buttonText,
-                hasStore ? styles.addItemsTextActive : styles.addItemsTextDisabled,
-              ]}
-              numberOfLines={1}
-            >
-              Add Items
-            </Text>
-          </Pressable>
+              <View style={styles.dropdown}>
+                <ScrollView
+                  style={styles.dropdownScroll}
+                  contentContainerStyle={styles.dropdownScrollContent}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                  nestedScrollEnabled
+                >
+                  {favStores.length > 0 && (
+                    <>
+                      <Text style={styles.dropdownSectionHeader}>YOUR STORES</Text>
+                      {favStores.map((store) => (
+                        <Pressable
+                          key={store.id}
+                          style={[
+                            styles.storeRow,
+                            store.id === currentStoreId && styles.storeRowSelected,
+                          ]}
+                          onPress={() => handleStoreSelect(store.id)}
+                        >
+                          <View style={[styles.storeDot, { backgroundColor: store.color }]} />
+                          <Text
+                            style={[
+                              styles.storeRowText,
+                              store.id === currentStoreId && styles.storeRowTextSelected,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {store.displayName}
+                          </Text>
+                          {store.id === currentStoreId && (
+                            <MaterialCommunityIcons
+                              name="check"
+                              size={18}
+                              color={colors.accent.primary}
+                            />
+                          )}
+                        </Pressable>
+                      ))}
+                    </>
+                  )}
+
+                  {otherStores.length > 0 && (
+                    <>
+                      {favStores.length > 0 && <View style={styles.dropdownDivider} />}
+                      <Text style={styles.dropdownSectionHeader}>ALL STORES</Text>
+                      {otherStores.map((store) => (
+                        <Pressable
+                          key={store.id}
+                          style={[
+                            styles.storeRow,
+                            store.id === currentStoreId && styles.storeRowSelected,
+                          ]}
+                          onPress={() => handleStoreSelect(store.id)}
+                        >
+                          <View style={[styles.storeDot, { backgroundColor: store.color }]} />
+                          <Text
+                            style={[
+                              styles.storeRowText,
+                              store.id === currentStoreId && styles.storeRowTextSelected,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {store.displayName}
+                          </Text>
+                          {store.id === currentStoreId && (
+                            <MaterialCommunityIcons
+                              name="check"
+                              size={18}
+                              color={colors.accent.primary}
+                            />
+                          )}
+                        </Pressable>
+                      ))}
+                    </>
+                  )}
+                </ScrollView>
+              </View>
+            </>
+          )}
         </View>
 
-        {!hasStore && (
-          <Text style={styles.hintText}>Pick a store to see prices</Text>
-        )}
+        {/* Add Items Button */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.button,
+            hasStore ? styles.buttonActive : styles.buttonDisabled,
+            hasStore && pressed && styles.buttonActivePressed,
+          ]}
+          onPress={handleAddItemsPress}
+          disabled={!hasStore}
+          accessibilityLabel="Add items"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !hasStore }}
+        >
+          {hasStore ? (
+            <MaterialCommunityIcons
+              name="plus"
+              size={18}
+              color={colors.accent.primary}
+            />
+          ) : null}
+          <Text
+            style={[
+              styles.buttonText,
+              hasStore ? styles.addItemsTextActive : styles.addItemsTextDisabled,
+            ]}
+            numberOfLines={1}
+          >
+            Add Items
+          </Text>
+        </Pressable>
       </View>
 
-      {/* Store Dropdown Modal */}
-      <Modal
-        visible={showStoreDropdown}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowStoreDropdown(false)}
-        statusBarTranslucent
-      >
-        <Pressable
-          style={styles.backdrop}
-          onPress={() => setShowStoreDropdown(false)}
-        >
-          <Pressable
-            style={styles.dropdown}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <ScrollView
-              style={styles.dropdownScroll}
-              contentContainerStyle={styles.dropdownScrollContent}
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-            >
-              {favStores.length > 0 && (
-                <>
-                  <Text style={styles.dropdownSectionHeader}>YOUR STORES</Text>
-                  {favStores.map((store) => (
-                    <Pressable
-                      key={store.id}
-                      style={[
-                        styles.storeRow,
-                        store.id === currentStoreId && styles.storeRowSelected,
-                      ]}
-                      onPress={() => handleStoreSelect(store.id)}
-                    >
-                      <View style={[styles.storeDot, { backgroundColor: store.color }]} />
-                      <Text
-                        style={[
-                          styles.storeRowText,
-                          store.id === currentStoreId && styles.storeRowTextSelected,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {store.displayName}
-                      </Text>
-                      {store.id === currentStoreId && (
-                        <MaterialCommunityIcons
-                          name="check"
-                          size={18}
-                          color={colors.accent.primary}
-                        />
-                      )}
-                    </Pressable>
-                  ))}
-                </>
-              )}
-
-              {otherStores.length > 0 && (
-                <>
-                  {favStores.length > 0 && <View style={styles.dropdownDivider} />}
-                  <Text style={styles.dropdownSectionHeader}>ALL STORES</Text>
-                  {otherStores.map((store) => (
-                    <Pressable
-                      key={store.id}
-                      style={[
-                        styles.storeRow,
-                        store.id === currentStoreId && styles.storeRowSelected,
-                      ]}
-                      onPress={() => handleStoreSelect(store.id)}
-                    >
-                      <View style={[styles.storeDot, { backgroundColor: store.color }]} />
-                      <Text
-                        style={[
-                          styles.storeRowText,
-                          store.id === currentStoreId && styles.storeRowTextSelected,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {store.displayName}
-                      </Text>
-                      {store.id === currentStoreId && (
-                        <MaterialCommunityIcons
-                          name="check"
-                          size={18}
-                          color={colors.accent.primary}
-                        />
-                      )}
-                    </Pressable>
-                  ))}
-                </>
-              )}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </>
+      {!hasStore && (
+        <Text style={styles.hintText}>Pick a store to see prices</Text>
+      )}
+    </View>
   );
 });
 
@@ -315,33 +257,6 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     gap: spacing.sm,
-  },
-
-  // Budget input
-  inputContainer: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.glass.background,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.sm,
-  },
-  inputContainerFocused: {
-    borderColor: colors.accent.primary,
-  },
-  currencyPrefix: {
-    ...typography.labelMedium,
-    color: colors.text.secondary,
-    marginRight: 2,
-  },
-  budgetInput: {
-    flex: 1,
-    ...typography.labelMedium,
-    color: colors.text.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: 0,
   },
 
   // Shared button
@@ -396,24 +311,43 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
+  // Store anchor (relative parent for the dropdown)
+  storeAnchor: {
+    flex: 1,
+    zIndex: 10,
+  },
+
   // Store dropdown
   backdrop: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    position: "absolute",
+    top: -1000,
+    bottom: -1000,
+    left: -1000,
+    right: -1000,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
+    zIndex: 1,
   },
   dropdown: {
-    width: "88%",
-    maxHeight: 420,
-    backgroundColor: "rgba(15, 23, 42, 0.97)",
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    marginTop: spacing.xs,
+    maxHeight: 300,
+    backgroundColor: colors.background.primary,
     borderWidth: 1,
-    borderColor: colors.glass.border,
+    borderColor: colors.glass.borderFocus,
     borderRadius: borderRadius.lg,
     overflow: "hidden",
+    zIndex: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   dropdownScroll: {
-    maxHeight: 410,
+    maxHeight: 290,
   },
   dropdownScrollContent: {
     paddingVertical: spacing.sm,
@@ -424,7 +358,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 1,
     fontSize: 11,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs,
   },
@@ -437,7 +371,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.background.primary,
   },
   storeRowSelected: {
     backgroundColor: "rgba(0, 212, 170, 0.08)",

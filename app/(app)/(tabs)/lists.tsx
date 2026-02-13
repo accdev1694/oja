@@ -180,6 +180,7 @@ export default function ListsScreen() {
     try {
       const listId = await createList({
         name: newListName.trim(),
+        budget: 50,
       });
 
       handleCloseCreateModal();

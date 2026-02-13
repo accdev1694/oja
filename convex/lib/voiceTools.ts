@@ -1068,7 +1068,7 @@ async function executeWriteTool(
 
       const listId = await ctx.runMutation(api.shoppingLists.create, {
         name: listName,
-        budget: args.budget,
+        budget: args.budget ?? 50,
         storeName: args.storeName,
       });
       return {

@@ -15,12 +15,12 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Modal,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import {
   AnimatedPressable,
+  GlassModal,
   colors,
   spacing,
   typography,
@@ -131,100 +131,77 @@ export function StoreDropdownSheet({
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <Modal
+    <GlassModal
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
+      onClose={onClose}
+      overlayOpacity={0.5}
       statusBarTranslucent
+      contentStyle={styles.card}
     >
-      {/* Backdrop – tap to dismiss */}
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        {/* Dropdown panel – stop propagation so taps inside don't dismiss */}
-        <Pressable
-          style={styles.dropdownContainer}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={styles.dropdown}>
-            <View style={styles.dropdownHeader}>
-              <Text style={styles.dropdownHeaderText}>Select Store</Text>
+      <View style={styles.dropdownHeader}>
+        <Text style={styles.dropdownHeaderText}>Select Store</Text>
+      </View>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        nestedScrollEnabled
+      >
+        {/* ── User's stores ──────────────────────────────────── */}
+        {userStores.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionHeaderText}>YOUR STORES</Text>
             </View>
-            <ScrollView
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-              nestedScrollEnabled
+            {userStores.map((store) => (
+              <StoreRow
+                key={store.id}
+                store={store}
+                isSelected={store.id === currentStoreId}
+                onPress={() => handleSelect(store.id)}
+              />
+            ))}
+          </>
+        )}
+
+        {/* ── Other shops (collapsible) ──────────────────────── */}
+        {otherStores.length > 0 && (
+          <>
+            <Pressable
+              style={styles.otherShopsToggle}
+              onPress={toggleOther}
             >
-              {/* ── User's stores ──────────────────────────────────── */}
-              {userStores.length > 0 && (
-                <>
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionHeaderText}>YOUR STORES</Text>
-                  </View>
-                  {userStores.map((store) => (
-                    <StoreRow
-                      key={store.id}
-                      store={store}
-                      isSelected={store.id === currentStoreId}
-                      onPress={() => handleSelect(store.id)}
-                    />
-                  ))}
-                </>
-              )}
+              <Text style={styles.otherShopsText}>Other Shops</Text>
+              <MaterialCommunityIcons
+                name={otherExpanded ? "chevron-up" : "chevron-down"}
+                size={20}
+                color={colors.text.tertiary}
+              />
+            </Pressable>
 
-              {/* ── Other shops (collapsible) ──────────────────────── */}
-              {otherStores.length > 0 && (
-                <>
-                  <Pressable
-                    style={styles.otherShopsToggle}
-                    onPress={toggleOther}
-                  >
-                    <Text style={styles.otherShopsText}>Other Shops</Text>
-                    <MaterialCommunityIcons
-                      name={otherExpanded ? "chevron-up" : "chevron-down"}
-                      size={20}
-                      color={colors.text.tertiary}
-                    />
-                  </Pressable>
-
-                  {otherExpanded &&
-                    otherStores.map((store) => (
-                      <StoreRow
-                        key={store.id}
-                        store={store}
-                        isSelected={store.id === currentStoreId}
-                        onPress={() => handleSelect(store.id)}
-                      />
-                    ))}
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+            {otherExpanded &&
+              otherStores.map((store) => (
+                <StoreRow
+                  key={store.id}
+                  store={store}
+                  isSelected={store.id === currentStoreId}
+                  onPress={() => handleSelect(store.id)}
+                />
+              ))}
+          </>
+        )}
+      </ScrollView>
+    </GlassModal>
   );
 }
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  dropdownContainer: {
+  card: {
+    padding: 0,
     maxHeight: 420,
-    width: "88%",
-  },
-  dropdown: {
-    backgroundColor: "rgba(15, 23, 42, 0.97)",
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    borderRadius: borderRadius.lg,
     overflow: "hidden",
   },
   scrollView: {
@@ -245,7 +222,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   sectionHeader: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs,
   },
@@ -260,7 +237,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     backgroundColor: "transparent",
   },
   storeRowSelected: {
@@ -287,7 +264,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.glass.border,
     marginTop: spacing.xs,

@@ -2,7 +2,6 @@ import React, { useCallback, useRef } from "react";
 import {
   View,
   Text,
-  Modal,
   Pressable,
   FlatList,
   StyleSheet,
@@ -13,6 +12,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useNotifications } from "@/hooks/useNotifications";
+import { GlassModal } from "@/components/ui/glass";
 import { colors, spacing, typography } from "@/lib/design/glassTokens";
 
 interface NotificationDropdownProps {
@@ -82,9 +82,14 @@ export function NotificationDropdown({
   ), []);
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <GlassModal
+      visible={visible}
+      onClose={onClose}
+      position="custom"
+      bare
+      overlayOpacity={0.4}
+    >
       <GestureHandlerRootView style={styles.gestureRoot}>
-      <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.dropdown} onPress={(e) => e.stopPropagation()}>
           {/* Header */}
           <View style={styles.header}>
@@ -178,9 +183,8 @@ export function NotificationDropdown({
             }}
           />
         </Pressable>
-      </Pressable>
       </GestureHandlerRootView>
-    </Modal>
+    </GlassModal>
   );
 }
 
@@ -188,20 +192,16 @@ const styles = StyleSheet.create({
   gestureRoot: {
     flex: 1,
   },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-  },
   dropdown: {
     position: "absolute",
     top: 100,
     right: spacing.md,
     left: spacing.md,
     maxHeight: 420,
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.background.primary,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.glass.border,
+    borderColor: colors.glass.borderFocus,
     overflow: "hidden",
   },
   header: {
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.glass.border,
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.background.primary,
   },
   notificationUnread: {
     backgroundColor: "rgba(255, 255, 255, 0.04)",
