@@ -67,7 +67,7 @@ export const ListActionRow = memo(function ListActionRow({
 
   const handleStorePress = useCallback(() => {
     haptic("light");
-    setShowStoreDropdown(true);
+    setShowStoreDropdown((prev) => !prev);
   }, []);
 
   const handleStoreSelect = useCallback(
@@ -118,93 +118,6 @@ export const ListActionRow = memo(function ListActionRow({
             />
           </Pressable>
 
-          {/* Inline Store Dropdown */}
-          {showStoreDropdown && (
-            <>
-              <Pressable
-                style={styles.backdrop}
-                onPress={() => setShowStoreDropdown(false)}
-              />
-              <View style={styles.dropdown}>
-                <ScrollView
-                  style={styles.dropdownScroll}
-                  contentContainerStyle={styles.dropdownScrollContent}
-                  showsVerticalScrollIndicator={false}
-                  bounces={false}
-                  nestedScrollEnabled
-                >
-                  {favStores.length > 0 && (
-                    <>
-                      <Text style={styles.dropdownSectionHeader}>YOUR STORES</Text>
-                      {favStores.map((store) => (
-                        <Pressable
-                          key={store.id}
-                          style={[
-                            styles.storeRow,
-                            store.id === currentStoreId && styles.storeRowSelected,
-                          ]}
-                          onPress={() => handleStoreSelect(store.id)}
-                        >
-                          <View style={[styles.storeDot, { backgroundColor: store.color }]} />
-                          <Text
-                            style={[
-                              styles.storeRowText,
-                              store.id === currentStoreId && styles.storeRowTextSelected,
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {store.displayName}
-                          </Text>
-                          {store.id === currentStoreId && (
-                            <MaterialCommunityIcons
-                              name="check"
-                              size={18}
-                              color={colors.accent.primary}
-                            />
-                          )}
-                        </Pressable>
-                      ))}
-                    </>
-                  )}
-
-                  {otherStores.length > 0 && (
-                    <>
-                      {favStores.length > 0 && <View style={styles.dropdownDivider} />}
-                      <Text style={styles.dropdownSectionHeader}>ALL STORES</Text>
-                      {otherStores.map((store) => (
-                        <Pressable
-                          key={store.id}
-                          style={[
-                            styles.storeRow,
-                            store.id === currentStoreId && styles.storeRowSelected,
-                          ]}
-                          onPress={() => handleStoreSelect(store.id)}
-                        >
-                          <View style={[styles.storeDot, { backgroundColor: store.color }]} />
-                          <Text
-                            style={[
-                              styles.storeRowText,
-                              store.id === currentStoreId && styles.storeRowTextSelected,
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {store.displayName}
-                          </Text>
-                          {store.id === currentStoreId && (
-                            <MaterialCommunityIcons
-                              name="check"
-                              size={18}
-                              color={colors.accent.primary}
-                            />
-                          )}
-                        </Pressable>
-                      ))}
-                    </>
-                  )}
-                </ScrollView>
-              </View>
-            </>
-          )}
         </View>
 
         {/* Add Items Button */}
@@ -242,6 +155,94 @@ export const ListActionRow = memo(function ListActionRow({
       {!hasStore && (
         <Text style={styles.hintText}>Pick a store to see prices</Text>
       )}
+
+      {/* Inline Store Dropdown — at wrapper level so it spans full width */}
+      {showStoreDropdown && (
+        <>
+          <Pressable
+            style={styles.backdrop}
+            onPress={() => setShowStoreDropdown(false)}
+          />
+          <View style={styles.dropdown}>
+            <ScrollView
+              style={styles.dropdownScroll}
+              contentContainerStyle={styles.dropdownScrollContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              nestedScrollEnabled
+            >
+              {favStores.length > 0 && (
+                <>
+                  <Text style={styles.dropdownSectionHeader}>YOUR STORES</Text>
+                  {favStores.map((store) => (
+                    <Pressable
+                      key={store.id}
+                      style={[
+                        styles.storeRow,
+                        store.id === currentStoreId && styles.storeRowSelected,
+                      ]}
+                      onPress={() => handleStoreSelect(store.id)}
+                    >
+                      <View style={[styles.storeDot, { backgroundColor: store.color }]} />
+                      <Text
+                        style={[
+                          styles.storeRowText,
+                          store.id === currentStoreId && styles.storeRowTextSelected,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {store.displayName}
+                      </Text>
+                      {store.id === currentStoreId && (
+                        <MaterialCommunityIcons
+                          name="check"
+                          size={18}
+                          color={colors.accent.primary}
+                        />
+                      )}
+                    </Pressable>
+                  ))}
+                </>
+              )}
+
+              {otherStores.length > 0 && (
+                <>
+                  {favStores.length > 0 && <View style={styles.dropdownDivider} />}
+                  <Text style={styles.dropdownSectionHeader}>ALL STORES</Text>
+                  {otherStores.map((store) => (
+                    <Pressable
+                      key={store.id}
+                      style={[
+                        styles.storeRow,
+                        store.id === currentStoreId && styles.storeRowSelected,
+                      ]}
+                      onPress={() => handleStoreSelect(store.id)}
+                    >
+                      <View style={[styles.storeDot, { backgroundColor: store.color }]} />
+                      <Text
+                        style={[
+                          styles.storeRowText,
+                          store.id === currentStoreId && styles.storeRowTextSelected,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {store.displayName}
+                      </Text>
+                      {store.id === currentStoreId && (
+                        <MaterialCommunityIcons
+                          name="check"
+                          size={18}
+                          color={colors.accent.primary}
+                        />
+                      )}
+                    </Pressable>
+                  ))}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </>
+      )}
     </View>
   );
 });
@@ -253,10 +254,13 @@ export const ListActionRow = memo(function ListActionRow({
 const styles = StyleSheet.create({
   wrapper: {
     gap: spacing.sm,
+    zIndex: 10,
   },
   row: {
     flexDirection: "row",
     gap: spacing.sm,
+    zIndex: 3,
+    elevation: 9,
   },
 
   // Shared button
@@ -309,12 +313,13 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.text.tertiary,
     textAlign: "center",
+    zIndex: 3,
+    elevation: 9,
   },
 
-  // Store anchor (relative parent for the dropdown)
+  // Store anchor
   storeAnchor: {
     flex: 1,
-    zIndex: 10,
   },
 
   // Store dropdown
@@ -328,26 +333,17 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   dropdown: {
-    position: "absolute",
-    top: "100%",
-    left: 0,
-    right: 0,
-    marginTop: spacing.xs,
-    maxHeight: 300,
-    backgroundColor: colors.background.primary,
+    maxHeight: 265,
+    backgroundColor: colors.background.secondary,
     borderWidth: 1,
     borderColor: colors.glass.borderFocus,
     borderRadius: borderRadius.lg,
     overflow: "hidden",
     zIndex: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
     elevation: 8,
   },
   dropdownScroll: {
-    maxHeight: 290,
+    maxHeight: 255,
   },
   dropdownScrollContent: {
     paddingVertical: spacing.sm,
@@ -372,7 +368,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.background.secondary,
   },
   storeRowSelected: {
     backgroundColor: "rgba(0, 212, 170, 0.08)",
