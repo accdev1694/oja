@@ -4,10 +4,13 @@
  * Renders a glass-styled mic icon that can be dragged anywhere on screen.
  * Tapping it opens the VoiceSheet bottom sheet.
  * Position is persisted so it remembers where the user left it.
+ *
+ * Bounds are derived from the actual measured container via onLayout —
+ * not from useWindowDimensions() which can return wrong values on Android.
  */
 
-import React, { useEffect } from "react";
-import { Pressable, StyleSheet, Dimensions, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { StyleSheet, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   withRepeat,
@@ -24,14 +27,14 @@ import { TAB_BAR_HEIGHT } from "@/components/ui/glass/GlassTabBar";
 import { useVoiceAssistant } from "@/hooks/useVoiceAssistant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { VoiceSheet } from "./VoiceSheet";
-import { colors, spacing } from "@/lib/design/glassTokens";
+import { colors, spacing, layout } from "@/lib/design/glassTokens";
 import { usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Id } from "@/convex/_generated/dataModel";
+import type { LayoutChangeEvent } from "react-native";
 
 const FAB_SIZE = 52;
 const STORAGE_KEY = "@oja_voice_fab_position";
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 interface Props {
   activeListId?: Id<"shoppingLists">;
@@ -43,38 +46,76 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
   const { firstName } = useCurrentUser();
   const insets = useSafeAreaInsets();
 
-  // Default position: right side, just above tab bar
-  const defaultX = SCREEN_WIDTH - FAB_SIZE - spacing.md;
-  const defaultY = SCREEN_HEIGHT - TAB_BAR_HEIGHT - FAB_SIZE - spacing.lg - insets.bottom;
+  // Measured container dimensions — the single source of truth for bounds.
+  const [layoutReady, setLayoutReady] = useState(false);
+
+  // Shared values for bounds (updated from onLayout, read in worklets)
+  const boundsMaxX = useSharedValue(0);
+  const boundsMaxY = useSharedValue(0);
+  const boundsMinY = useSharedValue(insets.top);
+  const boundsSnapRight = useSharedValue(0);
+  const boundsMidX = useSharedValue(0);
 
   // Position shared values
-  const translateX = useSharedValue(defaultX);
-  const translateY = useSharedValue(defaultY);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
   const contextX = useSharedValue(0);
   const contextY = useSharedValue(0);
   const isPressed = useSharedValue(false);
   const isDragging = useSharedValue(false);
 
-  // Load saved position on mount
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((saved) => {
-      if (saved) {
-        try {
-          const { x, y } = JSON.parse(saved);
-          // Validate position is within screen bounds
-          const clampedX = Math.max(0, Math.min(x, SCREEN_WIDTH - FAB_SIZE));
-          const clampedY = Math.max(
-            insets.top,
-            Math.min(y, SCREEN_HEIGHT - TAB_BAR_HEIGHT - FAB_SIZE - insets.bottom)
-          );
-          translateX.value = clampedX;
-          translateY.value = clampedY;
-        } catch {
-          // Invalid data, use defaults
-        }
+  // Called when the full-screen overlay measures itself
+  const handleLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const { width, height } = e.nativeEvent.layout;
+
+      const maxX = width - FAB_SIZE;
+      const maxY = height - TAB_BAR_HEIGHT - FAB_SIZE - insets.bottom;
+      const minY = insets.top + layout.headerHeight;
+
+      boundsMaxX.value = maxX;
+      boundsMaxY.value = maxY;
+      boundsMinY.value = minY;
+      boundsSnapRight.value = maxX - spacing.md;
+      boundsMidX.value = width / 2;
+
+      if (!layoutReady) {
+        // First layout: set default position (bottom-right, above tab bar)
+        const defaultX = maxX - spacing.md;
+        const defaultY = maxY - spacing.md;
+
+        // Check for saved position
+        AsyncStorage.getItem(STORAGE_KEY)
+          .then((saved) => {
+            if (saved) {
+              try {
+                const { x, y } = JSON.parse(saved);
+                translateX.value = Math.max(0, Math.min(x, maxX));
+                translateY.value = Math.max(minY, Math.min(y, maxY));
+              } catch {
+                translateX.value = defaultX;
+                translateY.value = defaultY;
+              }
+            } else {
+              translateX.value = defaultX;
+              translateY.value = defaultY;
+            }
+            setLayoutReady(true);
+          })
+          .catch(() => {
+            translateX.value = defaultX;
+            translateY.value = defaultY;
+            setLayoutReady(true);
+          });
       }
-    });
-  }, []);
+    },
+    [layoutReady, insets.top, insets.bottom]
+  );
+
+  // Keep minY in sync if insets change (e.g. status bar toggling)
+  useEffect(() => {
+    boundsMinY.value = insets.top + layout.headerHeight;
+  }, [insets.top]);
 
   // Save position helper
   const savePosition = (x: number, y: number) => {
@@ -111,57 +152,50 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
 
   // Pan gesture for dragging
   const panGesture = Gesture.Pan()
+    .activeOffsetX([-8, 8])
+    .activeOffsetY([-8, 8])
     .onStart(() => {
       contextX.value = translateX.value;
       contextY.value = translateY.value;
-      isDragging.value = false;
+      isDragging.value = true;
     })
     .onUpdate((e) => {
-      // Mark as dragging if moved more than 5px
-      if (Math.abs(e.translationX) > 5 || Math.abs(e.translationY) > 5) {
-        isDragging.value = true;
-      }
-
-      // Calculate new position with boundaries
       const newX = contextX.value + e.translationX;
       const newY = contextY.value + e.translationY;
 
-      // Clamp to screen bounds
-      translateX.value = Math.max(0, Math.min(newX, SCREEN_WIDTH - FAB_SIZE));
+      translateX.value = Math.max(0, Math.min(newX, boundsMaxX.value));
       translateY.value = Math.max(
-        insets.top,
-        Math.min(newY, SCREEN_HEIGHT - TAB_BAR_HEIGHT - FAB_SIZE - insets.bottom)
+        boundsMinY.value,
+        Math.min(newY, boundsMaxY.value)
       );
     })
     .onEnd(() => {
-      // Snap to edges with spring animation
-      const midX = SCREEN_WIDTH / 2;
-      const finalX = translateX.value < midX ? spacing.md : SCREEN_WIDTH - FAB_SIZE - spacing.md;
+      const finalX =
+        translateX.value < boundsMidX.value
+          ? spacing.md
+          : boundsSnapRight.value;
 
       translateX.value = withSpring(finalX, {
         damping: 15,
         stiffness: 150,
       });
 
-      // Save final position
       runOnJS(savePosition)(finalX, translateY.value);
     });
 
   // Tap gesture for opening sheet
   const tapGesture = Gesture.Tap()
+    .maxDuration(250)
     .onStart(() => {
       isPressed.value = true;
     })
     .onEnd(() => {
       isPressed.value = false;
-      // Only open if we weren't dragging
-      if (!isDragging.value) {
-        runOnJS(voice.openSheet)();
-      }
+      runOnJS(voice.openSheet)();
     });
 
-  // Combine gestures - pan has priority
-  const composedGesture = Gesture.Race(panGesture, tapGesture);
+  // Combine gestures — pan takes priority, tap only fires if pan doesn't activate
+  const composedGesture = Gesture.Exclusive(panGesture, tapGesture);
 
   // Animated styles
   const animatedContainerStyle = useAnimatedStyle(() => ({
@@ -184,25 +218,31 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
   if (shouldHide || !voice.isAvailable) return null;
 
   return (
-    <>
-      <GestureDetector gesture={composedGesture}>
-        <Animated.View style={[styles.container, animatedContainerStyle]}>
-          <View
-            style={[
-              styles.fab,
-              voice.isListening && styles.fabActive,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Ask Oja voice assistant"
-          >
-            <MaterialCommunityIcons
-              name="microphone"
-              size={26}
-              color={colors.text.primary}
-            />
-          </View>
-        </Animated.View>
-      </GestureDetector>
+    <View
+      style={styles.overlay}
+      pointerEvents="box-none"
+      onLayout={handleLayout}
+    >
+      {layoutReady && (
+        <GestureDetector gesture={composedGesture}>
+          <Animated.View style={[styles.fabWrapper, animatedContainerStyle]}>
+            <View
+              style={[
+                styles.fab,
+                voice.isListening && styles.fabActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Ask Oja voice assistant"
+            >
+              <MaterialCommunityIcons
+                name="microphone"
+                size={26}
+                color={colors.text.primary}
+              />
+            </View>
+          </Animated.View>
+        </GestureDetector>
+      )}
 
       <VoiceSheet
         visible={voice.isSheetOpen}
@@ -221,16 +261,19 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
         onCancelAction={voice.cancelAction}
         onResetConversation={voice.resetConversation}
       />
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
+  },
+  fabWrapper: {
     position: "absolute",
     left: 0,
     top: 0,
-    zIndex: 100,
   },
   fab: {
     width: FAB_SIZE,
