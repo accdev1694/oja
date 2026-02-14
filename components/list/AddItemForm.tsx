@@ -102,6 +102,8 @@ export const AddItemForm = memo(function AddItemForm({
   const [selectedVariantSize, setSelectedVariantSize] = useState<string | null>(null);
   const [selectedVariantUnit, setSelectedVariantUnit] = useState<string | null>(null);
   const [isEstimatingPrice, setIsEstimatingPrice] = useState(false);
+  // Track whether the user has manually typed a price (prevents auto-fill overwriting)
+  const userHasTypedPrice = useRef(false);
 
   // ── Suggestions state ───────────────────────────────────────────────────────
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -142,18 +144,19 @@ export const AddItemForm = memo(function AddItemForm({
 
   // ── Effects ─────────────────────────────────────────────────────────────────
 
-  // Auto-fill price estimate when available and user hasn't typed one
+  // Auto-fill price estimate when available and user hasn't manually typed one
   useEffect(() => {
-    if (priceEstimate && priceEstimate.cheapest && !newItemPrice) {
+    if (priceEstimate && priceEstimate.cheapest && !userHasTypedPrice.current) {
       setNewItemPrice(priceEstimate.cheapest.price.toFixed(2));
     }
-  }, [priceEstimate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [priceEstimate]);
 
-  // Reset selected variant when item name changes
+  // Reset selected variant and manual price flag when item name changes
   useEffect(() => {
     setSelectedVariantName(null);
     setSelectedVariantSize(null);
     setSelectedVariantUnit(null);
+    userHasTypedPrice.current = false;
   }, [newItemName]);
 
   // Pre-select "your usual" variant when variants load (if no variant already selected)
@@ -284,6 +287,7 @@ export const AddItemForm = memo(function AddItemForm({
     setSelectedVariantUnit(null);
     setShowSuggestionsDropdown(false);
     clearItemSuggestions();
+    userHasTypedPrice.current = false;
   }
 
   async function addItemToList(
@@ -315,12 +319,13 @@ export const AddItemForm = memo(function AddItemForm({
   async function addAsNewItem() {
     const itemName = newItemName.trim();
     const quantity = parseInt(newItemQuantity) || 1;
-    const price = newItemPrice ? parseFloat(newItemPrice) : 0;
+    // Parse price: empty string → undefined, "0" or "0.00" → 0 (valid for BOGOF/free items)
+    const price = newItemPrice.trim() ? parseFloat(newItemPrice) : undefined;
 
     await addItemToList(
       itemName,
       quantity,
-      price || undefined,
+      price != null && !isNaN(price) ? price : undefined,
       selectedVariantSize,
       selectedVariantUnit
     );
@@ -403,11 +408,11 @@ export const AddItemForm = memo(function AddItemForm({
   function openMidShopModal() {
     const itemName = newItemName.trim();
     const quantity = parseInt(newItemQuantity) || 1;
-    const price = parseFloat(newItemPrice) || 0;
+    const price = newItemPrice.trim() ? parseFloat(newItemPrice) : 0;
 
     onMidShopAdd(itemName, quantity, price);
-    // Reset form — the parent's mid-shop modal takes over from here
-    resetForm();
+    // Don't reset form here — parent calls resetForm on successful add,
+    // preserving data if user cancels the mid-shop modal
   }
 
   // ── Suggestion handlers ─────────────────────────────────────────────────────
@@ -568,7 +573,10 @@ export const AddItemForm = memo(function AddItemForm({
               <GlassInput
                 placeholder="£ Est."
                 value={newItemPrice}
-                onChangeText={setNewItemPrice}
+                onChangeText={(text: string) => {
+                  setNewItemPrice(text);
+                  userHasTypedPrice.current = true;
+                }}
                 keyboardType="decimal-pad"
                 editable={!isAddingItem}
                 style={styles.smallInput}

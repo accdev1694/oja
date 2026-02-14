@@ -504,6 +504,15 @@ export function AddItemsModal({
       const searchItemsToCreate: SelectedItem[] = [];
       const customItemsToSeed: SelectedItem[] = [];
 
+      // Build a lookup of existing pantry items by normalized name
+      // to prevent creating duplicate pantry entries
+      const pantryByName = new Map<string, Id<"pantryItems">>();
+      if (pantryItems) {
+        for (const p of pantryItems) {
+          pantryByName.set(p.name.toLowerCase().trim(), p._id);
+        }
+      }
+
       for (const [, item] of selectedItems) {
         if (item.pantryItemId) {
           pantryItemIds.push(item.pantryItemId);
@@ -511,7 +520,14 @@ export function AddItemsModal({
           (item.source === "search" || item.source === "manual") &&
           !item.category
         ) {
-          customItemsToSeed.push(item);
+          // Check if a matching pantry item already exists before seeding
+          const existingPantryId = pantryByName.get(item.name.toLowerCase().trim());
+          if (existingPantryId) {
+            // Use createItem with the existing pantryItemId instead of seeding a duplicate
+            searchItemsToCreate.push({ ...item, pantryItemId: existingPantryId });
+          } else {
+            customItemsToSeed.push(item);
+          }
         } else {
           searchItemsToCreate.push(item);
         }
@@ -530,6 +546,7 @@ export function AddItemsModal({
           size: item.size,
           unit: item.unit,
           estimatedPrice: item.estimatedPrice,
+          ...(item.pantryItemId ? { pantryItemId: item.pantryItemId } : {}),
         });
       }
 
@@ -556,6 +573,7 @@ export function AddItemsModal({
   }, [
     selectedItems,
     listId,
+    pantryItems,
     addFromPantryBulk,
     createItem,
     addAndSeedPantry,

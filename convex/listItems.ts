@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { getUserListPermissions } from "./partners";
 import { resolveVariantWithPrice } from "./lib/priceResolver";
 import { getIconForItem } from "./iconMapping";
@@ -10,19 +12,19 @@ import { canAddPantryItem } from "./lib/featureGating";
  * Falls back when lastPrice is unavailable
  */
 async function getPriceFromCurrentPrices(
-  ctx: any,
+  ctx: MutationCtx | QueryCtx,
   itemName: string
 ): Promise<number | undefined> {
   const normalizedName = itemName.toLowerCase().trim();
   const prices = await ctx.db
     .query("currentPrices")
-    .withIndex("by_item", (q: any) => q.eq("normalizedName", normalizedName))
+    .withIndex("by_item", (q) => q.eq("normalizedName", normalizedName))
     .collect();
 
   if (prices.length === 0) return undefined;
 
   // Return cheapest price
-  const sorted = [...prices].sort((a: any, b: any) => a.unitPrice - b.unitPrice);
+  const sorted = [...prices].sort((a, b) => a.unitPrice - b.unitPrice);
   return sorted[0].unitPrice;
 }
 
@@ -129,7 +131,7 @@ export const create = mutation({
       // Owner adding → check if there's an approver partner on this list
       const partners = await ctx.db
         .query("listPartners")
-        .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+        .withIndex("by_list", (q) => q.eq("listId", args.listId))
         .collect();
       const hasApprover = partners.some((p) => p.role === "approver" && p.status === "accepted");
       approvalStatus = hasApprover ? "pending" : undefined;
@@ -156,6 +158,9 @@ export const create = mutation({
       updatedAt: now,
     });
 
+    // Recalculate list total after adding item
+    await recalculateListTotal(ctx, args.listId);
+
     // Notify the other party about pending approval
     if (approvalStatus === "pending") {
       if (perms.isPartner) {
@@ -173,7 +178,7 @@ export const create = mutation({
         // Notify approver partners
         const partners = await ctx.db
           .query("listPartners")
-          .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+          .withIndex("by_list", (q) => q.eq("listId", args.listId))
           .collect();
         for (const p of partners) {
           if (p.role === "approver" && p.status === "accepted") {
@@ -196,35 +201,17 @@ export const create = mutation({
 });
 
 /**
- * Helper to recalculate list totals after item changes
+ * Helper to mark a list as updated after item changes.
+ * Totals are computed reactively client-side from item data (Convex subscriptions),
+ * so we only need to bump `updatedAt` to signal the change.
  */
 async function recalculateListTotal(
-  ctx: any,
-  listId: any
-): Promise<{ estimatedTotal: number; actualTotal: number }> {
-  const items = await ctx.db
-    .query("listItems")
-    .withIndex("by_list", (q: any) => q.eq("listId", listId))
-    .collect();
-
-  let estimatedTotal = 0;
-  let actualTotal = 0;
-
-  for (const item of items) {
-    const quantity = item.quantity ?? 1;
-    if (item.actualPrice !== undefined) {
-      actualTotal += item.actualPrice * quantity;
-    }
-    estimatedTotal += (item.estimatedPrice ?? 0) * quantity;
-  }
-
-  // Update the list with new totals
+  ctx: MutationCtx,
+  listId: Id<"shoppingLists">
+): Promise<void> {
   await ctx.db.patch(listId, {
-    estimatedTotal,
     updatedAt: Date.now(),
   });
-
-  return { estimatedTotal, actualTotal };
 }
 
 /**
@@ -456,7 +443,6 @@ export const addFromPantryOut = mutation({
       throw new Error("Not authenticated");
     }
 
-    // Verify list ownership
     const list = await ctx.db.get(args.listId);
     if (!list) {
       throw new Error("List not found");
@@ -466,9 +452,11 @@ export const addFromPantryOut = mutation({
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
+    if (!user) throw new Error("User not found");
 
-    if (!user || list.userId !== user._id) {
-      throw new Error("Unauthorized");
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canEdit) {
+      throw new Error("You don't have permission to add items to this list");
     }
 
     // Get all pantry items marked as "out"
@@ -511,6 +499,11 @@ export const addFromPantryOut = mutation({
       addedIds.push(itemId);
     }
 
+    // Recalculate list total after adding items
+    if (addedIds.length > 0) {
+      await recalculateListTotal(ctx, args.listId);
+    }
+
     return { count: addedIds.length, itemIds: addedIds };
   },
 });
@@ -538,9 +531,11 @@ export const addFromPantrySelected = mutation({
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
+    if (!user) throw new Error("User not found");
 
-    if (!user || list.userId !== user._id) {
-      throw new Error("Unauthorized");
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canEdit) {
+      throw new Error("You don't have permission to add items to this list");
     }
 
     const now = Date.now();
@@ -575,6 +570,11 @@ export const addFromPantrySelected = mutation({
       });
 
       count++;
+    }
+
+    // Recalculate list total after adding items
+    if (count > 0) {
+      await recalculateListTotal(ctx, args.listId);
     }
 
     return { count };
@@ -613,9 +613,11 @@ export const addItemMidShop = mutation({
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
+    if (!user) throw new Error("User not found");
 
-    if (!user || list.userId !== user._id) {
-      throw new Error("Unauthorized");
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canEdit) {
+      throw new Error("You don't have permission to add items to this list");
     }
 
     const now = Date.now();
@@ -638,9 +640,18 @@ export const addItemMidShop = mutation({
         updatedAt: now,
       });
 
+      // Recalculate list total after adding item
+      await recalculateListTotal(ctx, args.listId);
+
       return { success: true, itemId, source: "add" };
 
     } else if (args.source === "next_trip") {
+      // Check pantry item limit for free tier
+      const pantryAccess = await canAddPantryItem(ctx, user._id);
+      if (!pantryAccess.allowed) {
+        throw new Error(pantryAccess.reason ?? "Pantry item limit reached");
+      }
+
       // Add to pantry as "Out" - will auto-add to next list
       const pantryItemId = await ctx.db.insert("pantryItems", {
         userId: user._id,
@@ -700,6 +711,21 @@ export const addFromPantryBulk = mutation({
     const normalizedStoreId = list.normalizedStoreId ?? undefined;
     const now = Date.now();
     const itemIds: string[] = [];
+    const addedItemNames: string[] = [];
+
+    // Determine approval status (same logic as create mutation)
+    let approvalStatus: "pending" | "approved" | undefined;
+
+    if (perms.isPartner) {
+      approvalStatus = "pending";
+    } else if (perms.isOwner) {
+      const partners = await ctx.db
+        .query("listPartners")
+        .withIndex("by_list", (q) => q.eq("listId", args.listId))
+        .collect();
+      const hasApprover = partners.some((p) => p.role === "approver" && p.status === "accepted");
+      approvalStatus = hasApprover ? "pending" : undefined;
+    }
 
     for (const pantryItemId of args.pantryItemIds) {
       const pantryItem = await ctx.db.get(pantryItemId);
@@ -767,11 +793,55 @@ export const addFromPantryBulk = mutation({
         priority: "should-have",
         isChecked: false,
         autoAdded: false,
+        ...(approvalStatus ? { approvalStatus } : {}),
         createdAt: now,
         updatedAt: now,
       });
 
       itemIds.push(itemId);
+      addedItemNames.push(pantryItem.name);
+    }
+
+    // Send approval notification (batched — one notification for the whole bulk add)
+    if (approvalStatus === "pending" && addedItemNames.length > 0) {
+      const itemsSummary = addedItemNames.length <= 3
+        ? addedItemNames.join(", ")
+        : `${addedItemNames.slice(0, 3).join(", ")} and ${addedItemNames.length - 3} more`;
+
+      if (perms.isPartner) {
+        await ctx.db.insert("notifications", {
+          userId: list.userId,
+          type: "approval_requested",
+          title: "Approval Needed",
+          body: `${user.name} wants to add ${addedItemNames.length} items: ${itemsSummary}`,
+          data: { listId: args.listId },
+          read: false,
+          createdAt: now,
+        });
+      } else {
+        const partners = await ctx.db
+          .query("listPartners")
+          .withIndex("by_list", (q) => q.eq("listId", args.listId))
+          .collect();
+        for (const p of partners) {
+          if (p.role === "approver" && p.status === "accepted") {
+            await ctx.db.insert("notifications", {
+              userId: p.userId,
+              type: "approval_requested",
+              title: "Approval Needed",
+              body: `${user.name} wants to add ${addedItemNames.length} items: ${itemsSummary}`,
+              data: { listId: args.listId },
+              read: false,
+              createdAt: now,
+            });
+          }
+        }
+      }
+    }
+
+    // Recalculate list total after adding items
+    if (itemIds.length > 0) {
+      await recalculateListTotal(ctx, args.listId);
     }
 
     return { count: itemIds.length, itemIds };
@@ -865,6 +935,9 @@ export const addAndSeedPantry = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // Recalculate list total after adding item
+    await recalculateListTotal(ctx, args.listId);
 
     return { listItemId, pantryItemId };
   },
