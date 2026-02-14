@@ -308,10 +308,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   iconLeft: {
-    marginRight: spacing.sm,
+    marginRight: spacing.xs,
   },
   iconRight: {
-    marginLeft: spacing.sm,
+    marginLeft: spacing.xs,
   },
 });
 

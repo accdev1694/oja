@@ -8,15 +8,9 @@
  * Tap outside or select a store to dismiss.
  */
 
-import React, { useMemo, useCallback, useState } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-} from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import React, { useMemo, useCallback, useState } from 'react'
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { MaterialCommunityIcons } from '@expo/vector-icons'
 
 import {
   AnimatedPressable,
@@ -25,24 +19,24 @@ import {
   spacing,
   typography,
   borderRadius,
-} from "@/components/ui/glass";
-import { haptic } from "@/lib/haptics/safeHaptics";
-import { getAllStores, getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
-import type { StoreInfo } from "@/convex/lib/storeNormalizer";
+} from '@/components/ui/glass'
+import { haptic } from '@/lib/haptics/safeHaptics'
+import { getAllStores, getStoreInfoSafe } from '@/convex/lib/storeNormalizer'
+import type { StoreInfo } from '@/convex/lib/storeNormalizer'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface StoreDropdownSheetProps {
   /** Whether the dropdown is visible */
-  visible: boolean;
+  visible: boolean
   /** Called when the user requests close (backdrop tap or selection) */
-  onClose: () => void;
+  onClose: () => void
   /** Called when a store is selected */
-  onSelect: (storeId: string) => void;
+  onSelect: (storeId: string) => void
   /** Currently selected store ID (shows checkmark) */
-  currentStoreId?: string;
+  currentStoreId?: string
   /** User's favourite store IDs (shown at top) */
-  userFavorites: string[];
+  userFavorites: string[]
 }
 
 // ── Store row sub-component ─────────────────────────────────────────────────
@@ -52,9 +46,9 @@ function StoreRow({
   isSelected,
   onPress,
 }: {
-  store: StoreInfo;
-  isSelected: boolean;
-  onPress: () => void;
+  store: StoreInfo
+  isSelected: boolean
+  onPress: () => void
 }) {
   return (
     <AnimatedPressable
@@ -80,7 +74,7 @@ function StoreRow({
         />
       )}
     </AnimatedPressable>
-  );
+  )
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -92,41 +86,41 @@ export function StoreDropdownSheet({
   currentStoreId,
   userFavorites,
 }: StoreDropdownSheetProps) {
-  const [otherExpanded, setOtherExpanded] = useState(false);
+  const [otherExpanded, setOtherExpanded] = useState(false)
 
   // ── Compute store lists ──────────────────────────────────────────────────
 
   const { userStores, otherStores } = useMemo(() => {
-    const allStores = getAllStores();
-    const favSet = new Set(userFavorites);
+    const allStores = getAllStores()
+    const favSet = new Set(userFavorites)
 
-    const user: StoreInfo[] = [];
+    const user: StoreInfo[] = []
     for (const favId of userFavorites) {
-      const info = getStoreInfoSafe(favId);
-      if (info) user.push(info);
+      const info = getStoreInfoSafe(favId)
+      if (info) user.push(info)
     }
 
-    const other = allStores.filter((s) => !favSet.has(s.id));
+    const other = allStores.filter((s) => !favSet.has(s.id))
 
-    return { userStores: user, otherStores: other };
-  }, [userFavorites]);
+    return { userStores: user, otherStores: other }
+  }, [userFavorites])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleSelect = useCallback(
     (storeId: string) => {
-      haptic("light");
-      onSelect(storeId);
+      haptic('light')
+      onSelect(storeId)
     },
-    [onSelect],
-  );
+    [onSelect]
+  )
 
   const toggleOther = useCallback(() => {
-    haptic("light");
-    setOtherExpanded((prev) => !prev);
-  }, []);
+    haptic('light')
+    setOtherExpanded((prev) => !prev)
+  }, [])
 
-  if (!visible) return null;
+  if (!visible) return null
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -168,13 +162,10 @@ export function StoreDropdownSheet({
         {/* ── Other shops (collapsible) ──────────────────────── */}
         {otherStores.length > 0 && (
           <>
-            <Pressable
-              style={styles.otherShopsToggle}
-              onPress={toggleOther}
-            >
+            <Pressable style={styles.otherShopsToggle} onPress={toggleOther}>
               <Text style={styles.otherShopsText}>Other Shops</Text>
               <MaterialCommunityIcons
-                name={otherExpanded ? "chevron-up" : "chevron-down"}
+                name={otherExpanded ? 'chevron-up' : 'chevron-down'}
                 size={20}
                 color={colors.text.tertiary}
               />
@@ -193,7 +184,7 @@ export function StoreDropdownSheet({
         )}
       </ScrollView>
     </GlassModal>
-  );
+  )
 }
 
 // ── Styles ───────────────────────────────────────────────────────────────────
@@ -202,7 +193,7 @@ const styles = StyleSheet.create({
   card: {
     padding: 0,
     maxHeight: 420,
-    overflow: "hidden",
+    overflow: 'hidden',
   },
   scrollView: {
     maxHeight: 370,
@@ -229,19 +220,19 @@ const styles = StyleSheet.create({
   sectionHeaderText: {
     ...typography.labelMedium,
     color: colors.text.tertiary,
-    textTransform: "uppercase",
+    textTransform: 'uppercase',
     letterSpacing: 1,
     fontSize: 11,
   },
   storeRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    backgroundColor: "transparent",
+    backgroundColor: 'transparent',
   },
   storeRowSelected: {
-    backgroundColor: "rgba(0, 212, 170, 0.08)",
+    backgroundColor: 'rgba(0, 212, 170, 0.08)',
   },
   brandDot: {
     width: 10,
@@ -257,12 +248,12 @@ const styles = StyleSheet.create({
   },
   storeNameSelected: {
     color: colors.accent.primary,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   otherShopsToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -274,4 +265,4 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: 13,
   },
-});
+})

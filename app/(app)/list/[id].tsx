@@ -727,6 +727,8 @@ export default function ListDetailScreen() {
           spent={checkedTotal}
           mode={list?.status ?? "active"}
           onPress={handleOpenEditBudget}
+          storeName={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
+          storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
         />
       )}
 
@@ -952,6 +954,9 @@ export default function ListDetailScreen() {
           title={list.name}
           subtitle={`${checkedCount}/${totalCount} items`}
           showBack
+          topRightElement={
+            <NotificationBell onPress={() => setShowNotifications(true)} />
+          }
           rightElement={
             <View style={styles.headerRightRow}>
               {hasPartners && (
@@ -977,7 +982,6 @@ export default function ListDetailScreen() {
                   )}
                 </Pressable>
               )}
-              <NotificationBell onPress={() => setShowNotifications(true)} />
               <Pressable
                 onPress={() => {
                   haptic("light");

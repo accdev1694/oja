@@ -37,6 +37,10 @@ interface CircularBudgetDialProps {
   currency?: string;
   /** Tap handler (edit budget) */
   onPress?: () => void;
+  /** Selected store display name */
+  storeName?: string;
+  /** Store brand color */
+  storeColor?: string;
 }
 
 export function CircularBudgetDial({
@@ -47,6 +51,8 @@ export function CircularBudgetDial({
   size = 200,
   currency = "£",
   onPress,
+  storeName,
+  storeColor,
 }: CircularBudgetDialProps) {
   const strokeWidth = 10;
   const center = size / 2;
@@ -282,10 +288,17 @@ export function CircularBudgetDial({
           )}
         </Svg>
 
+        {/* Pencil badge – top-left inside the dial */}
+        {onPress && (
+          <View style={[styles.editBadge, { top: size * 0.08, right: size * 0.16 }]}>
+            <MaterialCommunityIcons name="pencil" size={14} color={colors.text.secondary} />
+          </View>
+        )}
+
         {/* Center text overlay */}
         <View style={[styles.centerText, { width: size, height: size }]}>
           {/* Budget label + amount */}
-          <Text style={styles.budgetLabel}>Edit Budget</Text>
+          <Text style={styles.budgetLabel}>Tap to edit budget</Text>
           <Text
             style={styles.budgetAmount}
             numberOfLines={1}
@@ -326,14 +339,19 @@ export function CircularBudgetDial({
               </Text>
             </>
           )}
+
         </View>
 
-        {/* Pencil badge to signal tappability */}
-        {onPress && (
-          <View style={styles.editBadge}>
-            <MaterialCommunityIcons name="pencil" size={14} color={colors.text.secondary} />
-          </View>
-        )}
+        {/* Store name – absolutely positioned at bottom of dial */}
+        <Text
+          style={[
+            styles.storeNameLabel,
+            { color: storeName ? (storeColor ?? colors.text.primary) : "transparent" },
+          ]}
+          numberOfLines={1}
+        >
+          {storeName ? storeName.toUpperCase() : "PLACEHOLDER"}
+        </Text>
       </View>
       {sentiment && (
         <Text style={[styles.sentiment, { color: sentimentColor }]}>{sentiment}</Text>
@@ -352,9 +370,10 @@ const styles = StyleSheet.create({
     left: 0,
     justifyContent: "center",
     alignItems: "center",
+    paddingBottom: 20,
   },
   budgetLabel: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: "500",
     color: colors.text.tertiary,
     letterSpacing: 0.5,
@@ -393,10 +412,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     opacity: 0.85,
   },
+  storeNameLabel: {
+    position: "absolute",
+    bottom: 28,
+    alignSelf: "center",
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+  },
   editBadge: {
     position: "absolute",
-    bottom: 10,
-    right: 10,
     backgroundColor: "rgba(255, 255, 255, 0.12)",
     borderRadius: 12,
     width: 24,

@@ -222,11 +222,11 @@ export default function ListsScreen() {
         accentColor={colors.semantic.lists}
         subtitle={
           tabMode === "active"
-            ? lists && lists.length > 0
+            ? lists !== undefined
               ? `${lists.length} active list${lists.length !== 1 ? "s" : ""}`
-              : "Ready to start shopping?"
-            : history && history.length > 0
-              ? `${history.length} past trip${history.length !== 1 ? "s" : ""}`
+              : undefined
+            : history !== undefined
+              ? `${history.length} archived list${history.length !== 1 ? "s" : ""}`
               : undefined
         }
         rightElement={

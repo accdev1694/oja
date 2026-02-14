@@ -62,8 +62,10 @@ export interface GlassHeaderProps {
   transparent?: boolean;
   /** Custom left element (replaces back button) */
   leftElement?: React.ReactNode;
-  /** Custom right element (replaces actions) */
+  /** Custom right element (replaces actions, shown in bottom row) */
   rightElement?: React.ReactNode;
+  /** Element shown at the right of the top row (title row) */
+  topRightElement?: React.ReactNode;
   /** Container styles */
   style?: StyleProp<ViewStyle>;
 }
@@ -179,6 +181,7 @@ export function GlassHeader({
   transparent = false,
   leftElement,
   rightElement,
+  topRightElement,
   style,
 }: GlassHeaderProps) {
   const insets = useSafeAreaInsets();
@@ -193,39 +196,39 @@ export function GlassHeader({
   };
 
   const headerContent = (
-    <View style={[styles.headerInner, { paddingTop: insets.top }]}>
-      {/* Left Side */}
-      <View style={styles.leftContainer}>
-        {leftElement || (showBack && <BackButton onPress={handleBack} />)}
-      </View>
-
-      {/* Center - Title */}
-      <View style={styles.centerContainer}>
+    <View style={[styles.headerOuter, { paddingTop: insets.top }]}>
+      {/* Row 1: Back + Title */}
+      <View style={styles.headerTopRow}>
+        <View style={styles.leftContainer}>
+          {leftElement || (showBack && <BackButton onPress={handleBack} />)}
+        </View>
         {!largeTitle && (
-          <>
-            <Text
-              style={styles.title}
-              numberOfLines={1}
-            >
-              {title}
-            </Text>
-            {subtitle && (
-              <Text style={styles.subtitle} numberOfLines={1}>
-                {subtitle}
-              </Text>
-            )}
-          </>
+          <Text style={styles.title} numberOfLines={1}>
+            {title}
+          </Text>
         )}
+        {topRightElement}
       </View>
 
-      {/* Right Side */}
-      <View style={styles.rightContainer}>
-        {rightElement || (
-          actions?.map((action, index) => (
-            <ActionButton key={index} action={action} />
-          ))
-        )}
-      </View>
+      {/* Row 2: Subtitle + Right actions */}
+      {(!largeTitle && subtitle) || rightElement || actions ? (
+        <View style={styles.headerBottomRow}>
+          {!largeTitle && subtitle ? (
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          ) : (
+            <View />
+          )}
+          <View style={styles.rightContainer}>
+            {rightElement || (
+              actions?.map((action, index) => (
+                <ActionButton key={index} action={action} />
+              ))
+            )}
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -284,23 +287,27 @@ const styles = StyleSheet.create({
   blurView: {
     flex: 1,
   },
-  headerInner: {
+  headerOuter: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  headerTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    minHeight: 56,
+    minHeight: 48,
+  },
+  headerBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingLeft: 44 + spacing.sm,
+    marginTop: -6,
   },
   leftContainer: {
     minWidth: 44,
     alignItems: "flex-start",
   },
-  centerContainer: {
-    flex: 1,
-    alignItems: "center",
-  },
   rightContainer: {
-    minWidth: 60,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
@@ -309,13 +316,12 @@ const styles = StyleSheet.create({
   title: {
     ...typography.headlineSmall,
     color: colors.text.primary,
-    textAlign: "center",
+    flex: 1,
+    marginLeft: spacing.sm,
   },
   subtitle: {
     ...typography.bodySmall,
     color: colors.text.secondary,
-    textAlign: "center",
-    marginTop: 2,
   },
   largeTitleContainer: {
     paddingHorizontal: spacing.xl,
