@@ -62,7 +62,10 @@ import {
   ActualPriceModal,
   EditItemModal,
   ListPickerModal,
+  StartShoppingModal,
+  TripSummaryModal,
 } from "@/components/list/modals";
+import type { TripStats } from "@/hooks/useTripSummary";
 import { ListComparisonSummary } from "@/components/lists/ListComparisonSummary";
 import { StoreSwitchPreview, type StoreSwitchItem } from "@/components/lists/StoreSwitchPreview";
 import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
@@ -83,7 +86,15 @@ export default function ListDetailScreen() {
   const removeMultipleItems = useMutation(api.listItems.removeMultiple);
   const startShopping = useMutation(api.shoppingLists.startShopping);
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
+  const pauseShoppingMut = useMutation(api.shoppingLists.pauseShopping);
+  const resumeShoppingMut = useMutation(api.shoppingLists.resumeShopping);
   const restockFromCheckedItems = useMutation(api.pantryItems.restockFromCheckedItems);
+
+  // Trip stats for completion summary (only fetch when shopping)
+  const tripStats = useQuery(
+    api.shoppingLists.getTripStats,
+    list?.status === "shopping" ? { id } : "skip"
+  ) as TripStats | null | undefined;
 
   const updateList = useMutation(api.shoppingLists.update);
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
@@ -146,6 +157,15 @@ export default function ListDetailScreen() {
 
   // Edit budget modal state
   const [showEditBudgetModal, setShowEditBudgetModal] = useState(false);
+
+  // Start shopping confirmation modal state
+  const [showStartShoppingModal, setShowStartShoppingModal] = useState(false);
+
+  // Trip summary modal state
+  const [showTripSummary, setShowTripSummary] = useState(false);
+
+  // Track dial transition animation
+  const [dialTransitioning, setDialTransitioning] = useState(false);
 
   // Add Items modal state
   const [showAddItemsModal, setShowAddItemsModal] = useState(false);
@@ -265,6 +285,7 @@ export default function ListDetailScreen() {
   }, [safeItems, listCategoryFilter]);
 
   const isShopping = listStatus === "shopping";
+  const isPaused = listStatus === "active" && !!list?.shoppingStartedAt && !!list?.pausedAt;
 
   // Edit budget handlers
   function handleOpenEditBudget() {
@@ -577,51 +598,81 @@ export default function ListDetailScreen() {
     });
   }, [switchTargetStore, comparison, items]);
 
-  async function handleStartShopping() {
+  // Open the "Ready to Shop?" confirmation modal
+  function handleStartShopping() {
     haptic("medium");
+    setShowStartShoppingModal(true);
+  }
+
+  // Actually start (or resume) shopping after confirmation
+  async function handleConfirmStartShopping() {
     clearSelection();
+    setShowStartShoppingModal(false);
     try {
-      await startShopping({ id });
+      if (isPaused) {
+        await resumeShoppingMut({ id });
+      } else {
+        await startShopping({ id });
+      }
+      setDialTransitioning(true);
+      setTimeout(() => setDialTransitioning(false), 700);
     } catch (error) {
       console.error("Failed to start shopping:", error);
       alert("Error", "Failed to start shopping");
     }
   }
 
-  async function handleCompleteShopping() {
+  // Pause shopping — revert to planning mode
+  async function handlePauseShopping() {
     haptic("medium");
+    try {
+      await pauseShoppingMut({ id });
+      showToast("Trip paused — you can resume anytime", "pause-circle-outline", colors.accent.warning);
+    } catch (error) {
+      console.error("Failed to pause shopping:", error);
+      alert("Error", "Failed to pause shopping");
+    }
+  }
 
-    const doComplete = async () => {
-      try {
-        await completeShopping({ id });
+  // Open the trip summary modal instead of alert
+  function handleCompleteShopping() {
+    haptic("medium");
+    setShowTripSummary(true);
+  }
 
-        // Restock pantry items that were checked off
-        const result = await restockFromCheckedItems({ listId: id });
-        haptic("success");
+  // Called from TripSummaryModal "Finish Trip" button
+  async function handleFinishTrip() {
+    try {
+      await completeShopping({ id });
+      const result = await restockFromCheckedItems({ listId: id });
+      haptic("success");
+      setShowTripSummary(false);
+      router.back();
+    } catch (error) {
+      console.error("Failed to complete shopping:", error);
+      alert("Error", "Failed to complete shopping");
+    }
+  }
 
-        const restockMsg = result.restockedCount > 0
-          ? `${result.restockedCount} pantry item${result.restockedCount !== 1 ? "s" : ""} restocked.`
-          : "";
+  // Called from TripSummaryModal "Scan Receipt" button
+  function handleScanReceipt() {
+    setShowTripSummary(false);
+    router.push("/(app)/(tabs)/scan");
+  }
 
-        const tipMsg = restockMsg
-          ? `\n\nTip: Scan your receipt anytime for more accurate prices.`
-          : "";
+  // Called from TripSummaryModal "Remove unchecked item"
+  const handleRemoveUncheckedItem = useCallback(async (itemId: string) => {
+    try {
+      await removeItem({ id: itemId as Id<"listItems"> });
+      haptic("light");
+    } catch (error) {
+      console.error("Failed to remove item:", error);
+    }
+  }, [removeItem]);
 
-        alert(
-          "Shopping Complete",
-          `Trip finished!${restockMsg ? `\n${restockMsg}` : ""}${tipMsg}`,
-          [{ text: "Done", onPress: () => router.back() }]
-        );
-      } catch (error) {
-        console.error("Failed to complete shopping:", error);
-        alert("Error", "Failed to complete shopping");
-      }
-    };
-
-    alert("Complete Shopping", "Mark this shopping trip as complete?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Complete", onPress: doComplete },
-    ]);
+  // Called from TripSummaryModal "Move unchecked item"
+  function handleMoveUncheckedItem(item: { name: string; estimatedPrice?: number; quantity: number }) {
+    handleAddItemToList(item);
   }
 
   // Helper to scroll the FlashList by a calculated overlap amount
@@ -729,7 +780,23 @@ export default function ListDetailScreen() {
           onPress={handleOpenEditBudget}
           storeName={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
           storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
+          transitioning={dialTransitioning}
         />
+      )}
+
+      {/* Paused trip resume banner */}
+      {isPaused && (
+        <View style={styles.pausedBanner}>
+          <View style={styles.pausedBannerLeft}>
+            <MaterialCommunityIcons name="pause-circle-outline" size={20} color={colors.accent.warning} />
+            <Text style={styles.pausedBannerText}>
+              Trip paused — {checkedCount}/{totalCount} items checked
+            </Text>
+          </View>
+          <Pressable onPress={handleStartShopping} hitSlop={8}>
+            <Text style={styles.pausedResumeText}>Resume</Text>
+          </Pressable>
+        </View>
       )}
 
       {/* List-Level Approval Banner */}
@@ -764,17 +831,28 @@ export default function ListDetailScreen() {
           <GlassButton
             variant="primary"
             size="md"
-            icon="cart-outline"
+            icon={isPaused ? "cart-arrow-right" : "cart-outline"}
             onPress={handleStartShopping}
             style={styles.actionButton}
           >
-            Go Shopping
+            {isPaused ? "Resume Shopping" : "Go Shopping"}
           </GlassButton>
         )}
         {list?.status === "shopping" && (
           <View style={styles.shoppingModeContainer}>
-            <ShoppingTypewriterHint />
+            <ShoppingTypewriterHint
+              storeName={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
+            />
             <View style={styles.shoppingButtonRow}>
+              <GlassButton
+                variant="secondary"
+                size="md"
+                icon="pencil-outline"
+                onPress={handlePauseShopping}
+                style={styles.shoppingRowButton}
+              >
+                Edit List
+              </GlassButton>
               <GlassButton
                 variant="secondary"
                 size="md"
@@ -865,10 +943,12 @@ export default function ListDetailScreen() {
     </View>
   ), [budget, estimatedTotal, checkedTotal, list?.status, list?.approvalStatus,
       list?.approvalNote, list?.userId, list?.storeName, list?.normalizedStoreId,
+      list?.shoppingStartedAt, list?.pausedAt,
       hasPartners, id, approverName,
       isOwner, canApprove, hasApprovers, items,
       selectionVersion, listCategories, listCategoryFilter,
-      listCategoryCounts, pendingCount]);
+      listCategoryCounts, pendingCount,
+      isPaused, dialTransitioning, checkedCount, totalCount]);
 
   // ─── FlashList ListEmptyComponent ────────────────────────────────────────────
   const listEmpty = useMemo(() => (
@@ -1144,6 +1224,31 @@ export default function ListDetailScreen() {
         );
       })()}
 
+      {/* Start Shopping Confirmation Modal */}
+      <StartShoppingModal
+        visible={showStartShoppingModal}
+        onClose={() => setShowStartShoppingModal(false)}
+        onConfirm={handleConfirmStartShopping}
+        listName={list.name}
+        storeName={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
+        storeColor={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
+        itemCount={totalCount}
+        estimatedTotal={estimatedTotal}
+        budget={budget}
+        hasStore={!!list.normalizedStoreId}
+      />
+
+      {/* Trip Summary Modal */}
+      <TripSummaryModal
+        visible={showTripSummary}
+        onClose={() => setShowTripSummary(false)}
+        onFinish={handleFinishTrip}
+        onScanReceipt={handleScanReceipt}
+        onRemoveItem={handleRemoveUncheckedItem}
+        onMoveItem={handleMoveUncheckedItem}
+        stats={tripStats ?? null}
+      />
+
       {/* Surprise delight toast */}
       <GlassToast
         message={toast.message}
@@ -1279,6 +1384,36 @@ const styles = StyleSheet.create({
   },
   deleteIconButton: {
     padding: spacing.xs,
+  },
+
+  // Paused trip banner
+  pausedBanner: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    backgroundColor: "rgba(245, 158, 11, 0.10)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.25)",
+  },
+  pausedBannerLeft: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: spacing.xs,
+    flex: 1,
+  },
+  pausedBannerText: {
+    color: colors.accent.warning,
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: "500" as const,
+  },
+  pausedResumeText: {
+    color: colors.accent.primary,
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: "700" as const,
   },
 
   // Pending approval banner

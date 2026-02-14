@@ -15,7 +15,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'
 import Animated, {
   useSharedValue,
   useAnimatedProps,
+  useAnimatedStyle,
   withTiming,
+  withSequence,
   Easing,
 } from 'react-native-reanimated'
 import { colors, typography, spacing } from '@/lib/design/glassTokens'
@@ -41,6 +43,8 @@ interface CircularBudgetDialProps {
   storeName?: string
   /** Store brand color */
   storeColor?: string
+  /** When true, plays a brief scale-pulse entrance animation */
+  transitioning?: boolean
 }
 
 export function CircularBudgetDial({
@@ -53,6 +57,7 @@ export function CircularBudgetDial({
   onPress,
   storeName,
   storeColor,
+  transitioning,
 }: CircularBudgetDialProps) {
   const strokeWidth = 10
   const center = size / 2
@@ -153,6 +158,7 @@ export function CircularBudgetDial({
   const animInnerOver = useSharedValue(0)
   const animOuterOpacity = useSharedValue(1)
   const animInnerOpacity = useSharedValue(0)
+  const transitionScale = useSharedValue(1)
 
   useEffect(() => {
     animOuterFill.value = withTiming(plannedFillRatio, arcConfig)
@@ -195,6 +201,20 @@ export function CircularBudgetDial({
     opacity: animInnerOpacity.value,
   }))
 
+  // --- Transition entrance animation ---
+  useEffect(() => {
+    if (transitioning) {
+      transitionScale.value = withSequence(
+        withTiming(1.05, { duration: 300, easing: Easing.out(Easing.cubic) }),
+        withTiming(1.0, { duration: 300, easing: Easing.inOut(Easing.cubic) })
+      )
+    }
+  }, [transitioning])
+
+  const transitionAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: transitionScale.value }],
+  }))
+
   // --- Separator tick positions ---
   const outerSepY1 = center + outerRadius - 4
   const outerSepY2 = center + outerRadius + 4
@@ -208,7 +228,7 @@ export function CircularBudgetDial({
       onPress={onPress}
       style={[styles.container, { marginBottom: spacing.md }]}
     >
-      <View style={{ width: size, height: size }}>
+      <Animated.View style={[{ width: size, height: size }, transitionAnimStyle]}>
         <Svg width={size} height={size}>
           {/* ── Outer Arc System (planned) ── */}
 
@@ -411,7 +431,7 @@ export function CircularBudgetDial({
             </>
           )}
         </View>
-      </View>
+      </Animated.View>
       {sentiment && (
         <Text style={[styles.sentiment, { color: sentimentColor }]}>
           {sentiment}

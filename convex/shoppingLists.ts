@@ -71,9 +71,34 @@ export const getActive = query({
       .collect();
 
     // Merge and sort by updatedAt descending (shopping lists first since they're in progress)
-    return [...shopping, ...active].sort(
+    const merged = [...shopping, ...active].sort(
       (a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt)
     );
+
+    // Enrich each list with item counts and estimated total
+    const enriched = await Promise.all(
+      merged.map(async (list) => {
+        const items = await ctx.db
+          .query("listItems")
+          .withIndex("by_list", (q) => q.eq("listId", list._id))
+          .collect();
+
+        const checkedCount = items.filter((i) => i.isChecked).length;
+        const totalEstimatedCost = items.reduce(
+          (sum, i) => sum + (i.estimatedPrice ?? 0) * i.quantity,
+          0
+        );
+
+        return {
+          ...list,
+          itemCount: items.length,
+          checkedCount,
+          totalEstimatedCost: totalEstimatedCost > 0 ? totalEstimatedCost : undefined,
+        };
+      })
+    );
+
+    return enriched;
   },
 });
 
@@ -356,6 +381,171 @@ export const completeShopping = mutation({
     });
 
     return await ctx.db.get(args.id);
+  },
+});
+
+/**
+ * Pause shopping (set status back to "active" but preserve shoppingStartedAt)
+ */
+export const pauseShopping = mutation({
+  args: { id: v.id("shoppingLists") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const list = await ctx.db.get(args.id);
+    if (!list) {
+      throw new Error("List not found");
+    }
+
+    // Verify ownership
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user || list.userId !== user._id) {
+      throw new Error("Unauthorized");
+    }
+
+    await ctx.db.patch(args.id, {
+      status: "active",
+      pausedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    return await ctx.db.get(args.id);
+  },
+});
+
+/**
+ * Resume a paused shopping trip (set status back to "shopping")
+ */
+export const resumeShopping = mutation({
+  args: { id: v.id("shoppingLists") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const list = await ctx.db.get(args.id);
+    if (!list) {
+      throw new Error("List not found");
+    }
+
+    // Verify ownership
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user || list.userId !== user._id) {
+      throw new Error("Unauthorized");
+    }
+
+    if (!list.shoppingStartedAt) {
+      throw new Error("No shopping trip to resume");
+    }
+
+    await ctx.db.patch(args.id, {
+      status: "shopping",
+      pausedAt: undefined,
+      updatedAt: Date.now(),
+    });
+
+    return await ctx.db.get(args.id);
+  },
+});
+
+/**
+ * Get real-time trip stats for a shopping list (checked/unchecked, budget, duration)
+ */
+export const getTripStats = query({
+  args: { id: v.id("shoppingLists") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+
+    const list = await ctx.db.get(args.id);
+    if (!list) {
+      return null;
+    }
+
+    // Verify ownership or partnership
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      return null;
+    }
+
+    // Allow access if owner OR accepted partner
+    if (list.userId !== user._id) {
+      const partner = await ctx.db
+        .query("listPartners")
+        .withIndex("by_list_user", (q: any) =>
+          q.eq("listId", args.id).eq("userId", user._id)
+        )
+        .unique();
+      if (!partner || partner.status !== "accepted") {
+        return null;
+      }
+    }
+
+    // Fetch all items for this list
+    const items = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.id))
+      .collect();
+
+    const checkedItems = items.filter((item) => item.isChecked);
+    const uncheckedItems = items.filter((item) => !item.isChecked);
+
+    const estimatedTotal = items.reduce((sum, item) => {
+      return sum + (item.estimatedPrice ?? 0) * item.quantity;
+    }, 0);
+
+    const actualSpent = checkedItems.reduce((sum, item) => {
+      const price = item.actualPrice ?? item.estimatedPrice ?? 0;
+      return sum + price * item.quantity;
+    }, 0);
+
+    const estimatedTotalForChecked = checkedItems.reduce((sum, item) => {
+      return sum + (item.estimatedPrice ?? 0) * item.quantity;
+    }, 0);
+
+    const budget = list.budget ?? 0;
+
+    return {
+      checkedCount: checkedItems.length,
+      uncheckedCount: uncheckedItems.length,
+      uncheckedItems: uncheckedItems.map((item) => ({
+        _id: item._id,
+        name: item.name,
+        quantity: item.quantity,
+        estimatedPrice: item.estimatedPrice,
+        priority: item.priority,
+        category: item.category,
+      })),
+      totalItems: items.length,
+      estimatedTotal,
+      actualSpent,
+      budget,
+      budgetRemaining: budget - actualSpent,
+      savings: estimatedTotalForChecked - actualSpent,
+      tripDuration: list.shoppingStartedAt
+        ? Date.now() - list.shoppingStartedAt
+        : null,
+      storeName: list.storeName,
+      storeId: list.normalizedStoreId,
+    };
   },
 });
 

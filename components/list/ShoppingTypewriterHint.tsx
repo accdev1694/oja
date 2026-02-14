@@ -6,9 +6,16 @@ import { colors, spacing } from "@/components/ui/glass";
 // ── Typewriter hint for shopping mode ─────────────────────────────────
 const TYPEWRITER_SPEED = 60; // ms per character
 const HINT_COLOR = colors.text.tertiary;
+const STORE_COLOR = colors.accent.primary;
 
-export function ShoppingTypewriterHint() {
-  const text = "Shopping in Progress. Tap item to check off.";
+interface ShoppingTypewriterHintProps {
+  storeName?: string;
+}
+
+export function ShoppingTypewriterHint({ storeName }: ShoppingTypewriterHintProps) {
+  const text = storeName
+    ? `Shopping at ${storeName}... check items as you go`
+    : "Shopping in Progress. Tap item to check off.";
   const [charIndex, setCharIndex] = useState(0);
   const [done, setDone] = useState(false);
 
@@ -43,13 +50,18 @@ export function ShoppingTypewriterHint() {
         {text.split("").map((char, i) => {
           const isActive = !done && i === charIndex - 1;
           const isVisible = i < charIndex;
+          // Highlight the store name portion with accent color
+          const storeStart = storeName ? "Shopping at ".length : -1;
+          const storeEnd = storeName ? storeStart + storeName.length : -1;
+          const isStoreName = storeName && i >= storeStart && i < storeEnd;
+          const charColor = isStoreName ? STORE_COLOR : HINT_COLOR;
           return (
             <Text
               key={i}
               style={{
-                color: isVisible ? HINT_COLOR : "transparent",
-                fontWeight: isActive ? "700" : "400",
-                textShadowColor: isActive ? HINT_COLOR : "transparent",
+                color: isVisible ? charColor : "transparent",
+                fontWeight: isActive ? "700" : isStoreName ? "700" : "400",
+                textShadowColor: isActive ? charColor : "transparent",
                 textShadowOffset: { width: 0, height: 0 },
                 textShadowRadius: isActive ? 8 : 0,
               }}

@@ -1,10 +1,13 @@
-import React, { useCallback } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import React, { useCallback, useEffect } from "react";
+import { View, Text, Pressable, StyleSheet, ViewStyle } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withRepeat,
+  withTiming,
+  Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Id } from "@/convex/_generated/dataModel";
@@ -18,6 +21,12 @@ import {
 } from "@/components/ui/glass";
 import { getRelativeListName } from "@/lib/list/helpers";
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type ListStatus = "active" | "shopping" | "completed" | "archived";
+
 export interface ListCardProps {
   list: {
     _id: Id<"shoppingLists">;
@@ -26,20 +35,162 @@ export interface ListCardProps {
     budget?: number;
     createdAt: number;
     itemCount?: number;
+    checkedCount?: number;
     totalEstimatedCost?: number;
+    shoppingStartedAt?: number;
+    pausedAt?: number;
+    actualTotal?: number;
   };
   onPress: (id: Id<"shoppingLists">) => void;
   onDelete: (id: Id<"shoppingLists">, name: string) => void;
   formatDateTime: (timestamp: number) => string;
 }
 
-const STATUS_CONFIG = {
-  planning: { color: colors.accent.primary, label: "Planning" },
-  shopping: { color: colors.semantic.warning, label: "Shopping" },
-  completed: { color: colors.text.tertiary, label: "Completed" },
-} as const;
+// ---------------------------------------------------------------------------
+// Status configuration
+// ---------------------------------------------------------------------------
 
-export const ListCard = React.memo(function ListCard({ list, onPress, onDelete, formatDateTime }: ListCardProps) {
+interface StatusEntry {
+  color: string;
+  label: string;
+  icon?: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+}
+
+function getStatusConfig(list: ListCardProps["list"]): StatusEntry {
+  const status = list.status as ListStatus;
+
+  if (status === "shopping") {
+    return { color: colors.semantic.scan, label: "Shopping", icon: "cart-outline" };
+  }
+
+  if (status === "active" && list.shoppingStartedAt && list.pausedAt) {
+    return { color: colors.accent.warning, label: "Paused", icon: "pause-circle-outline" };
+  }
+
+  if (status === "completed" || status === "archived") {
+    return { color: colors.text.tertiary, label: "Completed", icon: "check-circle-outline" };
+  }
+
+  // Default: active without shoppingStartedAt = Planning
+  return { color: colors.accent.primary, label: "Planning", icon: "clipboard-edit-outline" };
+}
+
+// ---------------------------------------------------------------------------
+// Pulse dot for active shopping trips
+// ---------------------------------------------------------------------------
+
+const PulseDot = React.memo(function PulseDot({ color }: { color: string }) {
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          width: 6,
+          height: 6,
+          borderRadius: 3,
+          backgroundColor: color,
+        },
+        animatedStyle,
+      ]}
+    />
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Budget mini-bar
+// ---------------------------------------------------------------------------
+
+function BudgetMiniBar({
+  budget,
+  spent,
+}: {
+  budget: number;
+  spent: number;
+}) {
+  const ratio = Math.min(spent / budget, 1);
+  const isOver = spent > budget;
+
+  return (
+    <View style={miniBarStyles.track}>
+      <View
+        style={[
+          miniBarStyles.fill,
+          {
+            width: `${ratio * 100}%` as ViewStyle["width"],
+            backgroundColor: isOver ? colors.semantic.danger : colors.accent.primary,
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
+const miniBarStyles = StyleSheet.create({
+  track: {
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    overflow: "hidden",
+  },
+  fill: {
+    height: 3,
+    borderRadius: 1.5,
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Progress text helper
+// ---------------------------------------------------------------------------
+
+function getProgressText(list: ListCardProps["list"]): string | null {
+  const status = list.status as ListStatus;
+  const total = list.itemCount ?? 0;
+  const checked = list.checkedCount ?? 0;
+
+  if (status === "shopping") {
+    return `${checked}/${total} items`;
+  }
+
+  if (status === "active" && list.shoppingStartedAt && list.pausedAt) {
+    return `${checked}/${total} checked`;
+  }
+
+  if ((status === "completed" || status === "archived") && list.actualTotal != null) {
+    return `\u00A3${list.actualTotal.toFixed(2)}`;
+  }
+
+  if (total > 0 && status === "active") {
+    return `${total} item${total !== 1 ? "s" : ""}`;
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// ListCard
+// ---------------------------------------------------------------------------
+
+export const ListCard = React.memo(function ListCard({
+  list,
+  onPress,
+  onDelete,
+  formatDateTime,
+}: ListCardProps) {
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -48,11 +199,11 @@ export const ListCard = React.memo(function ListCard({ list, onPress, onDelete, 
 
   const handlePressIn = useCallback(() => {
     scale.value = withSpring(0.98, animations.spring.stiff);
-  }, []);
+  }, [scale]);
 
   const handlePressOut = useCallback(() => {
     scale.value = withSpring(1, animations.spring.gentle);
-  }, []);
+  }, [scale]);
 
   const handlePress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -74,12 +225,39 @@ export const ListCard = React.memo(function ListCard({ list, onPress, onDelete, 
           : "healthy"
       : "healthy";
 
-  const status = STATUS_CONFIG[list.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.planning;
+  const statusConfig = getStatusConfig(list);
+  const progressText = getProgressText(list);
+  const isShopping = (list.status as ListStatus) === "shopping";
+  const isPaused =
+    (list.status as ListStatus) === "active" &&
+    !!list.shoppingStartedAt &&
+    !!list.pausedAt;
+
+  // Show budget mini-bar for active/shopping states that have a budget
+  const showMiniBar =
+    list.budget != null &&
+    list.budget > 0 &&
+    ((list.status as ListStatus) === "active" ||
+      (list.status as ListStatus) === "shopping");
+
+  const spent = list.totalEstimatedCost ?? 0;
+
+  // Paused state gets a subtle amber left border
+  const cardBorderStyle: ViewStyle | undefined = isPaused
+    ? { borderLeftWidth: 3, borderLeftColor: colors.accent.warning }
+    : undefined;
 
   return (
     <Animated.View style={animatedStyle}>
-      <Pressable onPress={handlePress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-        <GlassCard variant="standard" style={styles.listCard}>
+      <Pressable
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+      >
+        <GlassCard
+          variant="standard"
+          style={[styles.listCard, cardBorderStyle]}
+        >
           {/* Header row */}
           <View style={styles.listHeader}>
             <View style={styles.listTitleContainer}>
@@ -92,12 +270,15 @@ export const ListCard = React.memo(function ListCard({ list, onPress, onDelete, 
                 {displayName}
               </Text>
             </View>
-
-
           </View>
 
+          {/* Budget mini-bar */}
+          {showMiniBar && list.budget != null && (
+            <BudgetMiniBar budget={list.budget} spent={spent} />
+          )}
+
           {/* Budget info */}
-          {list.budget && (
+          {list.budget != null && list.budget > 0 && (
             <View style={styles.budgetRow}>
               <MaterialCommunityIcons
                 name="wallet-outline"
@@ -123,25 +304,62 @@ export const ListCard = React.memo(function ListCard({ list, onPress, onDelete, 
                   },
                 ]}
               >
-                £{list.budget.toFixed(2)} budget
+                {"\u00A3"}{list.budget.toFixed(2)} budget
                 {list.totalEstimatedCost
-                  ? ` • £${list.totalEstimatedCost.toFixed(2)} estimated`
+                  ? ` \u2022 \u00A3${list.totalEstimatedCost.toFixed(2)} estimated`
                   : ""}
               </Text>
             </View>
           )}
 
-          {/* Item count, date, status and delete */}
+          {/* Meta row: date, progress, status badge, delete */}
           <View style={styles.metaRow}>
             <View style={styles.metaLeft}>
               <View style={styles.metaItem}>
-                <MaterialCommunityIcons name="clock-outline" size={14} color={colors.text.tertiary} />
-                <Text style={styles.metaText}>{formatDateTime(list.createdAt)}</Text>
+                <MaterialCommunityIcons
+                  name="clock-outline"
+                  size={14}
+                  color={colors.text.tertiary}
+                />
+                <Text style={styles.metaText}>
+                  {formatDateTime(list.createdAt)}
+                </Text>
               </View>
+              {progressText && (
+                <View style={styles.metaItem}>
+                  <MaterialCommunityIcons
+                    name={
+                      isShopping || isPaused
+                        ? "checkbox-marked-circle-outline"
+                        : "format-list-bulleted"
+                    }
+                    size={14}
+                    color={statusConfig.color}
+                  />
+                  <Text
+                    style={[styles.metaText, { color: statusConfig.color }]}
+                  >
+                    {progressText}
+                  </Text>
+                </View>
+              )}
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: `${status.color}20` }]}>
-              <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+
+            {/* Status badge */}
+            <View
+              style={[
+                styles.statusBadge,
+                { backgroundColor: `${statusConfig.color}20` },
+              ]}
+            >
+              {isShopping && <PulseDot color={statusConfig.color} />}
+              <Text
+                style={[styles.statusText, { color: statusConfig.color }]}
+              >
+                {statusConfig.label}
+              </Text>
             </View>
+
             <View style={styles.metaRight}>
               <Pressable
                 style={styles.deleteButton}
@@ -166,7 +384,11 @@ export const ListCard = React.memo(function ListCard({ list, onPress, onDelete, 
     prev.list.status === next.list.status &&
     prev.list.budget === next.list.budget &&
     prev.list.itemCount === next.list.itemCount &&
+    prev.list.checkedCount === next.list.checkedCount &&
     prev.list.totalEstimatedCost === next.list.totalEstimatedCost &&
+    prev.list.shoppingStartedAt === next.list.shoppingStartedAt &&
+    prev.list.pausedAt === next.list.pausedAt &&
+    prev.list.actualTotal === next.list.actualTotal &&
     prev.list.createdAt === next.list.createdAt &&
     prev.list.name === next.list.name &&
     prev.onPress === next.onPress &&
@@ -174,6 +396,10 @@ export const ListCard = React.memo(function ListCard({ list, onPress, onDelete, 
     prev.formatDateTime === next.formatDateTime
   );
 });
+
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   listCard: {
@@ -202,6 +428,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,

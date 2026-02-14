@@ -124,6 +124,7 @@ export default defineSchema({
     plannedDate: v.optional(v.number()),
     shoppingStartedAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
+    pausedAt: v.optional(v.number()),
     archivedAt: v.optional(v.number()),
 
     // Post-trip summary

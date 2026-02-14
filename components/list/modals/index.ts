@@ -12,3 +12,9 @@ export type { EditItemModalProps } from "./EditItemModal";
 
 export { ListPickerModal } from "./ListPickerModal";
 export type { ListPickerModalProps, ListPickerItem } from "./ListPickerModal";
+
+export { StartShoppingModal } from "./StartShoppingModal";
+export type { StartShoppingModalProps } from "./StartShoppingModal";
+
+export { TripSummaryModal } from "./TripSummaryModal";
+export type { TripSummaryModalProps } from "./TripSummaryModal";
