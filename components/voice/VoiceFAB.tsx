@@ -36,7 +36,7 @@ import type { LayoutChangeEvent } from "react-native";
 const FAB_SIZE = 52;
 const STORAGE_KEY = "@oja_voice_fab_position";
 /** Minimum Y from top of screen — keeps the FAB below any header variant. */
-const MIN_TOP_PX = 230;
+const MIN_TOP_PX = 180;
 
 interface Props {
   activeListId?: Id<"shoppingLists">;
