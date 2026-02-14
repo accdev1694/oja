@@ -27,7 +27,7 @@ import { TAB_BAR_HEIGHT } from "@/components/ui/glass/GlassTabBar";
 import { useVoiceAssistant } from "@/hooks/useVoiceAssistant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { VoiceSheet } from "./VoiceSheet";
-import { colors, spacing, layout } from "@/lib/design/glassTokens";
+import { colors, spacing } from "@/lib/design/glassTokens";
 import { usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -35,6 +35,8 @@ import type { LayoutChangeEvent } from "react-native";
 
 const FAB_SIZE = 52;
 const STORAGE_KEY = "@oja_voice_fab_position";
+/** Minimum Y from top of screen — keeps the FAB below any header variant. */
+const MIN_TOP_PX = 230;
 
 interface Props {
   activeListId?: Id<"shoppingLists">;
@@ -52,7 +54,6 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
   // Shared values for bounds (updated from onLayout, read in worklets)
   const boundsMaxX = useSharedValue(0);
   const boundsMaxY = useSharedValue(0);
-  const boundsMinY = useSharedValue(insets.top);
   const boundsSnapRight = useSharedValue(0);
   const boundsMidX = useSharedValue(0);
 
@@ -71,11 +72,9 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
 
       const maxX = width - FAB_SIZE;
       const maxY = height - TAB_BAR_HEIGHT - FAB_SIZE - insets.bottom;
-      const minY = insets.top + layout.headerHeight;
 
       boundsMaxX.value = maxX;
       boundsMaxY.value = maxY;
-      boundsMinY.value = minY;
       boundsSnapRight.value = maxX - spacing.md;
       boundsMidX.value = width / 2;
 
@@ -91,7 +90,7 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
               try {
                 const { x, y } = JSON.parse(saved);
                 translateX.value = Math.max(0, Math.min(x, maxX));
-                translateY.value = Math.max(minY, Math.min(y, maxY));
+                translateY.value = Math.max(MIN_TOP_PX, Math.min(y, maxY));
               } catch {
                 translateX.value = defaultX;
                 translateY.value = defaultY;
@@ -109,13 +108,8 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
           });
       }
     },
-    [layoutReady, insets.top, insets.bottom]
+    [layoutReady, insets.bottom]
   );
-
-  // Keep minY in sync if insets change (e.g. status bar toggling)
-  useEffect(() => {
-    boundsMinY.value = insets.top + layout.headerHeight;
-  }, [insets.top]);
 
   // Save position helper
   const savePosition = (x: number, y: number) => {
@@ -164,10 +158,7 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
       const newY = contextY.value + e.translationY;
 
       translateX.value = Math.max(0, Math.min(newX, boundsMaxX.value));
-      translateY.value = Math.max(
-        boundsMinY.value,
-        Math.min(newY, boundsMaxY.value)
-      );
+      translateY.value = Math.max(MIN_TOP_PX, Math.min(newY, boundsMaxY.value));
     })
     .onEnd(() => {
       const finalX =
