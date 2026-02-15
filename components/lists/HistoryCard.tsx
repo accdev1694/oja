@@ -28,6 +28,7 @@ export interface HistoryCardProps {
     completedAt?: number;
     createdAt: number;
     storeName?: string;
+    storeSegments?: Array<{ storeId: string; storeName: string; switchedAt: number }>;
   };
   onPress: (id: Id<"shoppingLists">) => void;
   formatDateTime: (timestamp: number) => string;
@@ -57,13 +58,30 @@ export const HistoryCard = React.memo(function HistoryCard({ list, onPress, form
   const actual = list.actualTotal ?? 0;
   const diff = budget - actual;
   const savedMoney = diff > 0 && budget > 0;
+
+  const formatShortDate = (ts: number) => {
+    const d = new Date(ts);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
+  };
+
   const completedDate = list.completedAt
-    ? new Date(list.completedAt).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : formatDateTime(list.createdAt);
+    ? formatShortDate(list.completedAt)
+    : formatShortDate(list.createdAt);
+
+  // Collect unique store names from segments, falling back to the list's storeName
+  const storeNames: string[] = [];
+  if (list.storeSegments && list.storeSegments.length > 0) {
+    for (const seg of list.storeSegments) {
+      if (!storeNames.includes(seg.storeName)) {
+        storeNames.push(seg.storeName);
+      }
+    }
+  } else if (list.storeName) {
+    storeNames.push(list.storeName);
+  }
 
   return (
     <Animated.View style={animatedStyle}>
@@ -85,57 +103,62 @@ export const HistoryCard = React.memo(function HistoryCard({ list, onPress, form
                 {list.name}
               </Text>
             </View>
-            <View style={styles.headerActions}>
-              <View style={[styles.statusBadge, { backgroundColor: "rgba(255, 255, 255, 0.13)" }]}>
-                <Text style={[styles.statusText, { color: colors.text.tertiary }]}>
-                  {list.status === "archived" ? "Archived" : "Completed"}
-                </Text>
-              </View>
+          </View>
+
+          {/* Middle row: savings/spend + status badge */}
+          <View style={styles.middleRow}>
+            <View style={styles.middleLeft}>
+              {budget > 0 && actual > 0 ? (
+                <View style={styles.budgetInfo}>
+                  <MaterialCommunityIcons
+                    name={savedMoney ? "trending-down" : "trending-up"}
+                    size={16}
+                    color={savedMoney ? colors.semantic.success : colors.semantic.danger}
+                  />
+                  <Text
+                    style={[
+                      styles.budgetText,
+                      { color: savedMoney ? colors.semantic.success : colors.semantic.danger },
+                    ]}
+                  >
+                    {savedMoney
+                      ? `Saved £${Math.abs(diff).toFixed(2)}`
+                      : `Over by £${Math.abs(diff).toFixed(2)}`}
+                    {` • £${actual.toFixed(2)} spent`}
+                  </Text>
+                </View>
+              ) : (list.pointsEarned ?? 0) > 0 ? (
+                <View style={styles.budgetInfo}>
+                  <MaterialCommunityIcons name="star" size={14} color={colors.accent.secondary} />
+                  <Text style={[styles.metaText, { color: colors.accent.secondary }]}>
+                    +{list.pointsEarned} pts
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: "rgba(255, 255, 255, 0.13)" }]}>
+              <Text style={[styles.statusText, { color: colors.text.tertiary }]}>
+                {list.status === "archived" ? "Archived" : "Completed"}
+              </Text>
             </View>
           </View>
 
-          {/* Savings or overspend */}
-          {budget > 0 && actual > 0 && (
-            <View style={styles.budgetRow}>
-              <MaterialCommunityIcons
-                name={savedMoney ? "trending-down" : "trending-up"}
-                size={16}
-                color={savedMoney ? colors.semantic.success : colors.semantic.danger}
-              />
-              <Text
-                style={[
-                  styles.budgetText,
-                  { color: savedMoney ? colors.semantic.success : colors.semantic.danger },
-                ]}
-              >
-                {savedMoney
-                  ? `Saved £${Math.abs(diff).toFixed(2)}`
-                  : `Over by £${Math.abs(diff).toFixed(2)}`}
-                {` • £${actual.toFixed(2)} spent`}
-              </Text>
+          {/* Bottom row: stores + date */}
+          <View style={styles.bottomRow}>
+            <View style={styles.bottomLeft}>
+              {storeNames.length > 0 && (
+                <View style={styles.metaItem}>
+                  <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    {storeNames.join(" • ")}
+                  </Text>
+                </View>
+              )}
             </View>
-          )}
-
-          {/* Meta row */}
-          <View style={styles.metaRow}>
             <View style={styles.metaItem}>
               <MaterialCommunityIcons name="calendar" size={14} color={colors.text.tertiary} />
               <Text style={styles.metaText}>{completedDate}</Text>
             </View>
-            {list.storeName && (
-              <View style={styles.metaItem}>
-                <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
-                <Text style={styles.metaText}>{list.storeName}</Text>
-              </View>
-            )}
-            {(list.pointsEarned ?? 0) > 0 && (
-              <View style={styles.metaItem}>
-                <MaterialCommunityIcons name="star" size={14} color={colors.accent.secondary} />
-                <Text style={[styles.metaText, { color: colors.accent.secondary }]}>
-                  +{list.pointsEarned} pts
-                </Text>
-              </View>
-            )}
           </View>
         </GlassCard>
       </Pressable>
@@ -149,6 +172,7 @@ export const HistoryCard = React.memo(function HistoryCard({ list, onPress, form
     prev.list.completedAt === next.list.completedAt &&
     prev.list.status === next.list.status &&
     prev.list.storeName === next.list.storeName &&
+    prev.list.storeSegments?.length === next.list.storeSegments?.length &&
     prev.list.name === next.list.name &&
     prev.onPress === next.onPress &&
     prev.formatDateTime === next.formatDateTime
@@ -176,10 +200,21 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     flex: 1,
   },
-  headerActions: {
+  middleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  middleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  budgetInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
   },
   statusBadge: {
     paddingHorizontal: spacing.sm,
@@ -190,20 +225,19 @@ const styles = StyleSheet.create({
     ...typography.labelSmall,
     fontWeight: "600",
   },
-  budgetRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
   budgetText: {
     ...typography.bodyMedium,
     fontWeight: "600",
   },
-  metaRow: {
+  bottomRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    justifyContent: "space-between",
+  },
+  bottomLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
   },
   metaItem: {
     flexDirection: "row",
