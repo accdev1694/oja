@@ -364,10 +364,14 @@ const styles = StyleSheet.create({
     ...typography.headlineSmall,
     color: colors.text.primary,
     marginTop: spacing.sm,
+    width: "100%",
+    textAlign: "center",
   },
   emptySubtext: {
     ...typography.bodyMedium,
     color: colors.text.secondary,
+    width: "100%",
+    textAlign: "center",
   },
   quickActions: {
     flexDirection: "row",

@@ -178,6 +178,8 @@ const styles = StyleSheet.create({
   addModalTitle: {
     ...typography.headlineMedium,
     color: colors.text.primary,
+    width: "100%",
+    textAlign: "center",
   },
   addInput: {
     width: "100%",
@@ -192,7 +194,7 @@ const styles = StyleSheet.create({
   },
   addLabel: {
     ...typography.labelMedium,
-    color: colors.text.secondary,
+    color: colors.text.primary,
     alignSelf: "flex-start",
   },
   addChipsScroll: {

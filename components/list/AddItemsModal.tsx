@@ -1123,7 +1123,7 @@ const styles = StyleSheet.create({
   },
   pantryButtonText: {
     ...typography.labelMedium,
-    color: colors.text.secondary,
+    color: colors.text.primary,
   },
   pantryButtonTextActive: {
     color: colors.accent.primary,
@@ -1184,8 +1184,9 @@ const styles = StyleSheet.create({
   },
   variantEmptyText: {
     ...typography.bodyMedium,
-    color: colors.text.secondary,
+    color: colors.text.primary,
     textAlign: "center",
+    width: "100%",
   },
 
   // Loading
@@ -1212,14 +1213,16 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...typography.bodyLarge,
-    color: colors.text.secondary,
+    color: colors.text.primary,
     textAlign: "center",
+    width: "100%",
   },
   emptySubtext: {
     ...typography.bodySmall,
-    color: colors.text.tertiary,
+    color: colors.text.secondary,
     textAlign: "center",
     lineHeight: 18,
+    width: "100%",
   },
 
   // Section headers (pantry)
@@ -1232,7 +1235,7 @@ const styles = StyleSheet.create({
   },
   sectionHeaderText: {
     ...typography.labelLarge,
-    color: colors.text.secondary,
+    color: colors.text.primary,
   },
   sectionBadge: {
     backgroundColor: colors.glass.backgroundActive,

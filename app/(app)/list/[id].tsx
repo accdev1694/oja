@@ -1320,12 +1320,14 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing.xs,
     textAlign: "center",
+    width: "100%",
   },
   emptySubtitle: {
     ...typography.bodyMedium,
-    color: colors.text.secondary,
+    color: colors.text.primary,
     textAlign: "center",
     paddingHorizontal: spacing.lg,
+    width: "100%",
   },
 
   // Items Section

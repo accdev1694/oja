@@ -363,10 +363,14 @@ const styles = StyleSheet.create({
     ...typography.headlineLarge,
     color: colors.text.primary,
     marginBottom: spacing.xs,
+    width: "100%",
+    textAlign: "center",
   },
   headerSubtitle: {
     ...typography.bodyMedium,
     color: colors.text.secondary,
+    width: "100%",
+    textAlign: "center",
   },
 
   // ── Stats Row ───────────────────────────────────────

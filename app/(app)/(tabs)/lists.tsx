@@ -694,7 +694,7 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     ...typography.labelMedium,
-    color: colors.text.secondary,
+    color: colors.text.primary,
   },
   charCount: {
     ...typography.labelSmall,

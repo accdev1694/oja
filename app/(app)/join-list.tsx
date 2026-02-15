@@ -99,8 +99,8 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   content: { flexGrow: 1, paddingHorizontal: spacing.xl, alignItems: "center", paddingTop: 40 },
   iconContainer: { marginBottom: spacing.lg },
-  heading: { ...typography.headlineMedium, color: colors.text.primary, marginBottom: spacing.xs },
-  subtitle: { ...typography.bodyMedium, color: colors.text.tertiary, marginBottom: spacing.xl },
+  heading: { ...typography.headlineMedium, color: colors.text.primary, marginBottom: spacing.xs, width: "100%" as const, textAlign: "center" as const },
+  subtitle: { ...typography.bodyMedium, color: colors.text.tertiary, marginBottom: spacing.xl, width: "100%" as const, textAlign: "center" as const },
   inputCard: { width: "100%", alignItems: "center", marginBottom: spacing.xl },
   codeInput: {
     fontSize: 36,
