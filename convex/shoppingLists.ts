@@ -4,6 +4,7 @@ import { Id } from "./_generated/dataModel";
 import { canCreateList } from "./lib/featureGating";
 import { getAllStores, getStoreInfoSafe, isValidStoreId, UKStoreId } from "./lib/storeNormalizer";
 import { parseSize } from "./lib/sizeUtils";
+import { getReceiptIds, pushReceiptId } from "./lib/receiptHelpers";
 
 /**
  * Get all shopping lists for the current user
@@ -366,12 +367,27 @@ export const completeShopping = mutation({
       if (item.isChecked && item.actualPrice) {
         return sum + item.actualPrice * item.quantity;
       }
-      // Fall back to estimated price for checked items without actual price
       if (item.isChecked && item.estimatedPrice) {
         return sum + item.estimatedPrice * item.quantity;
       }
       return sum;
     }, 0);
+
+    // Calculate per-store subtotals for multi-store trips
+    const storeMap = new Map<string, { storeName: string; itemCount: number; subtotal: number }>();
+    for (const item of items) {
+      if (!item.isChecked) continue;
+      const storeId = item.purchasedAtStoreId ?? list.normalizedStoreId ?? "unknown";
+      const storeName = item.purchasedAtStoreName ?? list.storeName ?? "Unknown";
+      const price = item.actualPrice ?? item.estimatedPrice ?? 0;
+      const existing = storeMap.get(storeId);
+      if (existing) {
+        existing.itemCount += 1;
+        existing.subtotal += price * item.quantity;
+      } else {
+        storeMap.set(storeId, { storeName, itemCount: 1, subtotal: price * item.quantity });
+      }
+    }
 
     await ctx.db.patch(args.id, {
       status: "completed",
@@ -380,7 +396,15 @@ export const completeShopping = mutation({
       actualTotal: actualTotal > 0 ? actualTotal : undefined,
     });
 
-    return await ctx.db.get(args.id);
+    const storeBreakdown = Array.from(storeMap.entries()).map(([storeId, data]) => ({
+      storeId,
+      storeName: data.storeName,
+      itemCount: data.itemCount,
+      subtotal: Math.round(data.subtotal * 100) / 100,
+    }));
+
+    const result = await ctx.db.get(args.id);
+    return { ...result, storeBreakdown };
   },
 });
 
@@ -457,6 +481,68 @@ export const resumeShopping = mutation({
     });
 
     return await ctx.db.get(args.id);
+  },
+});
+
+/**
+ * Switch store mid-shopping trip (lightweight — no re-pricing).
+ *
+ * Only works when list status is "shopping". Updates the list's current store
+ * and appends to storeSegments for trip tracking. Does NOT re-price items
+ * (unlike switchStore which is for planning mode).
+ */
+export const switchStoreMidShop = mutation({
+  args: {
+    listId: v.id("shoppingLists"),
+    newStoreId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const list = await ctx.db.get(args.listId);
+    if (!list) throw new Error("List not found");
+    if (list.userId !== user._id) throw new Error("Unauthorized");
+    if (list.status !== "shopping") {
+      throw new Error("Can only switch stores while actively shopping");
+    }
+
+    // Validate store
+    const storeInfo = getStoreInfoSafe(args.newStoreId);
+    if (!storeInfo) {
+      throw new Error(`Invalid store: ${args.newStoreId}`);
+    }
+
+    // Build new storeSegments entry
+    const newSegment = {
+      storeId: args.newStoreId,
+      storeName: storeInfo.displayName,
+      switchedAt: Date.now(),
+    };
+
+    const existingSegments = list.storeSegments ?? [];
+
+    await ctx.db.patch(args.listId, {
+      normalizedStoreId: args.newStoreId,
+      storeName: storeInfo.displayName,
+      storeSegments: [...existingSegments, newSegment],
+      updatedAt: Date.now(),
+    });
+
+    return {
+      success: true,
+      storeName: storeInfo.displayName,
+      storeId: args.newStoreId,
+      segmentCount: existingSegments.length + 1,
+    };
   },
 });
 
@@ -545,6 +631,27 @@ export const getTripStats = query({
         : null,
       storeName: list.storeName,
       storeId: list.normalizedStoreId,
+      storeBreakdown: (() => {
+        const map = new Map<string, { storeName: string; itemCount: number; subtotal: number }>();
+        for (const item of checkedItems) {
+          const sId = item.purchasedAtStoreId ?? list.normalizedStoreId ?? "unknown";
+          const sName = item.purchasedAtStoreName ?? list.storeName ?? "Unknown";
+          const price = item.actualPrice ?? item.estimatedPrice ?? 0;
+          const existing = map.get(sId);
+          if (existing) {
+            existing.itemCount += 1;
+            existing.subtotal += price * item.quantity;
+          } else {
+            map.set(sId, { storeName: sName, itemCount: 1, subtotal: price * item.quantity });
+          }
+        }
+        return Array.from(map.entries()).map(([storeId, data]) => ({
+          storeId,
+          storeName: data.storeName,
+          itemCount: data.itemCount,
+          subtotal: Math.round(data.subtotal * 100) / 100,
+        }));
+      })(),
     };
   },
 });
@@ -580,11 +687,14 @@ export const archiveList = mutation({
     }
 
     const now = Date.now();
+    // Push to receiptIds array (multi-receipt support) + keep legacy receiptId
+    const receiptIds = args.receiptId ? pushReceiptId(list, args.receiptId) : getReceiptIds(list);
     await ctx.db.patch(args.id, {
       status: "archived",
       archivedAt: now,
       completedAt: list.completedAt ?? now,
       receiptId: args.receiptId,
+      receiptIds,
       actualTotal: args.actualTotal,
       pointsEarned: args.pointsEarned,
       updatedAt: now,
@@ -669,16 +779,37 @@ export const getTripSummary = query({
       .withIndex("by_list", (q) => q.eq("listId", args.id))
       .collect();
 
-    // Get linked receipt if any
-    let receipt = null;
-    if (list.receiptId) {
-      receipt = await ctx.db.get(list.receiptId);
-    } else {
-      // Try to find a receipt linked to this list
-      receipt = await ctx.db
+    // Get all linked receipts (multi-receipt support)
+    const allReceiptIds = getReceiptIds(list);
+    const receipts = [];
+    for (const rid of allReceiptIds) {
+      const r = await ctx.db.get(rid);
+      if (r) receipts.push(r);
+    }
+
+    // Fallback: try to find receipts linked via receipt.listId field
+    if (receipts.length === 0) {
+      const linkedReceipts = await ctx.db
         .query("receipts")
         .withIndex("by_list", (q) => q.eq("listId", args.id))
-        .first();
+        .collect();
+      receipts.push(...linkedReceipts);
+    }
+
+    // Primary receipt (for backward compat, use the first one)
+    const receipt = receipts.length > 0 ? receipts[0] : null;
+
+    // Aggregate per-store totals from all receipts
+    const perStoreFromReceipts = new Map<string, { storeName: string; total: number; receiptCount: number }>();
+    for (const r of receipts) {
+      const sId = r.normalizedStoreId ?? "unknown";
+      const existing = perStoreFromReceipts.get(sId);
+      if (existing) {
+        existing.total += r.total;
+        existing.receiptCount += 1;
+      } else {
+        perStoreFromReceipts.set(sId, { storeName: r.storeName, total: r.total, receiptCount: 1 });
+      }
     }
 
     const budget = list.budget ?? 0;
@@ -689,6 +820,7 @@ export const getTripSummary = query({
       list,
       items,
       receipt,
+      receipts,
       budget,
       actualTotal,
       difference,
@@ -697,6 +829,12 @@ export const getTripSummary = query({
       pointsEarned: list.pointsEarned ?? 0,
       itemCount: items.length,
       checkedCount: items.filter((i) => i.isChecked).length,
+      receiptStoreBreakdown: Array.from(perStoreFromReceipts.entries()).map(([storeId, data]) => ({
+        storeId,
+        storeName: data.storeName,
+        total: Math.round(data.total * 100) / 100,
+        receiptCount: data.receiptCount,
+      })),
     };
   },
 });

@@ -55,14 +55,13 @@ import { ShoppingListItem, type ListItem } from "@/components/list/ShoppingListI
 import { ShoppingTypewriterHint } from "@/components/list/ShoppingTypewriterHint";
 import { StickyBudgetBar } from "@/components/list/BudgetSection";
 import { ListActionRow } from "@/components/list/ListActionRow";
+import { StoreDropdownSheet } from "@/components/list/StoreDropdownSheet";
 import { AddItemsModal } from "@/components/list/AddItemsModal";
 import {
   EditBudgetModal,
   MidShopModal,
-  ActualPriceModal,
   EditItemModal,
   ListPickerModal,
-  StartShoppingModal,
   TripSummaryModal,
 } from "@/components/list/modals";
 import type { TripStats } from "@/hooks/useTripSummary";
@@ -100,6 +99,7 @@ export default function ListDetailScreen() {
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
   const switchStore = useMutation(api.shoppingLists.switchStore);
   const setStore = useMutation(api.shoppingLists.setStore);
+  const switchStoreMidShop = useMutation(api.shoppingLists.switchStoreMidShop);
 
   // Current user for store preferences
   const currentUser = useQuery(api.users.getCurrent);
@@ -158,8 +158,6 @@ export default function ListDetailScreen() {
   // Edit budget modal state
   const [showEditBudgetModal, setShowEditBudgetModal] = useState(false);
 
-  // Start shopping confirmation modal state
-  const [showStartShoppingModal, setShowStartShoppingModal] = useState(false);
 
   // Trip summary modal state
   const [showTripSummary, setShowTripSummary] = useState(false);
@@ -178,19 +176,14 @@ export default function ListDetailScreen() {
     quantity: number;
   }>({ visible: false, name: "", price: 0, quantity: 1 });
 
-  // Check-off with actual price state (Story 3.8)
-  const [actualPriceState, setActualPriceState] = useState<{
-    visible: boolean;
-    itemId: Id<"listItems"> | null;
-    name: string;
-    estPrice: number;
-    quantity: number;
-  }>({ visible: false, itemId: null, name: "", estPrice: 0, quantity: 1 });
 
   // Store Switch Preview modal state (Phase 5)
   const [switchPreviewVisible, setSwitchPreviewVisible] = useState(false);
   const [switchTargetStore, setSwitchTargetStore] = useState<string | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
+
+  // Mid-shop store picker state
+  const [showMidShopStorePicker, setShowMidShopStorePicker] = useState(false);
 
   // Category filter for items list
   const [listCategoryFilter, setListCategoryFilter] = useState<string | null>(null);
@@ -299,19 +292,6 @@ export default function ListDetailScreen() {
 
   const handleToggleItem = useCallback(async (itemId: Id<"listItems">) => {
     haptic("light");
-    const item = safeItems.find((i) => i._id === itemId);
-
-    if (isShopping && item && !item.isChecked) {
-      setActualPriceState({
-        visible: true,
-        itemId,
-        name: item.name,
-        estPrice: item.estimatedPrice ?? 0,
-        quantity: item.quantity,
-      });
-      return;
-    }
-
     try {
       await toggleChecked({ id: itemId });
       onMundaneAction();
@@ -319,24 +299,8 @@ export default function ListDetailScreen() {
       console.error("Failed to toggle item:", error);
       alert("Error", "Failed to update item");
     }
-  }, [toggleChecked, onMundaneAction, alert, isShopping, safeItems]);
+  }, [toggleChecked, onMundaneAction, alert]);
 
-  // Actual price modal handlers (Story 3.8)
-  function closeActualPriceModal() {
-    setActualPriceState({ visible: false, itemId: null, name: "", estPrice: 0, quantity: 1 });
-  }
-
-  const handleConfirmActualPrice = useCallback(async (itemId: Id<"listItems">, actualPrice: number) => {
-    await updateItem({ id: itemId, actualPrice });
-    await toggleChecked({ id: itemId });
-    haptic("success");
-    onMundaneAction();
-  }, [updateItem, toggleChecked, onMundaneAction]);
-
-  const handleSkipActualPrice = useCallback(async (itemId: Id<"listItems">) => {
-    await toggleChecked({ id: itemId });
-    haptic("success");
-  }, [toggleChecked]);
 
   function closeMidShopModal() {
     setMidShopState({ visible: false, name: "", price: 0, quantity: 1 });
@@ -565,6 +529,23 @@ export default function ListDetailScreen() {
     setSwitchTargetStore(null);
   }, []);
 
+  // Mid-shop store switch handler (lightweight, no re-pricing)
+  const handleMidShopStoreSwitch = useCallback(async (storeId: string) => {
+    setShowMidShopStorePicker(false);
+    try {
+      const result = await switchStoreMidShop({ listId: id, newStoreId: storeId });
+      haptic("success");
+      showToast(
+        `Switched to ${result.storeName}`,
+        "store",
+        colors.accent.primary
+      );
+    } catch (error) {
+      console.error("Failed to switch store:", error);
+      showToast("Failed to switch store", "alert-circle", colors.semantic.danger);
+    }
+  }, [switchStoreMidShop, id, showToast]);
+
   // Build preview items from comparison data for StoreSwitchPreview
   const switchPreviewItems = useMemo((): StoreSwitchItem[] => {
     if (!switchTargetStore || !comparison || !items) return [];
@@ -598,16 +579,10 @@ export default function ListDetailScreen() {
     });
   }, [switchTargetStore, comparison, items]);
 
-  // Open the "Ready to Shop?" confirmation modal
-  function handleStartShopping() {
+  // Start (or resume) shopping directly — no confirmation needed since it's reversible
+  async function handleStartShopping() {
     haptic("medium");
-    setShowStartShoppingModal(true);
-  }
-
-  // Actually start (or resume) shopping after confirmation
-  async function handleConfirmStartShopping() {
     clearSelection();
-    setShowStartShoppingModal(false);
     try {
       if (isPaused) {
         await resumeShoppingMut({ id });
@@ -843,34 +818,47 @@ export default function ListDetailScreen() {
             <ShoppingTypewriterHint
               storeName={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
             />
-            <View style={styles.shoppingButtonRow}>
-              <GlassButton
-                variant="secondary"
-                size="md"
-                icon="pencil-outline"
-                onPress={handlePauseShopping}
-                style={styles.shoppingRowButton}
-              >
-                Edit List
-              </GlassButton>
-              <GlassButton
-                variant="secondary"
-                size="md"
-                icon="plus"
-                onPress={() => setShowAddItemsModal(true)}
-                style={styles.shoppingRowButton}
-              >
-                Add Item
-              </GlassButton>
-              <GlassButton
-                variant="primary"
-                size="md"
-                icon="check-circle-outline"
-                onPress={handleCompleteShopping}
-                style={styles.shoppingRowButton}
-              >
-                Complete
-              </GlassButton>
+            <View style={styles.shoppingButtonGrid}>
+              <View style={styles.shoppingButtonGridRow}>
+                <GlassButton
+                  variant="secondary"
+                  size="md"
+                  icon="swap-horizontal"
+                  onPress={() => setShowMidShopStorePicker(true)}
+                  style={styles.shoppingBtnFlex2}
+                >
+                  Switch Store
+                </GlassButton>
+                <GlassButton
+                  variant="secondary"
+                  size="md"
+                  icon="pencil-outline"
+                  onPress={handlePauseShopping}
+                  style={styles.shoppingBtnFlex1}
+                >
+                  Edit List
+                </GlassButton>
+              </View>
+              <View style={styles.shoppingButtonGridRow}>
+                <GlassButton
+                  variant="secondary"
+                  size="md"
+                  icon="plus"
+                  onPress={() => setShowAddItemsModal(true)}
+                  style={styles.shoppingBtnFlex1}
+                >
+                  Add Items
+                </GlassButton>
+                <GlassButton
+                  variant="primary"
+                  size="md"
+                  icon="check-circle-outline"
+                  onPress={handleCompleteShopping}
+                  style={styles.shoppingBtnFlex2}
+                >
+                  Complete Shopping
+                </GlassButton>
+              </View>
             </View>
           </View>
         )}
@@ -1157,18 +1145,6 @@ export default function ListDetailScreen() {
         onClose={() => setShowListChat(false)}
       />
 
-      {/* Actual Price Modal (Story 3.8) */}
-      <ActualPriceModal
-        visible={actualPriceState.visible}
-        itemId={actualPriceState.itemId}
-        itemName={actualPriceState.name}
-        estimatedPrice={actualPriceState.estPrice}
-        quantity={actualPriceState.quantity}
-        onClose={closeActualPriceModal}
-        onConfirm={handleConfirmActualPrice}
-        onSkip={handleSkipActualPrice}
-      />
-
       {/* Edit Item Modal */}
       <EditItemModal
         item={editingItem}
@@ -1224,29 +1200,25 @@ export default function ListDetailScreen() {
         );
       })()}
 
-      {/* Start Shopping Confirmation Modal */}
-      <StartShoppingModal
-        visible={showStartShoppingModal}
-        onClose={() => setShowStartShoppingModal(false)}
-        onConfirm={handleConfirmStartShopping}
-        listName={list.name}
-        storeName={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
-        storeColor={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
-        itemCount={totalCount}
-        estimatedTotal={estimatedTotal}
-        budget={budget}
-        hasStore={!!list.normalizedStoreId}
-      />
-
       {/* Trip Summary Modal */}
       <TripSummaryModal
         visible={showTripSummary}
         onClose={() => setShowTripSummary(false)}
         onFinish={handleFinishTrip}
         onScanReceipt={handleScanReceipt}
+        onContinueShopping={() => setShowTripSummary(false)}
         onRemoveItem={handleRemoveUncheckedItem}
         onMoveItem={handleMoveUncheckedItem}
         stats={tripStats ?? null}
+      />
+
+      {/* Mid-Shop Store Picker */}
+      <StoreDropdownSheet
+        visible={showMidShopStorePicker}
+        onClose={() => setShowMidShopStorePicker(false)}
+        onSelect={handleMidShopStoreSwitch}
+        currentStoreId={list?.normalizedStoreId}
+        userFavorites={userFavorites}
       />
 
       {/* Surprise delight toast */}
@@ -1315,11 +1287,17 @@ const styles = StyleSheet.create({
   shoppingModeContainer: {
     flex: 1,
   },
-  shoppingButtonRow: {
+  shoppingButtonGrid: {
+    gap: spacing.sm,
+  },
+  shoppingButtonGridRow: {
     flexDirection: "row",
     gap: spacing.sm,
   },
-  shoppingRowButton: {
+  shoppingBtnFlex2: {
+    flex: 2,
+  },
+  shoppingBtnFlex1: {
     flex: 1,
   },
 

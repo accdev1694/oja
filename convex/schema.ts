@@ -120,6 +120,13 @@ export default defineSchema({
     storeName: v.optional(v.string()),
     normalizedStoreId: v.optional(v.string()),  // Target store for this list (e.g., "tesco", "sainsburys")
 
+    // Multi-store: chronological list of stores visited during a shopping trip
+    storeSegments: v.optional(v.array(v.object({
+      storeId: v.string(),
+      storeName: v.string(),
+      switchedAt: v.number(),
+    }))),
+
     // Timestamps
     plannedDate: v.optional(v.number()),
     shoppingStartedAt: v.optional(v.number()),
@@ -129,6 +136,7 @@ export default defineSchema({
 
     // Post-trip summary
     receiptId: v.optional(v.id("receipts")),
+    receiptIds: v.optional(v.array(v.id("receipts"))),
     actualTotal: v.optional(v.number()),
     pointsEarned: v.optional(v.number()),
 
@@ -187,6 +195,10 @@ export default defineSchema({
     // Mid-shop add tracking
     isImpulse: v.optional(v.boolean()), // Deprecated — kept for existing data
     addedMidShop: v.optional(v.boolean()), // Added during shopping
+
+    // Multi-store: which store the item was actually purchased at
+    purchasedAtStoreId: v.optional(v.string()),
+    purchasedAtStoreName: v.optional(v.string()),
 
     // Approval workflow (Epic 4 - Partner Mode)
     approvalStatus: v.optional(v.union(

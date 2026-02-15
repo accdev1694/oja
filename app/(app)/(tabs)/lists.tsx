@@ -323,7 +323,7 @@ export default function ListsScreen() {
         >
           <EmptyLists
             onAction={handleOpenCreateModal}
-            actionText="Create Your First List"
+            actionText="Create a New List"
           />
           {/* Join a shared list — always visible even with no lists */}
           <View style={styles.joinCardEmpty}>

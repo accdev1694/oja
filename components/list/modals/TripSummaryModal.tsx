@@ -34,6 +34,7 @@ export interface TripSummaryModalProps {
   onClose: () => void;
   onFinish: () => void;
   onScanReceipt: () => void;
+  onContinueShopping: () => void;
   onRemoveItem: (itemId: string) => void;
   onMoveItem: (item: {
     name: string;
@@ -56,6 +57,7 @@ export function TripSummaryModal({
   onClose,
   onFinish,
   onScanReceipt,
+  onContinueShopping,
   onRemoveItem,
   onMoveItem,
   stats,
@@ -198,6 +200,19 @@ export function TripSummaryModal({
               </View>
             )}
 
+            {/* ── Per-Store Breakdown (multi-store trips) ───────── */}
+            {display.isMultiStore && (
+              <View style={styles.storeBreakdown}>
+                <Text style={styles.storeBreakdownHeader}>Per-Store Breakdown</Text>
+                {display.storeBreakdownLabels.map((entry) => (
+                  <View key={entry.storeId} style={styles.storeBreakdownRow}>
+                    <View style={styles.storeBreakdownDot} />
+                    <Text style={styles.storeBreakdownLabel}>{entry.label}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
             {/* ── Unchecked Items ─────────────────────────────────── */}
             {display.hasUncheckedItems && (
               <View style={styles.uncheckedSection}>
@@ -279,23 +294,32 @@ export function TripSummaryModal({
           </ScrollView>
 
           {/* ── Sticky Action Buttons ─────────────────────────────── */}
-          <View style={styles.actions}>
+          <View style={styles.actionsContainer}>
             <GlassButton
-              variant="secondary"
-              icon="camera"
-              onPress={onScanReceipt}
-              style={styles.actionBtn}
+              variant="ghost"
+              icon="cart-plus"
+              onPress={onContinueShopping}
             >
-              Scan Receipt
+              Continue Shopping
             </GlassButton>
-            <GlassButton
-              variant="primary"
-              icon="check-circle-outline"
-              onPress={handleFinish}
-              style={styles.actionBtn}
-            >
-              Finish Trip
-            </GlassButton>
+            <View style={styles.actionsRow}>
+              <GlassButton
+                variant="secondary"
+                icon="camera"
+                onPress={onScanReceipt}
+                style={styles.actionBtn}
+              >
+                Scan Receipt
+              </GlassButton>
+              <GlassButton
+                variant="primary"
+                icon="check-circle-outline"
+                onPress={handleFinish}
+                style={styles.actionBtn}
+              >
+                Finish Trip
+              </GlassButton>
+            </View>
           </View>
         </View>
       </SafeAreaView>
@@ -423,6 +447,38 @@ const styles = StyleSheet.create({
     color: colors.semantic.danger,
   },
 
+  // ── Store Breakdown ─────────────────────────────────
+  storeBreakdown: {
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  storeBreakdownHeader: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+  storeBreakdownRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  storeBreakdownDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent.primary,
+  },
+  storeBreakdownLabel: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    flex: 1,
+  },
+
   // ── Unchecked Items ─────────────────────────────────
   uncheckedSection: {
     backgroundColor: colors.glass.background,
@@ -491,14 +547,18 @@ const styles = StyleSheet.create({
   },
 
   // ── Actions ─────────────────────────────────────────
-  actions: {
-    flexDirection: "row",
+  actionsContainer: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: 75,
     borderTopWidth: 1,
     borderTopColor: colors.glass.border,
     backgroundColor: colors.background.primary,
+  },
+  actionsRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
   },
   actionBtn: {
     flex: 1,

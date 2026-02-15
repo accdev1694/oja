@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { normalizeStoreName } from "./lib/storeNormalizer";
+import { pushReceiptId } from "./lib/receiptHelpers";
 
 /**
  * Generate a fingerprint for duplicate detection.
@@ -261,10 +262,12 @@ export const linkToList = mutation({
     // Link receipt to list
     await ctx.db.patch(args.receiptId, { listId: args.listId });
 
-    // Correct list actualTotal from receipt total (receipt is source of truth)
+    // Push to receiptIds array (multi-receipt support) + keep legacy receiptId
+    const updatedReceiptIds = pushReceiptId(list, args.receiptId);
     await ctx.db.patch(args.listId, {
       actualTotal: receipt.total,
       receiptId: args.receiptId,
+      receiptIds: updatedReceiptIds,
       updatedAt: Date.now(),
     });
 
@@ -292,6 +295,9 @@ export const linkToList = mutation({
           await ctx.db.patch(listItem._id, {
             actualPrice: match.unitPrice,
             isChecked: true,
+            // Tag item with the receipt's store (multi-store price intelligence)
+            purchasedAtStoreId: receipt.normalizedStoreId ?? undefined,
+            purchasedAtStoreName: receipt.storeName ?? undefined,
             updatedAt: Date.now(),
           });
         }
@@ -299,6 +305,51 @@ export const linkToList = mutation({
     }
 
     return { success: true };
+  },
+});
+
+/**
+ * Detect if a receipt's store mismatches the shopping list's store.
+ * Also checks against storeSegments (multi-store trips).
+ */
+export const detectStoreMismatch = query({
+  args: {
+    receiptId: v.id("receipts"),
+    listId: v.id("shoppingLists"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const receipt = await ctx.db.get(args.receiptId);
+    if (!receipt) return null;
+
+    const list = await ctx.db.get(args.listId);
+    if (!list) return null;
+
+    const receiptStore = receipt.normalizedStoreId ?? receipt.storeName?.toLowerCase() ?? "unknown";
+    const listStore = list.normalizedStoreId ?? list.storeName?.toLowerCase() ?? "unknown";
+
+    // Check primary store match
+    if (receiptStore === listStore) {
+      return {
+        isMismatch: false,
+        receiptStore: receipt.storeName,
+        listStore: list.storeName ?? "Unknown",
+        isKnownSegment: false,
+      };
+    }
+
+    // Check against storeSegments (visited stores during multi-store trip)
+    const segments = list.storeSegments ?? [];
+    const isKnownSegment = segments.some((seg) => seg.storeId === receiptStore);
+
+    return {
+      isMismatch: !isKnownSegment,
+      receiptStore: receipt.storeName,
+      listStore: list.storeName ?? "Unknown",
+      isKnownSegment,
+    };
   },
 });
 

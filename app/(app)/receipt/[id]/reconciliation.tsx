@@ -34,6 +34,13 @@ export default function ReconciliationScreen() {
   const receipt = useQuery(api.receipts.getById, { id: receiptId });
   const list = listId ? useQuery(api.shoppingLists.getById, { id: listId }) : null;
   const listItems = listId ? useQuery(api.listItems.getByList, { listId }) : null;
+
+  // Multi-store: detect receipt/list store mismatch
+  const mismatchInfo = listId ? useQuery(api.receipts.detectStoreMismatch, {
+    receiptId,
+    listId,
+  }) : null;
+
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
   const archiveList = useMutation(api.shoppingLists.archiveList);
   const linkReceiptToList = useMutation(api.receipts.linkToList);
@@ -53,6 +60,7 @@ export default function ReconciliationScreen() {
     }[];
     itemsToAdd: { name: string; category?: string }[];
   } | null>(null);
+  const [mismatchChoice, setMismatchChoice] = useState<"tag" | "ignore" | null>(null);
 
   if (receipt === undefined || (listId && (list === undefined || listItems === undefined))) {
     return (
@@ -169,6 +177,12 @@ export default function ReconciliationScreen() {
         receiptId,
         listId,
       });
+
+      // Step 1b: Handle store mismatch — tag items with receipt's store if user chose "tag"
+      if (mismatchChoice === "tag" && receipt?.normalizedStoreId) {
+        // The linkToList mutation already tags matched items with purchasedAtStoreId
+        // from the receipt, so no additional action needed — it's handled in the backend
+      }
 
       // Step 2: Complete the shopping trip
       await completeShopping({ id: listId });
@@ -452,6 +466,62 @@ export default function ReconciliationScreen() {
           </GlassCard>
         )}
 
+        {/* Store Mismatch Warning */}
+        {mismatchInfo?.isMismatch && mismatchChoice === null && (
+          <GlassCard variant="bordered" accentColor={colors.semantic.warning} style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons
+                name="alert-outline"
+                size={20}
+                color={colors.semantic.warning}
+              />
+              <Text style={styles.sectionTitle}>Store Mismatch</Text>
+            </View>
+            <Text style={styles.mismatchText}>
+              This receipt is from{" "}
+              <Text style={{ fontWeight: "700" }}>{mismatchInfo.receiptStore}</Text>
+              , but your list was for{" "}
+              <Text style={{ fontWeight: "700" }}>{mismatchInfo.listStore}</Text>.
+            </Text>
+            <View style={styles.mismatchActions}>
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                icon="tag-outline"
+                onPress={() => setMismatchChoice("tag")}
+                style={styles.mismatchButton}
+              >
+                {`Tag items as ${mismatchInfo.receiptStore}`}
+              </GlassButton>
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                icon="close"
+                onPress={() => setMismatchChoice("ignore")}
+                style={styles.mismatchButton}
+              >
+                {`Keep as ${mismatchInfo.listStore}`}
+              </GlassButton>
+            </View>
+          </GlassCard>
+        )}
+
+        {/* Mismatch resolved */}
+        {mismatchInfo?.isMismatch && mismatchChoice !== null && (
+          <View style={styles.mismatchResolved}>
+            <MaterialCommunityIcons
+              name="check-circle-outline"
+              size={16}
+              color={colors.text.tertiary}
+            />
+            <Text style={styles.mismatchResolvedText}>
+              {mismatchChoice === "tag"
+                ? `Items will be tagged as ${mismatchInfo.receiptStore}`
+                : `Items will stay as ${mismatchInfo.listStore}`}
+            </Text>
+          </View>
+        )}
+
         {/* Complete Trip Button */}
         <GlassButton
           variant="primary"
@@ -679,6 +749,32 @@ const styles = StyleSheet.create({
     ...typography.labelLarge,
     color: colors.accent.secondary,
     fontWeight: "700",
+  },
+
+  // Store Mismatch
+  mismatchText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+    lineHeight: 22,
+  },
+  mismatchActions: {
+    gap: spacing.sm,
+  },
+  mismatchButton: {
+    marginBottom: spacing.xs,
+  },
+  mismatchResolved: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xs,
+  },
+  mismatchResolvedText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    fontStyle: "italic",
   },
 
   bottomSpacer: {

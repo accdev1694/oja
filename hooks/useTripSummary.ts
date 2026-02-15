@@ -28,6 +28,12 @@ export interface TripStats {
   tripDuration: number | null;
   storeName: string | undefined;
   storeId: string | undefined;
+  storeBreakdown?: {
+    storeId: string;
+    storeName: string;
+    itemCount: number;
+    subtotal: number;
+  }[];
 }
 
 export interface TripSummaryDisplay {
@@ -49,6 +55,10 @@ export interface TripSummaryDisplay {
   isAllChecked: boolean;
   /** true if there are unchecked items */
   hasUncheckedItems: boolean;
+  /** Per-store breakdown labels for multi-store trips, e.g. "Tesco: £32.50 (8 items)" */
+  storeBreakdownLabels: { storeId: string; storeName: string; label: string }[];
+  /** true if more than one store was visited */
+  isMultiStore: boolean;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -111,6 +121,15 @@ export function useTripSummary(stats: TripStats | null): TripSummaryDisplay | nu
     const isAllChecked = uncheckedCount === 0;
     const hasUncheckedItems = uncheckedCount > 0;
 
+    // Per-store breakdown (multi-store trips)
+    const breakdown = stats.storeBreakdown ?? [];
+    const storeBreakdownLabels = breakdown.map((s) => ({
+      storeId: s.storeId,
+      storeName: s.storeName,
+      label: `${s.storeName}: ${formatPrice(s.subtotal)} (${s.itemCount} item${s.itemCount !== 1 ? "s" : ""})`,
+    }));
+    const isMultiStore = breakdown.length > 1;
+
     return {
       checkedLabel,
       durationLabel,
@@ -121,6 +140,8 @@ export function useTripSummary(stats: TripStats | null): TripSummaryDisplay | nu
       isUnderBudget,
       isAllChecked,
       hasUncheckedItems,
+      storeBreakdownLabels,
+      isMultiStore,
     };
   }, [stats]);
 }

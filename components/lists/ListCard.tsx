@@ -457,6 +457,7 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing.sm,
   },
   metaLeft: {
     flex: 1,
@@ -465,10 +466,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   metaRight: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
   },
   metaItem: {
     flexDirection: "row",

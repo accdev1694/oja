@@ -292,7 +292,7 @@ export function EmptyLists({ title, message, onAction, actionText, style }: Empt
     <GlassErrorState
       type="empty"
       icon="clipboard-list-outline"
-      title={title ?? "Ready for your first shop?"}
+      title={title ?? "Ready to shop?"}
       message={message ?? "Create a list and set a budget — UK shoppers save an average of £35/month by tracking their spending."}
       onRetry={onAction}
       retryText={actionText ?? "Create List"}

@@ -22,6 +22,7 @@ import type * as lib_featureGating from "../lib/featureGating.js";
 import type * as lib_fuzzyMatch from "../lib/fuzzyMatch.js";
 import type * as lib_priceBracketMatcher from "../lib/priceBracketMatcher.js";
 import type * as lib_priceResolver from "../lib/priceResolver.js";
+import type * as lib_receiptHelpers from "../lib/receiptHelpers.js";
 import type * as lib_sizeUtils from "../lib/sizeUtils.js";
 import type * as lib_storeNormalizer from "../lib/storeNormalizer.js";
 import type * as lib_voiceParser from "../lib/voiceParser.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   "lib/fuzzyMatch": typeof lib_fuzzyMatch;
   "lib/priceBracketMatcher": typeof lib_priceBracketMatcher;
   "lib/priceResolver": typeof lib_priceResolver;
+  "lib/receiptHelpers": typeof lib_receiptHelpers;
   "lib/sizeUtils": typeof lib_sizeUtils;
   "lib/storeNormalizer": typeof lib_storeNormalizer;
   "lib/voiceParser": typeof lib_voiceParser;

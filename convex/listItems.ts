@@ -350,11 +350,23 @@ export const toggleChecked = mutation({
 
     const newCheckedStatus = !item.isChecked;
 
-    await ctx.db.patch(args.id, {
+    // Build update
+    const updates: Record<string, unknown> = {
       isChecked: newCheckedStatus,
       checkedAt: newCheckedStatus ? Date.now() : undefined,
       updatedAt: Date.now(),
-    });
+    };
+
+    // When checking ON, stamp the current store on the item (multi-store support)
+    if (newCheckedStatus) {
+      const list = await ctx.db.get(item.listId);
+      if (list?.normalizedStoreId) {
+        updates.purchasedAtStoreId = list.normalizedStoreId;
+        updates.purchasedAtStoreName = list.storeName;
+      }
+    }
+
+    await ctx.db.patch(args.id, updates);
 
     return await ctx.db.get(args.id);
   },
