@@ -391,7 +391,7 @@ const itemStyles = StyleSheet.create({
   // Swipe Container
   swipeContainer: {
     position: "relative",
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   swipeAction: {
     position: "absolute",

@@ -165,6 +165,7 @@ export const PantryItemRow = React.memo(function PantryItemRow({
 const styles = StyleSheet.create({
   itemRowContainer: {
     borderRadius: borderRadius.lg,
+    marginBottom: spacing.sm,
   },
   itemCard: {
     flexDirection: "row",
