@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -23,6 +24,7 @@ import {
   colors,
   typography,
   spacing,
+  useGlassAlert,
 } from "@/components/ui/glass";
 import { useDelightToast } from "@/hooks/useDelightToast";
 
@@ -30,7 +32,8 @@ export default function TripSummaryScreen() {
   const params = useLocalSearchParams();
   const listId = params.id as string as Id<"shoppingLists">;
   const router = useRouter();
-  const { toast, dismiss, onNewRecord, onSavingsMilestone } = useDelightToast();
+  const { toast, dismiss, showToast, onNewRecord, onSavingsMilestone } = useDelightToast();
+  const { alert } = useGlassAlert();
   const recordChecked = useRef(false);
   const milestoneChecked = useRef(false);
 
@@ -42,6 +45,62 @@ export default function TripSummaryScreen() {
   // Gamification mutations
   const updateStreak = useMutation(api.insights.updateStreak);
   const updateChallengeProgress = useMutation(api.insights.updateChallengeProgress);
+
+  // Restock
+  const bulkRestock = useMutation(api.pantryItems.bulkRestockFromTrip);
+  const [restockState, setRestockState] = useState<"idle" | "loading" | "done">("idle");
+
+  const doAutoRestock = useCallback(async () => {
+    setRestockState("loading");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const result = await bulkRestock({ listId });
+      setRestockState("done");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(
+        result.restockedCount > 0
+          ? `${result.restockedCount} item${result.restockedCount === 1 ? "" : "s"} restocked`
+          : "All items already stocked",
+        "fridge",
+        colors.accent.primary,
+      );
+    } catch {
+      setRestockState("idle");
+    }
+  }, [bulkRestock, listId, showToast]);
+
+  const handleAutoRestock = useCallback(() => {
+    if (restockState !== "idle") return;
+
+    const completedAt = summary?.list.completedAt;
+    const daysSince = completedAt
+      ? (Date.now() - completedAt) / (1000 * 60 * 60 * 24)
+      : 0;
+
+    if (daysSince > 1) {
+      alert(
+        "Still fully stocked?",
+        "It\u2019s been a while since this trip. Have you used any of these items?",
+        [
+          {
+            text: "No, update manually",
+            style: "cancel",
+            onPress: () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.navigate("/(app)/(tabs)/" as never);
+            },
+          },
+          {
+            text: "Yes, restock all",
+            style: "default",
+            onPress: () => doAutoRestock(),
+          },
+        ],
+      );
+    } else {
+      doAutoRestock();
+    }
+  }, [restockState, summary, alert, doAutoRestock, router]);
 
   // Check for new personal records once both data are loaded
   useEffect(() => {
@@ -337,12 +396,24 @@ export default function TripSummaryScreen() {
             <Text style={styles.rowLabel}>Completed</Text>
             <Text style={styles.rowValue}>{completedDate}</Text>
           </View>
-          {list.storeName && (
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Store</Text>
-              <Text style={styles.rowValue}>{list.storeName}</Text>
-            </View>
-          )}
+          {(() => {
+            const segments = (list as Record<string, unknown>).storeSegments as
+              | Array<{ storeName: string }> | undefined;
+            const names: string[] = [];
+            if (segments && segments.length > 0) {
+              for (const seg of segments) {
+                if (!names.includes(seg.storeName)) names.push(seg.storeName);
+              }
+            } else if (list.storeName) {
+              names.push(list.storeName);
+            }
+            return names.length > 0 ? (
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>{names.length > 1 ? "Stores" : "Store"}</Text>
+                <Text style={styles.rowValue}>{names.join(" | ")}</Text>
+              </View>
+            ) : null;
+          })()}
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Status</Text>
             <View style={[styles.statusBadge, { backgroundColor: "rgba(255, 255, 255, 0.13)" }]}>
@@ -353,31 +424,90 @@ export default function TripSummaryScreen() {
           </View>
         </GlassCard>
 
-        {/* Journey prompt: bridge Scan → Stock */}
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.navigate("/(app)/(tabs)/" as any);
-          }}
-        >
-          <GlassCard style={styles.journeyBanner}>
-            <View style={styles.journeyRow}>
-              <MaterialCommunityIcons
-                name="fridge-outline"
-                size={20}
-                color={colors.accent.primary}
-              />
-              <Text style={styles.journeyText}>
-                Update your stock levels?
+        {/* Scan Receipt prompt (only if no receipt linked yet) */}
+        {!receipt && (
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push({ pathname: "/(app)/(tabs)/scan", params: { listId: listId } } as never);
+            }}
+          >
+            <GlassCard variant="bordered" accentColor={colors.accent.primary} style={styles.section}>
+              <View style={styles.scanReceiptRow}>
+                <View style={styles.scanReceiptIcon}>
+                  <MaterialCommunityIcons name="camera" size={24} color={colors.accent.primary} />
+                </View>
+                <View style={styles.scanReceiptText}>
+                  <Text style={styles.scanReceiptTitle}>Scan Receipt</Text>
+                  <Text style={styles.scanReceiptDesc}>
+                    Capture your receipt to track exact prices
+                  </Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text.tertiary} />
+              </View>
+            </GlassCard>
+          </Pressable>
+        )}
+
+        {/* Restock pantry */}
+        <GlassCard variant="standard" style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="fridge-outline" size={20} color={colors.accent.primary} />
+            <Text style={styles.sectionTitle}>Update Pantry</Text>
+          </View>
+
+          <View style={styles.restockOptions}>
+            <Pressable
+              style={[
+                styles.restockOption,
+                restockState === "done" && styles.restockOptionDone,
+              ]}
+              onPress={handleAutoRestock}
+              disabled={restockState !== "idle"}
+            >
+              {restockState === "loading" ? (
+                <ActivityIndicator size="small" color={colors.accent.primary} />
+              ) : (
+                <MaterialCommunityIcons
+                  name={restockState === "done" ? "check-circle" : "auto-fix"}
+                  size={24}
+                  color={restockState === "done" ? colors.semantic.success : colors.accent.primary}
+                />
+              )}
+              <Text style={[
+                styles.restockLabel,
+                restockState === "done" && { color: colors.semantic.success },
+              ]}>
+                {restockState === "done" ? "Restocked" : "Auto-restock"}
               </Text>
+              <Text style={styles.restockDesc}>
+                {restockState === "done"
+                  ? "Pantry updated"
+                  : "Mark all purchased items as stocked"}
+              </Text>
+            </Pressable>
+
+            <View style={styles.restockDivider} />
+
+            <Pressable
+              style={styles.restockOption}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.navigate("/(app)/(tabs)/" as never);
+              }}
+            >
               <MaterialCommunityIcons
-                name="chevron-right"
-                size={18}
-                color={colors.text.tertiary}
+                name="pencil-outline"
+                size={24}
+                color={colors.text.secondary}
               />
-            </View>
-          </GlassCard>
-        </Pressable>
+              <Text style={styles.restockLabel}>Manual</Text>
+              <Text style={styles.restockDesc}>
+                Go to pantry and adjust individually
+              </Text>
+            </Pressable>
+          </View>
+        </GlassCard>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -541,21 +671,62 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Journey prompt
-  journeyBanner: {
-    marginBottom: spacing.md,
-    borderColor: `${colors.accent.primary}30`,
-    borderWidth: 1,
-  },
-  journeyRow: {
+  // Scan receipt prompt
+  scanReceiptRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.md,
   },
-  journeyText: {
-    ...typography.bodyMedium,
-    color: colors.text.secondary,
+  scanReceiptIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: `${colors.accent.primary}15`,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scanReceiptText: {
     flex: 1,
+  },
+  scanReceiptTitle: {
+    ...typography.labelLarge,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  scanReceiptDesc: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+
+  // Restock options
+  restockOptions: {
+    flexDirection: "row",
+    gap: 0,
+  },
+  restockOption: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    gap: spacing.xs,
+  },
+  restockOptionDone: {
+    opacity: 0.7,
+  },
+  restockLabel: {
+    ...typography.labelMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  restockDesc: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: "center",
+  },
+  restockDivider: {
+    width: 1,
+    backgroundColor: colors.glass.border,
+    marginVertical: spacing.sm,
   },
 
   bottomSpacer: {
