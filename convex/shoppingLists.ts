@@ -1,10 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { canCreateList } from "./lib/featureGating";
-import { getAllStores, getStoreInfoSafe, isValidStoreId, UKStoreId } from "./lib/storeNormalizer";
+import { canCreateList, canAddPantryItem } from "./lib/featureGating";
+import { getAllStores, getStoreInfoSafe, isValidStoreId, normalizeStoreName, UKStoreId } from "./lib/storeNormalizer";
 import { parseSize } from "./lib/sizeUtils";
 import { getReceiptIds, pushReceiptId } from "./lib/receiptHelpers";
+import { getIconForItem } from "./iconMapping";
 
 /**
  * Get all shopping lists for the current user
@@ -191,6 +192,265 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    return listId;
+  },
+});
+
+/**
+ * Create a new shopping list pre-populated with items from an existing receipt.
+ *
+ * This captures exact item names, sizes, and verified prices from the receipt,
+ * creates list items with receipt-verified pricing, upserts pantry items,
+ * and feeds price intelligence (currentPrices + priceHistory) for all users.
+ */
+export const createFromReceipt = mutation({
+  args: {
+    receiptId: v.id("receipts"),
+    name: v.optional(v.string()),
+    budget: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Feature gating: check list limit for free tier
+    const access = await canCreateList(ctx, user._id);
+    if (!access.allowed) {
+      throw new Error(access.reason ?? "List limit reached");
+    }
+
+    // Fetch receipt and verify ownership
+    const receipt = await ctx.db.get(args.receiptId);
+    if (!receipt) {
+      throw new Error("Receipt not found");
+    }
+    if (receipt.userId !== user._id) {
+      throw new Error("Unauthorized");
+    }
+    if (receipt.processingStatus !== "completed") {
+      throw new Error("Receipt is not fully processed yet");
+    }
+    if (!receipt.items || receipt.items.length === 0) {
+      throw new Error("Receipt has no items");
+    }
+
+    const now = Date.now();
+    const normalizedStoreId = normalizeStoreName(receipt.storeName);
+
+    // Smart budget: receipt total rounded up to nearest £5
+    const smartBudget = args.budget ?? Math.ceil(receipt.total / 5) * 5;
+
+    // List name: user-provided or "{StoreName} Re-shop"
+    const listName = args.name?.trim() || `${receipt.storeName} Re-shop`;
+
+    // ── 1. Create the shopping list ──
+    const listId = await ctx.db.insert("shoppingLists", {
+      userId: user._id,
+      name: listName,
+      status: "active",
+      budget: smartBudget,
+      storeName: receipt.storeName,
+      ...(normalizedStoreId && { normalizedStoreId }),
+      sourceReceiptId: args.receiptId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // ── 2. Create list items from receipt items ──
+    // Track names we've seen to avoid duplicate list items from receipt dupes
+    const seenNames = new Set<string>();
+
+    for (const item of receipt.items) {
+      const normalizedName = item.name.toLowerCase().trim();
+      if (seenNames.has(normalizedName)) continue;
+      seenNames.add(normalizedName);
+
+      // Parse size/unit from receipt item if available
+      const size = (item as Record<string, unknown>).size as string | undefined;
+      const unit = (item as Record<string, unknown>).unit as string | undefined;
+
+      await ctx.db.insert("listItems", {
+        listId,
+        userId: user._id,
+        name: item.name,
+        category: item.category,
+        quantity: item.quantity,
+        ...(size && { size }),
+        ...(unit && { unit }),
+        estimatedPrice: item.unitPrice,
+        priceSource: "personal",
+        priceConfidence: 1.0,
+        priority: "should-have",
+        isChecked: false,
+        autoAdded: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // ── 3. Upsert pantry items — enrich names, sizes, prices ──
+    // Query all pantry items once (not inside the loop)
+    const allPantryItems = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    const pantryByName = new Map(
+      allPantryItems.map((p) => [p.name.toLowerCase().trim(), p])
+    );
+    const pantrySeenNames = new Set<string>();
+
+    for (const item of receipt.items) {
+      const normalizedName = item.name.toLowerCase().trim();
+      if (pantrySeenNames.has(normalizedName)) continue;
+      pantrySeenNames.add(normalizedName);
+
+      const size = (item as Record<string, unknown>).size as string | undefined;
+      const unit = (item as Record<string, unknown>).unit as string | undefined;
+
+      const existingPantry = pantryByName.get(normalizedName);
+
+      if (existingPantry) {
+        // Update existing pantry item with receipt-verified data
+        await ctx.db.patch(existingPantry._id, {
+          lastPrice: item.unitPrice,
+          priceSource: "receipt" as const,
+          lastStoreName: receipt.storeName,
+          ...(size && { defaultSize: size }),
+          ...(unit && { defaultUnit: unit }),
+          updatedAt: now,
+        });
+      } else {
+        // Check pantry item limit before creating
+        const pantryAccess = await canAddPantryItem(ctx, user._id);
+        if (pantryAccess.allowed) {
+          await ctx.db.insert("pantryItems", {
+            userId: user._id,
+            name: item.name,
+            category: item.category || "other",
+            icon: getIconForItem(item.name, item.category || "other"),
+            stockLevel: "stocked",
+            lastPrice: item.unitPrice,
+            priceSource: "receipt" as const,
+            lastStoreName: receipt.storeName,
+            ...(size && { defaultSize: size }),
+            ...(unit && { defaultUnit: unit }),
+            autoAddToList: false,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+        // Silently skip if pantry limit reached — list items still get created
+      }
+    }
+
+    // ── 4. Feed price intelligence — currentPrices + priceHistory ──
+    for (const item of receipt.items) {
+      const normalizedName = item.name.toLowerCase().trim();
+      const size = (item as Record<string, unknown>).size as string | undefined;
+      const unit = (item as Record<string, unknown>).unit as string | undefined;
+
+      // 4a. Upsert currentPrices (per item+store, across all users)
+      const existingPrice = await ctx.db
+        .query("currentPrices")
+        .withIndex("by_item_store", (q) =>
+          q.eq("normalizedName", normalizedName).eq("storeName", receipt.storeName)
+        )
+        .first();
+
+      const daysSinceReceipt = Math.max(
+        0,
+        (now - receipt.purchaseDate) / (1000 * 60 * 60 * 24)
+      );
+
+      if (existingPrice) {
+        // Only update if receipt is newer than what we have
+        if (receipt.purchaseDate >= existingPrice.lastSeenDate) {
+          const newReportCount = existingPrice.reportCount + 1;
+          // Weighted average: favour newer prices
+          const newWeight = Math.max(0, 1 - daysSinceReceipt / 30);
+          const existingWeight = Math.max(0.3, 1 - (newReportCount > 1 ? 0.1 : 0));
+          const totalWeight = newWeight + existingWeight;
+          const weightedAvg =
+            (item.unitPrice * newWeight +
+              (existingPrice.averagePrice ?? existingPrice.unitPrice) * existingWeight) /
+            totalWeight;
+
+          // Confidence = count factor + recency factor
+          const countFactor = Math.min(newReportCount / 10, 0.5);
+          const recencyFactor = Math.max(0, 0.5 * (1 - daysSinceReceipt / 30));
+          const confidence = Math.min(1, countFactor + recencyFactor);
+
+          await ctx.db.patch(existingPrice._id, {
+            unitPrice: item.unitPrice,
+            averagePrice: Math.round(weightedAvg * 100) / 100,
+            minPrice: Math.min(existingPrice.minPrice ?? item.unitPrice, item.unitPrice),
+            maxPrice: Math.max(existingPrice.maxPrice ?? item.unitPrice, item.unitPrice),
+            reportCount: newReportCount,
+            confidence,
+            lastSeenDate: receipt.purchaseDate,
+            lastReportedBy: user._id,
+            ...(size && { size }),
+            ...(unit && { unit }),
+            updatedAt: now,
+          });
+        }
+      } else {
+        // New price entry for this item+store combination
+        const countFactor = Math.min(1 / 10, 0.5);
+        const recencyFactor = Math.max(0, 0.5 * (1 - daysSinceReceipt / 30));
+        const confidence = Math.min(1, countFactor + recencyFactor);
+
+        await ctx.db.insert("currentPrices", {
+          normalizedName,
+          itemName: item.name,
+          ...(size && { size }),
+          ...(unit && { unit }),
+          storeName: receipt.storeName,
+          ...(normalizedStoreId && { normalizedStoreId }),
+          unitPrice: item.unitPrice,
+          averagePrice: item.unitPrice,
+          minPrice: item.unitPrice,
+          maxPrice: item.unitPrice,
+          reportCount: 1,
+          confidence,
+          lastSeenDate: receipt.purchaseDate,
+          lastReportedBy: user._id,
+          updatedAt: now,
+        });
+      }
+
+      // 4b. Insert priceHistory entry (per-user price record)
+      await ctx.db.insert("priceHistory", {
+        userId: user._id,
+        receiptId: args.receiptId,
+        itemName: item.name,
+        normalizedName,
+        ...(size && { size }),
+        ...(unit && { unit }),
+        price: item.totalPrice,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        storeName: receipt.storeName,
+        storeAddress: receipt.storeAddress,
+        ...(normalizedStoreId && { normalizedStoreId }),
+        purchaseDate: receipt.purchaseDate,
+        createdAt: now,
+      });
+    }
+
+    // ── 5. Touch list updatedAt (triggers reactivity for list total) ──
+    await ctx.db.patch(listId, { updatedAt: Date.now() });
 
     return listId;
   },

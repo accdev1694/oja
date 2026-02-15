@@ -140,6 +140,9 @@ export default defineSchema({
     actualTotal: v.optional(v.number()),
     pointsEarned: v.optional(v.number()),
 
+    // Provenance: which receipt this list was created from (create-from-receipt flow)
+    sourceReceiptId: v.optional(v.id("receipts")),
+
     // List-level approval (Epic 4 - Partner Mode)
     approvalStatus: v.optional(v.union(
       v.literal("draft"),
@@ -272,6 +275,9 @@ export default defineSchema({
 
     // Admin pre-launch seeding flag
     isAdminSeed: v.optional(v.boolean()),
+
+    // Soft-delete: hides receipt from user's profile but preserves price data
+    isHidden: v.optional(v.boolean()),
 
     purchaseDate: v.number(),
     createdAt: v.number(),

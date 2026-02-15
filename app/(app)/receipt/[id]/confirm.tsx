@@ -60,7 +60,7 @@ interface ReceiptItem {
 export default function ConfirmReceiptScreen() {
   const router = useRouter();
   const { alert } = useGlassAlert();
-  const { id } = useLocalSearchParams();
+  const { id, returnTo } = useLocalSearchParams<{ id: string; returnTo?: string }>();
   const receiptId = id as Id<"receipts">;
 
   const receipt = useQuery(api.receipts.getById, { id: receiptId });
@@ -284,7 +284,10 @@ export default function ConfirmReceiptScreen() {
 
       // Determine navigation destination
       const navigateAfterSave = () => {
-        if (receipt?.listId) {
+        if (returnTo === "create-list-from-receipt") {
+          // Return to receipt picker with newly scanned receipt pre-selected
+          router.replace(`/(app)/create-list-from-receipt?receiptId=${receiptId}` as never);
+        } else if (receipt?.listId) {
           router.push(`/receipt/${receiptId}/reconciliation?listId=${receipt.listId}` as any);
         } else {
           router.push("/(app)/(tabs)/scan" as any);

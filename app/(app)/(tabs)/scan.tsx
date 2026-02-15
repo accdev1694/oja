@@ -6,8 +6,9 @@ import {
   Image,
   TouchableOpacity,
   ScrollView,
+  Pressable,
 } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { useMutation, useAction, useQuery } from "convex/react";
@@ -28,10 +29,11 @@ import {
   useGlassAlert,
 } from "@/components/ui/glass";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
 
 export default function ScanScreen() {
   const router = useRouter();
-  const { listId: listIdParam } = useLocalSearchParams<{ listId?: string }>();
+  const { listId: listIdParam, returnTo } = useLocalSearchParams<{ listId?: string; returnTo?: string }>();
   const { alert } = useGlassAlert();
   const { firstName } = useCurrentUser();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -48,6 +50,7 @@ export default function ScanScreen() {
   }, [listIdParam]);
 
   const shoppingLists = useQuery(api.shoppingLists.getByUser, {});
+  const allReceipts = useQuery(api.receipts.getByUser, {});
   const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);
   const createReceipt = useMutation(api.receipts.create);
   const parseReceipt = useAction(api.ai.parseReceipt);
@@ -56,6 +59,14 @@ export default function ScanScreen() {
   const [parseReceiptId, setParseReceiptId] = useState<Id<"receipts"> | null>(null);
 
   const selectedList = shoppingLists?.find((l) => l._id === selectedListId);
+
+  // Filter to completed receipts with items for the history section
+  const completedReceipts = useMemo(() => {
+    if (!allReceipts) return [];
+    return allReceipts.filter(
+      (r) => r.processingStatus === "completed" && r.items && r.items.length > 0
+    );
+  }, [allReceipts]);
 
   async function handleTakePhoto() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -176,8 +187,11 @@ export default function ScanScreen() {
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-        // Navigate to confirmation screen
-        router.push(`/receipt/${receiptId}/confirm` as any);
+        // Navigate to confirmation screen (forward returnTo if present)
+        const confirmUrl = returnTo
+          ? `/receipt/${receiptId}/confirm?returnTo=${returnTo}`
+          : `/receipt/${receiptId}/confirm`;
+        router.push(confirmUrl as never);
       } catch (parseError) {
         console.error("Parse error:", parseError);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -316,7 +330,11 @@ export default function ScanScreen() {
         subtitle={firstName ? `${firstName}, track your spending` : "Track spending & build price history"}
       />
 
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentScroll}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Camera Icon */}
         <View style={styles.iconSection}>
           <View style={styles.iconContainer}>
@@ -476,9 +494,81 @@ export default function ScanScreen() {
           </GlassButton>
         </View>
 
+        {/* Receipt History */}
+        <View style={styles.historySection}>
+          <View style={styles.historySectionHeader}>
+            <View style={styles.historySectionLeft}>
+              <MaterialCommunityIcons
+                name="receipt"
+                size={18}
+                color={colors.text.secondary}
+              />
+              <Text style={styles.historySectionTitle}>Your Receipts</Text>
+            </View>
+            {completedReceipts.length > 0 && (
+              <View style={styles.historyBadge}>
+                <Text style={styles.historyBadgeText}>
+                  {completedReceipts.length}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {completedReceipts.length === 0 ? (
+            <View style={styles.historyEmpty}>
+              <MaterialCommunityIcons
+                name="receipt"
+                size={36}
+                color={colors.text.tertiary}
+              />
+              <Text style={styles.historyEmptyText}>
+                Scan your first receipt to start building your history
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.historyList}>
+              {completedReceipts.map((receipt) => (
+                <ReceiptHistoryCard
+                  key={receipt._id}
+                  receipt={receipt}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push(
+                      `/(app)/create-list-from-receipt?receiptId=${receipt._id}` as never
+                    );
+                  }}
+                  onDelete={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    alert(
+                      "Remove Receipt",
+                      `Remove this ${receipt.storeName} receipt from your history? Price data will be kept.`,
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Remove",
+                          style: "destructive",
+                          onPress: async () => {
+                            try {
+                              await deleteReceipt({ id: receipt._id });
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            } catch (e) {
+                              console.error("Failed to remove receipt:", e);
+                              alert("Error", "Failed to remove receipt");
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+
         {/* Bottom spacing */}
         <View style={styles.bottomSpacer} />
-      </View>
+      </ScrollView>
     </GlassScreen>
   );
 }
@@ -504,6 +594,72 @@ function InstructionItem({ number, text }: InstructionItemProps) {
 }
 
 // =============================================================================
+// RECEIPT HISTORY CARD COMPONENT
+// =============================================================================
+
+interface ReceiptHistoryCardProps {
+  receipt: {
+    _id: Id<"receipts">;
+    storeName: string;
+    normalizedStoreId?: string;
+    total: number;
+    purchaseDate: number;
+    items: { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
+  };
+  onPress: () => void;
+  onDelete: () => void;
+}
+
+function ReceiptHistoryCard({ receipt, onPress, onDelete }: ReceiptHistoryCardProps) {
+  const storeColor = receipt.normalizedStoreId
+    ? getStoreInfoSafe(receipt.normalizedStoreId)?.color ?? colors.text.tertiary
+    : colors.text.tertiary;
+
+  const d = new Date(receipt.purchaseDate);
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = String(d.getFullYear()).slice(-2);
+  const dateStr = `${day}/${month}/${year}`;
+
+  return (
+    <Pressable style={styles.receiptCard} onPress={onPress}>
+      <View style={[styles.receiptStoreDot, { backgroundColor: storeColor }]} />
+      <View style={styles.receiptCardInfo}>
+        <Text style={styles.receiptCardStore} numberOfLines={1}>
+          {receipt.storeName}
+        </Text>
+        <Text style={styles.receiptCardMeta}>
+          {dateStr} · {receipt.items.length} item
+          {receipt.items.length !== 1 ? "s" : ""}
+        </Text>
+      </View>
+      <Text style={styles.receiptCardTotal}>
+        £{receipt.total.toFixed(2)}
+      </Text>
+      <Pressable
+        onPress={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        hitSlop={8}
+        style={styles.receiptDeleteBtn}
+      >
+        <MaterialCommunityIcons
+          name="close-circle-outline"
+          size={18}
+          color={colors.text.tertiary}
+        />
+      </Pressable>
+      <MaterialCommunityIcons
+        name="clipboard-plus-outline"
+        size={20}
+        color={colors.accent.primary}
+      />
+    </Pressable>
+  );
+}
+
+// =============================================================================
 // STYLES
 // =============================================================================
 
@@ -511,6 +667,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: spacing.lg,
+  },
+  contentScroll: {
+    paddingBottom: spacing.md,
   },
 
   // Icon Section
@@ -695,5 +854,96 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     textAlign: "center",
     lineHeight: 22,
+  },
+
+  // Receipt History Section
+  historySection: {
+    marginTop: spacing["2xl"],
+    borderTopWidth: 1,
+    borderTopColor: colors.glass.border,
+    paddingTop: spacing.lg,
+  },
+  historySectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
+  },
+  historySectionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  historySectionTitle: {
+    ...typography.labelLarge,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  historyBadge: {
+    backgroundColor: colors.glass.backgroundStrong,
+    borderRadius: borderRadius.sm,
+    minWidth: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing.sm,
+  },
+  historyBadgeText: {
+    ...typography.labelSmall,
+    color: colors.text.secondary,
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  historyEmpty: {
+    alignItems: "center",
+    paddingVertical: spacing["2xl"],
+    gap: spacing.sm,
+  },
+  historyEmptyText: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    maxWidth: 240,
+  },
+  historyList: {
+    gap: spacing.sm,
+  },
+
+  // Receipt Card
+  receiptCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  receiptStoreDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  receiptCardInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  receiptCardStore: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  receiptCardMeta: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  receiptCardTotal: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: "700",
+  },
+  receiptDeleteBtn: {
+    padding: spacing.xs,
   },
 });

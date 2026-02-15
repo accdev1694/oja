@@ -34,11 +34,13 @@ export const getByUser = query({
       return [];
     }
 
-    return await ctx.db
+    const all = await ctx.db
       .query("receipts")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .order("desc")
       .collect();
+
+    return all.filter((r) => !r.isHidden);
   },
 });
 
@@ -195,7 +197,8 @@ export const update = mutation({
 });
 
 /**
- * Delete a receipt
+ * Soft-delete a receipt — hides from user's profile but preserves
+ * crowdsourced price data (priceHistory, currentPrices).
  */
 export const remove = mutation({
   args: { id: v.id("receipts") },
@@ -220,7 +223,7 @@ export const remove = mutation({
       throw new Error("Unauthorized");
     }
 
-    await ctx.db.delete(args.id);
+    await ctx.db.patch(args.id, { isHidden: true });
     return { success: true };
   },
 });

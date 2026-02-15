@@ -65,6 +65,7 @@ export default function ListsScreen() {
   // Create list modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newListName, setNewListName] = useState("");
+  const [modalMode, setModalMode] = useState<"choice" | "manual">("choice");
 
   // Sliding pill animation: 0 = active (left), 1 = history (right)
   const tabProgress = useSharedValue(0);
@@ -153,6 +154,13 @@ export default function ListsScreen() {
 
   function handleOpenCreateModal() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setModalMode("choice");
+    setNewListName("");
+    setShowCreateModal(true);
+  }
+
+  function handleStartManualCreate() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const now = new Date();
     const day = now.getDate();
     const ordinal =
@@ -162,12 +170,20 @@ export default function ListsScreen() {
     const month = now.toLocaleDateString("en-GB", { month: "long" });
     const year = now.getFullYear();
     setNewListName(`${day}${ordinal} ${month} ${year} Shopping`);
-    setShowCreateModal(true);
+    setModalMode("manual");
+  }
+
+  function handleFromReceipt() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowCreateModal(false);
+    setModalMode("choice");
+    router.push("/(app)/create-list-from-receipt" as never);
   }
 
   function handleCloseCreateModal() {
     setShowCreateModal(false);
     setNewListName("");
+    setModalMode("choice");
   }
 
   async function handleCreateList() {
@@ -460,68 +476,149 @@ export default function ListsScreen() {
         maxWidth={360}
         avoidKeyboard
       >
-        {/* Modal Header */}
-        <View style={styles.modalHeader}>
-          <View style={styles.modalHeaderLeft}>
-            <MaterialCommunityIcons
-              name="clipboard-plus-outline"
-              size={24}
-              color={colors.accent.primary}
-            />
-            <Text style={styles.modalTitle}>Create New List</Text>
-          </View>
-        </View>
+        {modalMode === "choice" ? (
+          <>
+            {/* Choice View — pick how to create */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <MaterialCommunityIcons
+                  name="clipboard-plus-outline"
+                  size={24}
+                  color={colors.accent.primary}
+                />
+                <Text style={styles.modalTitle}>New List</Text>
+              </View>
+            </View>
 
-        {/* List Name Input */}
-        <View style={styles.inputGroup}>
-          <View style={styles.inputLabelRow}>
-            <Text style={styles.inputLabel}>List Name</Text>
-            <Text
-              style={[
-                styles.charCount,
-                newListName.length > MAX_LIST_NAME_LENGTH - 5 && styles.charCountWarning,
-                newListName.length >= MAX_LIST_NAME_LENGTH && styles.charCountLimit,
-              ]}
-            >
-              {MAX_LIST_NAME_LENGTH - newListName.length}
-            </Text>
-          </View>
-          <View style={styles.inputContainer}>
-            <MaterialCommunityIcons name="clipboard-list" size={20} color={colors.text.tertiary} />
-            <TextInput
-              style={styles.textInput}
-              value={newListName}
-              onChangeText={(text) => setNewListName(text.slice(0, MAX_LIST_NAME_LENGTH))}
-              placeholder="e.g., Weekly Shop"
-              placeholderTextColor={colors.text.tertiary}
-              maxLength={MAX_LIST_NAME_LENGTH}
-              autoFocus
-            />
-          </View>
-        </View>
+            <View style={styles.choiceOptions}>
+              <Pressable
+                style={styles.choiceOption}
+                onPress={handleFromReceipt}
+              >
+                <View style={styles.choiceIconWrap}>
+                  <MaterialCommunityIcons
+                    name="receipt"
+                    size={24}
+                    color={colors.accent.primary}
+                  />
+                </View>
+                <View style={styles.choiceTextWrap}>
+                  <Text style={styles.choiceLabel}>From a Receipt</Text>
+                  <Text style={styles.choiceDesc}>
+                    Pick or scan a receipt to auto-fill items and prices
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color={colors.text.tertiary}
+                />
+              </Pressable>
 
-        {/* Action Buttons */}
-        <View style={styles.modalActions}>
-          <GlassButton
-            variant="secondary"
-            size="md"
-            onPress={handleCloseCreateModal}
-            style={styles.modalButton}
-          >
-            Cancel
-          </GlassButton>
-          <GlassButton
-            variant="primary"
-            size="md"
-            icon="plus"
-            onPress={handleCreateList}
-            loading={isCreating}
-            disabled={isCreating}
-            style={styles.modalButton}
-          >
-            Create List
-          </GlassButton>
-        </View>
+              <Pressable
+                style={styles.choiceOption}
+                onPress={handleStartManualCreate}
+              >
+                <View style={styles.choiceIconWrap}>
+                  <MaterialCommunityIcons
+                    name="pencil-outline"
+                    size={24}
+                    color={colors.text.secondary}
+                  />
+                </View>
+                <View style={styles.choiceTextWrap}>
+                  <Text style={styles.choiceLabel}>Create Manually</Text>
+                  <Text style={styles.choiceDesc}>
+                    Start with an empty list and add items yourself
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color={colors.text.tertiary}
+                />
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <>
+            {/* Manual Create View — existing flow */}
+            <View style={styles.modalHeader}>
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setModalMode("choice");
+                }}
+                hitSlop={8}
+              >
+                <MaterialCommunityIcons
+                  name="arrow-left"
+                  size={24}
+                  color={colors.text.secondary}
+                />
+              </Pressable>
+              <View style={styles.modalHeaderLeft}>
+                <MaterialCommunityIcons
+                  name="pencil-outline"
+                  size={24}
+                  color={colors.accent.primary}
+                />
+                <Text style={styles.modalTitle}>Create Manually</Text>
+              </View>
+            </View>
+
+            {/* List Name Input */}
+            <View style={styles.inputGroup}>
+              <View style={styles.inputLabelRow}>
+                <Text style={styles.inputLabel}>List Name</Text>
+                <Text
+                  style={[
+                    styles.charCount,
+                    newListName.length > MAX_LIST_NAME_LENGTH - 5 && styles.charCountWarning,
+                    newListName.length >= MAX_LIST_NAME_LENGTH && styles.charCountLimit,
+                  ]}
+                >
+                  {MAX_LIST_NAME_LENGTH - newListName.length}
+                </Text>
+              </View>
+              <View style={styles.inputContainer}>
+                <MaterialCommunityIcons name="clipboard-list" size={20} color={colors.text.tertiary} />
+                <TextInput
+                  style={styles.textInput}
+                  value={newListName}
+                  onChangeText={(text) => setNewListName(text.slice(0, MAX_LIST_NAME_LENGTH))}
+                  placeholder="e.g., Weekly Shop"
+                  placeholderTextColor={colors.text.tertiary}
+                  maxLength={MAX_LIST_NAME_LENGTH}
+                  autoFocus
+                />
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.modalActions}>
+              <GlassButton
+                variant="secondary"
+                size="md"
+                onPress={handleCloseCreateModal}
+                style={styles.modalButton}
+              >
+                Cancel
+              </GlassButton>
+              <GlassButton
+                variant="primary"
+                size="md"
+                icon="plus"
+                onPress={handleCreateList}
+                loading={isCreating}
+                disabled={isCreating}
+                style={styles.modalButton}
+              >
+                Create List
+              </GlassButton>
+            </View>
+          </>
+        )}
       </GlassModal>
     </GlassScreen>
   );
@@ -729,6 +826,42 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
+  },
+
+  // Choice modal styles
+  choiceOptions: {
+    gap: spacing.sm,
+  },
+  choiceOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  choiceIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    backgroundColor: `${colors.accent.primary}10`,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  choiceTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  choiceLabel: {
+    ...typography.bodyLarge,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  choiceDesc: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
   },
 
   // Header actions (bell + New List)
