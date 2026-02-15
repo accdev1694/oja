@@ -145,6 +145,19 @@ export default function ConfirmReceiptScreen() {
     return { subtotal: sub, total: sub + tax };
   }, [editedItems, tax]);
 
+  // Partial scan detection: if the receipt total is much higher than the
+  // sum of parsed items, the scan likely missed items.
+  const isPartialScan = useMemo(() => {
+    if (editedItems.length === 0) return false;
+    const parsedTotal = editedItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    const receiptTotal = receipt.total;
+    // If parsed items cover less than 70% of the receipt total, flag it
+    if (receiptTotal > 0 && parsedTotal < receiptTotal * 0.7) return true;
+    // If very few items relative to total (e.g. 2 items but £30+ total)
+    if (editedItems.length <= 2 && receiptTotal > 15) return true;
+    return false;
+  }, [editedItems, receipt.total]);
+
   const openEditNameModal = useCallback((index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEditingItemIndex(index);
@@ -384,6 +397,39 @@ export default function ConfirmReceiptScreen() {
             </Text>
           </View>
         </GlassCard>
+
+        {/* Partial Scan Warning */}
+        {isPartialScan && (
+          <GlassCard
+            variant="bordered"
+            accentColor={colors.semantic.danger}
+            style={styles.section}
+          >
+            <View style={styles.warningHeader}>
+              <MaterialCommunityIcons
+                name="image-broken-variant"
+                size={20}
+                color={colors.semantic.danger}
+              />
+              <Text style={styles.partialScanTitle}>Incomplete Scan</Text>
+            </View>
+            <Text style={styles.warningText}>
+              We only found {editedItems.length} item{editedItems.length !== 1 ? "s" : ""} but
+              the receipt total is £{receipt.total.toFixed(2)}. Some items may not have
+              been captured. Try retaking the photo with better lighting, or add
+              missing items manually below.
+            </Text>
+            <GlassButton
+              variant="secondary"
+              size="sm"
+              icon="camera-retake"
+              onPress={() => router.back()}
+              style={styles.retakeButton}
+            >
+              Retake Photo
+            </GlassButton>
+          </GlassCard>
+        )}
 
         {/* Low Confidence Warning */}
         {lowConfidenceItems.length > 0 && (
@@ -776,6 +822,15 @@ const styles = StyleSheet.create({
   warningText: {
     ...typography.bodySmall,
     color: colors.text.secondary,
+  },
+  partialScanTitle: {
+    ...typography.labelMedium,
+    color: colors.semantic.danger,
+    fontWeight: "600",
+  },
+  retakeButton: {
+    marginTop: spacing.sm,
+    alignSelf: "flex-start",
   },
 
   // Items
