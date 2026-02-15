@@ -658,6 +658,26 @@ export const addItemMidShop = mutation({
       return { success: true, itemId, source: "add" };
 
     } else if (args.source === "next_trip") {
+      // Dedup: check if item already exists in pantry
+      const normalizedName = args.name.toLowerCase().trim();
+      const existingItems = await ctx.db
+        .query("pantryItems")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .collect();
+      const existingPantry = existingItems.find(
+        (p) => p.name.toLowerCase().trim() === normalizedName
+      );
+
+      if (existingPantry) {
+        // Mark existing item as out + auto-add to next list
+        await ctx.db.patch(existingPantry._id, {
+          stockLevel: "out",
+          autoAddToList: true,
+          updatedAt: now,
+        });
+        return { success: true, deferred: true, pantryItemId: existingPantry._id, source: "next_trip" };
+      }
+
       // Check pantry item limit for free tier
       const pantryAccess = await canAddPantryItem(ctx, user._id);
       if (!pantryAccess.allowed) {
@@ -910,26 +930,40 @@ export const addAndSeedPantry = mutation({
 
     const now = Date.now();
 
-    // 1. Create pantry item
-    const icon = getIconForItem(args.name, args.category);
-    const pantryItemId = await ctx.db.insert("pantryItems", {
-      userId: user._id,
-      name: args.name,
-      category: args.category,
-      icon,
-      stockLevel: "out",
-      autoAddToList: false,
-      ...(args.size ? { defaultSize: args.size } : {}),
-      ...(args.unit ? { defaultUnit: args.unit } : {}),
-      ...(args.estimatedPrice != null ? {
-        lastPrice: args.estimatedPrice,
-        priceSource: "user" as const,
-      } : {}),
-      createdAt: now,
-      updatedAt: now,
-    });
+    // 1. Find or create pantry item (dedup by name)
+    const normalizedName = args.name.toLowerCase().trim();
+    const allPantryItems = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    const existingPantry = allPantryItems.find(
+      (p) => p.name.toLowerCase().trim() === normalizedName
+    );
 
-    // 2. Create list item linked to the new pantry item
+    let pantryItemId: Id<"pantryItems">;
+    if (existingPantry) {
+      pantryItemId = existingPantry._id;
+    } else {
+      const icon = getIconForItem(args.name, args.category);
+      pantryItemId = await ctx.db.insert("pantryItems", {
+        userId: user._id,
+        name: args.name,
+        category: args.category,
+        icon,
+        stockLevel: "out",
+        autoAddToList: false,
+        ...(args.size ? { defaultSize: args.size } : {}),
+        ...(args.unit ? { defaultUnit: args.unit } : {}),
+        ...(args.estimatedPrice != null ? {
+          lastPrice: args.estimatedPrice,
+          priceSource: "user" as const,
+        } : {}),
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // 2. Create list item linked to the pantry item
     const listItemId = await ctx.db.insert("listItems", {
       listId: args.listId,
       userId: user._id,

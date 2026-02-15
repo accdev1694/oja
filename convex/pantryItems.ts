@@ -1,9 +1,27 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
 import { calculateSimilarity } from "./lib/fuzzyMatch";
+
+/**
+ * Find an existing pantry item by name (case-insensitive, trimmed).
+ * Returns the matching item or null.
+ */
+async function findExistingPantryItem(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  name: string,
+) {
+  const normalized = name.toLowerCase().trim();
+  const items = await ctx.db
+    .query("pantryItems")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+  return items.find((item) => item.name.toLowerCase().trim() === normalized) ?? null;
+}
 
 /**
  * Bulk create pantry items for a user
@@ -197,6 +215,12 @@ export const create = mutation({
       throw new Error("User not found");
     }
 
+    // Dedup: return existing item if one matches by name
+    const existing = await findExistingPantryItem(ctx, user._id, args.name);
+    if (existing) {
+      return existing._id;
+    }
+
     // Feature gating: check pantry item limit for free tier
     const access = await canAddPantryItem(ctx, user._id);
     if (!access.allowed) {
@@ -365,6 +389,57 @@ export const updateStockLevel = mutation({
     });
 
     return await ctx.db.get(args.id);
+  },
+});
+
+/**
+ * Bulk-restock pantry items from a completed shopping trip.
+ * Finds all checked items with a pantryItemId and sets them to "stocked".
+ */
+export const bulkRestockFromTrip = mutation({
+  args: {
+    listId: v.id("shoppingLists"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    // Verify list ownership
+    const list = await ctx.db.get(args.listId);
+    if (!list || list.userId !== user._id) throw new Error("Unauthorized");
+
+    // Get checked items from the list
+    const checkedItems = await ctx.db
+      .query("listItems")
+      .withIndex("by_list_checked", (q) =>
+        q.eq("listId", args.listId).eq("isChecked", true)
+      )
+      .collect();
+
+    const now = Date.now();
+    let restockedCount = 0;
+
+    for (const item of checkedItems) {
+      if (!item.pantryItemId) continue;
+
+      const pantryItem = await ctx.db.get(item.pantryItemId);
+      if (!pantryItem || pantryItem.userId !== user._id) continue;
+      if (pantryItem.stockLevel === "stocked") continue;
+
+      await ctx.db.patch(item.pantryItemId, {
+        stockLevel: "stocked",
+        updatedAt: now,
+      });
+      restockedCount++;
+    }
+
+    return { restockedCount };
   },
 });
 
@@ -793,6 +868,23 @@ export const addFromReceipt = mutation({
     }
 
     const now = Date.now();
+
+    // Dedup: if item exists, update price/stock from receipt instead of creating duplicate
+    const existing = await findExistingPantryItem(ctx, user._id, args.name);
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        stockLevel: "stocked",
+        ...(args.price !== undefined && {
+          lastPrice: args.price,
+          priceSource: "receipt" as const,
+          ...(args.storeName && { lastStoreName: args.storeName }),
+        }),
+        ...(args.size && { defaultSize: args.size }),
+        ...(args.unit && { defaultUnit: args.unit }),
+        updatedAt: now,
+      });
+      return existing._id;
+    }
 
     const pantryItemId = await ctx.db.insert("pantryItems", {
       userId: user._id,
