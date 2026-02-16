@@ -584,7 +584,7 @@ Return a JSON object with these fields:
 - confidence: 0-100 how confident you are in the identification. Below 40 means the image is too unclear.
 
 If the image does not show a recognisable product (e.g., blurry, not a product, random object), return:
-{"confidence": 0, "rejection": "Could not identify a product in this image"}
+{"confidence": 0, "rejection": "Product not recognised. Snap the label showing name and size."}
 
 Return ONLY valid JSON, no markdown code blocks.`;
 
@@ -620,7 +620,7 @@ Return ONLY valid JSON, no markdown code blocks.`;
       if (parsed.rejection || confidence < 30) {
         return {
           success: false,
-          rejection: (parsed.rejection as string) || "Could not identify a product in this image",
+          rejection: (parsed.rejection as string) || "Product not recognised. Snap the label showing name and size.",
           confidence,
         };
       }

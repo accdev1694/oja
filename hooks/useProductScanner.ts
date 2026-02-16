@@ -81,7 +81,7 @@ export function useProductScanner() {
 
       if (!parsed.success) {
         haptic("error");
-        setLastError(parsed.rejection || "Could not identify product");
+        setLastError(parsed.rejection || "Product not recognised. Snap the label showing name and size.");
         setIsProcessing(false);
         return null;
       }
