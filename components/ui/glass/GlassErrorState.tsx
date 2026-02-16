@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
     ...typography.headlineMedium,
     color: colors.text.primary,
     textAlign: "center",
-    width: "100%",
+    alignSelf: "stretch",
   },
   titleCompact: {
     ...typography.headlineSmall,
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.text.primary,
     textAlign: "center",
-    width: "100%",
+    alignSelf: "stretch",
     lineHeight: 22,
   },
   messageCompact: {

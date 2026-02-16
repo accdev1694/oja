@@ -100,6 +100,55 @@ export default function ConfirmReceiptScreen() {
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemQuantity, setNewItemQuantity] = useState("1");
 
+  // All hooks must be above early returns to satisfy Rules of Hooks
+  const lowConfidenceItems = useMemo(
+    () => editedItems.filter((item) => item.confidence && item.confidence < 70),
+    [editedItems]
+  );
+
+  const tax = receipt?.tax || 0;
+  const { subtotal, total } = useMemo(() => {
+    const sub = editedItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    return { subtotal: sub, total: sub + tax };
+  }, [editedItems, tax]);
+
+  const isPartialScan = useMemo(() => {
+    if (editedItems.length === 0 || !receipt) return false;
+    const parsedTotal = editedItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    const receiptTotal = receipt.total;
+    if (receiptTotal > 0 && parsedTotal < receiptTotal * 0.7) return true;
+    if (editedItems.length <= 2 && receiptTotal > 15) return true;
+    return false;
+  }, [editedItems, receipt]);
+
+  const openEditNameModal = useCallback((index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEditingItemIndex(index);
+    setEditingField("name");
+    setEditValue(editedItems[index].name);
+  }, [editedItems]);
+
+  const openEditPriceModal = useCallback((index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEditingItemIndex(index);
+    setEditingField("price");
+    setEditValue(editedItems[index].totalPrice.toFixed(2));
+  }, [editedItems]);
+
+  const handleDeleteItem = useCallback((index: number) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    setEditedItems((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // Get pantry suggestions for autocomplete
+  const pantrySuggestions = useMemo(() => {
+    if (!pantryItems || !editValue || editingField !== "name") return [];
+    return pantryItems
+      .filter((item: unknown) => (item as { name: string }).name.toLowerCase().includes(editValue.toLowerCase()))
+      .slice(0, 5)
+      .map((item: unknown) => (item as { name: string }).name);
+  }, [pantryItems, editValue, editingField]);
+
   // Initialize edited items from receipt
   if (receipt && !isInitialized) {
     setEditedItems(receipt.items as ReceiptItem[]);
@@ -133,45 +182,6 @@ export default function ConfirmReceiptScreen() {
     );
   }
 
-  const lowConfidenceItems = useMemo(
-    () => editedItems.filter((item) => item.confidence && item.confidence < 70),
-    [editedItems]
-  );
-
-  // Calculate totals from edited items
-  const tax = receipt.tax || 0;
-  const { subtotal, total } = useMemo(() => {
-    const sub = editedItems.reduce((sum, item) => sum + item.totalPrice, 0);
-    return { subtotal: sub, total: sub + tax };
-  }, [editedItems, tax]);
-
-  // Partial scan detection: if the receipt total is much higher than the
-  // sum of parsed items, the scan likely missed items.
-  const isPartialScan = useMemo(() => {
-    if (editedItems.length === 0) return false;
-    const parsedTotal = editedItems.reduce((sum, item) => sum + item.totalPrice, 0);
-    const receiptTotal = receipt.total;
-    // If parsed items cover less than 70% of the receipt total, flag it
-    if (receiptTotal > 0 && parsedTotal < receiptTotal * 0.7) return true;
-    // If very few items relative to total (e.g. 2 items but £30+ total)
-    if (editedItems.length <= 2 && receiptTotal > 15) return true;
-    return false;
-  }, [editedItems, receipt.total]);
-
-  const openEditNameModal = useCallback((index: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setEditingItemIndex(index);
-    setEditingField("name");
-    setEditValue(editedItems[index].name);
-  }, [editedItems]);
-
-  const openEditPriceModal = useCallback((index: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setEditingItemIndex(index);
-    setEditingField("price");
-    setEditValue(editedItems[index].totalPrice.toFixed(2));
-  }, [editedItems]);
-
   function saveEdit() {
     if (editingItemIndex === null) return;
 
@@ -197,11 +207,6 @@ export default function ConfirmReceiptScreen() {
     setEditingField(null);
     setEditValue("");
   }
-
-  const handleDeleteItem = useCallback((index: number) => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    setEditedItems((prev) => prev.filter((_, i) => i !== index));
-  }, []);
 
   function handleAddMissingItem() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -345,15 +350,6 @@ export default function ConfirmReceiptScreen() {
       alert("Error", "Failed to save receipt");
     }
   }
-
-  // Get pantry suggestions for autocomplete
-  const pantrySuggestions = useMemo(() => {
-    if (!pantryItems || !editValue || editingField !== "name") return [];
-    return pantryItems
-      .filter((item: any) => item.name.toLowerCase().includes(editValue.toLowerCase()))
-      .slice(0, 5)
-      .map((item: any) => item.name);
-  }, [pantryItems, editValue, editingField]);
 
   return (
     <GlassScreen>
