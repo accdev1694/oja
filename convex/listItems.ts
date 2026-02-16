@@ -989,3 +989,126 @@ export const addAndSeedPantry = mutation({
   },
 });
 
+/**
+ * Add multiple items from product scanning.
+ * Creates list items + seeds pantry items (deduplicates by name).
+ */
+export const addBatchFromScan = mutation({
+  args: {
+    listId: v.id("shoppingLists"),
+    items: v.array(
+      v.object({
+        name: v.string(),
+        category: v.string(),
+        size: v.optional(v.string()),
+        unit: v.optional(v.string()),
+        estimatedPrice: v.optional(v.number()),
+        quantity: v.optional(v.number()),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const list = await ctx.db.get(args.listId);
+    if (!list) throw new Error("List not found");
+
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canEdit) throw new Error("You don't have permission to add items to this list");
+
+    const now = Date.now();
+    const itemIds: string[] = [];
+
+    // Get existing pantry items for dedup
+    const existingPantry = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    const pantryByName = new Map(
+      existingPantry.map((p) => [p.name.toLowerCase().trim(), p])
+    );
+
+    // Get existing list items for dedup
+    const existingListItems = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.listId))
+      .collect();
+    const listItemNames = new Set(
+      existingListItems.map((i) => i.name.toLowerCase().trim())
+    );
+
+    for (const item of args.items) {
+      const normalizedName = item.name.toLowerCase().trim();
+
+      // Skip if already on this list
+      if (listItemNames.has(normalizedName)) continue;
+
+      // Find or create pantry item
+      let pantryItemId: Id<"pantryItems"> | undefined;
+      const existingPantryItem = pantryByName.get(normalizedName);
+
+      if (existingPantryItem) {
+        pantryItemId = existingPantryItem._id;
+      } else {
+        // Check pantry limit
+        const access = await canAddPantryItem(ctx, user._id);
+        if (access.allowed) {
+          pantryItemId = await ctx.db.insert("pantryItems", {
+            userId: user._id,
+            name: item.name,
+            category: item.category,
+            icon: getIconForItem(item.name, item.category),
+            stockLevel: "out",
+            autoAddToList: false,
+            ...(item.size ? { defaultSize: item.size } : {}),
+            ...(item.unit ? { defaultUnit: item.unit } : {}),
+            ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "ai_estimate" as const } : {}),
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      }
+
+      // Price cascade: provided → currentPrices → undefined
+      let estimatedPrice = item.estimatedPrice;
+      if (estimatedPrice === undefined) {
+        estimatedPrice = await getPriceFromCurrentPrices(ctx, item.name);
+      }
+
+      const listItemId = await ctx.db.insert("listItems", {
+        listId: args.listId,
+        userId: user._id,
+        ...(pantryItemId ? { pantryItemId } : {}),
+        name: item.name,
+        category: item.category,
+        quantity: item.quantity ?? 1,
+        size: item.size,
+        unit: item.unit,
+        estimatedPrice,
+        priceSource: item.estimatedPrice != null ? "ai" : undefined,
+        priority: "should-have",
+        isChecked: false,
+        autoAdded: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      itemIds.push(listItemId);
+      listItemNames.add(normalizedName);
+    }
+
+    if (itemIds.length > 0) {
+      await recalculateListTotal(ctx, args.listId);
+    }
+
+    return { count: itemIds.length, itemIds };
+  },
+});
+

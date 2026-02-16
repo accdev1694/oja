@@ -988,3 +988,83 @@ export const removeDuplicates = mutation({
     return { removed, totalBefore: items.length, totalAfter: items.length - removed };
   },
 });
+
+/**
+ * Add multiple items to pantry from product scanning.
+ * Deduplicates by name — if item exists, updates price/stock instead.
+ */
+export const addBatchFromScan = mutation({
+  args: {
+    items: v.array(
+      v.object({
+        name: v.string(),
+        category: v.string(),
+        size: v.optional(v.string()),
+        unit: v.optional(v.string()),
+        estimatedPrice: v.optional(v.number()),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const now = Date.now();
+
+    // Get existing items for dedup
+    const existing = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    const existingByName = new Map(
+      existing.map((p) => [p.name.toLowerCase().trim(), p])
+    );
+
+    let added = 0;
+    let updated = 0;
+
+    for (const item of args.items) {
+      const normalizedName = item.name.toLowerCase().trim();
+      const existingItem = existingByName.get(normalizedName);
+
+      if (existingItem) {
+        // Update existing item with new info
+        await ctx.db.patch(existingItem._id, {
+          stockLevel: "stocked",
+          ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "ai_estimate" as const } : {}),
+          ...(item.size ? { defaultSize: item.size } : {}),
+          ...(item.unit ? { defaultUnit: item.unit } : {}),
+          updatedAt: now,
+        });
+        updated++;
+      } else {
+        // Check pantry limit
+        const access = await canAddPantryItem(ctx, user._id);
+        if (!access.allowed) continue;
+
+        await ctx.db.insert("pantryItems", {
+          userId: user._id,
+          name: item.name,
+          category: item.category,
+          icon: getIconForItem(item.name, item.category),
+          stockLevel: "stocked",
+          autoAddToList: false,
+          ...(item.size ? { defaultSize: item.size } : {}),
+          ...(item.unit ? { defaultUnit: item.unit } : {}),
+          ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "ai_estimate" as const } : {}),
+          createdAt: now,
+          updatedAt: now,
+        });
+        added++;
+      }
+    }
+
+    return { added, updated };
+  },
+});
