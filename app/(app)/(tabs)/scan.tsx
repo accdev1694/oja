@@ -280,10 +280,26 @@ export default function ScanScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       productScanner.clearAll();
       setShowProductListPicker(false);
-      alert(
-        "Added to List",
-        `${result.count} item${result.count !== 1 ? "s" : ""} added to your list.`,
-      );
+
+      // Build feedback message including skipped duplicates
+      const skipped = result.skippedDuplicates ?? [];
+      if (result.count > 0 && skipped.length === 0) {
+        alert(
+          "Added to List",
+          `${result.count} item${result.count !== 1 ? "s" : ""} added to your list.`,
+        );
+      } else if (result.count > 0 && skipped.length > 0) {
+        const skippedNames = skipped.map((d: { existingName: string }) => d.existingName).join(", ");
+        alert(
+          "Added to List",
+          `${result.count} item${result.count !== 1 ? "s" : ""} added. ${skipped.length} already on list (skipped): ${skippedNames}.`,
+        );
+      } else if (result.count === 0 && skipped.length > 0) {
+        alert(
+          "No Items Added",
+          "All scanned items are already on your list.",
+        );
+      }
     } catch (error) {
       console.error("Failed to add products to list:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

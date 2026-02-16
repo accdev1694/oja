@@ -6,6 +6,7 @@ import { getUserListPermissions } from "./partners";
 import { resolveVariantWithPrice } from "./lib/priceResolver";
 import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
+import { isDuplicateItemName } from "./lib/fuzzyMatch";
 
 /**
  * Helper to get price estimate from currentPrices table
@@ -26,6 +27,51 @@ async function getPriceFromCurrentPrices(
   // Return cheapest price
   const sorted = [...prices].sort((a, b) => a.unitPrice - b.unitPrice);
   return sorted[0].unitPrice;
+}
+
+/**
+ * Find an existing list item that is a fuzzy duplicate of the given name.
+ * Checks all items on the list (checked and unchecked).
+ * Returns the matching item document or null.
+ */
+async function findDuplicateListItem(
+  ctx: MutationCtx | QueryCtx,
+  listId: Id<"shoppingLists">,
+  name: string,
+) {
+  const items = await ctx.db
+    .query("listItems")
+    .withIndex("by_list", (q) => q.eq("listId", listId))
+    .collect();
+
+  for (const item of items) {
+    if (isDuplicateItemName(name, item.name)) {
+      return item;
+    }
+  }
+  return null;
+}
+
+/**
+ * Find a pantry item that is a fuzzy duplicate of the given name.
+ * Returns the matching pantry item document or null.
+ */
+async function findDuplicatePantryItem(
+  ctx: MutationCtx | QueryCtx,
+  userId: Id<"users">,
+  name: string,
+) {
+  const items = await ctx.db
+    .query("pantryItems")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+
+  for (const item of items) {
+    if (isDuplicateItemName(name, item.name)) {
+      return item;
+    }
+  }
+  return null;
 }
 
 /**
@@ -88,6 +134,7 @@ export const create = mutation({
     pantryItemId: v.optional(v.id("pantryItems")),
     autoAdded: v.optional(v.boolean()),
     notes: v.optional(v.string()),
+    force: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -109,6 +156,26 @@ export const create = mutation({
     const perms = await getUserListPermissions(ctx, args.listId, user._id);
     if (!perms.canEdit) {
       throw new Error("You don't have permission to add items to this list");
+    }
+
+    // Duplicate check: if a fuzzy match exists on this list, ask for confirmation or bump
+    const existingItem = await findDuplicateListItem(ctx, args.listId, args.name);
+    if (existingItem) {
+      if (!args.force) {
+        // Return duplicate info without modifying DB — let the UI confirm
+        return {
+          status: "duplicate" as const,
+          existingName: existingItem.name,
+          existingQuantity: existingItem.quantity,
+        };
+      }
+      // force=true: user confirmed — bump quantity
+      await ctx.db.patch(existingItem._id, {
+        quantity: existingItem.quantity + args.quantity,
+        updatedAt: Date.now(),
+      });
+      await recalculateListTotal(ctx, args.listId);
+      return { status: "bumped" as const, itemId: existingItem._id };
     }
 
     const now = Date.now();
@@ -196,7 +263,7 @@ export const create = mutation({
       }
     }
 
-    return itemId;
+    return { status: "added" as const, itemId };
   },
 });
 
@@ -482,8 +549,19 @@ export const addFromPantryOut = mutation({
     const now = Date.now();
     const addedIds: string[] = [];
 
-    // Add each out item to the list
+    // Pre-fetch existing list item names for dedup
+    const existingListItems = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.listId))
+      .collect();
+    const knownNames: string[] = existingListItems.map((i) => i.name);
+
+    // Add each out item to the list (skip duplicates)
     for (const pantryItem of outItems) {
+      // Fuzzy duplicate check — skip if already on list
+      const isDup = knownNames.some((n) => isDuplicateItemName(pantryItem.name, n));
+      if (isDup) continue;
+
       // Price cascade: lastPrice → currentPrices → undefined (AI will fill later)
       let estimatedPrice = pantryItem.lastPrice;
       if (estimatedPrice === undefined) {
@@ -509,6 +587,7 @@ export const addFromPantryOut = mutation({
       });
 
       addedIds.push(itemId);
+      knownNames.push(pantryItem.name);
     }
 
     // Recalculate list total after adding items
@@ -553,9 +632,20 @@ export const addFromPantrySelected = mutation({
     const now = Date.now();
     let count = 0;
 
+    // Pre-fetch existing list items for dedup
+    const existingListItems = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.listId))
+      .collect();
+    const addedNames: string[] = existingListItems.map((i) => i.name);
+
     for (const pantryItemId of args.pantryItemIds) {
       const pantryItem = await ctx.db.get(pantryItemId);
       if (!pantryItem || pantryItem.userId !== user._id) continue;
+
+      // Fuzzy duplicate check — skip if already on list
+      const isDup = addedNames.some((n) => isDuplicateItemName(pantryItem.name, n));
+      if (isDup) continue;
 
       // Price cascade: lastPrice → currentPrices → undefined (AI will fill later)
       let estimatedPrice = pantryItem.lastPrice;
@@ -582,6 +672,7 @@ export const addFromPantrySelected = mutation({
       });
 
       count++;
+      addedNames.push(pantryItem.name);
     }
 
     // Recalculate list total after adding items
@@ -609,6 +700,7 @@ export const addItemMidShop = mutation({
     ),
     quantity: v.optional(v.number()),
     category: v.optional(v.string()),
+    force: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -636,7 +728,25 @@ export const addItemMidShop = mutation({
     const quantity = args.quantity ?? 1;
 
     if (args.source === "add") {
-      // Always allow adding — no budget lock or impulse fund checks
+      // Duplicate check: if a fuzzy match exists on this list, ask for confirmation or bump
+      const existingItem = await findDuplicateListItem(ctx, args.listId, args.name);
+      if (existingItem) {
+        if (!args.force) {
+          return {
+            status: "duplicate" as const,
+            existingName: existingItem.name,
+            existingQuantity: existingItem.quantity,
+            source: "add" as const,
+          };
+        }
+        await ctx.db.patch(existingItem._id, {
+          quantity: existingItem.quantity + quantity,
+          updatedAt: now,
+        });
+        await recalculateListTotal(ctx, args.listId);
+        return { status: "bumped" as const, success: true, itemId: existingItem._id, source: "add" as const };
+      }
+
       const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
@@ -655,18 +765,11 @@ export const addItemMidShop = mutation({
       // Recalculate list total after adding item
       await recalculateListTotal(ctx, args.listId);
 
-      return { success: true, itemId, source: "add" };
+      return { status: "added" as const, success: true, itemId, source: "add" as const };
 
     } else if (args.source === "next_trip") {
-      // Dedup: check if item already exists in pantry
-      const normalizedName = args.name.toLowerCase().trim();
-      const existingItems = await ctx.db
-        .query("pantryItems")
-        .withIndex("by_user", (q) => q.eq("userId", user._id))
-        .collect();
-      const existingPantry = existingItems.find(
-        (p) => p.name.toLowerCase().trim() === normalizedName
-      );
+      // Fuzzy dedup: check if item already exists in pantry
+      const existingPantry = await findDuplicatePantryItem(ctx, user._id, args.name);
 
       if (existingPantry) {
         // Mark existing item as out + auto-add to next list
@@ -675,7 +778,7 @@ export const addItemMidShop = mutation({
           autoAddToList: true,
           updatedAt: now,
         });
-        return { success: true, deferred: true, pantryItemId: existingPantry._id, source: "next_trip" };
+        return { status: "added" as const, success: true, deferred: true, pantryItemId: existingPantry._id, source: "next_trip" };
       }
 
       // Check pantry item limit for free tier
@@ -695,7 +798,7 @@ export const addItemMidShop = mutation({
         updatedAt: now,
       });
 
-      return { success: true, deferred: true, pantryItemId, source: "next_trip" };
+      return { status: "added" as const, success: true, deferred: true, pantryItemId, source: "next_trip" };
     }
 
     throw new Error("Invalid source");
@@ -744,6 +847,14 @@ export const addFromPantryBulk = mutation({
     const now = Date.now();
     const itemIds: string[] = [];
     const addedItemNames: string[] = [];
+    const skippedDuplicates: { name: string; existingName: string }[] = [];
+
+    // Pre-fetch existing list items for dedup
+    const existingListItems = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.listId))
+      .collect();
+    const knownNames: string[] = existingListItems.map((i) => i.name);
 
     // Determine approval status (same logic as create mutation)
     let approvalStatus: "pending" | "approved" | undefined;
@@ -762,6 +873,13 @@ export const addFromPantryBulk = mutation({
     for (const pantryItemId of args.pantryItemIds) {
       const pantryItem = await ctx.db.get(pantryItemId);
       if (!pantryItem || pantryItem.userId !== user._id) continue;
+
+      // Fuzzy duplicate check — skip if already on list
+      const matchedName = knownNames.find((n) => isDuplicateItemName(pantryItem.name, n));
+      if (matchedName) {
+        skippedDuplicates.push({ name: pantryItem.name, existingName: matchedName });
+        continue;
+      }
 
       let size: string | undefined;
       let unit: string | undefined;
@@ -832,6 +950,7 @@ export const addFromPantryBulk = mutation({
 
       itemIds.push(itemId);
       addedItemNames.push(pantryItem.name);
+      knownNames.push(pantryItem.name);
     }
 
     // Send approval notification (batched — one notification for the whole bulk add)
@@ -876,7 +995,7 @@ export const addFromPantryBulk = mutation({
       await recalculateListTotal(ctx, args.listId);
     }
 
-    return { count: itemIds.length, itemIds };
+    return { count: itemIds.length, itemIds, skippedDuplicates };
   },
 });
 
@@ -899,6 +1018,7 @@ export const addAndSeedPantry = mutation({
     unit: v.optional(v.string()),
     estimatedPrice: v.optional(v.number()),
     quantity: v.optional(v.number()),
+    force: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -922,23 +1042,57 @@ export const addAndSeedPantry = mutation({
       throw new Error("You don't have permission to add items to this list");
     }
 
+    const now = Date.now();
+    const quantity = args.quantity ?? 1;
+
+    // Duplicate check: if a fuzzy match exists on this list, ask for confirmation or bump
+    const existingListItem = await findDuplicateListItem(ctx, args.listId, args.name);
+    if (existingListItem) {
+      if (!args.force) {
+        // Return duplicate info without modifying DB — let the UI confirm
+        return {
+          status: "duplicate" as const,
+          existingName: existingListItem.name,
+          existingQuantity: existingListItem.quantity,
+        };
+      }
+      // force=true: user confirmed — bump quantity
+      await ctx.db.patch(existingListItem._id, {
+        quantity: existingListItem.quantity + quantity,
+        updatedAt: now,
+      });
+      await recalculateListTotal(ctx, args.listId);
+      // Resolve pantryItemId — must always return a valid ID to match normal return type
+      let pantryId = existingListItem.pantryItemId;
+      if (!pantryId) {
+        const existingPantry = await findDuplicatePantryItem(ctx, user._id, args.name);
+        if (existingPantry) {
+          pantryId = existingPantry._id;
+        } else {
+          const icon = getIconForItem(args.name, args.category);
+          pantryId = await ctx.db.insert("pantryItems", {
+            userId: user._id,
+            name: args.name,
+            category: args.category,
+            icon,
+            stockLevel: "out",
+            autoAddToList: false,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      }
+      return { status: "bumped" as const, listItemId: existingListItem._id, pantryItemId: pantryId };
+    }
+
     // Check pantry item limit for free tier
     const pantryAccess = await canAddPantryItem(ctx, user._id);
     if (!pantryAccess.allowed) {
       throw new Error(pantryAccess.reason ?? "Pantry item limit reached");
     }
 
-    const now = Date.now();
-
-    // 1. Find or create pantry item (dedup by name)
-    const normalizedName = args.name.toLowerCase().trim();
-    const allPantryItems = await ctx.db
-      .query("pantryItems")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .collect();
-    const existingPantry = allPantryItems.find(
-      (p) => p.name.toLowerCase().trim() === normalizedName
-    );
+    // 1. Find or create pantry item (fuzzy dedup by name)
+    const existingPantry = await findDuplicatePantryItem(ctx, user._id, args.name);
 
     let pantryItemId: Id<"pantryItems">;
     if (existingPantry) {
@@ -970,7 +1124,7 @@ export const addAndSeedPantry = mutation({
       pantryItemId,
       name: args.name,
       category: args.category,
-      quantity: args.quantity ?? 1,
+      quantity,
       size: args.size,
       unit: args.unit,
       estimatedPrice: args.estimatedPrice,
@@ -985,7 +1139,7 @@ export const addAndSeedPantry = mutation({
     // Recalculate list total after adding item
     await recalculateListTotal(ctx, args.listId);
 
-    return { listItemId, pantryItemId };
+    return { status: "added" as const, listItemId, pantryItemId };
   },
 });
 
@@ -1025,34 +1179,33 @@ export const addBatchFromScan = mutation({
 
     const now = Date.now();
     const itemIds: string[] = [];
+    const skippedDuplicates: { name: string; existingName: string }[] = [];
 
-    // Get existing pantry items for dedup
-    const existingPantry = await ctx.db
+    // Get existing pantry items for fuzzy dedup
+    const existingPantryItems = await ctx.db
       .query("pantryItems")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
-    const pantryByName = new Map(
-      existingPantry.map((p) => [p.name.toLowerCase().trim(), p])
-    );
 
-    // Get existing list items for dedup
+    // Get existing list items for fuzzy dedup
     const existingListItems = await ctx.db
       .query("listItems")
       .withIndex("by_list", (q) => q.eq("listId", args.listId))
       .collect();
-    const listItemNames = new Set(
-      existingListItems.map((i) => i.name.toLowerCase().trim())
-    );
+    const knownListNames: string[] = existingListItems.map((i) => i.name);
+    const knownPantryNames: string[] = existingPantryItems.map((p) => p.name);
 
     for (const item of args.items) {
-      const normalizedName = item.name.toLowerCase().trim();
+      // Fuzzy duplicate check — skip if already on this list (or matches a name we just added)
+      const matchedListName = knownListNames.find((n) => isDuplicateItemName(item.name, n));
+      if (matchedListName) {
+        skippedDuplicates.push({ name: item.name, existingName: matchedListName });
+        continue;
+      }
 
-      // Skip if already on this list
-      if (listItemNames.has(normalizedName)) continue;
-
-      // Find or create pantry item
+      // Fuzzy find or create pantry item
       let pantryItemId: Id<"pantryItems"> | undefined;
-      const existingPantryItem = pantryByName.get(normalizedName);
+      const existingPantryItem = existingPantryItems.find((p) => isDuplicateItemName(item.name, p.name));
 
       if (existingPantryItem) {
         pantryItemId = existingPantryItem._id;
@@ -1101,14 +1254,15 @@ export const addBatchFromScan = mutation({
       });
 
       itemIds.push(listItemId);
-      listItemNames.add(normalizedName);
+      knownListNames.push(item.name);
+      knownPantryNames.push(item.name);
     }
 
     if (itemIds.length > 0) {
       await recalculateListTotal(ctx, args.listId);
     }
 
-    return { count: itemIds.length, itemIds };
+    return { count: itemIds.length, itemIds, skippedDuplicates };
   },
 });
 

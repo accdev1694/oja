@@ -1236,6 +1236,7 @@ async function executeWriteTool(
           unit,
           estimatedPrice,
           priceSource,
+          force: true,
         });
 
         addedItems.push({

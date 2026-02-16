@@ -306,6 +306,7 @@ export const AddItemForm = memo(function AddItemForm({
         // Pass size/unit from variant selection (Zero-Blank: ensures items have full context)
         ...(size ? { size } : {}),
         ...(unit ? { unit } : {}),
+        force: true,
       });
 
       haptic("success");
@@ -440,6 +441,7 @@ export const AddItemForm = memo(function AddItemForm({
         name: suggestionName,
         quantity: 1,
         estimatedPrice: price,
+        force: true,
       });
       haptic("success");
     } catch (error) {

@@ -4,10 +4,11 @@ import type { MutationCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
-import { calculateSimilarity } from "./lib/fuzzyMatch";
+import { calculateSimilarity, isDuplicateItemName } from "./lib/fuzzyMatch";
 
 /**
- * Find an existing pantry item by name (case-insensitive, trimmed).
+ * Find an existing pantry item by name using fuzzy matching.
+ * Catches plurals, common prefixes, typos, and case differences.
  * Returns the matching item or null.
  */
 async function findExistingPantryItem(
@@ -15,12 +16,11 @@ async function findExistingPantryItem(
   userId: Id<"users">,
   name: string,
 ) {
-  const normalized = name.toLowerCase().trim();
   const items = await ctx.db
     .query("pantryItems")
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .collect();
-  return items.find((item) => item.name.toLowerCase().trim() === normalized) ?? null;
+  return items.find((item) => isDuplicateItemName(name, item.name)) ?? null;
 }
 
 /**
@@ -63,19 +63,22 @@ export const bulkCreate = mutation({
 
     const now = Date.now();
 
-    // Get existing items to avoid duplicates
+    // Get existing items to avoid duplicates (fuzzy matching)
     const existing = await ctx.db
       .query("pantryItems")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
-    const existingNames = new Set(
-      existing.map((e) => e.name.toLowerCase().trim())
-    );
+    const knownNames: string[] = existing.map((e) => e.name);
 
-    // Insert only items that don't already exist
-    const newItems = args.items.filter(
-      (item) => !existingNames.has(item.name.toLowerCase().trim())
-    );
+    // Insert only items that don't fuzzy-match any existing item
+    const newItems = args.items.filter((item) => {
+      const isDup = knownNames.some((n) => isDuplicateItemName(item.name, n));
+      if (!isDup) {
+        knownNames.push(item.name); // prevent dupes within the batch too
+        return true;
+      }
+      return false;
+    });
 
     const promises = newItems.map((item) =>
       ctx.db.insert("pantryItems", {
@@ -1017,21 +1020,17 @@ export const addBatchFromScan = mutation({
 
     const now = Date.now();
 
-    // Get existing items for dedup
+    // Get existing items for fuzzy dedup
     const existing = await ctx.db
       .query("pantryItems")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
-    const existingByName = new Map(
-      existing.map((p) => [p.name.toLowerCase().trim(), p])
-    );
 
     let added = 0;
     let updated = 0;
 
     for (const item of args.items) {
-      const normalizedName = item.name.toLowerCase().trim();
-      const existingItem = existingByName.get(normalizedName);
+      const existingItem = existing.find((p) => isDuplicateItemName(item.name, p.name));
 
       if (existingItem) {
         // Update existing item with new info

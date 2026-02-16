@@ -1279,6 +1279,7 @@ export const executeVoiceAction = action({
             quantity: item.quantity || 1,
             unit: item.unit,
             priority: "should-have",
+            force: true,
           });
         }
 

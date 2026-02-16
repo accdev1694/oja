@@ -310,13 +310,51 @@ export default function ListDetailScreen() {
     if (!midShopState.name) return;
 
     try {
-      await addItemMidShop({
+      const result = await addItemMidShop({
         listId: id,
         name: midShopState.name,
         estimatedPrice: midShopState.price,
         quantity: midShopState.quantity,
         source,
       });
+
+      // Check if mutation returned a duplicate indicator
+      if (result && typeof result === "object" && "status" in result && result.status === "duplicate") {
+        const existingName = "existingName" in result ? result.existingName as string : midShopState.name;
+        const existingQty = "existingQuantity" in result ? result.existingQuantity as number : 0;
+        const itemName = midShopState.name;
+        const itemPrice = midShopState.price;
+        const itemQty = midShopState.quantity;
+        closeMidShopModal();
+        alert(
+          "Item Already on List",
+          `"${existingName}" (\u00D7${existingQty}) is already on your list. Add again?`,
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Add Anyway",
+              onPress: async () => {
+                try {
+                  await addItemMidShop({
+                    listId: id,
+                    name: itemName,
+                    estimatedPrice: itemPrice,
+                    quantity: itemQty,
+                    source,
+                    force: true,
+                  });
+                  haptic("success");
+                  showToast(`"${itemName}" added to list`, "check-circle", colors.semantic.success);
+                } catch (err) {
+                  console.error("Failed to force-add:", err);
+                  alert("Error", "Failed to add item");
+                }
+              },
+            },
+          ]
+        );
+        return;
+      }
 
       haptic("success");
 
@@ -464,6 +502,7 @@ export default function ListDetailScreen() {
         name: itemName,
         quantity,
         estimatedPrice,
+        force: true,
       });
       showToast(`${itemName} \u2192 ${listName}`, "check-circle", "#00D4AA");
     } catch (e) {

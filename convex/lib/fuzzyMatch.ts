@@ -73,6 +73,64 @@ export function calculateSimilarity(str1: string, str2: string): number {
   return ((maxLen - distance) / maxLen) * 100;
 }
 
+/**
+ * Similarity threshold for duplicate detection.
+ * - For normalized names >= 5 chars: 85% similarity catches typos
+ * - For shorter names: exact normalized match only (too risky otherwise)
+ */
+const DUPLICATE_SIMILARITY_THRESHOLD = 85;
+
+/**
+ * Check if two item names should be considered duplicates.
+ * Handles: plurals, common prefixes, typos, case, whitespace.
+ *
+ * Returns true if the items are duplicates.
+ */
+export function isDuplicateItemName(name1: string, name2: string): boolean {
+  const norm1 = normalizeItemName(name1);
+  const norm2 = normalizeItemName(name2);
+
+  if (!norm1 || !norm2) return false;
+
+  // Exact normalized match (catches plurals, articles, case)
+  if (norm1 === norm2) return true;
+
+  // Substring containment (e.g. "chicken breast" vs "chicken breasts" after normalize)
+  // Only if the shorter string is meaningful (> 3 chars)
+  const shorter = norm1.length <= norm2.length ? norm1 : norm2;
+  const longer = norm1.length <= norm2.length ? norm2 : norm1;
+  if (shorter.length > 3 && longer.includes(shorter)) {
+    // Only count as duplicate if the contained string is >80% of the longer string
+    // This prevents "rice" matching "rice pudding"
+    if (shorter.length / longer.length > 0.8) return true;
+  }
+
+  // Levenshtein similarity for typo detection (only for longer names)
+  const minLen = Math.min(norm1.length, norm2.length);
+  if (minLen >= 5) {
+    const similarity = calculateSimilarity(norm1, norm2);
+    if (similarity >= DUPLICATE_SIMILARITY_THRESHOLD) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Find the first duplicate match in a list of existing names.
+ * Returns the matching name or null.
+ */
+export function findDuplicateName(
+  newName: string,
+  existingNames: string[]
+): string | null {
+  for (const existing of existingNames) {
+    if (isDuplicateItemName(newName, existing)) {
+      return existing;
+    }
+  }
+  return null;
+}
+
 export interface FuzzyMatch {
   name: string;
   similarity: number;

@@ -19,6 +19,7 @@ import {
   GlassModal,
   GlassInput,
   GlassButton,
+  useGlassAlert,
   colors,
   typography,
   spacing,
@@ -198,6 +199,7 @@ export function AddItemsModal({
     new Map()
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { alert } = useGlassAlert();
 
   const sizeInputRef = useRef<TextInput>(null);
   const qtyInputRef = useRef<TextInput>(null);
@@ -563,12 +565,24 @@ export function AddItemsModal({
         }
       }
 
+      // Track duplicates found during mutations
+      interface DuplicateInfo {
+        name: string;
+        existingName: string;
+        existingQuantity: number;
+        mutation: "create" | "seed";
+        args: Record<string, unknown>;
+      }
+      const duplicates: DuplicateInfo[] = [];
+
+      // Pantry bulk add — skippedDuplicates are informational only (no force-add for bulk)
       if (pantryItemIds.length > 0) {
         await addFromPantryBulk({ listId, pantryItemIds });
       }
 
+      // Add search items — check for duplicates
       for (const item of searchItemsToCreate) {
-        await createItem({
+        const result = await createItem({
           listId,
           name: item.name,
           quantity: item.quantity,
@@ -578,10 +592,29 @@ export function AddItemsModal({
           estimatedPrice: item.estimatedPrice,
           ...(item.pantryItemId ? { pantryItemId: item.pantryItemId } : {}),
         });
+        if (result && typeof result === "object" && "status" in result && result.status === "duplicate") {
+          duplicates.push({
+            name: item.name,
+            existingName: result.existingName as string,
+            existingQuantity: result.existingQuantity as number,
+            mutation: "create",
+            args: {
+              listId,
+              name: item.name,
+              quantity: item.quantity,
+              category: item.category,
+              size: item.size,
+              unit: item.unit,
+              estimatedPrice: item.estimatedPrice,
+              ...(item.pantryItemId ? { pantryItemId: item.pantryItemId } : {}),
+            },
+          });
+        }
       }
 
+      // Add custom items (seed pantry) — check for duplicates
       for (const item of customItemsToSeed) {
-        await addAndSeedPantry({
+        const result = await addAndSeedPantry({
           listId,
           name: item.name,
           category: item.category ?? "Uncategorized",
@@ -590,6 +623,59 @@ export function AddItemsModal({
           estimatedPrice: item.estimatedPrice,
           quantity: item.quantity,
         });
+        if (result && typeof result === "object" && "status" in result && result.status === "duplicate") {
+          duplicates.push({
+            name: item.name,
+            existingName: result.existingName as string,
+            existingQuantity: result.existingQuantity as number,
+            mutation: "seed",
+            args: {
+              listId,
+              name: item.name,
+              category: item.category ?? "Uncategorized",
+              size: item.size,
+              unit: item.unit,
+              estimatedPrice: item.estimatedPrice,
+              quantity: item.quantity,
+            },
+          });
+        }
+      }
+
+      // If duplicates found, show confirmation dialog
+      if (duplicates.length > 0) {
+        const dupList = duplicates
+          .map((d) => `"${d.existingName}" (\u00D7${d.existingQuantity})`)
+          .join(", ");
+        const message = duplicates.length === 1
+          ? `${dupList} is already on your list. Add again?`
+          : `These items are already on your list: ${dupList}. Add again?`;
+
+        setIsSubmitting(false);
+        handleClose();
+
+        alert("Items Already on List", message, [
+          { text: "Skip", style: "cancel" },
+          {
+            text: "Add Anyway",
+            onPress: async () => {
+              try {
+                for (const dup of duplicates) {
+                  if (dup.mutation === "create") {
+                    await createItem({ ...dup.args, force: true } as Parameters<typeof createItem>[0]);
+                  } else {
+                    await addAndSeedPantry({ ...dup.args, force: true } as Parameters<typeof addAndSeedPantry>[0]);
+                  }
+                }
+                haptic("success");
+              } catch (err) {
+                console.error("Failed to force-add duplicates:", err);
+                haptic("error");
+              }
+            },
+          },
+        ]);
+        return;
       }
 
       haptic("success");
@@ -608,6 +694,7 @@ export function AddItemsModal({
     createItem,
     addAndSeedPantry,
     handleClose,
+    alert,
   ]);
 
   // ── Render helpers ──────────────────────────────────────────────────────────

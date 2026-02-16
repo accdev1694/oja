@@ -6,6 +6,7 @@ import { getAllStores, getStoreInfoSafe, isValidStoreId, normalizeStoreName, UKS
 import { parseSize } from "./lib/sizeUtils";
 import { getReceiptIds, pushReceiptId } from "./lib/receiptHelpers";
 import { getIconForItem } from "./iconMapping";
+import { isDuplicateItemName } from "./lib/fuzzyMatch";
 
 /**
  * Get all shopping lists for the current user
@@ -305,20 +306,35 @@ export const createFromReceipt = mutation({
       .query("pantryItems")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
-    const pantryByName = new Map(
-      allPantryItems.map((p) => [p.name.toLowerCase().trim(), p])
-    );
-    const pantrySeenNames = new Set<string>();
+    const pantrySeenNames: string[] = allPantryItems.map((p) => p.name);
 
     for (const item of receipt.items) {
-      const normalizedName = item.name.toLowerCase().trim();
-      if (pantrySeenNames.has(normalizedName)) continue;
-      pantrySeenNames.add(normalizedName);
+      // Fuzzy dedup within the batch itself
+      const seenDup = pantrySeenNames.some((n) => isDuplicateItemName(item.name, n));
+      // We always add to seenNames (even if already there) since allPantryItems already seeded it
+      if (seenDup) {
+        // Might be an existing pantry item — update it if so
+        const existingPantry = allPantryItems.find((p) => isDuplicateItemName(item.name, p.name));
+        if (existingPantry) {
+          const size = (item as Record<string, unknown>).size as string | undefined;
+          const unit = (item as Record<string, unknown>).unit as string | undefined;
+          await ctx.db.patch(existingPantry._id, {
+            lastPrice: item.unitPrice,
+            priceSource: "receipt" as const,
+            lastStoreName: receipt.storeName,
+            ...(size && { defaultSize: size }),
+            ...(unit && { defaultUnit: unit }),
+            updatedAt: now,
+          });
+        }
+        continue;
+      }
+      pantrySeenNames.push(item.name);
 
       const size = (item as Record<string, unknown>).size as string | undefined;
       const unit = (item as Record<string, unknown>).unit as string | undefined;
 
-      const existingPantry = pantryByName.get(normalizedName);
+      const existingPantry = allPantryItems.find((p) => isDuplicateItemName(item.name, p.name));
 
       if (existingPantry) {
         // Update existing pantry item with receipt-verified data

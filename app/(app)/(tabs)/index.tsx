@@ -338,6 +338,7 @@ export default function PantryScreen() {
         priority: "must-have",
         pantryItemId: item._id,
         autoAdded: true,
+        force: true,
       });
     } catch (error) {
       console.error("Failed to auto-add to list:", error);
@@ -443,6 +444,7 @@ export default function PantryScreen() {
             name: item.name,
             quantity: 1,
             estimatedPrice: item.lastPrice,
+            force: true,
           });
           showToast(item.name);
         } catch (e) {
@@ -476,6 +478,7 @@ export default function PantryScreen() {
         name: itemName,
         quantity: 1,
         estimatedPrice,
+        force: true,
       });
       showToast(itemName);
     } catch (e) {
