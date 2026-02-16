@@ -33,7 +33,7 @@ export const STOCK_LEVEL_SHORT: Record<StockLevel, string> = {
 const SEGMENT_COLORS = {
   top: "#10B981", // green — stocked
   mid: "#F59E0B", // amber — low
-  bot: "#EF4444", // red   — out
+  bot: "#FF6B6B", // red   — out
 };
 
 // Which segments light up per level (bottom to top)

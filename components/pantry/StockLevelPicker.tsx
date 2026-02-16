@@ -27,7 +27,7 @@ const SIMPLE_LEVELS: {
 }[] = [
   { key: "stocked", label: "Stocked", color: "#10B981", icon: "check-circle" },
   { key: "low", label: "Running Low", color: "#F59E0B", icon: "minus-circle" },
-  { key: "out", label: "Out", color: "#EF4444", icon: "close-circle" },
+  { key: "out", label: "Out", color: "#FF6B6B", icon: "close-circle" },
 ];
 
 export function StockLevelPicker({
@@ -93,7 +93,7 @@ export function StockLevelPicker({
           <MaterialCommunityIcons
             name="delete-outline"
             size={16}
-            color="#EF4444"
+            color="#FF6B6B"
           />
           <Text style={styles.removeButtonText}>Remove from Stock</Text>
         </TouchableOpacity>
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   removeButtonText: {
-    color: "#EF4444",
+    color: "#FF6B6B",
     fontSize: 14,
     fontWeight: "500",
   },

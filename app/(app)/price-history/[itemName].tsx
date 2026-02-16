@@ -69,7 +69,7 @@ export default function PriceHistoryScreen() {
 
   const trendColor =
     trend === "increasing"
-      ? "#EF4444"
+      ? "#FF6B6B"
       : trend === "decreasing"
       ? "#10B981"
       : colors.text.secondary;

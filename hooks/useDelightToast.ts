@@ -10,7 +10,7 @@ const DELIGHT_MESSAGES = [
   { message: "Smart shopping pays off!", icon: "lightbulb-on", color: "#00D4AA" },
   { message: "Every penny counts. Nice work!", icon: "piggy-bank", color: "#10B981" },
   { message: "Look at you, staying on track!", icon: "run-fast", color: "#6366F1" },
-  { message: "Your future self thanks you!", icon: "heart", color: "#EF4444" },
+  { message: "Your future self thanks you!", icon: "heart", color: "#FF6B6B" },
   { message: "Budget boss mode: activated!", icon: "shield-check", color: "#00D4AA" },
   { message: "Consistency is your superpower!", icon: "lightning-bolt", color: "#F59E0B" },
   { message: "Shopping goals? Smashed!", icon: "arm-flex", color: "#3B82F6" },

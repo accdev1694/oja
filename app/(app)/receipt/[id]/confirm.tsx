@@ -868,7 +868,7 @@ const styles = StyleSheet.create({
 
   // Delete action
   deleteAction: {
-    backgroundColor: "#EF4444",
+    backgroundColor: "#FF6B6B",
     justifyContent: "center",
     alignItems: "center",
     width: 80,

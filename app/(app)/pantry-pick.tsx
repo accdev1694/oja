@@ -34,7 +34,7 @@ import {
 import { CategoryFilter } from "@/components/ui/CategoryFilter";
 
 const STOCK_COLORS: Record<string, string> = {
-  out: "#EF4444",
+  out: "#FF6B6B",
   low: "#F59E0B",
   stocked: "#10B981",
 };

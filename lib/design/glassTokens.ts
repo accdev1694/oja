@@ -52,8 +52,8 @@ export const colors = {
     successLight: "#34D399",
     warning: "#F59E0B", // Amber/Gold
     warningLight: "#FBBF24",
-    error: "#EF4444", // Red
-    errorLight: "#F87171",
+    error: "#FF6B6B", // Soft coral-red (readable on dark bg)
+    errorLight: "#FF8A8A",
     info: "#3B82F6", // Blue
     infoLight: "#60A5FA",
   },
@@ -64,8 +64,8 @@ export const colors = {
     healthyGlow: "rgba(16, 185, 129, 0.2)",
     caution: "#F59E0B", // Approaching limit - amber
     cautionGlow: "rgba(245, 158, 11, 0.2)",
-    exceeded: "#EF4444", // Over budget - red
-    exceededGlow: "rgba(239, 68, 68, 0.2)",
+    exceeded: "#FF6B6B", // Over budget - soft coral-red
+    exceededGlow: "rgba(255, 107, 107, 0.2)",
     neutral: "#6B7280", // No budget set - gray
   },
 
@@ -92,7 +92,7 @@ export const colors = {
     // Status colors (aliased from accent)
     success: "#10B981",
     warning: "#F59E0B",
-    danger: "#EF4444",
+    danger: "#FF6B6B",
     // Gamification & Celebrations
     fire: "#FF6B35",
     fireGlow: "rgba(255, 107, 53, 0.15)",
@@ -105,7 +105,7 @@ export const colors = {
     "#00D4AA", // Teal (primary)
     "#6366F1", // Indigo (secondary)
     "#F59E0B", // Amber (warning)
-    "#EF4444", // Red (error)
+    "#FF6B6B", // Red (error)
     "#3B82F6", // Blue (info)
     "#10B981", // Green (success)
   ] as unknown as readonly string[],
@@ -124,7 +124,7 @@ export const gradients = {
   // Accent gradients
   accentPrimary: ["#00D4AA", "#00B894"] as const,
   accentSecondary: ["#6366F1", "#8B5CF6"] as const,
-  accentWarm: ["#F59E0B", "#EF4444"] as const,
+  accentWarm: ["#F59E0B", "#FF6B6B"] as const,
   accentCool: ["#3B82F6", "#6366F1"] as const,
 
   // Glass overlays
@@ -140,7 +140,7 @@ export const gradients = {
   // Budget status gradients
   budgetHealthy: ["#10B981", "#059669"] as const,
   budgetCaution: ["#F59E0B", "#D97706"] as const,
-  budgetExceeded: ["#EF4444", "#DC2626"] as const,
+  budgetExceeded: ["#FF6B6B", "#E85D5D"] as const,
 } as const;
 
 // =============================================================================
