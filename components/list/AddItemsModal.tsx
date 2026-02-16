@@ -25,6 +25,7 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 import { haptic } from "@/lib/haptics/safeHaptics";
+import { useProductScanner } from "@/hooks/useProductScanner";
 import { useItemSuggestions } from "@/hooks/useItemSuggestions";
 import type { ItemSuggestion } from "@/hooks/useItemSuggestions";
 import { ItemSuggestionsDropdown } from "@/components/list/ItemSuggestionsDropdown";
@@ -213,6 +214,24 @@ export function AddItemsModal({
   const { triggerPrefetch } = useVariantPrefetch({
     store: listNormalizedStoreId ?? listStoreName ?? "tesco",
   });
+
+  // ── Product scanner (camera) ──────────────────────────────────────────────
+  const productScanner = useProductScanner();
+
+  const handleCameraScan = useCallback(async () => {
+    haptic("medium");
+    const product = await productScanner.captureProduct();
+    if (product) {
+      setItemName(product.name);
+      if (product.size) setManualSize(product.size);
+      if (product.estimatedPrice != null) {
+        setManualPrice(product.estimatedPrice.toFixed(2));
+      }
+      setSelectedSuggestion(null);
+      setSelectedVariantName(undefined);
+      setActiveView("suggestions");
+    }
+  }, [productScanner]);
 
   const priceEstimate = useQuery(
     api.currentPrices.getEstimate,
@@ -672,6 +691,24 @@ export function AddItemsModal({
           </View>
           <Pressable
             style={[
+              styles.cameraIconButton,
+              productScanner.isProcessing && styles.cameraIconButtonProcessing,
+            ]}
+            onPress={handleCameraScan}
+            disabled={productScanner.isProcessing}
+          >
+            {productScanner.isProcessing ? (
+              <ActivityIndicator size="small" color={colors.accent.primary} />
+            ) : (
+              <MaterialCommunityIcons
+                name="camera"
+                size={20}
+                color={colors.text.secondary}
+              />
+            )}
+          </Pressable>
+          <Pressable
+            style={[
               styles.addIconButton,
               itemName.trim().length > 0
                 ? styles.addIconButtonActive
@@ -857,6 +894,18 @@ export function AddItemsModal({
             </View>
           )}
         </Pressable>
+
+        {/* Camera scan error */}
+        {productScanner.lastError && (
+          <View style={styles.scanErrorRow}>
+            <MaterialCommunityIcons
+              name="alert-circle-outline"
+              size={14}
+              color={colors.accent.error}
+            />
+            <Text style={styles.scanErrorText}>{productScanner.lastError}</Text>
+          </View>
+        )}
       </View>
 
       {/* Content Area */}
@@ -1047,6 +1096,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.glass.background,
     borderWidth: 1,
     borderColor: colors.glass.border,
+  },
+  cameraIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  cameraIconButtonProcessing: {
+    borderColor: colors.accent.primary,
+    backgroundColor: "rgba(0, 212, 170, 0.08)",
+  },
+  scanErrorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  scanErrorText: {
+    ...typography.bodySmall,
+    color: colors.accent.error,
+    flex: 1,
   },
 
   // Field buttons row (Size / Qty / Price)
