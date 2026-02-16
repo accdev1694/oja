@@ -805,163 +805,9 @@ export function AddItemsModal({
               />
             )}
           </Pressable>
-          <Pressable
-            style={[
-              styles.addIconButton,
-              itemName.trim().length > 0
-                ? styles.addIconButtonActive
-                : styles.addIconButtonDisabled,
-            ]}
-            onPress={handleAddManualItem}
-            disabled={itemName.trim().length === 0}
-          >
-            <MaterialCommunityIcons
-              name="plus"
-              size={22}
-              color={
-                itemName.trim().length > 0
-                  ? colors.text.primary
-                  : colors.text.disabled
-              }
-            />
-          </Pressable>
         </View>
 
-        {/* Size / Qty / Price buttons */}
-        <View style={styles.fieldButtonRow}>
-          <Pressable
-            style={[
-              styles.fieldButton,
-              editingField === "size" && styles.fieldButtonActive,
-              manualSize.length > 0 && styles.fieldButtonFilled,
-            ]}
-            onPress={() => handleFieldToggle("size")}
-          >
-            <MaterialCommunityIcons
-              name="ruler"
-              size={14}
-              color={
-                manualSize.length > 0
-                  ? colors.accent.primary
-                  : colors.text.secondary
-              }
-            />
-            <Text
-              style={[
-                styles.fieldButtonText,
-                manualSize.length > 0 && styles.fieldButtonTextFilled,
-              ]}
-            >
-              {manualSize || "Size"}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.fieldButton,
-              editingField === "qty" && styles.fieldButtonActive,
-              manualQty !== "1" && styles.fieldButtonFilled,
-            ]}
-            onPress={() => handleFieldToggle("qty")}
-          >
-            <MaterialCommunityIcons
-              name="numeric"
-              size={14}
-              color={
-                manualQty !== "1"
-                  ? colors.accent.primary
-                  : colors.text.secondary
-              }
-            />
-            <Text
-              style={[
-                styles.fieldButtonText,
-                manualQty !== "1" && styles.fieldButtonTextFilled,
-              ]}
-            >
-              {manualQty !== "1" ? `x${manualQty}` : "Qty"}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.fieldButton,
-              editingField === "price" && styles.fieldButtonActive,
-              manualPrice.length > 0 && styles.fieldButtonFilled,
-            ]}
-            onPress={() => handleFieldToggle("price")}
-          >
-            <MaterialCommunityIcons
-              name="currency-gbp"
-              size={14}
-              color={
-                manualPrice.length > 0
-                  ? colors.accent.primary
-                  : colors.text.secondary
-              }
-            />
-            <Text
-              style={[
-                styles.fieldButtonText,
-                manualPrice.length > 0 && styles.fieldButtonTextFilled,
-              ]}
-            >
-              {manualPrice ? `£${manualPrice}` : "Price"}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Inline field editor */}
-        {editingField && (
-          <View style={styles.fieldEditorRow}>
-            {editingField === "size" && (
-              <TextInput
-                ref={sizeInputRef}
-                style={styles.fieldEditorInput}
-                placeholder="e.g. 500ml, 1kg"
-                placeholderTextColor={colors.text.disabled}
-                value={manualSize}
-                onChangeText={setManualSize}
-                onSubmitEditing={() => setEditingField(null)}
-                returnKeyType="done"
-              />
-            )}
-            {editingField === "qty" && (
-              <TextInput
-                ref={qtyInputRef}
-                style={styles.fieldEditorInput}
-                placeholder="Quantity"
-                placeholderTextColor={colors.text.disabled}
-                value={manualQty}
-                onChangeText={setManualQty}
-                keyboardType="number-pad"
-                onSubmitEditing={() => setEditingField(null)}
-                returnKeyType="done"
-              />
-            )}
-            {editingField === "price" && (
-              <TextInput
-                ref={priceInputRef}
-                style={styles.fieldEditorInput}
-                placeholder="Estimated price"
-                placeholderTextColor={colors.text.disabled}
-                value={manualPrice}
-                onChangeText={setManualPrice}
-                keyboardType="decimal-pad"
-                onSubmitEditing={() => setEditingField(null)}
-                returnKeyType="done"
-              />
-            )}
-          </View>
-        )}
-
-        {!manualPrice && priceEstimate?.cheapest && (
-          <Text style={styles.priceHint}>
-            ~£{priceEstimate.cheapest.price.toFixed(2)} est.
-          </Text>
-        )}
-
-        {/* Add from Pantry button */}
+        {/* Add from Pantry — elevated to primary path */}
         <Pressable
           style={[
             styles.pantryButton,
@@ -992,6 +838,144 @@ export function AddItemsModal({
             </View>
           )}
         </Pressable>
+
+        {/* Size / Qty / Price — only after item name is entered */}
+        {(itemName.trim().length > 0 || selectedSuggestion != null) && (
+          <>
+            <View style={styles.fieldButtonRow}>
+              <Pressable
+                style={[
+                  styles.fieldButton,
+                  editingField === "size" && styles.fieldButtonActive,
+                  manualSize.length > 0 && styles.fieldButtonFilled,
+                ]}
+                onPress={() => handleFieldToggle("size")}
+              >
+                <MaterialCommunityIcons
+                  name="ruler"
+                  size={14}
+                  color={
+                    manualSize.length > 0
+                      ? colors.accent.primary
+                      : colors.text.secondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.fieldButtonText,
+                    manualSize.length > 0 && styles.fieldButtonTextFilled,
+                  ]}
+                >
+                  {manualSize || "Size"}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.fieldButton,
+                  editingField === "qty" && styles.fieldButtonActive,
+                  manualQty !== "1" && styles.fieldButtonFilled,
+                ]}
+                onPress={() => handleFieldToggle("qty")}
+              >
+                <MaterialCommunityIcons
+                  name="numeric"
+                  size={14}
+                  color={
+                    manualQty !== "1"
+                      ? colors.accent.primary
+                      : colors.text.secondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.fieldButtonText,
+                    manualQty !== "1" && styles.fieldButtonTextFilled,
+                  ]}
+                >
+                  {manualQty !== "1" ? `x${manualQty}` : "Qty"}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.fieldButton,
+                  editingField === "price" && styles.fieldButtonActive,
+                  manualPrice.length > 0 && styles.fieldButtonFilled,
+                ]}
+                onPress={() => handleFieldToggle("price")}
+              >
+                <MaterialCommunityIcons
+                  name="currency-gbp"
+                  size={14}
+                  color={
+                    manualPrice.length > 0
+                      ? colors.accent.primary
+                      : colors.text.secondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.fieldButtonText,
+                    manualPrice.length > 0 && styles.fieldButtonTextFilled,
+                  ]}
+                >
+                  {manualPrice ? `£${manualPrice}` : "Price"}
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Inline field editor */}
+            {editingField && (
+              <View style={styles.fieldEditorRow}>
+                {editingField === "size" && (
+                  <TextInput
+                    ref={sizeInputRef}
+                    style={styles.fieldEditorInput}
+                    placeholder="e.g. 500ml, 1kg"
+                    placeholderTextColor={colors.text.disabled}
+                    value={manualSize}
+                    onChangeText={setManualSize}
+                    onSubmitEditing={() => setEditingField(null)}
+                    returnKeyType="done"
+                  />
+                )}
+                {editingField === "qty" && (
+                  <TextInput
+                    ref={qtyInputRef}
+                    style={styles.fieldEditorInput}
+                    placeholder="Quantity"
+                    placeholderTextColor={colors.text.disabled}
+                    value={manualQty}
+                    onChangeText={setManualQty}
+                    keyboardType="number-pad"
+                    onSubmitEditing={() => setEditingField(null)}
+                    returnKeyType="done"
+                  />
+                )}
+                {editingField === "price" && (
+                  <TextInput
+                    ref={priceInputRef}
+                    style={styles.fieldEditorInput}
+                    placeholder="Estimated price"
+                    placeholderTextColor={colors.text.disabled}
+                    value={manualPrice}
+                    onChangeText={setManualPrice}
+                    keyboardType="decimal-pad"
+                    onSubmitEditing={() => setEditingField(null)}
+                    returnKeyType="done"
+                  />
+                )}
+              </View>
+            )}
+
+            {!manualPrice && priceEstimate?.cheapest && (
+              <Text style={styles.priceHint}>
+                ~£{priceEstimate.cheapest.price.toFixed(2)} est.
+              </Text>
+            )}
+          </>
+        )}
 
         {/* Camera scan error */}
         {productScanner.lastError && (
@@ -1095,13 +1079,8 @@ export function AddItemsModal({
               </View>
             ) : (
               <View style={styles.emptyContainer}>
-                <MaterialCommunityIcons
-                  name="text-box-search-outline"
-                  size={48}
-                  color={colors.text.disabled}
-                />
-                <Text style={styles.emptyText}>
-                  Type an item name to search or add manually
+                <Text style={styles.emptyHint}>
+                  Search above or add from pantry
                 </Text>
               </View>
             )}
@@ -1388,6 +1367,11 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     textAlign: "center",
     width: "100%",
+  },
+  emptyHint: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: "center",
   },
   emptySubtext: {
     ...typography.bodySmall,

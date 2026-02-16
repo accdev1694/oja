@@ -854,6 +854,7 @@ export default function ListDetailScreen() {
               size="md"
               icon={isPaused ? "cart-arrow-right" : "cart-outline"}
               onPress={handleStartShopping}
+              disabled={(items?.length ?? 0) === 0}
               fullWidth
             >
               {isPaused ? "Resume Shopping" : "Go Shopping"}
@@ -995,7 +996,7 @@ export default function ListDetailScreen() {
           color={colors.text.tertiary}
         />
       </View>
-      <Text style={styles.emptyTitle}>Your list is ready</Text>
+      <Text style={styles.emptyTitle}>No items yet</Text>
       <Text style={styles.emptySubtitle}>Add items above or pull from your stock</Text>
     </View>
   ), []);

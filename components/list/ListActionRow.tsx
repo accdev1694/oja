@@ -19,6 +19,7 @@ import {
   GuidedBorder,
 } from "@/components/ui/glass";
 import { haptic } from "@/lib/haptics/safeHaptics";
+import { TypewriterHint } from "@/components/pantry/TypewriterHint";
 import { getAllStores, getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
 import type { StoreInfo } from "@/convex/lib/storeNormalizer";
 
@@ -91,81 +92,87 @@ export const ListActionRow = memo(function ListActionRow({
   return (
     <View style={styles.wrapper}>
       <View style={styles.row}>
-        {/* Store Selector */}
-        <GuidedBorder
-          active={!hasStore}
-          borderRadius={borderRadius.md}
-          style={styles.storeAnchor}
-        >
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              pressed && styles.buttonPressed,
-              showStoreDropdown && styles.buttonActive,
-            ]}
-            onPress={handleStorePress}
-            accessibilityLabel={hasStore ? `Store: ${storeName}` : "Select store"}
-            accessibilityRole="button"
+        {/* Store Selector + hint */}
+        <View style={styles.btnColumn}>
+          <GuidedBorder
+            active={!hasStore}
+            borderRadius={borderRadius.md}
           >
-            {hasStore && storeColor ? (
-              <View
-                style={[styles.storeDot, { backgroundColor: storeColor }]}
-              />
-            ) : null}
-            <Text
-              style={[styles.buttonText, hasStore && styles.storeNameText]}
-              numberOfLines={1}
-            >
-              {hasStore && storeName ? storeName : "Store"}
-            </Text>
-            <MaterialCommunityIcons
-              name={showStoreDropdown ? "chevron-up" : "chevron-down"}
-              size={16}
-              color={colors.text.tertiary}
-            />
-          </Pressable>
-        </GuidedBorder>
-
-        {/* Add Items Button */}
-        <GuidedBorder
-          active={hasStore && itemCount === 0}
-          borderRadius={borderRadius.md}
-          style={{ flex: 1 }}
-        >
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              hasStore ? styles.buttonActive : styles.buttonDisabled,
-              hasStore && pressed && styles.buttonActivePressed,
-            ]}
-            onPress={handleAddItemsPress}
-            disabled={!hasStore}
-            accessibilityLabel="Add items"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !hasStore }}
-          >
-            {hasStore ? (
-              <MaterialCommunityIcons
-                name="plus"
-                size={18}
-                color={colors.accent.primary}
-              />
-            ) : null}
-            <Text
-              style={[
-                styles.buttonText,
-                hasStore ? styles.addItemsTextActive : styles.addItemsTextDisabled,
+            <Pressable
+              style={({ pressed }) => [
+                styles.button,
+                pressed && styles.buttonPressed,
+                showStoreDropdown && styles.buttonActive,
               ]}
-              numberOfLines={1}
+              onPress={handleStorePress}
+              accessibilityLabel={hasStore ? `Store: ${storeName}` : "Select store"}
+              accessibilityRole="button"
             >
-              Add Items
-            </Text>
-          </Pressable>
-        </GuidedBorder>
+              {hasStore && storeColor ? (
+                <View
+                  style={[styles.storeDot, { backgroundColor: storeColor }]}
+                />
+              ) : null}
+              <Text
+                style={[styles.buttonText, hasStore && styles.storeNameText]}
+                numberOfLines={1}
+              >
+                {hasStore && storeName ? storeName : "Store"}
+              </Text>
+              <MaterialCommunityIcons
+                name={showStoreDropdown ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={colors.text.tertiary}
+              />
+            </Pressable>
+          </GuidedBorder>
+          {!hasStore && <TypewriterHint text="Pick a store" />}
+        </View>
+
+        {/* Add Items Button + hint */}
+        <View style={styles.btnColumn}>
+          <GuidedBorder
+            active={hasStore}
+            borderRadius={borderRadius.md}
+          >
+            <Pressable
+              style={({ pressed }) => [
+                styles.button,
+                hasStore ? styles.buttonActive : styles.buttonDisabled,
+                hasStore && pressed && styles.buttonActivePressed,
+              ]}
+              onPress={handleAddItemsPress}
+              disabled={!hasStore}
+              accessibilityLabel="Add items"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !hasStore }}
+            >
+              {hasStore ? (
+                <MaterialCommunityIcons
+                  name="plus"
+                  size={18}
+                  color={colors.accent.primary}
+                />
+              ) : null}
+              <Text
+                style={[
+                  styles.buttonText,
+                  hasStore ? styles.addItemsTextActive : styles.addItemsTextDisabled,
+                ]}
+                numberOfLines={1}
+              >
+                Add Items
+              </Text>
+            </Pressable>
+          </GuidedBorder>
+          {hasStore && itemCount === 0 && (
+            <TypewriterHint text="Add items to list" />
+          )}
+        </View>
       </View>
 
-      {!hasStore && (
-        <Text style={styles.hintText}>Pick a store to see prices</Text>
+      {hasStore && itemCount > 0 && (
+        <TypewriterHint text="Add more items or go shopping" />
       )}
 
       {/* Inline Store Dropdown — at wrapper level so it spans full width */}
@@ -321,17 +328,10 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: borderRadius.full,
   },
-  hintText: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-    textAlign: "center",
-    zIndex: 3,
-    elevation: 9,
-  },
-
-  // Store anchor
-  storeAnchor: {
+  // Button column (button + typewriter hint)
+  btnColumn: {
     flex: 1,
+    gap: spacing.xs,
   },
 
   // Store dropdown
