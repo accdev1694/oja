@@ -18,46 +18,8 @@ import {
   spacing,
   borderRadius,
 } from "@/components/ui/glass";
-import { getIconForItem } from "@/lib/icons/iconMatcher";
-import type { Id } from "@/convex/_generated/dataModel";
 
-/**
- * Format size display for items
- * Returns formatted size string or null if no size data
- * Examples: "250g", "2pt", "500ml"
- */
-function formatSize(size?: string, unit?: string): string | null {
-  if (!size) return null;
-  // If size already includes unit (e.g., "2pt", "500ml", "250g"), return as-is
-  if (/\d+\s*(ml|l|g|kg|pt|pint|oz|lb)/i.test(size)) return size;
-  // Otherwise combine: "2" + "pint" → "2pint" or abbreviate common units
-  if (unit) {
-    // Abbreviate common units for cleaner display
-    const unitAbbr: Record<string, string> = {
-      pint: "pt",
-      pints: "pt",
-      litre: "L",
-      litres: "L",
-      liter: "L",
-      liters: "L",
-      gram: "g",
-      grams: "g",
-      kilogram: "kg",
-      kilograms: "kg",
-      millilitre: "ml",
-      millilitres: "ml",
-      milliliter: "ml",
-      milliliters: "ml",
-      ounce: "oz",
-      ounces: "oz",
-      pound: "lb",
-      pounds: "lb",
-    };
-    const abbr = unitAbbr[unit.toLowerCase()] || unit;
-    return `${size}${abbr}`;
-  }
-  return size;
-}
+import type { Id } from "@/convex/_generated/dataModel";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -131,7 +93,7 @@ export interface ShoppingListItemProps {
   onApprove?: (itemId: Id<"listItems">) => void;
   onReject?: (itemId: Id<"listItems">) => void;
   onOpenComments?: (itemId: Id<"listItems">, itemName: string) => void;
-  // Selection props (checkboxes always visible)
+  // Selection mode
   isSelected?: boolean;
   onSelectToggle?: (itemId: Id<"listItems">) => void;
 }
@@ -231,11 +193,10 @@ export const ShoppingListItem = memo(function ShoppingListItem({
     borderWidth: checkFlash.value > 0 ? 1.5 : 0,
   }));
 
-  const iconResult = getIconForItem(item.name, item.category || "other");
 
-  // Format display name with size if available
-  const sizeDisplay = formatSize(item.size, item.unit);
-  const displayName = sizeDisplay ? `${item.name} (${sizeDisplay})` : item.name;
+
+  // Name already includes size (AI embeds it). Use as-is.
+  const displayName = item.name;
 
   return (
     <View style={itemStyles.swipeContainer}>
@@ -259,7 +220,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
               style={[itemStyles.itemCard, item.isChecked && itemStyles.itemCardChecked, item.approvalStatus === "pending" && itemStyles.itemCardPending]}
             >
               <View style={itemStyles.itemRow}>
-                {/* Selection checkbox — only in planning mode (hidden during shopping to avoid conflict with shopping checkbox) */}
+                {/* Selection checkbox — planning mode only */}
                 {!isShopping && (
                   <Pressable
                     onPress={() => onSelectToggle?.(item._id)}
@@ -268,7 +229,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                   >
                     <MaterialCommunityIcons
                       name={isSelected ? "checkbox-marked" : "checkbox-blank-outline"}
-                      size={22}
+                      size={16}
                       color={isSelected ? colors.accent.primary : colors.text.tertiary}
                     />
                   </Pressable>
@@ -296,25 +257,29 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                     />
                   )}
 
-                  {/* Pair 1: Icon + Name */}
-                  <View style={itemStyles.itemPairLeft}>
-                    <MaterialCommunityIcons
-                      name={iconResult.icon as keyof typeof MaterialCommunityIcons.glyphMap}
-                      size={18}
-                      color={item.isChecked ? colors.text.tertiary : colors.text.secondary}
-                    />
+                  {/* Item Name — tap to edit */}
+                  <Pressable
+                    style={itemStyles.itemPairLeft}
+                    onPress={() => {
+                      if (!item.isChecked) {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        onEdit(item);
+                      }
+                    }}
+                    disabled={item.isChecked}
+                  >
                     <Text
                       style={[itemStyles.itemName, item.isChecked && itemStyles.itemNameChecked]}
                       numberOfLines={1}
                     >
                       {displayName}
                     </Text>
-                  </View>
+                  </Pressable>
 
-                  {/* Pair 2: Qty + Price */}
-                  <View style={itemStyles.itemPairCenter}>
-                    <Text style={[itemStyles.quantityText, item.isChecked && itemStyles.quantityTextChecked]}>
-                      ×{item.quantity}
+                  {/* Qty × Price */}
+                  <View style={itemStyles.qtyPriceRow}>
+                    <Text style={[itemStyles.itemQty, item.isChecked && itemStyles.itemPriceChecked]}>
+                      {item.quantity}x
                     </Text>
                     <Text style={[itemStyles.itemPrice, item.isChecked && itemStyles.itemPriceChecked]}>
                       £{((item.actualPrice || item.estimatedPrice || 0) * item.quantity).toFixed(2)}
@@ -322,39 +287,21 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                   </View>
                 </Pressable>
 
-                {/* Pair 3: Edit + Delete */}
-                <View style={itemStyles.itemPairRight}>
-                  {!item.isChecked && (
-                    <Pressable
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        onEdit(item);
-                      }}
-                      style={itemStyles.iconButton}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <MaterialCommunityIcons
-                        name="pencil-outline"
-                        size={18}
-                        color={colors.text.tertiary}
-                      />
-                    </Pressable>
-                  )}
-                  <Pressable
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      onRemove(item._id, item.name);
-                    }}
-                    style={itemStyles.iconButton}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <MaterialCommunityIcons
-                      name="trash-can-outline"
-                      size={18}
-                      color={colors.semantic.danger}
-                    />
-                  </Pressable>
-                </View>
+                {/* Delete button */}
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    onRemove(item._id, item.name);
+                  }}
+                  style={itemStyles.iconButton}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialCommunityIcons
+                    name="trash-can-outline"
+                    size={18}
+                    color={colors.semantic.danger}
+                  />
+                </Pressable>
               </View>
             </GlassCard>
           </Animated.View>
@@ -434,33 +381,21 @@ const itemStyles = StyleSheet.create({
   itemRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   selectionCheckbox: {
-    marginRight: spacing.xs,
+    marginRight: 2,
   },
   itemTappableArea: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   itemPairLeft: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-  },
-  itemPairCenter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  itemPairRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
   },
   itemName: {
     ...typography.bodyMedium,
@@ -474,15 +409,17 @@ const itemStyles = StyleSheet.create({
   iconButton: {
     padding: spacing.xs,
   },
-  quantityText: {
-    ...typography.bodySmall,
-    color: colors.text.secondary,
+  qtyPriceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
-  quantityTextChecked: {
+  itemQty: {
+    ...typography.bodySmall,
     color: colors.text.tertiary,
   },
   itemPrice: {
-    ...typography.bodyMedium,
+    ...typography.bodySmall,
     color: colors.text.secondary,
     fontWeight: "600",
   },

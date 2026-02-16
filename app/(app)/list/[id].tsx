@@ -387,7 +387,7 @@ export default function ListDetailScreen() {
       try {
         await removeMultipleItems({ ids: Array.from(selectedItemsRef.current) });
         haptic("success");
-        clearSelection();
+        clearSelection(); // Also exits bulk select mode
       } catch (error) {
         console.error("Failed to delete items:", error);
         alert("Error", "Failed to delete items");
@@ -873,7 +873,7 @@ export default function ListDetailScreen() {
                 ? `${selectedItemsRef.current.size} selected`
                 : `Items (${items?.length ?? 0})`}
             </Text>
-            {/* Bulk selection actions -- hidden during shopping mode */}
+            {/* Selection actions — hidden during shopping mode */}
             {list?.status !== "shopping" && (
               <View style={styles.selectionActions}>
                 {selectedItemsRef.current.size > 0 && (
