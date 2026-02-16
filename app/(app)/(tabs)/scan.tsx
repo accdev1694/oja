@@ -30,17 +30,26 @@ import {
 } from "@/components/ui/glass";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
+import { useProductScanner } from "@/hooks/useProductScanner";
+import type { ScannedProduct } from "@/hooks/useProductScanner";
+
+type ScanMode = "receipt" | "product";
 
 export default function ScanScreen() {
   const router = useRouter();
   const { listId: listIdParam, returnTo } = useLocalSearchParams<{ listId?: string; returnTo?: string }>();
   const { alert } = useGlassAlert();
   const { firstName } = useCurrentUser();
+  const [scanMode, setScanMode] = useState<ScanMode>("receipt");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [selectedListId, setSelectedListId] = useState<Id<"shoppingLists"> | null>(null);
   const [showListPicker, setShowListPicker] = useState(false);
+  const [showProductListPicker, setShowProductListPicker] = useState(false);
+
+  // Product scanner
+  const productScanner = useProductScanner();
 
   // Auto-select list when navigated from complete shopping flow
   useEffect(() => {
@@ -56,6 +65,8 @@ export default function ScanScreen() {
   const parseReceipt = useAction(api.ai.parseReceipt);
   const updateReceipt = useMutation(api.receipts.update);
   const deleteReceipt = useMutation(api.receipts.remove);
+  const addBatchToList = useMutation(api.listItems.addBatchFromScan);
+  const addBatchToPantry = useMutation(api.pantryItems.addBatchFromScan);
   const [parseReceiptId, setParseReceiptId] = useState<Id<"receipts"> | null>(null);
 
   const selectedList = shoppingLists?.find((l) => l._id === selectedListId);
@@ -250,6 +261,62 @@ export default function ScanScreen() {
     setSelectedImage(null);
   }
 
+  // ── Product mode handlers ──────────────────────────────────────────────────
+
+  async function handleAddProductsToList(listId: Id<"shoppingLists">) {
+    if (productScanner.scannedProducts.length === 0) return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const result = await addBatchToList({
+        listId,
+        items: productScanner.scannedProducts.map((p) => ({
+          name: p.name,
+          category: p.category,
+          size: p.size,
+          unit: p.unit,
+          estimatedPrice: p.estimatedPrice,
+        })),
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      productScanner.clearAll();
+      setShowProductListPicker(false);
+      alert(
+        "Added to List",
+        `${result.count} item${result.count !== 1 ? "s" : ""} added to your list.`,
+      );
+    } catch (error) {
+      console.error("Failed to add products to list:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert("Error", "Failed to add items to list");
+    }
+  }
+
+  async function handleAddProductsToPantry() {
+    if (productScanner.scannedProducts.length === 0) return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const result = await addBatchToPantry({
+        items: productScanner.scannedProducts.map((p) => ({
+          name: p.name,
+          category: p.category,
+          size: p.size,
+          unit: p.unit,
+          estimatedPrice: p.estimatedPrice,
+        })),
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      productScanner.clearAll();
+      alert(
+        "Added to Pantry",
+        `${result.added} added, ${result.updated} updated in your pantry.`,
+      );
+    } catch (error) {
+      console.error("Failed to add products to pantry:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert("Error", "Failed to add items to pantry");
+    }
+  }
+
   // Parsing mode - AI processing receipt
   if (isParsing) {
     return (
@@ -348,7 +415,7 @@ export default function ScanScreen() {
   return (
     <GlassScreen>
       <SimpleHeader
-        title="Scan Receipt"
+        title={scanMode === "receipt" ? "Scan Receipt" : "Scan Product"}
         accentColor={colors.semantic.scan}
         subtitle={firstName ? `${firstName}, track your spending` : "Track spending & build price history"}
       />
@@ -358,166 +425,337 @@ export default function ScanScreen() {
         contentContainerStyle={styles.contentScroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Camera Icon */}
-        <View style={styles.iconSection}>
-          <View style={styles.iconContainer}>
-            <MaterialCommunityIcons
-              name="camera"
-              size={64}
-              color={colors.semantic.scan}
-            />
-          </View>
-        </View>
-
-        {/* Instructions Card */}
-        <GlassCard variant="standard" style={styles.instructionsCard}>
-          <View style={styles.instructionsHeader}>
-            <MaterialCommunityIcons
-              name="lightbulb-outline"
-              size={20}
-              color={colors.accent.primary}
-            />
-            <Text style={styles.instructionsTitle}>Tips for best results</Text>
-          </View>
-
-          <View style={styles.instructionsList}>
-            <InstructionItem number={1} text="Lay receipt on a flat surface" />
-            <InstructionItem number={2} text="Ensure good lighting" />
-            <InstructionItem number={3} text="Capture the entire receipt" />
-            <InstructionItem number={4} text="Keep the image sharp and clear" />
-          </View>
-        </GlassCard>
-
-        {/* Link to List (optional) */}
-        {shoppingLists && shoppingLists.length > 0 && (
-          <TouchableOpacity
-            style={styles.listSelector}
+        {/* Mode Toggle */}
+        <View style={styles.modeToggle}>
+          <Pressable
+            style={[styles.modeOption, scanMode === "receipt" && styles.modeOptionActive]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowListPicker(!showListPicker);
+              setScanMode("receipt");
             }}
-            activeOpacity={0.7}
           >
             <MaterialCommunityIcons
-              name={selectedList ? "clipboard-check" : "clipboard-text-outline"}
-              size={20}
-              color={selectedList ? colors.accent.primary : colors.text.secondary}
+              name="receipt"
+              size={16}
+              color={scanMode === "receipt" ? colors.accent.primary : colors.text.tertiary}
             />
-            <Text
-              style={[
-                styles.listSelectorText,
-                selectedList && styles.listSelectorTextActive,
-              ]}
-              numberOfLines={1}
-            >
-              {selectedList
-                ? `Linked to: ${selectedList.name}`
-                : "Link to shopping list (optional)"}
+            <Text style={[styles.modeOptionText, scanMode === "receipt" && styles.modeOptionTextActive]}>
+              Receipt
             </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.modeOption, scanMode === "product" && styles.modeOptionActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setScanMode("product");
+            }}
+          >
             <MaterialCommunityIcons
-              name={showListPicker ? "chevron-up" : "chevron-down"}
-              size={20}
-              color={colors.text.secondary}
+              name="barcode-scan"
+              size={16}
+              color={scanMode === "product" ? colors.accent.primary : colors.text.tertiary}
             />
-          </TouchableOpacity>
-        )}
-
-        {showListPicker && shoppingLists && (
-          <GlassCard variant="standard" style={styles.listPickerCard}>
-            <ScrollView style={styles.listPickerScroll} nestedScrollEnabled>
-              {/* None option */}
-              <TouchableOpacity
-                style={[
-                  styles.listOption,
-                  !selectedListId && styles.listOptionActive,
-                ]}
-                onPress={() => {
-                  setSelectedListId(null);
-                  setShowListPicker(false);
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-              >
-                <MaterialCommunityIcons
-                  name="close-circle-outline"
-                  size={18}
-                  color={colors.text.secondary}
-                />
-                <Text style={styles.listOptionText}>No list (standalone receipt)</Text>
-              </TouchableOpacity>
-
-              {shoppingLists.map((list) => (
-                <TouchableOpacity
-                  key={list._id}
-                  style={[
-                    styles.listOption,
-                    selectedListId === list._id && styles.listOptionActive,
-                  ]}
-                  onPress={() => {
-                    setSelectedListId(list._id);
-                    setShowListPicker(false);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                >
-                  <MaterialCommunityIcons
-                    name="clipboard-text"
-                    size={18}
-                    color={
-                      selectedListId === list._id
-                        ? colors.accent.primary
-                        : colors.text.secondary
-                    }
-                  />
-                  <View style={styles.listOptionInfo}>
-                    <Text
-                      style={[
-                        styles.listOptionText,
-                        selectedListId === list._id && styles.listOptionTextActive,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {list.name}
-                    </Text>
-                    {(list.budget ?? 0) > 0 && (
-                      <Text style={styles.listOptionBudget}>
-                        £{(list.budget ?? 0).toFixed(2)} budget
-                      </Text>
-                    )}
-                  </View>
-                  {selectedListId === list._id && (
-                    <MaterialCommunityIcons
-                      name="check"
-                      size={18}
-                      color={colors.accent.primary}
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </GlassCard>
-        )}
-
-        {/* Action Buttons */}
-        <View style={styles.buttons}>
-          <GlassButton
-            variant="primary"
-            size="lg"
-            icon="camera"
-            onPress={handleTakePhoto}
-          >
-            Take Photo
-          </GlassButton>
-
-          <GlassButton
-            variant="secondary"
-            size="lg"
-            icon="image-multiple"
-            onPress={handlePickImage}
-          >
-            Choose from Library
-          </GlassButton>
+            <Text style={[styles.modeOptionText, scanMode === "product" && styles.modeOptionTextActive]}>
+              Product
+            </Text>
+          </Pressable>
         </View>
 
-        {/* Receipt History */}
+        {scanMode === "receipt" ? (
+          <>
+            {/* Camera Icon */}
+            <View style={styles.iconSection}>
+              <View style={styles.iconContainer}>
+                <MaterialCommunityIcons
+                  name="camera"
+                  size={64}
+                  color={colors.semantic.scan}
+                />
+              </View>
+            </View>
+
+            {/* Instructions Card */}
+            <GlassCard variant="standard" style={styles.instructionsCard}>
+              <View style={styles.instructionsHeader}>
+                <MaterialCommunityIcons
+                  name="lightbulb-outline"
+                  size={20}
+                  color={colors.accent.primary}
+                />
+                <Text style={styles.instructionsTitle}>Tips for best results</Text>
+              </View>
+
+              <View style={styles.instructionsList}>
+                <InstructionItem number={1} text="Lay receipt on a flat surface" />
+                <InstructionItem number={2} text="Ensure good lighting" />
+                <InstructionItem number={3} text="Capture the entire receipt" />
+                <InstructionItem number={4} text="Keep the image sharp and clear" />
+              </View>
+            </GlassCard>
+
+            {/* Link to List (optional) */}
+            {shoppingLists && shoppingLists.length > 0 && (
+              <TouchableOpacity
+                style={styles.listSelector}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowListPicker(!showListPicker);
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons
+                  name={selectedList ? "clipboard-check" : "clipboard-text-outline"}
+                  size={20}
+                  color={selectedList ? colors.accent.primary : colors.text.secondary}
+                />
+                <Text
+                  style={[
+                    styles.listSelectorText,
+                    selectedList && styles.listSelectorTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {selectedList
+                    ? `Linked to: ${selectedList.name}`
+                    : "Link to shopping list (optional)"}
+                </Text>
+                <MaterialCommunityIcons
+                  name={showListPicker ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color={colors.text.secondary}
+                />
+              </TouchableOpacity>
+            )}
+
+            {showListPicker && shoppingLists && (
+              <GlassCard variant="standard" style={styles.listPickerCard}>
+                <ScrollView style={styles.listPickerScroll} nestedScrollEnabled>
+                  {/* None option */}
+                  <TouchableOpacity
+                    style={[
+                      styles.listOption,
+                      !selectedListId && styles.listOptionActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedListId(null);
+                      setShowListPicker(false);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name="close-circle-outline"
+                      size={18}
+                      color={colors.text.secondary}
+                    />
+                    <Text style={styles.listOptionText}>No list (standalone receipt)</Text>
+                  </TouchableOpacity>
+
+                  {shoppingLists.map((list) => (
+                    <TouchableOpacity
+                      key={list._id}
+                      style={[
+                        styles.listOption,
+                        selectedListId === list._id && styles.listOptionActive,
+                      ]}
+                      onPress={() => {
+                        setSelectedListId(list._id);
+                        setShowListPicker(false);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                    >
+                      <MaterialCommunityIcons
+                        name="clipboard-text"
+                        size={18}
+                        color={
+                          selectedListId === list._id
+                            ? colors.accent.primary
+                            : colors.text.secondary
+                        }
+                      />
+                      <View style={styles.listOptionInfo}>
+                        <Text
+                          style={[
+                            styles.listOptionText,
+                            selectedListId === list._id && styles.listOptionTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {list.name}
+                        </Text>
+                        {(list.budget ?? 0) > 0 && (
+                          <Text style={styles.listOptionBudget}>
+                            £{(list.budget ?? 0).toFixed(2)} budget
+                          </Text>
+                        )}
+                      </View>
+                      {selectedListId === list._id && (
+                        <MaterialCommunityIcons
+                          name="check"
+                          size={18}
+                          color={colors.accent.primary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </GlassCard>
+            )}
+
+            {/* Action Buttons */}
+            <View style={styles.buttons}>
+              <GlassButton
+                variant="primary"
+                size="lg"
+                icon="camera"
+                onPress={handleTakePhoto}
+              >
+                Take Photo
+              </GlassButton>
+
+              <GlassButton
+                variant="secondary"
+                size="lg"
+                icon="image-multiple"
+                onPress={handlePickImage}
+              >
+                Choose from Library
+              </GlassButton>
+            </View>
+          </>
+        ) : (
+          /* ────────────── Product Scanning Mode ────────────── */
+          <>
+            {/* Scan Product Button */}
+            <View style={styles.iconSection}>
+              <View style={[styles.iconContainer, { backgroundColor: `${colors.accent.primary}20` }]}>
+                <MaterialCommunityIcons
+                  name="cube-scan"
+                  size={64}
+                  color={colors.accent.primary}
+                />
+              </View>
+            </View>
+
+            <View style={styles.buttons}>
+              <GlassButton
+                variant="primary"
+                size="lg"
+                icon="camera"
+                onPress={productScanner.captureProduct}
+                loading={productScanner.isProcessing}
+                disabled={productScanner.isProcessing}
+              >
+                {productScanner.isProcessing ? "Identifying..." : "Scan Product"}
+              </GlassButton>
+            </View>
+
+            {/* Error message */}
+            {productScanner.lastError && (
+              <GlassCard variant="standard" style={styles.productErrorCard}>
+                <View style={styles.productErrorRow}>
+                  <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.semantic.danger} />
+                  <Text style={styles.productErrorText}>{productScanner.lastError}</Text>
+                </View>
+              </GlassCard>
+            )}
+
+            {/* Scanned Products List */}
+            {productScanner.scannedProducts.length > 0 && (
+              <View style={styles.scannedSection}>
+                <View style={styles.scannedHeader}>
+                  <Text style={styles.scannedTitle}>
+                    Scanned ({productScanner.scannedProducts.length})
+                  </Text>
+                  <Pressable onPress={productScanner.clearAll}>
+                    <Text style={styles.scannedClear}>Clear All</Text>
+                  </Pressable>
+                </View>
+
+                {productScanner.scannedProducts.map((product, index) => (
+                  <ScannedProductCard
+                    key={`${product.name}-${index}`}
+                    product={product}
+                    onRemove={() => productScanner.removeProduct(index)}
+                  />
+                ))}
+
+                {/* Add to List / Pantry buttons */}
+                <View style={styles.productActions}>
+                  {shoppingLists && shoppingLists.length > 0 && (
+                    <GlassButton
+                      variant="primary"
+                      size="md"
+                      icon="clipboard-plus"
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setShowProductListPicker(true);
+                      }}
+                    >
+                      Add to List
+                    </GlassButton>
+                  )}
+                  <GlassButton
+                    variant="secondary"
+                    size="md"
+                    icon="fridge-outline"
+                    onPress={handleAddProductsToPantry}
+                  >
+                    Add to Pantry
+                  </GlassButton>
+                </View>
+
+                {/* Product list picker */}
+                {showProductListPicker && shoppingLists && (
+                  <GlassCard variant="standard" style={styles.listPickerCard}>
+                    <ScrollView style={styles.listPickerScroll} nestedScrollEnabled>
+                      {shoppingLists.map((list) => (
+                        <TouchableOpacity
+                          key={list._id}
+                          style={styles.listOption}
+                          onPress={() => handleAddProductsToList(list._id)}
+                        >
+                          <MaterialCommunityIcons
+                            name="clipboard-text"
+                            size={18}
+                            color={colors.text.secondary}
+                          />
+                          <View style={styles.listOptionInfo}>
+                            <Text style={styles.listOptionText} numberOfLines={1}>
+                              {list.name}
+                            </Text>
+                            {(list.budget ?? 0) > 0 && (
+                              <Text style={styles.listOptionBudget}>
+                                £{(list.budget ?? 0).toFixed(2)} budget
+                              </Text>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </GlassCard>
+                )}
+              </View>
+            )}
+
+            {/* Empty state hint */}
+            {productScanner.scannedProducts.length === 0 && !productScanner.isProcessing && (
+              <GlassCard variant="standard" style={styles.instructionsCard}>
+                <View style={styles.instructionsHeader}>
+                  <MaterialCommunityIcons name="lightbulb-outline" size={20} color={colors.accent.primary} />
+                  <Text style={styles.instructionsTitle}>How it works</Text>
+                </View>
+                <View style={styles.instructionsList}>
+                  <InstructionItem number={1} text="Point camera at a product" />
+                  <InstructionItem number={2} text="AI reads the label text" />
+                  <InstructionItem number={3} text="Scan multiple products in a row" />
+                  <InstructionItem number={4} text="Add all to a list or your pantry" />
+                </View>
+              </GlassCard>
+            )}
+          </>
+        )}
+
+        {/* Receipt History (visible in both modes) */}
         <View style={styles.historySection}>
           <View style={styles.historySectionHeader}>
             <View style={styles.historySectionLeft}>
@@ -679,6 +917,48 @@ function ReceiptHistoryCard({ receipt, onPress, onDelete }: ReceiptHistoryCardPr
         color={colors.accent.primary}
       />
     </Pressable>
+  );
+}
+
+// =============================================================================
+// SCANNED PRODUCT CARD COMPONENT
+// =============================================================================
+
+interface ScannedProductCardProps {
+  product: ScannedProduct;
+  onRemove: () => void;
+}
+
+function ScannedProductCard({ product, onRemove }: ScannedProductCardProps) {
+  return (
+    <View style={styles.productCard}>
+      <View style={styles.productCardInfo}>
+        <Text style={styles.productCardName} numberOfLines={1}>
+          {product.name}
+        </Text>
+        <Text style={styles.productCardMeta}>
+          {product.category}
+          {product.size ? ` · ${product.size}` : ""}
+          {product.brand ? ` · ${product.brand}` : ""}
+        </Text>
+      </View>
+      {product.estimatedPrice != null && (
+        <Text style={styles.productCardPrice}>
+          ~£{product.estimatedPrice.toFixed(2)}
+        </Text>
+      )}
+      <Pressable
+        onPress={onRemove}
+        hitSlop={8}
+        style={styles.productCardRemove}
+      >
+        <MaterialCommunityIcons
+          name="close-circle-outline"
+          size={18}
+          color={colors.text.tertiary}
+        />
+      </Pressable>
+    </View>
   );
 }
 
@@ -968,5 +1248,106 @@ const styles = StyleSheet.create({
   },
   receiptDeleteBtn: {
     padding: spacing.xs,
+  },
+
+  // Mode Toggle
+  modeToggle: {
+    flexDirection: "row",
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    padding: 3,
+    marginBottom: spacing.md,
+  },
+  modeOption: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  modeOptionActive: {
+    backgroundColor: colors.glass.backgroundStrong,
+  },
+  modeOptionText: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    fontWeight: "600",
+  },
+  modeOptionTextActive: {
+    color: colors.accent.primary,
+  },
+
+  // Product Scanning
+  productErrorCard: {
+    marginTop: spacing.md,
+  },
+  productErrorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  productErrorText: {
+    ...typography.bodySmall,
+    color: colors.semantic.danger,
+    flex: 1,
+  },
+  scannedSection: {
+    marginTop: spacing.xl,
+  },
+  scannedHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  scannedTitle: {
+    ...typography.labelLarge,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  scannedClear: {
+    ...typography.labelSmall,
+    color: colors.semantic.danger,
+  },
+  productCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    padding: spacing.md,
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  productCardInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  productCardName: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  productCardMeta: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  productCardPrice: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    fontWeight: "600",
+  },
+  productCardRemove: {
+    padding: spacing.xs,
+  },
+  productActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.sm,
   },
 });
