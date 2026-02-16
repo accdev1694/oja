@@ -632,7 +632,7 @@ Return ONLY valid JSON, no markdown code blocks.`;
         size: typeof parsed.size === "string" ? parsed.size : undefined,
         unit: typeof parsed.unit === "string" ? parsed.unit : undefined,
         brand: typeof parsed.brand === "string" ? parsed.brand : undefined,
-        estimatedPrice: typeof parsed.estimatedPrice === "number" ? parsed.estimatedPrice : undefined,
+        estimatedPrice: typeof parsed.estimatedPrice === "number" && isFinite(parsed.estimatedPrice) && parsed.estimatedPrice > 0 ? parsed.estimatedPrice : undefined,
         confidence,
       };
     } catch (error) {

@@ -193,6 +193,7 @@ export function AddItemsModal({
   const [activeView, setActiveView] = useState<ActiveView>("suggestions");
   const [selectedSuggestion, setSelectedSuggestion] = useState<ItemSuggestion | null>(null);
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>(undefined);
+  const [scannedCategory, setScannedCategory] = useState<string | undefined>(undefined);
   const [selectedItems, setSelectedItems] = useState<Map<string, SelectedItem>>(
     new Map()
   );
@@ -220,16 +221,22 @@ export function AddItemsModal({
 
   const handleCameraScan = useCallback(async () => {
     haptic("medium");
-    const product = await productScanner.captureProduct();
-    if (product) {
-      setItemName(product.name);
-      if (product.size) setManualSize(product.size);
-      if (product.estimatedPrice != null) {
-        setManualPrice(product.estimatedPrice.toFixed(2));
+    try {
+      const product = await productScanner.captureProduct();
+      if (product) {
+        setItemName(product.name);
+        if (product.size) setManualSize(product.size);
+        if (product.estimatedPrice != null && isFinite(product.estimatedPrice)) {
+          setManualPrice(product.estimatedPrice.toFixed(2));
+        }
+        setScannedCategory(product.category);
+        setSelectedSuggestion(null);
+        setSelectedVariantName(undefined);
+        setActiveView("suggestions");
       }
-      setSelectedSuggestion(null);
-      setSelectedVariantName(undefined);
-      setActiveView("suggestions");
+    } catch (error) {
+      console.error("Camera scan failed:", error);
+      haptic("error");
     }
   }, [productScanner]);
 
@@ -351,11 +358,12 @@ export function AddItemsModal({
         setSelectedSuggestion(null);
         setSelectedVariantName(undefined);
       }
+      if (scannedCategory) setScannedCategory(undefined);
       if (activeView !== "suggestions") setActiveView("suggestions");
       searchItems(text);
       triggerPrefetch(text);
     },
-    [activeView, selectedSuggestion, searchItems, triggerPrefetch]
+    [activeView, selectedSuggestion, scannedCategory, searchItems, triggerPrefetch]
   );
 
   const handleSelectSuggestion = useCallback(
@@ -448,7 +456,7 @@ export function AddItemsModal({
           size: manualSize || undefined,
           unit: selectedVariant?.unit || undefined,
           estimatedPrice: price,
-          category: selectedSuggestion?.category,
+          category: selectedSuggestion?.category || scannedCategory,
           source: "manual",
           pantryItemId: selectedSuggestion?.pantryItemId
             ? (selectedSuggestion.pantryItemId as Id<"pantryItems">)
@@ -466,6 +474,7 @@ export function AddItemsModal({
     setEditingField(null);
     setSelectedSuggestion(null);
     setSelectedVariantName(undefined);
+    setScannedCategory(undefined);
     setActiveView("suggestions");
     clearSuggestions();
   }, [
@@ -476,6 +485,7 @@ export function AddItemsModal({
     priceEstimate,
     selectedSuggestion,
     selectedVariantName,
+    scannedCategory,
     variantOptions,
     clearSuggestions,
   ]);
@@ -507,6 +517,7 @@ export function AddItemsModal({
     setSelectedItems(new Map());
     setSelectedSuggestion(null);
     setSelectedVariantName(undefined);
+    setScannedCategory(undefined);
     setActiveView("suggestions");
     clearSuggestions();
     onClose();

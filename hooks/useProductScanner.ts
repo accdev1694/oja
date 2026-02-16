@@ -1,8 +1,8 @@
 import { useState, useCallback } from "react";
 import * as ImagePicker from "expo-image-picker";
-import * as Haptics from "expo-haptics";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { haptic } from "@/lib/haptics/safeHaptics";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -57,7 +57,7 @@ export function useProductScanner() {
       }
 
       setIsProcessing(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptic("medium");
 
       // Upload image to Convex storage
       const uploadUrl = await generateUploadUrl();
@@ -80,7 +80,7 @@ export function useProductScanner() {
       const parsed = await scanProduct({ storageId });
 
       if (!parsed.success) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        haptic("error");
         setLastError(parsed.rejection || "Could not identify product");
         setIsProcessing(false);
         return null;
@@ -99,12 +99,12 @@ export function useProductScanner() {
       };
 
       setScannedProducts((prev) => [...prev, product]);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic("success");
       setIsProcessing(false);
       return product;
     } catch (error) {
       console.error("Product scan error:", error);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      haptic("error");
       setLastError(
         error instanceof Error ? error.message : "Failed to scan product"
       );
@@ -115,7 +115,7 @@ export function useProductScanner() {
 
   /** Remove a scanned product by index */
   const removeProduct = useCallback((index: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic("light");
     setScannedProducts((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
