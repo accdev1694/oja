@@ -16,6 +16,7 @@ import {
   spacing,
   borderRadius,
   typography,
+  GuidedBorder,
 } from "@/components/ui/glass";
 import { haptic } from "@/lib/haptics/safeHaptics";
 import { getAllStores, getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
@@ -31,6 +32,7 @@ export interface ListActionRowProps {
   hasStore: boolean;
   currentStoreId?: string;
   userFavorites: string[];
+  itemCount: number;
   onStoreSelect: (storeId: string) => void;
   onAddItemsPress: () => void;
 }
@@ -45,6 +47,7 @@ export const ListActionRow = memo(function ListActionRow({
   hasStore,
   currentStoreId,
   userFavorites,
+  itemCount,
   onStoreSelect,
   onAddItemsPress,
 }: ListActionRowProps) {
@@ -89,7 +92,11 @@ export const ListActionRow = memo(function ListActionRow({
     <View style={styles.wrapper}>
       <View style={styles.row}>
         {/* Store Selector */}
-        <View style={styles.storeAnchor}>
+        <GuidedBorder
+          active={!hasStore}
+          borderRadius={borderRadius.md}
+          style={styles.storeAnchor}
+        >
           <Pressable
             style={({ pressed }) => [
               styles.button,
@@ -117,39 +124,44 @@ export const ListActionRow = memo(function ListActionRow({
               color={colors.text.tertiary}
             />
           </Pressable>
-
-        </View>
+        </GuidedBorder>
 
         {/* Add Items Button */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            hasStore ? styles.buttonActive : styles.buttonDisabled,
-            hasStore && pressed && styles.buttonActivePressed,
-          ]}
-          onPress={handleAddItemsPress}
-          disabled={!hasStore}
-          accessibilityLabel="Add items"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !hasStore }}
+        <GuidedBorder
+          active={hasStore && itemCount === 0}
+          borderRadius={borderRadius.md}
+          style={{ flex: 1 }}
         >
-          {hasStore ? (
-            <MaterialCommunityIcons
-              name="plus"
-              size={18}
-              color={colors.accent.primary}
-            />
-          ) : null}
-          <Text
-            style={[
-              styles.buttonText,
-              hasStore ? styles.addItemsTextActive : styles.addItemsTextDisabled,
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              hasStore ? styles.buttonActive : styles.buttonDisabled,
+              hasStore && pressed && styles.buttonActivePressed,
             ]}
-            numberOfLines={1}
+            onPress={handleAddItemsPress}
+            disabled={!hasStore}
+            accessibilityLabel="Add items"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !hasStore }}
           >
-            Add Items
-          </Text>
-        </Pressable>
+            {hasStore ? (
+              <MaterialCommunityIcons
+                name="plus"
+                size={18}
+                color={colors.accent.primary}
+              />
+            ) : null}
+            <Text
+              style={[
+                styles.buttonText,
+                hasStore ? styles.addItemsTextActive : styles.addItemsTextDisabled,
+              ]}
+              numberOfLines={1}
+            >
+              Add Items
+            </Text>
+          </Pressable>
+        </GuidedBorder>
       </View>
 
       {!hasStore && (

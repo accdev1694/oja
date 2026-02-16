@@ -33,6 +33,7 @@ import {
   GlassHeader,
   CircularBudgetDial,
   OfflineBanner,
+  GuidedBorder,
   colors,
   typography,
   spacing,
@@ -834,6 +835,7 @@ export default function ListDetailScreen() {
           hasStore={!!list.normalizedStoreId}
           currentStoreId={list.normalizedStoreId}
           userFavorites={userFavorites}
+          itemCount={items?.length ?? 0}
           onStoreSelect={handleSelectStore}
           onAddItemsPress={() => setShowAddItemsModal(true)}
         />
@@ -842,15 +844,21 @@ export default function ListDetailScreen() {
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
         {list?.status === "active" && (
-          <GlassButton
-            variant="primary"
-            size="md"
-            icon={isPaused ? "cart-arrow-right" : "cart-outline"}
-            onPress={handleStartShopping}
+          <GuidedBorder
+            active={(items?.length ?? 0) > 0}
+            borderRadius={borderRadius.lg}
             style={styles.actionButton}
           >
-            {isPaused ? "Resume Shopping" : "Go Shopping"}
-          </GlassButton>
+            <GlassButton
+              variant="primary"
+              size="md"
+              icon={isPaused ? "cart-arrow-right" : "cart-outline"}
+              onPress={handleStartShopping}
+              fullWidth
+            >
+              {isPaused ? "Resume Shopping" : "Go Shopping"}
+            </GlassButton>
+          </GuidedBorder>
         )}
         {list?.status === "shopping" && (
           <View style={styles.shoppingModeContainer}>

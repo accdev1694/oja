@@ -254,7 +254,6 @@ export function GlassButton({
               name={leadingIcon}
               size={sStyles.iconSize}
               color={vStyles.textColor}
-              style={children ? styles.iconLeft : undefined}
             />
           )}
           {children && (
@@ -276,7 +275,6 @@ export function GlassButton({
               name={iconRight}
               size={sStyles.iconSize}
               color={vStyles.textColor}
-              style={children ? styles.iconRight : undefined}
             />
           )}
         </View>
@@ -302,16 +300,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 4,
   },
   text: {
     fontWeight: "600",
     textAlign: "center",
-  },
-  iconLeft: {
-    marginRight: spacing.xs,
-  },
-  iconRight: {
-    marginLeft: spacing.xs,
   },
 });
 

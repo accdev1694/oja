@@ -195,6 +195,7 @@ export {
 } from "./GlassModal";
 
 export { TrialNudgeBanner } from "./TrialNudgeBanner";
+export { GuidedBorder } from "./GuidedBorder";
 
 // =============================================================================
 // ALERT / CONFIRM DIALOG

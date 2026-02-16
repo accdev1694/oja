@@ -782,9 +782,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.glass.background,
   },
   modalHeaderLeft: {
-    flexDirection: "row",
+    flex: 1,
     alignItems: "center",
-    gap: spacing.sm,
+    marginRight: 40,
   },
   modalTitle: {
     ...typography.headlineMedium,

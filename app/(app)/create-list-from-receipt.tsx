@@ -30,7 +30,7 @@ import {
 import { useDelightToast } from "@/hooks/useDelightToast";
 import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
 
-const MAX_LIST_NAME_LENGTH = 24;
+const MAX_LIST_NAME_LENGTH = 30;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
