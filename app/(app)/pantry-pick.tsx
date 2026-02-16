@@ -171,7 +171,7 @@ export default function PantryPickScreen() {
       <GlassScreen edges={["top"]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text.primary} />
+            <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Add from Stock</Text>
           <View style={{ width: 40 }} />
@@ -188,7 +188,7 @@ export default function PantryPickScreen() {
       <GlassScreen edges={["top"]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text.primary} />
+            <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Add from Stock</Text>
           <View style={{ width: 40 }} />
@@ -207,7 +207,7 @@ export default function PantryPickScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text.primary} />
+          <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add from Stock</Text>
         <View style={{ width: 40 }} />
@@ -345,6 +345,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: colors.glass.background,
   },
   headerTitle: {
     ...typography.headlineLarge,

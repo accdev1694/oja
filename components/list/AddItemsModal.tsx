@@ -1156,9 +1156,9 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.full,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.glass.background,
     justifyContent: "center",
     alignItems: "center",

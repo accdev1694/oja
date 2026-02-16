@@ -99,11 +99,11 @@ export function VoiceSheet({
           />
           <Text style={styles.headerTitle}>Ask Tobi</Text>
         </View>
-        <Pressable onPress={onClose} hitSlop={8}>
+        <Pressable onPress={onClose} hitSlop={8} style={styles.closeButton}>
           <MaterialCommunityIcons
             name="close"
             size={22}
-            color={colors.text.secondary}
+            color={colors.text.primary}
           />
         </Pressable>
       </View>
@@ -256,6 +256,14 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: typography.headlineSmall.fontSize,
     fontWeight: "600",
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.glass.background,
   },
   conversation: {
     flex: 1,

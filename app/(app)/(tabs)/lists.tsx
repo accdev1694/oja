@@ -46,7 +46,7 @@ import { SharedListCard } from "@/components/lists/SharedListCard";
 
 type TabMode = "active" | "history";
 
-const MAX_LIST_NAME_LENGTH = 24;
+const MAX_LIST_NAME_LENGTH = 30;
 
 export default function ListsScreen() {
   const router = useRouter();
@@ -550,19 +550,15 @@ export default function ListsScreen() {
                   setModalMode("choice");
                 }}
                 hitSlop={8}
+                style={styles.modalBackButton}
               >
                 <MaterialCommunityIcons
-                  name="arrow-left"
-                  size={24}
-                  color={colors.text.secondary}
+                  name="chevron-left"
+                  size={28}
+                  color={colors.text.primary}
                 />
               </Pressable>
               <View style={styles.modalHeaderLeft}>
-                <MaterialCommunityIcons
-                  name="pencil-outline"
-                  size={24}
-                  color={colors.accent.primary}
-                />
                 <Text style={styles.modalTitle}>Create Manually</Text>
               </View>
             </View>
@@ -582,16 +578,22 @@ export default function ListsScreen() {
                 </Text>
               </View>
               <View style={styles.inputContainer}>
-                <MaterialCommunityIcons name="clipboard-list" size={20} color={colors.text.tertiary} />
-                <TextInput
-                  style={styles.textInput}
-                  value={newListName}
-                  onChangeText={(text) => setNewListName(text.slice(0, MAX_LIST_NAME_LENGTH))}
-                  placeholder="e.g., Weekly Shop"
-                  placeholderTextColor={colors.text.tertiary}
-                  maxLength={MAX_LIST_NAME_LENGTH}
-                  autoFocus
-                />
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="always"
+                  contentContainerStyle={{ flexGrow: 1 }}
+                >
+                  <TextInput
+                    style={[styles.textInput, { minWidth: "100%" }]}
+                    value={newListName}
+                    onChangeText={(text) => setNewListName(text.slice(0, MAX_LIST_NAME_LENGTH))}
+                    placeholder="e.g., Weekly Shop"
+                    placeholderTextColor={colors.text.tertiary}
+                    maxLength={MAX_LIST_NAME_LENGTH}
+                    autoFocus
+                  />
+                </ScrollView>
               </View>
             </View>
 
@@ -770,6 +772,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: spacing.xl,
+  },
+  modalBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.glass.background,
   },
   modalHeaderLeft: {
     flexDirection: "row",

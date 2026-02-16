@@ -106,11 +106,11 @@ export function ListChatThread({
             {listName}
           </Text>
         </View>
-        <Pressable onPress={onClose} hitSlop={12}>
+        <Pressable onPress={onClose} hitSlop={12} style={styles.closeButton}>
           <MaterialCommunityIcons
             name="close"
             size={22}
-            color={colors.text.secondary}
+            color={colors.text.primary}
           />
         </Pressable>
       </View>
@@ -219,6 +219,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flex: 1,
     marginRight: spacing.md,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.glass.background,
   },
   title: {
     fontSize: typography.bodyLarge.fontSize,
