@@ -543,6 +543,113 @@ IMPORTANT RULES:
 });
 
 /**
+ * Scan a physical product photo and extract product details using AI vision.
+ * Returns structured product info: name, category, size, unit, brand, estimated price.
+ */
+export const scanProduct = action({
+  args: {
+    storageId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      const imageUrl = await ctx.storage.getUrl(args.storageId);
+      if (!imageUrl) {
+        throw new Error("Failed to get image URL");
+      }
+
+      // Fetch image as base64 (chunked to avoid OOM)
+      const response = await fetch(imageUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      const CHUNK = 8192;
+      const chunks: string[] = [];
+      for (let i = 0; i < bytes.byteLength; i += CHUNK) {
+        const slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.byteLength));
+        chunks.push(String.fromCharCode(...slice));
+      }
+      const base64Image = btoa(chunks.join(""));
+
+      const productPrompt = `You are a UK grocery product identifier. Analyse this photo of a physical product and extract its details.
+
+Read the text on the packaging — product name, brand, size/weight, and any other relevant info.
+
+Return a JSON object with these fields:
+- name: Product name, MAX 30 CHARACTERS. SIZE/QUANTITY COMES FIRST, then the product name. Meaningfully rephrase to fit — never just truncate. Drop unnecessary brand prefixes or filler words.
+  Examples: "2pt Whole Milk", "500g Chicken Breast", "400g Heinz Baked Beans", "80pk PG Tips Tea Bags", "2L Coke Zero", "6pk Free Range Eggs"
+- category: One of: "Dairy & Eggs", "Meat & Fish", "Fruits & Vegetables", "Bakery", "Drinks", "Snacks & Sweets", "Canned & Jarred", "Frozen", "Household", "Personal Care", "Condiments & Sauces", "Grains & Pasta", "Baking", "Baby & Kids", "Pet", "Other"
+- size: The size/weight value (e.g., "2L", "500g", "6 pack", "2pt"). Read from packaging. If not visible, estimate the standard UK size.
+- unit: Unit of measurement (e.g., "L", "g", "pack", "pint", "ml", "kg")
+- brand: Brand name if visible (e.g., "Tesco", "Heinz", "PG Tips"). null if generic/unbranded.
+- estimatedPrice: Your best estimate of the UK retail price in GBP (number). Use typical UK supermarket pricing.
+- confidence: 0-100 how confident you are in the identification. Below 40 means the image is too unclear.
+
+If the image does not show a recognisable product (e.g., blurry, not a product, random object), return:
+{"confidence": 0, "rejection": "Could not identify a product in this image"}
+
+Return ONLY valid JSON, no markdown code blocks.`;
+
+      async function geminiParseProduct(): Promise<Record<string, unknown>> {
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const result = await model.generateContent([
+          { text: productPrompt },
+          { inlineData: { mimeType: "image/jpeg", data: base64Image } },
+        ]);
+        return JSON.parse(stripCodeBlocks(result.response.text().trim()));
+      }
+
+      async function openaiParseProduct(): Promise<Record<string, unknown>> {
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: productPrompt },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
+            ],
+          }],
+          max_tokens: 1000,
+        });
+        const text = completion.choices[0]?.message?.content?.trim() || "";
+        return JSON.parse(stripCodeBlocks(text));
+      }
+
+      const parsed = await withAIFallback(geminiParseProduct, openaiParseProduct, "scanProduct");
+
+      const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
+
+      if (parsed.rejection || confidence < 30) {
+        return {
+          success: false,
+          rejection: (parsed.rejection as string) || "Could not identify a product in this image",
+          confidence,
+        };
+      }
+
+      return {
+        success: true,
+        name: typeof parsed.name === "string" ? parsed.name.slice(0, 30) : "Unknown Product",
+        category: typeof parsed.category === "string" ? parsed.category : "Other",
+        size: typeof parsed.size === "string" ? parsed.size : undefined,
+        unit: typeof parsed.unit === "string" ? parsed.unit : undefined,
+        brand: typeof parsed.brand === "string" ? parsed.brand : undefined,
+        estimatedPrice: typeof parsed.estimatedPrice === "number" ? parsed.estimatedPrice : undefined,
+        confidence,
+      };
+    } catch (error) {
+      console.error("Product scanning failed:", error);
+      if (error instanceof SyntaxError) {
+        throw new Error("Failed to read product. Please try again with a clearer image.");
+      }
+      throw new Error(
+        error instanceof Error
+          ? error.message
+          : "Failed to identify product. Please try again."
+      );
+    }
+  },
+});
+
+/**
  * Generate size variants for items flagged as hasVariants during onboarding.
  * Called after pantry seeding to populate the itemVariants table.
  * Returns variant data for bulk insert via itemVariants.bulkUpsert.
