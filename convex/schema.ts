@@ -259,8 +259,12 @@ export default defineSchema({
         category: v.optional(v.string()),
         size: v.optional(v.string()),      // "2L", "500g", "6-pack"
         unit: v.optional(v.string()),      // "L", "g", "pack"
+        confidence: v.optional(v.number()), // 0-100 AI confidence score
       })
     ),
+
+    // Overall image quality score from AI (0-100)
+    imageQuality: v.optional(v.number()),
 
     // Receipt image
     imageStorageId: v.optional(v.string()),

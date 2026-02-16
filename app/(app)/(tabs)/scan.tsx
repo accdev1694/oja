@@ -166,6 +166,27 @@ export default function ScanScreen() {
       try {
         const parsedData = await parseReceipt({ storageId });
 
+        // Check if AI rejected the image due to low quality
+        if (parsedData.rejection || (parsedData.imageQuality != null && parsedData.imageQuality < 50)) {
+          // Clean up the pending receipt
+          try {
+            await deleteReceipt({ id: receiptId });
+          } catch (deleteErr) {
+            console.warn("Failed to clean up receipt:", deleteErr);
+          }
+
+          setIsParsing(false);
+          setParseReceiptId(null);
+          setSelectedImage(null);
+
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          alert(
+            "Image Too Blurry",
+            "We couldn't read this receipt clearly enough. Please retake the photo with better lighting and hold the camera steady.",
+          );
+          return;
+        }
+
         // Step 4: Update receipt with parsed data
         await updateReceipt({
           id: receiptId,
@@ -176,12 +197,14 @@ export default function ScanScreen() {
           tax: parsedData.tax,
           total: parsedData.total,
           processingStatus: "completed",
-          items: parsedData.items.map((item: any) => ({
-            name: item.name,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            totalPrice: item.totalPrice,
-            category: item.category,
+          imageQuality: parsedData.imageQuality,
+          items: parsedData.items.map((item: Record<string, unknown>) => ({
+            name: item.name as string,
+            quantity: item.quantity as number,
+            unitPrice: item.unitPrice as number,
+            totalPrice: item.totalPrice as number,
+            category: item.category as string | undefined,
+            confidence: typeof item.confidence === "number" ? item.confidence : undefined,
           })),
         });
 

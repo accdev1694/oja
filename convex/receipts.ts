@@ -148,9 +148,11 @@ export const update = mutation({
           unitPrice: v.number(),
           totalPrice: v.number(),
           category: v.optional(v.string()),
+          confidence: v.optional(v.number()),
         })
       )
     ),
+    imageQuality: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -190,6 +192,7 @@ export const update = mutation({
     if (args.total !== undefined) updates.total = args.total;
     if (args.processingStatus !== undefined) updates.processingStatus = args.processingStatus;
     if (args.items !== undefined) updates.items = args.items;
+    if (args.imageQuality !== undefined) updates.imageQuality = args.imageQuality;
 
     await ctx.db.patch(args.id, updates);
     return await ctx.db.get(args.id);

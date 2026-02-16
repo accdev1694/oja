@@ -331,44 +331,60 @@ export const parseReceipt = action({
       }
       const base64Image = btoa(chunks.join(""));
 
-      const receiptPrompt = `You are a receipt parser for a UK grocery shopping app. Extract as much data as possible from this receipt image, even if some parts are unclear.
+      const receiptPrompt = `You are a receipt parser for a UK grocery shopping app. Analyse this receipt image and honestly assess what you can and cannot read.
 
-Extract the following information (use your best judgment if unclear):
+FIRST: Assess image quality STRICTLY. Score "imageQuality" from 0-100:
+- 90-100: Crystal clear, all text easily readable, sharp focus
+- 70-89: Good quality, most text readable with only minor issues
+- 50-69: Mediocre, some text readable but noticeable blur or obstruction — many items will be guesses
+- 30-49: Poor quality, most text is blurry or unreadable — DO NOT attempt to parse items
+- 0-29: Illegible, cannot make out meaningful text at all
+
+BE STRICT: if you have to guess what most item names are, the image quality is below 50. A blurry, out-of-focus, or poorly lit receipt is POOR quality even if you can make out a few words.
+
+If imageQuality < 50, you MUST return: {"imageQuality": <score>, "storeName": "Unknown Store", "items": [], "total": 0, "rejection": "Image too blurry or unclear to read reliably"}
+Do NOT attempt to guess or fabricate items from a low-quality image.
+
+Otherwise, extract:
 1. Store name (if unclear, use "Unknown Store")
 2. Store address (if visible, otherwise omit)
 3. Purchase date (in ISO format YYYY-MM-DD, or use today's date if unclear)
 4. All items with:
-   - Item name: Clean, readable product name. Expand obvious abbreviations (e.g., "TS WHL MLK 2PT" → "Whole Milk 2 Pints", "BRIT S/MILK" → "British Semi-Skimmed Milk")
-   - Size: Product size/weight if visible on the receipt line (e.g., "2L", "500g", "4 pack", "2 pints"). Use null if not on receipt — do NOT guess.
-   - Unit: Unit of measurement if determinable from size (e.g., "L", "g", "pack", "pint"). Use null if size is null.
+   - Item name: Meaningfully rephrased product name, MAX 30 CHARACTERS. SIZE/QUANTITY COMES FIRST, then the product. Never just truncate — rephrase to fit. If the receipt shows a size, include it first. If not printed, estimate the standard UK size for that product. Examples: "2pt Whole Milk", "4pt Semi-Skimmed Milk", "6pk Free Range Eggs", "800g Hovis Wholemeal", "2L Coke Zero", "500g Chicken Breast", "30 Conqueror A4 Sheets". Drop brand prefixes or redundant words to stay under 30 chars.
+   - Size: The size/weight value separately (e.g., "2L", "500g", "6 pack"). Estimate standard UK size if not on receipt.
+   - Unit: Unit of measurement (e.g., "L", "g", "pack", "pint"). Estimate from size.
    - Quantity: Number of units purchased (default to 1). Handle "2 x £2.19" as quantity: 2.
    - Unit price (price per single unit)
    - Total price for that line item
+   - Confidence: 0-100 how confident you are this item name and price are correct. Be honest — if you're guessing from blurry text, use 20-40. If clearly readable, use 80-100.
 5. Subtotal (if visible)
 6. Tax amount (if visible)
 7. Grand total (REQUIRED - extract this even if other fields are unclear)
 
 Return ONLY valid JSON in this exact format:
 {
+  "imageQuality": 85,
   "storeName": "Store Name",
   "storeAddress": "123 Main St",
   "purchaseDate": "2026-01-29",
   "items": [
     {
-      "name": "Whole Milk 2 Pints",
-      "size": "2 pints",
+      "name": "2pt Whole Milk",
+      "size": "2pt",
       "unit": "pint",
       "quantity": 1,
       "unitPrice": 1.15,
-      "totalPrice": 1.15
+      "totalPrice": 1.15,
+      "confidence": 95
     },
     {
-      "name": "Bananas",
-      "size": null,
-      "unit": null,
+      "name": "Bananas Loose",
+      "size": "each",
+      "unit": "each",
       "quantity": 1,
       "unitPrice": 0.75,
-      "totalPrice": 0.75
+      "totalPrice": 0.75,
+      "confidence": 60
     }
   ],
   "subtotal": 10.00,
@@ -377,13 +393,13 @@ Return ONLY valid JSON in this exact format:
 }
 
 IMPORTANT RULES:
-- DO extract data even if the receipt is blurry, wrinkled, or partially obscured
+- DO NOT fabricate items you cannot read. If the image is too blurry to identify a product, skip it.
 - DO expand abbreviations to clean readable names (e.g., "Mlk" → "Milk", "ORG BNS" → "Organic Bananas")
 - DO extract size from the item description when it's printed on the receipt
 - DO NOT guess sizes — if the receipt just says "MILK" with no size, set size and unit to null
 - DO extract at least the total amount - this is the most important field
-- DO extract as many items as you can see, even if some text is unclear
-- If an item name is completely illegible, use generic names like "Item 1", "Item 2"
+- If an item name is partially legible, do your best but set confidence low (20-50)
+- If you can only read prices but not names, use "Unknown Item 1" etc. with low confidence
 - All prices should be numbers (not strings)
 - Quantities should be integers
 - Date must be in YYYY-MM-DD format
@@ -391,7 +407,7 @@ IMPORTANT RULES:
 - EXCLUDE non-product lines: "Balance Due", "Amount Tendered", "Change", "Cash", "Card Payment", "Subtotal", "Total", "Charity Donation", "Carrier Bag", "Price Cut", "Savings", "Clubcard", "Nectar", "Meal Deal Saving"
 - EXCLUDE refund/return lines with negative prices or negative quantities — these are not purchased products
 - Only include actual product items that the customer bought and took home
-- Be lenient and helpful - users need their receipts parsed even if quality isn't perfect`;
+- Be HONEST about confidence — do not inflate scores. A fuzzy receipt should have low imageQuality and low item confidence.`;
 
       async function geminiParseReceipt(): Promise<any> {
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -420,6 +436,24 @@ IMPORTANT RULES:
 
       const parsed = await withAIFallback(geminiParseReceipt, openaiParseReceipt, "parseReceipt");
 
+      // Image quality score from AI (0-100)
+      const imageQuality = typeof parsed.imageQuality === "number" ? parsed.imageQuality : 50;
+
+      // GATE 1: If AI rejected the image or quality is below threshold
+      if (parsed.rejection || imageQuality < 50) {
+        return {
+          storeName: parsed.storeName || "Unknown Store",
+          storeAddress: "",
+          purchaseDate: new Date().toISOString().split("T")[0],
+          items: [],
+          subtotal: 0,
+          tax: 0,
+          total: typeof parsed.total === "number" ? parsed.total : 0,
+          imageQuality,
+          rejection: parsed.rejection || "Image too blurry or unclear to read reliably",
+        };
+      }
+
       // Provide fallback values for missing fields
       const storeName = parsed.storeName || "Unknown Store";
       const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
@@ -439,25 +473,47 @@ IMPORTANT RULES:
         return true;
       });
 
-      // If no items were parsed, try to create at least one generic item from the total
-      if (items.length === 0 && total > 0) {
-        items.push({
-          name: "Receipt Items",
-          size: null,
-          unit: null,
-          quantity: 1,
-          unitPrice: total,
-          totalPrice: total,
-          confidence: 50,
-        });
+      // Ensure each item has a confidence score
+      for (const item of items) {
+        if (typeof item.confidence !== "number") {
+          item.confidence = imageQuality >= 70 ? 75 : 40;
+        }
       }
 
-      // Calculate average confidence
-      const avgConfidence =
-        Object.values(parsed.confidence || {}).reduce(
-          (sum: number, val: any) => sum + (typeof val === "number" ? val : 0),
-          0
-        ) / Math.max(Object.keys(parsed.confidence || {}).length, 1);
+      // GATE 2: If AI ignored the prompt and parsed anyway, check average confidence.
+      // If most items are low-confidence guesses, reject the scan server-side.
+      if (items.length > 0) {
+        const avgItemConfidence =
+          items.reduce((sum: number, item: any) => sum + (typeof item.confidence === "number" ? item.confidence : 50), 0) / items.length;
+        if (avgItemConfidence < 45) {
+          return {
+            storeName,
+            storeAddress: "",
+            purchaseDate: new Date().toISOString().split("T")[0],
+            items: [],
+            subtotal: 0,
+            tax: 0,
+            total,
+            imageQuality: Math.min(imageQuality, 40),
+            rejection: "Most items could not be read confidently. Please retake with a clearer image.",
+          };
+        }
+      }
+
+      // If no items were parsed, create a generic placeholder
+      if (items.length === 0 && total > 0) {
+        return {
+          storeName,
+          storeAddress: "",
+          purchaseDate: parsed.purchaseDate || new Date().toISOString().split("T")[0],
+          items: [],
+          subtotal: 0,
+          tax: 0,
+          total,
+          imageQuality: Math.min(imageQuality, 40),
+          rejection: "Could not identify any items. Please retake with a clearer image.",
+        };
+      }
 
       return {
         storeName,
@@ -467,8 +523,7 @@ IMPORTANT RULES:
         subtotal: typeof parsed.subtotal === "number" ? parsed.subtotal : total,
         tax: typeof parsed.tax === "number" ? parsed.tax : 0,
         total,
-        confidence: parsed.confidence || {},
-        overallConfidence: avgConfidence || 50,
+        imageQuality,
       };
     } catch (error) {
       console.error("Receipt parsing failed:", error);
