@@ -637,14 +637,17 @@ Return ONLY valid JSON, no markdown code blocks.`;
       };
     } catch (error) {
       console.error("Product scanning failed:", error);
-      if (error instanceof SyntaxError) {
-        throw new Error("Failed to read product. Please try again with a clearer image.");
-      }
-      throw new Error(
-        error instanceof Error
-          ? error.message
-          : "Failed to identify product. Please try again."
-      );
+      const message =
+        error instanceof SyntaxError
+          ? "Product not recognised. Snap the label showing name and size."
+          : error instanceof Error
+            ? error.message
+            : "Failed to identify product. Please try again.";
+      return {
+        success: false,
+        rejection: message,
+        confidence: 0,
+      };
     }
   },
 });
