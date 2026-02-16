@@ -29,6 +29,7 @@ import type * as lib_voiceParser from "../lib/voiceParser.js";
 import type * as lib_voiceTools from "../lib/voiceTools.js";
 import type * as listItems from "../listItems.js";
 import type * as migrations_backfillListStores from "../migrations/backfillListStores.js";
+import type * as migrations_rephraseItemNames from "../migrations/rephraseItemNames.js";
 import type * as notifications from "../notifications.js";
 import type * as nurture from "../nurture.js";
 import type * as pantryItems from "../pantryItems.js";
@@ -70,6 +71,7 @@ declare const fullApi: ApiFromModules<{
   "lib/voiceTools": typeof lib_voiceTools;
   listItems: typeof listItems;
   "migrations/backfillListStores": typeof migrations_backfillListStores;
+  "migrations/rephraseItemNames": typeof migrations_rephraseItemNames;
   notifications: typeof notifications;
   nurture: typeof nurture;
   pantryItems: typeof pantryItems;
