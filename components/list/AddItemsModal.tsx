@@ -248,6 +248,25 @@ export function AddItemsModal({
         setSelectedVariantName(undefined);
         setActiveView("suggestions");
 
+        // Auto-add scanned item to selectedItems so submit button activates
+        const key = product.name.toLowerCase().trim();
+        setSelectedItems((prev) => {
+          const next = new Map(prev);
+          next.set(key, {
+            name: product.name,
+            quantity: 1,
+            size: product.size || undefined,
+            unit: product.unit || undefined,
+            estimatedPrice:
+              product.estimatedPrice != null && isFinite(product.estimatedPrice)
+                ? product.estimatedPrice
+                : undefined,
+            category: product.category,
+            source: "manual",
+          });
+          return next;
+        });
+
         // Enrich itemVariants with scan data (fire-and-forget)
         // Use the known suggestion name if user had one selected, else derive from scan
         if (product.size && product.category) {
