@@ -133,7 +133,9 @@
       "Bash(./gradlew assembleDebug:*)",
       "mcp__playwright__browser_close",
       "Bash(~/.claude/statusline.sh)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(git merge:*)",
+      "Bash(git branch:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

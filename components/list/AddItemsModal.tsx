@@ -212,6 +212,7 @@ export function AddItemsModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { alert } = useGlassAlert();
 
+  const itemInputRef = useRef<TextInput>(null);
   const sizeInputRef = useRef<TextInput>(null);
   const qtyInputRef = useRef<TextInput>(null);
   const priceInputRef = useRef<TextInput>(null);
@@ -238,17 +239,7 @@ export function AddItemsModal({
     try {
       const product = await productScanner.captureProduct();
       if (product) {
-        setItemName(product.name);
-        if (product.size) setManualSize(product.size);
-        if (product.estimatedPrice != null && isFinite(product.estimatedPrice)) {
-          setManualPrice(product.estimatedPrice.toFixed(2));
-        }
-        setScannedCategory(product.category);
-        setSelectedSuggestion(null);
-        setSelectedVariantName(undefined);
-        setActiveView("suggestions");
-
-        // Auto-add scanned item to selectedItems so submit button activates
+        // Auto-add scanned item to selectedItems
         const key = product.name.toLowerCase().trim();
         setSelectedItems((prev) => {
           const next = new Map(prev);
@@ -267,8 +258,22 @@ export function AddItemsModal({
           return next;
         });
 
+        // Reset for next item (zero-tap loop)
+        setItemName("");
+        setManualSize("");
+        setManualQty("1");
+        setManualPrice("");
+        setEditingField(null);
+        setSelectedSuggestion(null);
+        setSelectedVariantName(undefined);
+        setScannedCategory(undefined);
+        setActiveView("suggestions");
+        clearSuggestions();
+
+        // Refocus input for next item
+        setTimeout(() => itemInputRef.current?.focus(), 150);
+
         // Enrich itemVariants with scan data (fire-and-forget)
-        // Use the known suggestion name if user had one selected, else derive from scan
         if (product.size && product.category) {
           const baseItem = selectedSuggestion?.name
             ?? (product.name
@@ -295,7 +300,7 @@ export function AddItemsModal({
       console.error("Camera scan failed:", error);
       haptic("error");
     }
-  }, [productScanner, enrichVariant, selectedSuggestion]);
+  }, [productScanner, enrichVariant, selectedSuggestion, clearSuggestions]);
 
   const priceEstimate = useQuery(
     api.currentPrices.getEstimate,
@@ -445,19 +450,47 @@ export function AddItemsModal({
 
   const handleVariantSelect = useCallback(
     (variantName: string) => {
-      haptic("light");
-      setSelectedVariantName(variantName);
+      haptic("medium");
 
-      // Find the selected variant and populate fields
       const variant = variantOptions.find((v) => v.variantName === variantName);
-      if (variant) {
-        setManualSize(variant.size);
-        if (variant.price != null) {
-          setManualPrice(variant.price.toFixed(2));
-        }
-      }
+      const name = selectedSuggestion?.name ?? itemName.trim();
+      if (!name) return;
+
+      // Auto-add item with selected variant to selectedItems
+      const key = name.toLowerCase();
+      setSelectedItems((prev) => {
+        const next = new Map(prev);
+        next.set(key, {
+          name,
+          quantity: parseInt(manualQty, 10) || 1,
+          size: variant?.size || manualSize || undefined,
+          unit: variant?.unit || undefined,
+          estimatedPrice: variant?.price ?? (manualPrice ? parseFloat(manualPrice) : undefined),
+          category: selectedSuggestion?.category || scannedCategory,
+          source: "manual",
+          pantryItemId: selectedSuggestion?.pantryItemId
+            ? (selectedSuggestion.pantryItemId as Id<"pantryItems">)
+            : undefined,
+        });
+        return next;
+      });
+
+      // Reset for next item (zero-tap loop)
+      setItemName("");
+      setManualSize("");
+      setManualQty("1");
+      setManualPrice("");
+      setEditingField(null);
+      setSelectedSuggestion(null);
+      setSelectedVariantName(undefined);
+      setScannedCategory(undefined);
+      setActiveView("suggestions");
+      clearSuggestions();
+
+      // Refocus input for next item
+      setTimeout(() => itemInputRef.current?.focus(), 150);
     },
-    [variantOptions]
+    [variantOptions, selectedSuggestion, itemName, manualQty, manualSize, manualPrice, scannedCategory, clearSuggestions]
   );
 
   const togglePantryItem = useCallback(
@@ -878,6 +911,7 @@ export function AddItemsModal({
           {/* Text input */}
           <View style={styles.inputBarFieldWrapper}>
             <GlassInput
+              ref={itemInputRef}
               placeholder={
                 activeView === "pantry"
                   ? "Search pantry..."
