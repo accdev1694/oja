@@ -151,7 +151,7 @@ export function GlassModal({
   const inner = avoidKeyboard ? (
     <KeyboardAvoidingView
       style={composedOverlay}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior="padding"
     >
       {/* Backdrop behind KAV content */}
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />

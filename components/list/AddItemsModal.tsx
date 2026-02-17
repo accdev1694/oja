@@ -1127,7 +1127,6 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    marginBottom: -120,
   },
 
   // Header
@@ -1467,8 +1466,7 @@ const styles = StyleSheet.create({
   // Bottom bar
   bottomBar: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg + 120,
+    paddingVertical: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.glass.border,
     backgroundColor: colors.background.primary,
