@@ -764,7 +764,7 @@ export function AddItemsModal({
         <View style={styles.headerTextContainer}>
           <Text style={styles.headerTitle}>Add Items</Text>
           <Text style={styles.headerSubtitle}>
-            Type to search, snap a product label, or restock from your pantry
+            Add product manually, snap a product label, or restock from your pantry
           </Text>
         </View>
         <Pressable
@@ -794,7 +794,7 @@ export function AddItemsModal({
           >
             <MaterialCommunityIcons
               name="fridge-outline"
-              size={16}
+              size={20}
               color={
                 activeView === "pantry"
                   ? colors.accent.primary
@@ -809,11 +809,6 @@ export function AddItemsModal({
             >
               From Pantry
             </Text>
-            {pantryNeedCount > 0 && (
-              <View style={styles.inputBarBadge}>
-                <Text style={styles.inputBarBadgeText}>{pantryNeedCount}</Text>
-              </View>
-            )}
           </Pressable>
 
           {/* Text input */}
@@ -848,7 +843,7 @@ export function AddItemsModal({
             ) : (
               <MaterialCommunityIcons
                 name="camera"
-                size={16}
+                size={20}
                 color={colors.text.secondary}
               />
             )}
@@ -1187,7 +1182,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.glass.background,
     borderWidth: 1,
     borderColor: colors.glass.border,
-    gap: 2,
+    gap: 1,
+    paddingVertical: 2,
   },
   inputBarIconActive: {
     borderColor: colors.accent.primary,
@@ -1195,24 +1191,6 @@ const styles = StyleSheet.create({
   },
   inputBarFieldWrapper: {
     flex: 1,
-  },
-  inputBarBadge: {
-    position: "absolute",
-    top: 2,
-    right: 2,
-    backgroundColor: colors.accent.primary,
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 3,
-  },
-  inputBarBadgeText: {
-    ...typography.labelSmall,
-    color: colors.text.primary,
-    fontWeight: "700",
-    fontSize: 9,
   },
   inputBarIconLabel: {
     ...typography.bodySmall,
