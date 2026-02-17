@@ -59,6 +59,12 @@ export interface GlassModalProps {
    * Useful for dropdowns that manage their own card styling.
    */
   bare?: boolean;
+  /**
+   * When true with position="bottom", the wrapper and card expand to fill
+   * all available overlay height. Useful for modals that need maximum space
+   * (e.g. when keyboard is open). Dismiss via close button / Android back.
+   */
+  fillHeight?: boolean;
   /** Modal content */
   children: React.ReactNode;
 }
@@ -78,6 +84,7 @@ export function GlassModal({
   contentStyle,
   bottomOffset = 0,
   bare = false,
+  fillHeight = false,
   children,
 }: GlassModalProps) {
   const isBottom = position === "bottom";
@@ -105,6 +112,7 @@ export function GlassModal({
     : {
         width: isFull || isBottom ? "100%" : "85%",
         ...(isFull || isBottom ? {} : { maxWidth: maxWidth as number }),
+        ...(fillHeight ? { flex: 1 } : {}),
       };
 
   // ── Content card style ─────────────────────────────────────────────
@@ -115,6 +123,7 @@ export function GlassModal({
     borderColor: colors.glass.borderFocus,
     padding: spacing.xl,
     width: "100%",
+    ...(fillHeight ? { flex: 1 } : {}),
     ...(isBottom
       ? {
           borderTopLeftRadius: radii.xl,

@@ -756,6 +756,7 @@ export function AddItemsModal({
       maxWidth="full"
       avoidKeyboard
       statusBarTranslucent
+      fillHeight
       overlayOpacity={0.7}
       contentStyle={styles.modalContent}
     >
@@ -1122,7 +1123,6 @@ export function AddItemsModal({
 const styles = StyleSheet.create({
   // Modal
   modalContent: {
-    height: "85%",
     paddingHorizontal: 0,
     paddingBottom: 0,
     borderTopLeftRadius: borderRadius.xl,
