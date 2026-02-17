@@ -778,33 +778,43 @@ export function AddItemsModal({
       {/* Unified Input Bar */}
       <View style={styles.inputSection}>
         <View style={styles.unifiedInputRow}>
-          {/* Pantry icon (left) */}
-          <Pressable
-            style={[
-              styles.inputBarIcon,
-              activeView === "pantry" && styles.inputBarIconActive,
-            ]}
-            onPress={handleShowPantry}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons
-              name="fridge-outline"
-              size={20}
-              color={
-                activeView === "pantry"
-                  ? colors.accent.primary
-                  : colors.text.secondary
-              }
-            />
-            {pantryNeedCount > 0 && (
-              <View style={styles.inputBarBadge}>
-                <Text style={styles.inputBarBadgeText}>{pantryNeedCount}</Text>
-              </View>
-            )}
-          </Pressable>
+          {/* Pantry column */}
+          <View style={styles.inputBarColumn}>
+            <Pressable
+              style={[
+                styles.inputBarIcon,
+                activeView === "pantry" && styles.inputBarIconActive,
+              ]}
+              onPress={handleShowPantry}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialCommunityIcons
+                name="fridge-outline"
+                size={20}
+                color={
+                  activeView === "pantry"
+                    ? colors.accent.primary
+                    : colors.text.secondary
+                }
+              />
+              {pantryNeedCount > 0 && (
+                <View style={styles.inputBarBadge}>
+                  <Text style={styles.inputBarBadgeText}>{pantryNeedCount}</Text>
+                </View>
+              )}
+            </Pressable>
+            <Text
+              style={[
+                styles.inputBarLabel,
+                activeView === "pantry" && styles.inputBarLabelActive,
+              ]}
+            >
+              Add from{"\n"}pantry
+            </Text>
+          </View>
 
-          {/* Text input (center) */}
-          <View style={styles.inputBarFieldWrapper}>
+          {/* Input column */}
+          <View style={styles.inputBarColumnCenter}>
             <GlassInput
               placeholder={
                 activeView === "pantry"
@@ -818,49 +828,40 @@ export function AddItemsModal({
               autoFocus
               size="md"
             />
+            <Text style={styles.inputBarLabel}>Search item</Text>
           </View>
 
-          {/* Camera icon (right) */}
-          <Pressable
-            style={[
-              styles.inputBarIcon,
-              productScanner.isProcessing && styles.inputBarIconActive,
-            ]}
-            onPress={handleCameraScan}
-            disabled={productScanner.isProcessing}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            {productScanner.isProcessing ? (
-              <ActivityIndicator size="small" color={colors.accent.primary} />
-            ) : (
-              <MaterialCommunityIcons
-                name="camera"
-                size={20}
-                color={colors.text.secondary}
-              />
-            )}
-          </Pressable>
+          {/* Camera column */}
+          <View style={styles.inputBarColumn}>
+            <Pressable
+              style={[
+                styles.inputBarIcon,
+                productScanner.isProcessing && styles.inputBarIconActive,
+              ]}
+              onPress={handleCameraScan}
+              disabled={productScanner.isProcessing}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              {productScanner.isProcessing ? (
+                <ActivityIndicator size="small" color={colors.accent.primary} />
+              ) : (
+                <MaterialCommunityIcons
+                  name="camera"
+                  size={20}
+                  color={colors.text.secondary}
+                />
+              )}
+            </Pressable>
+            <Text
+              style={[
+                styles.inputBarLabel,
+                productScanner.isProcessing && styles.inputBarLabelActive,
+              ]}
+            >
+              Snap{"\n"}product
+            </Text>
+          </View>
         </View>
-
-        {/* Contextual hint */}
-        <Text
-          style={[
-            styles.contextualHint,
-            productScanner.lastError ? styles.contextualHintError : undefined,
-          ]}
-        >
-          {productScanner.lastError
-            ? productScanner.lastError
-            : productScanner.isProcessing
-              ? "Point at the product name and size"
-              : activeView === "pantry"
-                ? "Showing items that are out or running low"
-                : selectedSuggestion
-                  ? "Pick a size or adjust details below"
-                  : itemName.trim().length >= 2
-                    ? "Tap a suggestion or add as custom item"
-                    : "Search, scan a label, or add from pantry"}
-        </Text>
 
         {/* Size / Qty / Price — only after item name is entered */}
         {(itemName.trim().length > 0 || selectedSuggestion != null) && (
@@ -1165,11 +1166,18 @@ const styles = StyleSheet.create({
   },
   unifiedInputRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: spacing.sm,
   },
+  inputBarColumn: {
+    alignItems: "center",
+  },
+  inputBarColumnCenter: {
+    flex: 1,
+    alignItems: "center",
+  },
   inputBarIcon: {
-    width: 44,
+    width: 52,
     height: 44,
     borderRadius: borderRadius.md,
     justifyContent: "center",
@@ -1203,14 +1211,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 9,
   },
-  contextualHint: {
+  inputBarLabel: {
     ...typography.bodySmall,
     color: colors.text.tertiary,
     textAlign: "center",
-    paddingHorizontal: spacing.md,
+    fontSize: 10,
+    lineHeight: 13,
+    marginTop: 4,
   },
-  contextualHintError: {
-    color: colors.accent.error,
+  inputBarLabelActive: {
+    color: colors.accent.primary,
   },
 
   // Field buttons row (Size / Qty / Price)
