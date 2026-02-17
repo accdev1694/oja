@@ -766,7 +766,7 @@ export function AddItemsModal({
         <View style={styles.headerTextContainer}>
           <Text style={styles.headerTitle}>Add Items</Text>
           <Text style={styles.headerSubtitle}>
-            Restock From Your Pantry, Add Product Manually, or Snap a Product Label
+            Restock From Your Pantry, Add Product Manually, or Scan a Product Label
           </Text>
         </View>
         <Pressable
@@ -809,7 +809,7 @@ export function AddItemsModal({
                 activeView === "pantry" && styles.inputBarIconLabelActive,
               ]}
             >
-              From Pantry
+              Pantry
             </Text>
           </Pressable>
 
@@ -855,7 +855,7 @@ export function AddItemsModal({
                 productScanner.isProcessing && styles.inputBarIconLabelActive,
               ]}
             >
-              Snap Product
+              Scan
             </Text>
           </Pressable>
         </View>
@@ -1124,7 +1124,8 @@ export function AddItemsModal({
 const styles = StyleSheet.create({
   // Modal
   modalContent: {
-    marginTop: StatusBar.currentHeight ?? 0,
+    marginTop: (StatusBar.currentHeight ?? 0) + 12,
+    paddingTop: spacing.xs,
     paddingHorizontal: 0,
     paddingBottom: 0,
     borderTopLeftRadius: borderRadius.xl,
@@ -1176,7 +1177,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   inputBarIcon: {
-    width: 76,
+    width: 48,
     height: 48,
     borderRadius: borderRadius.md,
     justifyContent: "center",
