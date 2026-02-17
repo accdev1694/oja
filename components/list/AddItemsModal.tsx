@@ -1122,11 +1122,12 @@ export function AddItemsModal({
 const styles = StyleSheet.create({
   // Modal
   modalContent: {
-    height: "95%",
-    paddingBottom: 0,
+    height: "85%",
     paddingHorizontal: 0,
+    paddingBottom: 0,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
+    marginBottom: -120,
   },
 
   // Header
@@ -1466,7 +1467,8 @@ const styles = StyleSheet.create({
   // Bottom bar
   bottomBar: {
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg + 120,
     borderTopWidth: 1,
     borderTopColor: colors.glass.border,
     backgroundColor: colors.background.primary,
