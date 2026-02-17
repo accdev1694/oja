@@ -811,7 +811,7 @@ export function AddItemsModal({
                   ? "Search pantry..."
                   : productScanner.isProcessing
                     ? "Scanning product..."
-                    : "Add item..."
+                    : "Type item name..."
               }
               value={itemName}
               onChangeText={handleNameChange}
