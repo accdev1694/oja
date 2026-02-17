@@ -809,7 +809,7 @@ export function AddItemsModal({
                 activeView === "pantry" && styles.inputBarLabelActive,
               ]}
             >
-              From{"\n"}Pantry
+              From Pantry
             </Text>
           </View>
 
@@ -858,7 +858,7 @@ export function AddItemsModal({
                 productScanner.isProcessing && styles.inputBarLabelActive,
               ]}
             >
-              Snap{"\n"}product
+              Snap Product
             </Text>
           </View>
         </View>
@@ -1177,7 +1177,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   inputBarIcon: {
-    width: 52,
+    width: 76,
     height: 44,
     borderRadius: borderRadius.md,
     justifyContent: "center",
@@ -1216,7 +1216,6 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     textAlign: "center",
     fontSize: 10,
-    lineHeight: 13,
     marginTop: 4,
   },
   inputBarLabelActive: {
