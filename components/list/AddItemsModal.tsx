@@ -809,7 +809,7 @@ export function AddItemsModal({
                 activeView === "pantry" && styles.inputBarLabelActive,
               ]}
             >
-              Add from{"\n"}pantry
+              From{"\n"}Pantry
             </Text>
           </View>
 
