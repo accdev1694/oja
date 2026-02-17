@@ -761,7 +761,12 @@ export function AddItemsModal({
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Add Items</Text>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerTitle}>Add Items</Text>
+          <Text style={styles.headerSubtitle}>
+            Type to search, snap a product label, or restock from your pantry
+          </Text>
+        </View>
         <Pressable
           style={styles.closeButton}
           onPress={handleClose}
@@ -1138,9 +1143,18 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
   },
+  headerTextContainer: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
   headerTitle: {
     ...typography.headlineMedium,
     color: colors.text.primary,
+  },
+  headerSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginTop: 2,
   },
   closeButton: {
     width: 40,
