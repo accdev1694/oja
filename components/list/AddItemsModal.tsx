@@ -249,16 +249,19 @@ export function AddItemsModal({
         setActiveView("suggestions");
 
         // Enrich itemVariants with scan data (fire-and-forget)
+        // Use the known suggestion name if user had one selected, else derive from scan
         if (product.size && product.category) {
-          const baseItem = product.name
-            .replace(/^\d+\s*(pk|pack|g|kg|ml|l|pt|pint)s?\s*/i, "")
-            .replace(/\s+\d+\s*(pk|pack|g|kg|ml|l|pt|pint)s?\s*$/i, "")
-            .trim();
+          const baseItem = selectedSuggestion?.name
+            ?? (product.name
+              .replace(/^\d+\s*(pk|pack|g|kg|ml|l|pt|pint)s?\s*/i, "")
+              .replace(/\s+\d+\s*(pk|pack|g|kg|ml|l|pt|pint)s?\s*$/i, "")
+              .trim()
+            || product.name);
           const label = product.brand
             ? `${product.brand} ${product.size}`
             : product.size;
           enrichVariant({
-            baseItem: baseItem || product.name,
+            baseItem,
             size: product.size,
             unit: product.unit ?? "",
             category: product.category,
@@ -273,7 +276,7 @@ export function AddItemsModal({
       console.error("Camera scan failed:", error);
       haptic("error");
     }
-  }, [productScanner, enrichVariant]);
+  }, [productScanner, enrichVariant, selectedSuggestion]);
 
   const priceEstimate = useQuery(
     api.currentPrices.getEstimate,

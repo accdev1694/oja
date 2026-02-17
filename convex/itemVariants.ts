@@ -376,10 +376,28 @@ export const enrichFromScan = mutation({
     const normalizedBase = args.baseItem.toLowerCase().trim();
     const normalizedSize = args.size.toLowerCase().trim();
 
-    const existing = await ctx.db
+    // Try exact baseItem match first
+    let existing = await ctx.db
       .query("itemVariants")
       .withIndex("by_base_item", (q) => q.eq("baseItem", normalizedBase))
       .collect();
+
+    // Fuzzy fallback: if no match, check if any baseItem is a suffix of
+    // the scanned name (e.g. scanned "free range eggs" → DB has "eggs")
+    if (existing.length === 0) {
+      const words = normalizedBase.split(/\s+/);
+      for (let i = 1; i < words.length; i++) {
+        const suffix = words.slice(i).join(" ");
+        const fallback = await ctx.db
+          .query("itemVariants")
+          .withIndex("by_base_item", (q) => q.eq("baseItem", suffix))
+          .collect();
+        if (fallback.length > 0) {
+          existing = fallback;
+          break;
+        }
+      }
+    }
 
     // Match by size (normalized)
     const match = existing.find(
@@ -387,14 +405,14 @@ export const enrichFromScan = mutation({
     );
 
     if (match) {
-      // Enrich existing variant with scan data
+      // Enrich existing variant with scan data — newer scans overwrite
       const updates: Record<string, unknown> = {
         scanCount: (match.scanCount ?? 0) + 1,
       };
-      if (args.brand && !match.brand) updates.brand = args.brand;
-      if (args.productName && !match.productName) updates.productName = args.productName;
-      if (args.displayLabel && !match.displayLabel) updates.displayLabel = args.displayLabel;
-      if (args.estimatedPrice != null && match.estimatedPrice == null) {
+      if (args.brand) updates.brand = args.brand;
+      if (args.productName) updates.productName = args.productName;
+      if (args.displayLabel) updates.displayLabel = args.displayLabel;
+      if (args.estimatedPrice != null) {
         updates.estimatedPrice = args.estimatedPrice;
       }
       if (match.source === "ai_seeded") updates.source = "scan_enriched";
@@ -402,13 +420,15 @@ export const enrichFromScan = mutation({
       return match._id;
     }
 
-    // Create new variant from scan
+    // Create new variant under the existing baseItem if we found one,
+    // otherwise use the scanned name
+    const targetBase = existing.length > 0 ? existing[0].baseItem : normalizedBase;
     const variantName = args.productName
       ? `${args.productName} ${args.size}`
       : `${args.baseItem} ${args.size}`;
 
     return await ctx.db.insert("itemVariants", {
-      baseItem: normalizedBase,
+      baseItem: targetBase,
       variantName,
       size: args.size,
       unit: args.unit,
