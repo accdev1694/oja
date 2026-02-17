@@ -764,7 +764,7 @@ export function AddItemsModal({
         <View style={styles.headerTextContainer}>
           <Text style={styles.headerTitle}>Add Items</Text>
           <Text style={styles.headerSubtitle}>
-            Restock from your pantry, add product manually, or snap a product label
+            Restock From Your Pantry, Add Product Manually, or Snap a Product Label
           </Text>
         </View>
         <Pressable
