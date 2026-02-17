@@ -7,6 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   StyleSheet,
+  StatusBar,
   ScrollView,
   type ListRenderItemInfo,
 } from "react-native";
@@ -1108,7 +1109,7 @@ export function AddItemsModal({
           style={styles.submitButton}
         >
           {selectedCount === 0
-            ? "Select items to add"
+            ? "Add Item"
             : `Add ${selectedCount} Item${selectedCount !== 1 ? "s" : ""}`}
         </GlassButton>
       </View>
@@ -1123,6 +1124,7 @@ export function AddItemsModal({
 const styles = StyleSheet.create({
   // Modal
   modalContent: {
+    marginTop: StatusBar.currentHeight ?? 0,
     paddingHorizontal: 0,
     paddingBottom: 0,
     borderTopLeftRadius: borderRadius.xl,
