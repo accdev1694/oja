@@ -231,6 +231,7 @@ export function AddItemsModal({
 
   // ── Product scanner (camera) ──────────────────────────────────────────────
   const productScanner = useProductScanner();
+  const enrichVariant = useMutation(api.itemVariants.enrichFromScan);
 
   const handleCameraScan = useCallback(async () => {
     haptic("medium");
@@ -246,12 +247,33 @@ export function AddItemsModal({
         setSelectedSuggestion(null);
         setSelectedVariantName(undefined);
         setActiveView("suggestions");
+
+        // Enrich itemVariants with scan data (fire-and-forget)
+        if (product.size && product.category) {
+          const baseItem = product.name
+            .replace(/^\d+\s*(pk|pack|g|kg|ml|l|pt|pint)s?\s*/i, "")
+            .replace(/\s+\d+\s*(pk|pack|g|kg|ml|l|pt|pint)s?\s*$/i, "")
+            .trim();
+          const label = product.brand
+            ? `${product.brand} ${product.size}`
+            : product.size;
+          enrichVariant({
+            baseItem: baseItem || product.name,
+            size: product.size,
+            unit: product.unit ?? "",
+            category: product.category,
+            brand: product.brand,
+            productName: product.name,
+            displayLabel: label,
+            estimatedPrice: product.estimatedPrice,
+          }).catch(() => {});
+        }
       }
     } catch (error) {
       console.error("Camera scan failed:", error);
       haptic("error");
     }
-  }, [productScanner]);
+  }, [productScanner, enrichVariant]);
 
   const priceEstimate = useQuery(
     api.currentPrices.getEstimate,
@@ -281,6 +303,7 @@ export function AddItemsModal({
       price: s.price,
       priceSource: s.source as "personal" | "crowdsourced" | "ai_estimate",
       isUsual: s.isUsual,
+      displayLabel: s.displayLabel,
     }));
   }, [variantResult, selectedSuggestion]);
 
@@ -755,6 +778,13 @@ export function AddItemsModal({
   );
 
   const selectedCount = selectedItems.size;
+  const selectedSubtotal = useMemo(() => {
+    let total = 0;
+    for (const [, item] of selectedItems) {
+      total += (item.estimatedPrice ?? 0) * item.quantity;
+    }
+    return total;
+  }, [selectedItems]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -1110,6 +1140,11 @@ export function AddItemsModal({
 
       {/* Sticky Bottom Button */}
       <View style={styles.bottomBar}>
+        {selectedCount > 0 && (
+          <Text style={styles.subtotalText}>
+            {selectedCount} item{selectedCount !== 1 ? "s" : ""} · £{selectedSubtotal.toFixed(2)}
+          </Text>
+        )}
         <GlassButton
           variant="primary"
           size="lg"
@@ -1484,6 +1519,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.glass.border,
     backgroundColor: colors.background.primary,
+  },
+  subtotalText: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    textAlign: "center",
+    marginBottom: spacing.sm,
   },
   submitButton: {
     width: "100%",

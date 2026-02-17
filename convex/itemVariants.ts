@@ -254,6 +254,9 @@ export const getSizesForStore = query({
           source: resolved.priceSource,
           confidence: resolved.confidence,
           isUsual: variant.size === usualSize,
+          brand: variant.brand,
+          productName: variant.productName,
+          displayLabel: variant.displayLabel,
         };
       })
     );
@@ -270,17 +273,26 @@ export const getSizesForStore = query({
       return 0;
     });
 
+    // Deduplicate by normalized size — keep the first (best) entry per size
+    const seenSizes = new Set<string>();
+    const dedupedSizes = sortedSizes.filter((s) => {
+      const key = s.sizeNormalized || s.size;
+      if (seenSizes.has(key)) return false;
+      seenSizes.add(key);
+      return true;
+    });
+
     // Determine default size
     const defaultSize =
       usualSize ??
-      sortedSizes.find((s) => s.price !== null)?.size ??
-      sortedSizes[0]?.size ??
+      dedupedSizes.find((s) => s.price !== null)?.size ??
+      dedupedSizes[0]?.size ??
       null;
 
     return {
       itemName: args.itemName,
       store: args.store,
-      sizes: sortedSizes,
+      sizes: dedupedSizes,
       defaultSize,
     };
   },
@@ -340,6 +352,73 @@ export const upsert = mutation({
       source: args.source,
       commonality: args.commonality,
       estimatedPrice: args.estimatedPrice,
+    });
+  },
+});
+
+/**
+ * Enrich or create a variant from scan data.
+ * If a variant with matching baseItem + size exists, enrich it with brand/productName.
+ * Otherwise create a new variant. Increments scanCount each time.
+ */
+export const enrichFromScan = mutation({
+  args: {
+    baseItem: v.string(),
+    size: v.string(),
+    unit: v.string(),
+    category: v.string(),
+    brand: v.optional(v.string()),
+    productName: v.optional(v.string()),
+    displayLabel: v.optional(v.string()),
+    estimatedPrice: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const normalizedBase = args.baseItem.toLowerCase().trim();
+    const normalizedSize = args.size.toLowerCase().trim();
+
+    const existing = await ctx.db
+      .query("itemVariants")
+      .withIndex("by_base_item", (q) => q.eq("baseItem", normalizedBase))
+      .collect();
+
+    // Match by size (normalized)
+    const match = existing.find(
+      (v) => v.size.toLowerCase().trim() === normalizedSize
+    );
+
+    if (match) {
+      // Enrich existing variant with scan data
+      const updates: Record<string, unknown> = {
+        scanCount: (match.scanCount ?? 0) + 1,
+      };
+      if (args.brand && !match.brand) updates.brand = args.brand;
+      if (args.productName && !match.productName) updates.productName = args.productName;
+      if (args.displayLabel && !match.displayLabel) updates.displayLabel = args.displayLabel;
+      if (args.estimatedPrice != null && match.estimatedPrice == null) {
+        updates.estimatedPrice = args.estimatedPrice;
+      }
+      if (match.source === "ai_seeded") updates.source = "scan_enriched";
+      await ctx.db.patch(match._id, updates);
+      return match._id;
+    }
+
+    // Create new variant from scan
+    const variantName = args.productName
+      ? `${args.productName} ${args.size}`
+      : `${args.baseItem} ${args.size}`;
+
+    return await ctx.db.insert("itemVariants", {
+      baseItem: normalizedBase,
+      variantName,
+      size: args.size,
+      unit: args.unit,
+      category: args.category,
+      source: "scan_enriched",
+      brand: args.brand,
+      productName: args.productName,
+      displayLabel: args.displayLabel,
+      estimatedPrice: args.estimatedPrice,
+      scanCount: 1,
     });
   },
 });

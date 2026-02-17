@@ -359,9 +359,13 @@ export default defineSchema({
     size: v.string(),                // "2 pints"
     unit: v.string(),                // "pint"
     category: v.string(),            // "Dairy"
-    source: v.string(),              // "ai_seeded" | "receipt_discovered"
+    source: v.string(),              // "ai_seeded" | "receipt_discovered" | "scan_enriched"
     commonality: v.optional(v.number()), // How often this variant appears in receipts (0-1)
     estimatedPrice: v.optional(v.number()), // AI-generated price for this variant
+    brand: v.optional(v.string()),   // "Sainsbury's", "Tesco" — from scans
+    productName: v.optional(v.string()), // "Free Range Eggs" — specific name from scans
+    displayLabel: v.optional(v.string()), // "Free Range 6pk" — short chip label
+    scanCount: v.optional(v.number()), // Times scanned — higher = more trusted
   })
     .index("by_base_item", ["baseItem"]),
 

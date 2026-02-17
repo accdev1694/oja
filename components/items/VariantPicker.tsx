@@ -58,6 +58,8 @@ export interface VariantOption {
   priceSource: "personal" | "crowdsourced" | "ai_estimate";
   /** Whether this is the user's typical purchase */
   isUsual?: boolean;
+  /** Short label from scan enrichment (e.g., "Tesco 6pk") */
+  displayLabel?: string;
 }
 
 export interface VariantPickerProps {
@@ -265,7 +267,7 @@ const VariantChip = memo(function VariantChip({
             isSelected && styles.sizeTextSelected,
           ]}
         >
-          {variant.size}
+          {variant.displayLabel || variant.size}
         </Text>
 
         {/* Price */}
@@ -367,9 +369,9 @@ export function VariantPicker({
         accessibilityRole="radiogroup"
         accessibilityLabel={`Size options for ${baseItem}`}
       >
-        {sortedVariants.map((variant) => (
+        {sortedVariants.map((variant, index) => (
           <VariantChip
-            key={variant.variantName}
+            key={`${variant.variantName}-${index}`}
             variant={variant}
             isSelected={selectedVariant === variant.variantName}
             showPricePerUnit={showPricePerUnit}
