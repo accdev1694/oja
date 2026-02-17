@@ -778,43 +778,41 @@ export function AddItemsModal({
       {/* Unified Input Bar */}
       <View style={styles.inputSection}>
         <View style={styles.unifiedInputRow}>
-          {/* Pantry column */}
-          <View style={styles.inputBarColumn}>
-            <Pressable
-              style={[
-                styles.inputBarIcon,
-                activeView === "pantry" && styles.inputBarIconActive,
-              ]}
-              onPress={handleShowPantry}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <MaterialCommunityIcons
-                name="fridge-outline"
-                size={20}
-                color={
-                  activeView === "pantry"
-                    ? colors.accent.primary
-                    : colors.text.secondary
-                }
-              />
-              {pantryNeedCount > 0 && (
-                <View style={styles.inputBarBadge}>
-                  <Text style={styles.inputBarBadgeText}>{pantryNeedCount}</Text>
-                </View>
-              )}
-            </Pressable>
+          {/* Pantry button */}
+          <Pressable
+            style={[
+              styles.inputBarIcon,
+              activeView === "pantry" && styles.inputBarIconActive,
+            ]}
+            onPress={handleShowPantry}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons
+              name="fridge-outline"
+              size={16}
+              color={
+                activeView === "pantry"
+                  ? colors.accent.primary
+                  : colors.text.secondary
+              }
+            />
             <Text
               style={[
-                styles.inputBarLabel,
-                activeView === "pantry" && styles.inputBarLabelActive,
+                styles.inputBarIconLabel,
+                activeView === "pantry" && styles.inputBarIconLabelActive,
               ]}
             >
               From Pantry
             </Text>
-          </View>
+            {pantryNeedCount > 0 && (
+              <View style={styles.inputBarBadge}>
+                <Text style={styles.inputBarBadgeText}>{pantryNeedCount}</Text>
+              </View>
+            )}
+          </Pressable>
 
-          {/* Input column */}
-          <View style={styles.inputBarColumnCenter}>
+          {/* Text input */}
+          <View style={styles.inputBarFieldWrapper}>
             <GlassInput
               placeholder={
                 activeView === "pantry"
@@ -828,39 +826,36 @@ export function AddItemsModal({
               autoFocus
               size="md"
             />
-            <Text style={styles.inputBarLabel}>Search item</Text>
           </View>
 
-          {/* Camera column */}
-          <View style={styles.inputBarColumn}>
-            <Pressable
-              style={[
-                styles.inputBarIcon,
-                productScanner.isProcessing && styles.inputBarIconActive,
-              ]}
-              onPress={handleCameraScan}
-              disabled={productScanner.isProcessing}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              {productScanner.isProcessing ? (
-                <ActivityIndicator size="small" color={colors.accent.primary} />
-              ) : (
-                <MaterialCommunityIcons
-                  name="camera"
-                  size={20}
-                  color={colors.text.secondary}
-                />
-              )}
-            </Pressable>
+          {/* Camera button */}
+          <Pressable
+            style={[
+              styles.inputBarIcon,
+              productScanner.isProcessing && styles.inputBarIconActive,
+            ]}
+            onPress={handleCameraScan}
+            disabled={productScanner.isProcessing}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            {productScanner.isProcessing ? (
+              <ActivityIndicator size="small" color={colors.accent.primary} />
+            ) : (
+              <MaterialCommunityIcons
+                name="camera"
+                size={16}
+                color={colors.text.secondary}
+              />
+            )}
             <Text
               style={[
-                styles.inputBarLabel,
-                productScanner.isProcessing && styles.inputBarLabelActive,
+                styles.inputBarIconLabel,
+                productScanner.isProcessing && styles.inputBarIconLabelActive,
               ]}
             >
               Snap Product
             </Text>
-          </View>
+          </Pressable>
         </View>
 
         {/* Size / Qty / Price — only after item name is entered */}
@@ -1166,25 +1161,19 @@ const styles = StyleSheet.create({
   },
   unifiedInputRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: spacing.sm,
-  },
-  inputBarColumn: {
-    alignItems: "center",
-  },
-  inputBarColumnCenter: {
-    flex: 1,
-    alignItems: "center",
   },
   inputBarIcon: {
     width: 76,
-    height: 44,
+    height: 48,
     borderRadius: borderRadius.md,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.glass.background,
     borderWidth: 1,
     borderColor: colors.glass.border,
+    gap: 2,
   },
   inputBarIconActive: {
     borderColor: colors.accent.primary,
@@ -1211,14 +1200,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 9,
   },
-  inputBarLabel: {
+  inputBarIconLabel: {
     ...typography.bodySmall,
     color: colors.text.tertiary,
     textAlign: "center",
-    fontSize: 10,
-    marginTop: 4,
+    fontSize: 9,
   },
-  inputBarLabelActive: {
+  inputBarIconLabelActive: {
     color: colors.accent.primary,
   },
 
