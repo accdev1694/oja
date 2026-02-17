@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo, memo } from "react";
+import React, { useState, useCallback, useRef, useMemo, useEffect, memo } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   StatusBar,
+  Keyboard,
   ScrollView,
   type ListRenderItemInfo,
 } from "react-native";
@@ -34,6 +35,7 @@ import { ItemSuggestionsDropdown } from "@/components/list/ItemSuggestionsDropdo
 import { VariantPicker } from "@/components/items/VariantPicker";
 import type { VariantOption } from "@/components/items/VariantPicker";
 import { useVariantPrefetch } from "@/hooks/useVariantPrefetch";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -186,6 +188,14 @@ export function AddItemsModal({
   listNormalizedStoreId,
   existingItems,
 }: AddItemsModalProps) {
+  const insets = useSafeAreaInsets();
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
+
   // ── State ───────────────────────────────────────────────────────────────────
   const [itemName, setItemName] = useState("");
   const [manualSize, setManualSize] = useState("");
@@ -759,7 +769,7 @@ export function AddItemsModal({
       statusBarTranslucent
       fillHeight
       overlayOpacity={0.7}
-      contentStyle={styles.modalContent}
+      contentStyle={[styles.modalContent, { marginBottom: keyboardVisible ? 0 : insets.bottom }]}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -1186,7 +1196,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.glass.border,
     gap: 1,
-    paddingVertical: 2,
+    paddingTop: 8,
+    paddingBottom: 0,
   },
   inputBarIconActive: {
     borderColor: colors.accent.primary,
