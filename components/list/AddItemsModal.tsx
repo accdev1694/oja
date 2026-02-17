@@ -1122,7 +1122,7 @@ export function AddItemsModal({
 const styles = StyleSheet.create({
   // Modal
   modalContent: {
-    height: "85%",
+    height: "95%",
     paddingBottom: 0,
     paddingHorizontal: 0,
     borderTopLeftRadius: borderRadius.xl,
