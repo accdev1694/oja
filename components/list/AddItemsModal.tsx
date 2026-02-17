@@ -775,25 +775,60 @@ export function AddItemsModal({
         </Pressable>
       </View>
 
-      {/* Input Section */}
+      {/* Unified Input Bar */}
       <View style={styles.inputSection}>
-        <View style={styles.nameInputRow}>
-          <View style={styles.nameInputWrapper}>
+        <View style={styles.unifiedInputRow}>
+          {/* Pantry icon (left) */}
+          <Pressable
+            style={[
+              styles.inputBarIcon,
+              activeView === "pantry" && styles.inputBarIconActive,
+            ]}
+            onPress={handleShowPantry}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons
+              name="fridge-outline"
+              size={20}
+              color={
+                activeView === "pantry"
+                  ? colors.accent.primary
+                  : colors.text.secondary
+              }
+            />
+            {pantryNeedCount > 0 && (
+              <View style={styles.inputBarBadge}>
+                <Text style={styles.inputBarBadgeText}>{pantryNeedCount}</Text>
+              </View>
+            )}
+          </Pressable>
+
+          {/* Text input (center) */}
+          <View style={styles.inputBarFieldWrapper}>
             <GlassInput
-              placeholder="Item name"
+              placeholder={
+                activeView === "pantry"
+                  ? "Search pantry..."
+                  : productScanner.isProcessing
+                    ? "Scanning product..."
+                    : "Add item..."
+              }
               value={itemName}
               onChangeText={handleNameChange}
               autoFocus
               size="md"
             />
           </View>
+
+          {/* Camera icon (right) */}
           <Pressable
             style={[
-              styles.cameraIconButton,
-              productScanner.isProcessing && styles.cameraIconButtonProcessing,
+              styles.inputBarIcon,
+              productScanner.isProcessing && styles.inputBarIconActive,
             ]}
             onPress={handleCameraScan}
             disabled={productScanner.isProcessing}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             {productScanner.isProcessing ? (
               <ActivityIndicator size="small" color={colors.accent.primary} />
@@ -807,37 +842,25 @@ export function AddItemsModal({
           </Pressable>
         </View>
 
-        {/* Add from Pantry — elevated to primary path */}
-        <Pressable
+        {/* Contextual hint */}
+        <Text
           style={[
-            styles.pantryButton,
-            activeView === "pantry" && styles.pantryButtonActive,
+            styles.contextualHint,
+            productScanner.lastError ? styles.contextualHintError : undefined,
           ]}
-          onPress={handleShowPantry}
         >
-          <MaterialCommunityIcons
-            name="fridge-outline"
-            size={18}
-            color={
-              activeView === "pantry"
-                ? colors.accent.primary
-                : colors.text.secondary
-            }
-          />
-          <Text
-            style={[
-              styles.pantryButtonText,
-              activeView === "pantry" && styles.pantryButtonTextActive,
-            ]}
-          >
-            Add from Pantry
-          </Text>
-          {pantryNeedCount > 0 && (
-            <View style={styles.pantryBadge}>
-              <Text style={styles.pantryBadgeText}>{pantryNeedCount}</Text>
-            </View>
-          )}
-        </Pressable>
+          {productScanner.lastError
+            ? productScanner.lastError
+            : productScanner.isProcessing
+              ? "Point at the product name and size"
+              : activeView === "pantry"
+                ? "Showing items that are out or running low"
+                : selectedSuggestion
+                  ? "Pick a size or adjust details below"
+                  : itemName.trim().length >= 2
+                    ? "Tap a suggestion or add as custom item"
+                    : "Search, scan a label, or add from pantry"}
+        </Text>
 
         {/* Size / Qty / Price — only after item name is entered */}
         {(itemName.trim().length > 0 || selectedSuggestion != null) && (
@@ -977,17 +1000,6 @@ export function AddItemsModal({
           </>
         )}
 
-        {/* Camera scan error */}
-        {productScanner.lastError && (
-          <View style={styles.scanErrorRow}>
-            <MaterialCommunityIcons
-              name="alert-circle-outline"
-              size={14}
-              color={colors.accent.error}
-            />
-            <Text style={styles.scanErrorText}>{productScanner.lastError}</Text>
-          </View>
-        )}
       </View>
 
       {/* Content Area */}
@@ -1143,38 +1155,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // Input section
+  // Unified input bar
   inputSection: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.glass.border,
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
-  nameInputRow: {
+  unifiedInputRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
-  nameInputWrapper: {
-    flex: 1,
-  },
-  addIconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.md,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  addIconButtonActive: {
-    backgroundColor: colors.accent.primary,
-  },
-  addIconButtonDisabled: {
-    backgroundColor: colors.glass.background,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-  },
-  cameraIconButton: {
+  inputBarIcon: {
     width: 44,
     height: 44,
     borderRadius: borderRadius.md,
@@ -1184,20 +1178,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.glass.border,
   },
-  cameraIconButtonProcessing: {
+  inputBarIconActive: {
     borderColor: colors.accent.primary,
     backgroundColor: "rgba(0, 212, 170, 0.08)",
   },
-  scanErrorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.xs,
-  },
-  scanErrorText: {
-    ...typography.bodySmall,
-    color: colors.accent.error,
+  inputBarFieldWrapper: {
     flex: 1,
+  },
+  inputBarBadge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    backgroundColor: colors.accent.primary,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 3,
+  },
+  inputBarBadgeText: {
+    ...typography.labelSmall,
+    color: colors.text.primary,
+    fontWeight: "700",
+    fontSize: 9,
+  },
+  contextualHint: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    paddingHorizontal: spacing.md,
+  },
+  contextualHintError: {
+    color: colors.accent.error,
   },
 
   // Field buttons row (Size / Qty / Price)
@@ -1256,45 +1269,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
 
-  // Add from Pantry button
-  pantryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.glass.background,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    borderRadius: borderRadius.md,
-  },
-  pantryButtonActive: {
-    borderColor: colors.accent.primary,
-    backgroundColor: "rgba(0, 212, 170, 0.08)",
-  },
-  pantryButtonText: {
-    ...typography.labelMedium,
-    color: colors.text.primary,
-  },
-  pantryButtonTextActive: {
-    color: colors.accent.primary,
-    fontWeight: "600",
-  },
-  pantryBadge: {
-    backgroundColor: colors.accent.primary,
-    borderRadius: borderRadius.sm,
-    minWidth: 20,
-    height: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: spacing.sm,
-  },
-  pantryBadgeText: {
-    ...typography.labelSmall,
-    color: colors.text.primary,
-    fontWeight: "700",
-    fontSize: 11,
-  },
+  // (pantry badge styles moved to inputBarBadge above)
 
   // Content area
   contentArea: {
