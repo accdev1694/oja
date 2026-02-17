@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   StyleSheet,
   ScrollView,
+  Platform,
+  StatusBar,
   type ListRenderItemInfo,
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
@@ -1122,11 +1124,12 @@ export function AddItemsModal({
 const styles = StyleSheet.create({
   // Modal
   modalContent: {
-    height: "85%",
+    height: "100%",
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight ?? 32 : 48,
     paddingBottom: 0,
     paddingHorizontal: 0,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
   },
 
   // Header
