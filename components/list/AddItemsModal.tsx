@@ -201,6 +201,7 @@ export function AddItemsModal({
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>(undefined);
   const [scannedCategory, setScannedCategory] = useState<string | undefined>(undefined);
   const [addedThisSession, setAddedThisSession] = useState<AddedFeedbackItem[]>([]);
+  const [sessionAddCount, setSessionAddCount] = useState(0);
   const [isAdding, setIsAdding] = useState(false);
   const feedbackIdRef = useRef(0);
   const { alert } = useGlassAlert();
@@ -376,7 +377,8 @@ export function AddItemsModal({
     (name: string, size?: string, price?: number) => {
       const id = ++feedbackIdRef.current;
       setAddedThisSession((prev) => [{ id, name, size, price }, ...prev]);
-      // Auto-dismiss after 2.5s
+      setSessionAddCount((prev) => prev + 1);
+      // Auto-dismiss pill after 2.5s (counter stays)
       setTimeout(() => {
         setAddedThisSession((prev) => prev.filter((f) => f.id !== id));
       }, 2500);
@@ -657,6 +659,7 @@ export function AddItemsModal({
     setManualPrice("");
     setEditingField(null);
     setAddedThisSession([]);
+    setSessionAddCount(0);
     setSelectedSuggestion(null);
     setSelectedVariantName(undefined);
     setScannedCategory(undefined);
@@ -664,9 +667,6 @@ export function AddItemsModal({
     clearSuggestions();
     onClose();
   }, [onClose, clearSuggestions]);
-
-  // Session stats for bottom bar
-  const addedCount = addedThisSession.length;
 
   // ── Render helpers ──────────────────────────────────────────────────────────
 
@@ -1128,24 +1128,20 @@ export function AddItemsModal({
 
       {/* Sticky Bottom Bar */}
       <View style={styles.bottomBar}>
-        {addedCount > 0 && (
+        {sessionAddCount > 0 && (
           <Text style={styles.subtotalText}>
-            {addedCount} item{addedCount !== 1 ? "s" : ""} added
+            {sessionAddCount} item{sessionAddCount !== 1 ? "s" : ""} added
           </Text>
         )}
         <GlassButton
           variant="primary"
           size="lg"
-          onPress={itemName.trim().length > 0 ? handleAddManualItem : handleClose}
-          disabled={isAdding || (itemName.trim().length === 0 && addedCount === 0)}
+          onPress={handleAddManualItem}
+          disabled={isAdding || itemName.trim().length === 0}
           loading={isAdding}
           style={styles.submitButton}
         >
-          {itemName.trim().length > 0
-            ? "Add Item"
-            : addedCount > 0
-              ? "Done"
-              : "Add Item"}
+          Add Item
         </GlassButton>
       </View>
     </GlassModal>
