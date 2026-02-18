@@ -5,6 +5,8 @@
  * Convex cannot import from the app's lib/ directory.
  */
 
+import { parseSize } from "./sizeUtils";
+
 /**
  * Normalize an item name for comparison.
  */
@@ -186,4 +188,50 @@ export function findFuzzyMatches(
 
   matches.sort((a, b) => b.similarity - a.similarity);
   return matches.slice(0, maxResults);
+}
+
+/**
+ * Normalize a size string for duplicate comparison.
+ * Uses parseSize() to convert to a canonical numeric+category form so that
+ * equivalent sizes in different formats match (e.g. "2 pints" === "2pt",
+ * "1 litre" === "1000ml").
+ *
+ * Returns empty string for undefined/null/empty (meaning "no size specified").
+ */
+export function normalizeSizeForDedup(
+  size: string | undefined | null,
+): string {
+  if (!size || !size.trim()) return "";
+
+  const parsed = parseSize(size);
+  if (parsed) {
+    // Use normalizedValue (base unit: ml for volume, g for weight, raw for count)
+    // plus category to avoid cross-category collisions (e.g. 500ml vs 500g)
+    return `${parsed.normalizedValue}:${parsed.category}`;
+  }
+
+  // Fallback for unparseable sizes: lowercase + strip whitespace
+  return size.toLowerCase().trim().replace(/\s+/g, "");
+}
+
+/**
+ * Check if two items should be considered duplicates considering BOTH name AND size.
+ *
+ * Rules:
+ * - Names must match (via isDuplicateItemName fuzzy logic)
+ * - Sizes must match (both absent, or both normalize to same value)
+ * - Brand is ignored (by design — brand is a store-time decision)
+ */
+export function isDuplicateItem(
+  name1: string,
+  size1: string | undefined | null,
+  name2: string,
+  size2: string | undefined | null,
+): boolean {
+  if (!isDuplicateItemName(name1, name2)) return false;
+
+  const normSize1 = normalizeSizeForDedup(size1);
+  const normSize2 = normalizeSizeForDedup(size2);
+
+  return normSize1 === normSize2;
 }

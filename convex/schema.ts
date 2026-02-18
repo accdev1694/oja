@@ -93,12 +93,20 @@ export default defineSchema({
     // Auto-add to list when out
     autoAddToList: v.boolean(),
 
+    // Pantry lifecycle (tiered pantry with auto-archiving)
+    status: v.optional(v.union(v.literal("active"), v.literal("archived"))), // defaults to "active"
+    pinned: v.optional(v.boolean()),            // user manually pinned → Essentials tier
+    purchaseCount: v.optional(v.number()),      // rolling 90-day purchase count
+    lastPurchasedAt: v.optional(v.number()),    // timestamp of last receipt match
+    archivedAt: v.optional(v.number()),         // when auto/manually archived
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"])
     .index("by_user_category", ["userId", "category"])
-    .index("by_user_stock", ["userId", "stockLevel"]),
+    .index("by_user_stock", ["userId", "stockLevel"])
+    .index("by_user_status", ["userId", "status"]),
 
   // Shopping lists
   shoppingLists: defineTable({
@@ -352,7 +360,7 @@ export default defineSchema({
     .index("by_user_item_date", ["userId", "normalizedName", "purchaseDate"])
     .index("by_receipt", ["receiptId"]),
 
-  // Item variants (size-aware pricing)
+  // Item variants (size-aware pricing + community product catalog)
   itemVariants: defineTable({
     baseItem: v.string(),            // "milk" (normalized)
     variantName: v.string(),         // "Whole Milk 2 Pints"
@@ -366,6 +374,12 @@ export default defineSchema({
     productName: v.optional(v.string()), // "Free Range Eggs" — specific name from scans
     displayLabel: v.optional(v.string()), // "Free Range 6pk" — short chip label
     scanCount: v.optional(v.number()), // Times scanned — higher = more trusted
+
+    // Community product sharing fields
+    imageStorageId: v.optional(v.id("_storage")), // First scan photo of this product
+    userCount: v.optional(v.number()),    // Approximate distinct users who've scanned/bought this
+    lastSeenAt: v.optional(v.number()),   // Last time any user scanned/bought this variant
+    region: v.optional(v.string()),       // Postcode area prefix (e.g., "SW", "M", "B") — Phase 3 prep
   })
     .index("by_base_item", ["baseItem"]),
 
