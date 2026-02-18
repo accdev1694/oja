@@ -41,6 +41,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { ListCard } from "@/components/lists/ListCard";
 import { HistoryCard } from "@/components/lists/HistoryCard";
 import { SharedListCard } from "@/components/lists/SharedListCard";
+import { defaultListName } from "@/lib/list/helpers";
 
 type TabMode = "active" | "history";
 
@@ -149,15 +150,7 @@ export default function ListsScreen() {
     setIsCreating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const now = new Date();
-    const day = now.getDate();
-    const ordinal =
-      day % 10 === 1 && day !== 11 ? "st" :
-      day % 10 === 2 && day !== 12 ? "nd" :
-      day % 10 === 3 && day !== 13 ? "rd" : "th";
-    const month = now.toLocaleDateString("en-GB", { month: "long" });
-    const year = now.getFullYear();
-    const name = `${day}${ordinal} ${month} ${year} Shopping`;
+    const name = defaultListName();
 
     try {
       const listId = await createList({ name, budget: 50 });

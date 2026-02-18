@@ -52,6 +52,21 @@ export function areItemsSimilar(name1: string, name2: string): boolean {
 }
 
 /**
+ * Generate the default name for a new shopping list.
+ * Format: "18th Feb '26 Shopping List"
+ */
+export function defaultListName(date: Date = new Date()): string {
+  const day = date.getDate();
+  const ordinal =
+    day % 10 === 1 && day !== 11 ? "st" :
+    day % 10 === 2 && day !== 12 ? "nd" :
+    day % 10 === 3 && day !== 13 ? "rd" : "th";
+  const month = date.toLocaleDateString("en-GB", { month: "short" });
+  const year = `'${String(date.getFullYear()).slice(-2)}`;
+  return `${day}${ordinal} ${month} ${year} Shopping List`;
+}
+
+/**
  * Generate friendly relative time name for list display
  * e.g., "Today's Shop", "Yesterday's Shop", "Monday's Shop"
  */

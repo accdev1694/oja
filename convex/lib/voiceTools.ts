@@ -1063,8 +1063,16 @@ async function executeWriteTool(
 ): Promise<ToolResult> {
   switch (functionName) {
     case "create_shopping_list": {
-      // Default to "Shopping List" if no name provided — footer date+time differentiates
-      const listName = args.name || "Shopping List";
+      // Default name: "18th Feb '26 Shopping List"
+      let listName = args.name;
+      if (!listName) {
+        const now = new Date();
+        const day = now.getDate();
+        const ord = day % 10 === 1 && day !== 11 ? "st" : day % 10 === 2 && day !== 12 ? "nd" : day % 10 === 3 && day !== 13 ? "rd" : "th";
+        const mon = now.toLocaleDateString("en-GB", { month: "short" });
+        const yr = `'${String(now.getFullYear()).slice(-2)}`;
+        listName = `${day}${ord} ${mon} ${yr} Shopping List`;
+      }
 
       const listId = await ctx.runMutation(api.shoppingLists.create, {
         name: listName,

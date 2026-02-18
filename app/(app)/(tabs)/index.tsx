@@ -59,6 +59,7 @@ import {
 } from "@/components/ui/glass";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { defaultListName } from "@/lib/list/helpers";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -424,7 +425,7 @@ export default function PantryScreen() {
       if (activeLists && activeLists.length > 0) {
         listId = activeLists[0]._id;
       } else {
-        const listName = `Shopping List ${new Date().toLocaleDateString()}`;
+        const listName = defaultListName();
         listId = await createList({ name: listName, budget: 50 });
       }
 
@@ -536,7 +537,7 @@ export default function PantryScreen() {
     if (planningLists.length === 0) {
       const doCreate = async () => {
         try {
-          const listId = await createList({ name: "Shopping List" });
+          const listId = await createList({ name: defaultListName() });
           await addListItem({
             listId: listId as Id<"shoppingLists">,
             name: item.name,
