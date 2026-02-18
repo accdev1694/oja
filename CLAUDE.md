@@ -93,7 +93,7 @@ All backend in `convex/`. **28 tables** in schema.ts:
 **Key files:**
 - `ai.ts` - Gemini 2.0 Flash + OpenAI fallback
 - `lib/voiceTools.ts` - **30 voice tools** for Tobi assistant
-- `lib/featureGating.ts` - Free (3 lists, 50 pantry, 20 voice/mo) vs Premium
+- `lib/featureGating.ts` - Free trial (full features, time-limited) → paid subscription
 - `stores.ts` - 13 UK stores with brand colors
 
 **Pattern:** Every mutation must call `requireCurrentUser(ctx)` for auth.

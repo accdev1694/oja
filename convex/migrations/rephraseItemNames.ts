@@ -27,22 +27,27 @@ function stripCodeBlocks(text: string): string {
 
 const REPHRASE_PROMPT = `You are a UK grocery item name formatter. Rephrase each item name to follow these rules:
 
-1. SIZE/QUANTITY COMES FIRST, then the product name
+FORMAT: "{size} {descriptor} {product type}"
+1. SIZE/QUANTITY COMES FIRST, then a concise descriptive name
 2. MAX 30 CHARACTERS — meaningfully rephrase, never just truncate
 3. If no size is apparent, estimate the standard UK size (milk = 2pt, eggs = 6pk, bread = 800g, etc.)
-4. Drop unnecessary brand prefixes or filler words to fit
+4. NEVER use just a brand name — always describe what the product IS
+5. DROP all brand/own-label names (Tesco, Aldi, Merevale, Hovis, Warburtons, Cathedral City, Heinz, etc.) UNLESS the brand IS the product identity (Coke Zero, PG Tips, Marmite, Branston, Lurpak)
+6. KEEP useful descriptors: size, type, style, variety (e.g., Wholemeal, Semi-Skimmed, Free Range, Mature)
 
 Examples:
 - "Whole Milk 2pt" → "2pt Whole Milk"
 - "Semi-Skimmed Milk 4 pints" → "4pt Semi-Skimmed Milk"
-- "Free Range Eggs 6" → "6pk Free Range Eggs"
-- "Hovis Wholemeal Bread 800g" → "800g Hovis Wholemeal"
+- "Merevale 12 Free Range Eggs" → "12pk Free Range Eggs"
+- "Hovis Wholemeal Bread 800g" → "800g Wholemeal Bread"
 - "Coca-Cola Zero Sugar 2L" → "2L Coke Zero"
 - "Chicken Breast Fillets 500g" → "500g Chicken Breast"
-- "Warburtons Toastie White 800g" → "800g Warburtons Toastie"
-- "Cathedral City Mature Cheddar Cheese 350g" → "350g Cathedral City Mature"
-- "Heinz Baked Beans" → "415g Heinz Baked Beans"
+- "Warburtons Toastie White 800g" → "800g White Toastie Bread"
+- "Cathedral City Mature Cheddar Cheese 350g" → "350g Mature Cheddar"
+- "Heinz Baked Beans" → "415g Baked Beans"
 - "PG Tips Tea Bags 80" → "80pk PG Tips Tea Bags"
+- "Tesco British Semi Skimmed Milk 2 Pint" → "2pt Semi-Skimmed Milk"
+- "Aldi Specially Selected Butter 250g" → "250g Salted Butter"
 
 I will give you a JSON array of item names. Return a JSON object mapping each original name to its rephrased version. Every value MUST be 30 characters or fewer.
 

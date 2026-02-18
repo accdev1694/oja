@@ -5,7 +5,6 @@ import {
   ScrollView,
   FlatList,
   Pressable,
-  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
@@ -28,7 +27,6 @@ import {
   SimpleHeader,
   SkeletonCard,
   EmptyLists,
-  GlassModal,
   TrialNudgeBanner,
   colors,
   typography,
@@ -46,8 +44,6 @@ import { SharedListCard } from "@/components/lists/SharedListCard";
 
 type TabMode = "active" | "history";
 
-const MAX_LIST_NAME_LENGTH = 30;
-
 export default function ListsScreen() {
   const router = useRouter();
   const { alert } = useGlassAlert();
@@ -62,10 +58,6 @@ export default function ListsScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
   const { unreadCount } = useNotifications();
 
-  // Create list modal state
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newListName, setNewListName] = useState("");
-  const [modalMode, setModalMode] = useState<"choice" | "manual">("choice");
 
   // Sliding pill animation: 0 = active (left), 1 = history (right)
   const tabProgress = useSharedValue(0);
@@ -152,15 +144,11 @@ export default function ListsScreen() {
     />
   ), [handleHistoryPress, stableFormatDateTime]);
 
-  function handleOpenCreateModal() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setModalMode("choice");
-    setNewListName("");
-    setShowCreateModal(true);
-  }
+  async function handleCreateList() {
+    if (isCreating) return;
+    setIsCreating(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-  function handleStartManualCreate() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const now = new Date();
     const day = now.getDate();
     const ordinal =
@@ -169,43 +157,15 @@ export default function ListsScreen() {
       day % 10 === 3 && day !== 13 ? "rd" : "th";
     const month = now.toLocaleDateString("en-GB", { month: "long" });
     const year = now.getFullYear();
-    setNewListName(`${day}${ordinal} ${month} ${year} Shopping`);
-    setModalMode("manual");
-  }
+    const name = `${day}${ordinal} ${month} ${year} Shopping`;
 
-  function handleFromReceipt() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setShowCreateModal(false);
-    setModalMode("choice");
-    router.push("/(app)/create-list-from-receipt" as never);
-  }
-
-  function handleCloseCreateModal() {
-    setShowCreateModal(false);
-    setNewListName("");
-    setModalMode("choice");
-  }
-
-  async function handleCreateList() {
-    if (!newListName.trim()) {
-      alert("Error", "Please enter a list name");
-      return;
-    }
-
-    setIsCreating(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const listId = await createList({
-        name: newListName.trim(),
-        budget: 50,
-      });
-
-      handleCloseCreateModal();
+      const listId = await createList({ name, budget: 50 });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.push(`/list/${listId}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to create list:", error);
-      const msg = error?.message ?? error?.data ?? "";
+      const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         alert(
@@ -273,7 +233,9 @@ export default function ListsScreen() {
                 variant="primary"
                 size="sm"
                 icon="plus"
-                onPress={handleOpenCreateModal}
+                onPress={handleCreateList}
+                loading={isCreating}
+                disabled={isCreating}
               >
                 New List
               </GlassButton>
@@ -338,7 +300,7 @@ export default function ListsScreen() {
           showsVerticalScrollIndicator={false}
         >
           <EmptyLists
-            onAction={handleOpenCreateModal}
+            onAction={handleCreateList}
             actionText="Create a New List"
           />
           {/* Join a shared list — always visible even with no lists */}
@@ -468,160 +430,6 @@ export default function ListsScreen() {
         onClose={() => setShowNotifications(false)}
       />
 
-      {/* Create List Modal */}
-      <GlassModal
-        visible={showCreateModal}
-        onClose={handleCloseCreateModal}
-        overlayOpacity={0.75}
-        maxWidth={360}
-        avoidKeyboard
-      >
-        {modalMode === "choice" ? (
-          <>
-            {/* Choice View — pick how to create */}
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderLeft}>
-                <MaterialCommunityIcons
-                  name="clipboard-plus-outline"
-                  size={24}
-                  color={colors.accent.primary}
-                />
-                <Text style={styles.modalTitle}>New List</Text>
-              </View>
-            </View>
-
-            <View style={styles.choiceOptions}>
-              <Pressable
-                style={styles.choiceOption}
-                onPress={handleFromReceipt}
-              >
-                <View style={styles.choiceIconWrap}>
-                  <MaterialCommunityIcons
-                    name="receipt"
-                    size={24}
-                    color={colors.accent.primary}
-                  />
-                </View>
-                <View style={styles.choiceTextWrap}>
-                  <Text style={styles.choiceLabel}>From a Receipt</Text>
-                  <Text style={styles.choiceDesc}>
-                    Pick or scan a receipt to auto-fill items and prices
-                  </Text>
-                </View>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={20}
-                  color={colors.text.tertiary}
-                />
-              </Pressable>
-
-              <Pressable
-                style={styles.choiceOption}
-                onPress={handleStartManualCreate}
-              >
-                <View style={styles.choiceIconWrap}>
-                  <MaterialCommunityIcons
-                    name="pencil-outline"
-                    size={24}
-                    color={colors.text.secondary}
-                  />
-                </View>
-                <View style={styles.choiceTextWrap}>
-                  <Text style={styles.choiceLabel}>Create Manually</Text>
-                  <Text style={styles.choiceDesc}>
-                    Start with an empty list and add items yourself
-                  </Text>
-                </View>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={20}
-                  color={colors.text.tertiary}
-                />
-              </Pressable>
-            </View>
-          </>
-        ) : (
-          <>
-            {/* Manual Create View — existing flow */}
-            <View style={styles.modalHeader}>
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setModalMode("choice");
-                }}
-                hitSlop={8}
-                style={styles.modalBackButton}
-              >
-                <MaterialCommunityIcons
-                  name="chevron-left"
-                  size={28}
-                  color={colors.text.primary}
-                />
-              </Pressable>
-              <View style={styles.modalHeaderLeft}>
-                <Text style={styles.modalTitle}>Create Manually</Text>
-              </View>
-            </View>
-
-            {/* List Name Input */}
-            <View style={styles.inputGroup}>
-              <View style={styles.inputLabelRow}>
-                <Text style={styles.inputLabel}>List Name</Text>
-                <Text
-                  style={[
-                    styles.charCount,
-                    newListName.length > MAX_LIST_NAME_LENGTH - 5 && styles.charCountWarning,
-                    newListName.length >= MAX_LIST_NAME_LENGTH && styles.charCountLimit,
-                  ]}
-                >
-                  {MAX_LIST_NAME_LENGTH - newListName.length}
-                </Text>
-              </View>
-              <View style={styles.inputContainer}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  keyboardShouldPersistTaps="always"
-                  contentContainerStyle={{ flexGrow: 1 }}
-                >
-                  <TextInput
-                    style={[styles.textInput, { minWidth: "100%" }]}
-                    value={newListName}
-                    onChangeText={(text) => setNewListName(text.slice(0, MAX_LIST_NAME_LENGTH))}
-                    placeholder="e.g., Weekly Shop"
-                    placeholderTextColor={colors.text.tertiary}
-                    maxLength={MAX_LIST_NAME_LENGTH}
-                    autoFocus
-                  />
-                </ScrollView>
-              </View>
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.modalActions}>
-              <GlassButton
-                variant="secondary"
-                size="md"
-                onPress={handleCloseCreateModal}
-                style={styles.modalButton}
-              >
-                Cancel
-              </GlassButton>
-              <GlassButton
-                variant="primary"
-                size="md"
-                icon="plus"
-                onPress={handleCreateList}
-                loading={isCreating}
-                disabled={isCreating}
-                style={styles.modalButton}
-              >
-                Create List
-              </GlassButton>
-            </View>
-          </>
-        )}
-      </GlassModal>
     </GlassScreen>
   );
 }
@@ -765,113 +573,6 @@ const styles = StyleSheet.create({
     ...typography.labelMedium,
     color: colors.text.secondary,
     fontWeight: "600",
-  },
-
-  // Modal styles
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.xl,
-  },
-  modalBackButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.glass.background,
-  },
-  modalHeaderLeft: {
-    flex: 1,
-    alignItems: "center",
-    marginRight: 40,
-  },
-  modalTitle: {
-    ...typography.headlineMedium,
-    color: colors.text.primary,
-  },
-  inputGroup: {
-    marginBottom: spacing.md,
-  },
-  inputLabelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.xs,
-  },
-  inputLabel: {
-    ...typography.labelMedium,
-    color: colors.text.primary,
-  },
-  charCount: {
-    ...typography.labelSmall,
-    color: colors.text.tertiary,
-  },
-  charCountWarning: {
-    color: colors.semantic.warning,
-  },
-  charCountLimit: {
-    color: colors.semantic.danger,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-  },
-  textInput: {
-    flex: 1,
-    ...typography.bodyLarge,
-    color: colors.text.primary,
-    paddingVertical: spacing.md,
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  modalButton: {
-    flex: 1,
-  },
-
-  // Choice modal styles
-  choiceOptions: {
-    gap: spacing.sm,
-  },
-  choiceOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  choiceIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    backgroundColor: `${colors.accent.primary}10`,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  choiceTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  choiceLabel: {
-    ...typography.bodyLarge,
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-  choiceDesc: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
   },
 
   // Header actions (bell + New List)

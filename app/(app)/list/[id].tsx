@@ -323,13 +323,15 @@ export default function ListDetailScreen() {
       if (result && typeof result === "object" && "status" in result && result.status === "duplicate") {
         const existingName = "existingName" in result ? result.existingName as string : midShopState.name;
         const existingQty = "existingQuantity" in result ? result.existingQuantity as number : 0;
+        const existingSize = "existingSize" in result ? result.existingSize as string | undefined : undefined;
+        const sizeLabel = existingSize ? ` (${existingSize})` : "";
         const itemName = midShopState.name;
         const itemPrice = midShopState.price;
         const itemQty = midShopState.quantity;
         closeMidShopModal();
         alert(
           "Item Already on List",
-          `"${existingName}" (\u00D7${existingQty}) is already on your list. Add again?`,
+          `"${existingName}"${sizeLabel} (\u00D7${existingQty}) is already on your list. Add again?`,
           [
             { text: "Cancel", style: "cancel" },
             {

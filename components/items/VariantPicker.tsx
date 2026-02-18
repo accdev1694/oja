@@ -323,6 +323,7 @@ export function VariantPicker({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.container}
         style={styles.scroll}
+        keyboardShouldPersistTaps="always"
       >
         {[1, 2, 3].map((i) => (
           <VariantSkeleton key={i} compact={compact} />
@@ -366,6 +367,7 @@ export function VariantPicker({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.container}
         style={styles.scroll}
+        keyboardShouldPersistTaps="always"
         accessibilityRole="radiogroup"
         accessibilityLabel={`Size options for ${baseItem}`}
       >

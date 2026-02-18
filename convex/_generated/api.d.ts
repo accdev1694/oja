@@ -18,6 +18,7 @@ import type * as iconMapping from "../iconMapping.js";
 import type * as insights from "../insights.js";
 import type * as itemSearch from "../itemSearch.js";
 import type * as itemVariants from "../itemVariants.js";
+import type * as lib_communityHelpers from "../lib/communityHelpers.js";
 import type * as lib_featureGating from "../lib/featureGating.js";
 import type * as lib_fuzzyMatch from "../lib/fuzzyMatch.js";
 import type * as lib_priceBracketMatcher from "../lib/priceBracketMatcher.js";
@@ -60,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   insights: typeof insights;
   itemSearch: typeof itemSearch;
   itemVariants: typeof itemVariants;
+  "lib/communityHelpers": typeof lib_communityHelpers;
   "lib/featureGating": typeof lib_featureGating;
   "lib/fuzzyMatch": typeof lib_fuzzyMatch;
   "lib/priceBracketMatcher": typeof lib_priceBracketMatcher;

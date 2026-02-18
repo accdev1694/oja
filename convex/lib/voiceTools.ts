@@ -1378,7 +1378,7 @@ async function executeWriteTool(
       await ctx.runMutation(api.pantryItems.create, {
         name: args.name,
         category: args.category || "Other",
-        stockLevel: args.stockLevel || "stocked",
+        stockLevel: args.stockLevel || "low",
         lastPrice,
         priceSource: lastPrice ? "ai_estimate" : undefined,
       });

@@ -350,7 +350,7 @@ Otherwise, extract:
 2. Store address (if visible, otherwise omit)
 3. Purchase date (in ISO format YYYY-MM-DD, or use today's date if unclear)
 4. All items with:
-   - Item name: Meaningfully rephrased product name, MAX 30 CHARACTERS. SIZE/QUANTITY COMES FIRST, then the product. Never just truncate — rephrase to fit. If the receipt shows a size, include it first. If not printed, estimate the standard UK size for that product. Examples: "2pt Whole Milk", "4pt Semi-Skimmed Milk", "6pk Free Range Eggs", "800g Hovis Wholemeal", "2L Coke Zero", "500g Chicken Breast", "30 Conqueror A4 Sheets". Drop brand prefixes or redundant words to stay under 30 chars.
+   - Item name: Concise but descriptive product name, MAX 30 CHARACTERS. FORMAT: "{size} {descriptor} {product type}". SIZE/QUANTITY COMES FIRST, then a key descriptor if useful, then WHAT THE PRODUCT IS. CRITICAL RULES: (a) NEVER use just a brand name — always describe what the product IS (e.g., "Merevale 12" MUST become "12pk Medium Eggs", "Yeo Valley" MUST become "500g Natural Yoghurt"). (b) DROP all brand/own-label names (Tesco, Asda, Aldi, Merevale, Hearty Food Co, etc.) UNLESS the brand IS the product identity (e.g., "Coke Zero", "PG Tips", "Marmite"). (c) KEEP useful descriptors: size (medium/large), type (whole/semi-skimmed), style (free-range/organic). (d) If the receipt shows a size, include it first. If not printed, estimate the standard UK size. Examples: "12pk Medium Eggs", "2pt Semi-Skimmed Milk", "500g Chicken Breast", "800g Wholemeal Bread", "400g Baked Beans", "2L Coke Zero", "80pk PG Tips Tea Bags", "6pk Free Range Eggs".
    - Size: The size/weight value separately (e.g., "2L", "500g", "6 pack"). Estimate standard UK size if not on receipt.
    - Unit: Unit of measurement (e.g., "L", "g", "pack", "pint"). Estimate from size.
    - Quantity: Number of units purchased (default to 1). Handle "2 x £2.19" as quantity: 2.
@@ -369,7 +369,7 @@ Return ONLY valid JSON in this exact format:
   "purchaseDate": "2026-01-29",
   "items": [
     {
-      "name": "2pt Whole Milk",
+      "name": "2pt Semi-Skimmed Milk",
       "size": "2pt",
       "unit": "pint",
       "quantity": 1,
@@ -378,7 +378,7 @@ Return ONLY valid JSON in this exact format:
       "confidence": 95
     },
     {
-      "name": "Bananas Loose",
+      "name": "Loose Bananas",
       "size": "each",
       "unit": "each",
       "quantity": 1,
@@ -574,8 +574,8 @@ export const scanProduct = action({
 Read the text on the packaging — product name, brand, size/weight, and any other relevant info.
 
 Return a JSON object with these fields:
-- name: Product name, MAX 30 CHARACTERS. SIZE/QUANTITY COMES FIRST, then the product name. Meaningfully rephrase to fit — never just truncate. Drop unnecessary brand prefixes or filler words.
-  Examples: "2pt Whole Milk", "500g Chicken Breast", "400g Heinz Baked Beans", "80pk PG Tips Tea Bags", "2L Coke Zero", "6pk Free Range Eggs"
+- name: Concise but descriptive product name, MAX 30 CHARACTERS. FORMAT: "{size} {descriptor} {product type}". SIZE/QUANTITY COMES FIRST, then a key descriptor if useful, then WHAT THE PRODUCT IS. CRITICAL: NEVER use just a brand name — always describe what the product IS. DROP all brand/own-label names (Tesco, Asda, Aldi, Merevale, etc.) UNLESS the brand IS the product identity (e.g., "Coke Zero", "PG Tips", "Marmite"). KEEP useful descriptors like size (medium/large), type (whole/semi-skimmed), style (free-range/organic).
+  Examples: "12pk Medium Eggs", "2pt Semi-Skimmed Milk", "500g Chicken Breast", "400g Baked Beans", "80pk PG Tips Tea Bags", "2L Coke Zero", "6pk Free Range Eggs"
 - category: One of: "Dairy & Eggs", "Meat & Fish", "Fruits & Vegetables", "Bakery", "Drinks", "Snacks & Sweets", "Canned & Jarred", "Frozen", "Household", "Personal Care", "Condiments & Sauces", "Grains & Pasta", "Baking", "Baby & Kids", "Pet", "Other"
 - size: The size/weight value (e.g., "2L", "500g", "6 pack", "2pt"). Read from packaging. If not visible, estimate the standard UK size.
 - unit: Unit of measurement (e.g., "L", "g", "pack", "pint", "ml", "kg")

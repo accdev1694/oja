@@ -1,8 +1,12 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { haptic } from "@/lib/haptics/safeHaptics";
+import {
+  normalizeItemName,
+  calculateSimilarity,
+} from "@/lib/text/fuzzyMatch";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -19,21 +23,66 @@ export interface ScannedProduct {
   imageStorageId: string;
 }
 
+export interface UseProductScannerOptions {
+  /** Called when a scanned product is a duplicate of one already in the session */
+  onDuplicate?: (existing: ScannedProduct, scanned: ScannedProduct) => void;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Client-side dedup helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DUPLICATE_THRESHOLD = 85;
+
+function isSameProduct(a: ScannedProduct, b: ScannedProduct): boolean {
+  const normA = normalizeItemName(a.name);
+  const normB = normalizeItemName(b.name);
+  if (!normA || !normB) return false;
+
+  // Exact normalized match
+  if (normA === normB) return sizesMatch(a.size, b.size);
+
+  // Fuzzy similarity
+  const sim = calculateSimilarity(normA, normB);
+  if (sim >= DUPLICATE_THRESHOLD) return sizesMatch(a.size, b.size);
+
+  return false;
+}
+
+function sizesMatch(a?: string, b?: string): boolean {
+  const normA = normalizeSize(a);
+  const normB = normalizeSize(b);
+  // Both absent → match; both present → must be equal
+  return normA === normB;
+}
+
+function normalizeSize(size?: string): string {
+  if (!size || !size.trim()) return "";
+  return size.toLowerCase().trim().replace(/\s+/g, "");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function useProductScanner() {
+export function useProductScanner(options?: UseProductScannerOptions) {
   const [scannedProducts, setScannedProducts] = useState<ScannedProduct[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+
+  // Keep a ref so the capture callback always sees the latest products
+  const productsRef = useRef<ScannedProduct[]>([]);
+  productsRef.current = scannedProducts;
+
+  const onDuplicateRef = useRef(options?.onDuplicate);
+  onDuplicateRef.current = options?.onDuplicate;
 
   const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);
   const scanProduct = useAction(api.ai.scanProduct);
 
   /**
    * Open camera, take photo, upload, and scan with AI.
-   * Returns the scanned product if successful, or null if cancelled/failed.
+   * Returns the scanned product if successful, or null if cancelled/failed/duplicate.
    */
   const captureProduct = useCallback(async (): Promise<ScannedProduct | null> => {
     setLastError(null);
@@ -86,7 +135,6 @@ export function useProductScanner() {
         return null;
       }
 
-      // Add to scanned products list
       const product: ScannedProduct = {
         name: parsed.name as string,
         category: parsed.category as string,
@@ -97,6 +145,15 @@ export function useProductScanner() {
         confidence: parsed.confidence as number,
         imageStorageId: storageId,
       };
+
+      // Client-side dedup: check against already-scanned products in this session
+      const existingMatch = productsRef.current.find((p) => isSameProduct(p, product));
+      if (existingMatch) {
+        haptic("warning");
+        setIsProcessing(false);
+        onDuplicateRef.current?.(existingMatch, product);
+        return null;
+      }
 
       setScannedProducts((prev) => [...prev, product]);
       haptic("success");

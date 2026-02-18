@@ -8,7 +8,7 @@ import {
   ScrollView,
   Pressable,
 } from "react-native";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { useMutation, useAction, useQuery } from "convex/react";
@@ -28,6 +28,7 @@ import {
   borderRadius,
   useGlassAlert,
 } from "@/components/ui/glass";
+import { GlassToast } from "@/components/ui/glass/GlassToast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
 import { useProductScanner } from "@/hooks/useProductScanner";
@@ -48,8 +49,16 @@ export default function ScanScreen() {
   const [showListPicker, setShowListPicker] = useState(false);
   const [showProductListPicker, setShowProductListPicker] = useState(false);
 
-  // Product scanner
-  const productScanner = useProductScanner();
+  // Duplicate toast state
+  const [dupToast, setDupToast] = useState({ visible: false, name: "" });
+  const dismissDupToast = useCallback(() => setDupToast((prev) => ({ ...prev, visible: false })), []);
+
+  // Product scanner with client-side dedup
+  const productScanner = useProductScanner({
+    onDuplicate: (existing) => {
+      setDupToast({ visible: true, name: existing.name });
+    },
+  });
 
   // Auto-select list when navigated from complete shopping flow
   useEffect(() => {
@@ -846,6 +855,16 @@ export default function ScanScreen() {
         {/* Bottom spacing */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Duplicate product toast */}
+      <GlassToast
+        message={`${dupToast.name} already scanned`}
+        icon="content-duplicate"
+        iconColor={colors.accent.warm}
+        visible={dupToast.visible}
+        duration={2500}
+        onDismiss={dismissDupToast}
+      />
     </GlassScreen>
   );
 }
