@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from "react";
+import React, { useCallback } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { FadeOut, runOnJS } from "react-native-reanimated";
@@ -12,7 +12,6 @@ import {
 import { GlassCard, colors, spacing, borderRadius } from "@/components/ui/glass";
 import { RemoveButton } from "@/components/ui/RemoveButton";
 import { AddToListButton } from "@/components/ui/AddToListButton";
-import { getSafeIcon } from "@/lib/icons/iconMatcher";
 
 /**
  * Format size display for items
@@ -65,11 +64,17 @@ export interface PantryItemRowProps {
     defaultSize?: string;
     defaultUnit?: string;
     preferredVariant?: string;
+    pinned?: boolean;
+    purchaseCount?: number;
+    status?: string;
   };
   onSwipeDecrease: (itemId: Id<"pantryItems">) => void;
   onSwipeIncrease: (itemId: Id<"pantryItems">) => void;
   onRemove: (itemId: Id<"pantryItems">) => void;
   onAddToList: (itemId: Id<"pantryItems">) => void;
+  onLongPress?: (itemId: Id<"pantryItems">) => void;
+  /** Show muted/archived appearance (for archived items in search) */
+  isArchivedResult?: boolean;
 }
 
 function arePropsEqual(prev: PantryItemRowProps, next: PantryItemRowProps): boolean {
@@ -80,10 +85,15 @@ function arePropsEqual(prev: PantryItemRowProps, next: PantryItemRowProps): bool
     prev.item.name === next.item.name &&
     prev.item.defaultSize === next.item.defaultSize &&
     prev.item.defaultUnit === next.item.defaultUnit &&
+    prev.item.pinned === next.item.pinned &&
+    prev.item.purchaseCount === next.item.purchaseCount &&
+    prev.item.status === next.item.status &&
+    prev.isArchivedResult === next.isArchivedResult &&
     prev.onSwipeDecrease === next.onSwipeDecrease &&
     prev.onSwipeIncrease === next.onSwipeIncrease &&
     prev.onRemove === next.onRemove &&
-    prev.onAddToList === next.onAddToList
+    prev.onAddToList === next.onAddToList &&
+    prev.onLongPress === next.onLongPress
   );
 }
 
@@ -93,6 +103,8 @@ export const PantryItemRow = React.memo(function PantryItemRow({
   onSwipeIncrease,
   onRemove,
   onAddToList,
+  onLongPress,
+  isArchivedResult,
 }: PantryItemRowProps) {
   const handleSwipeDecrease = useCallback(() => {
     onSwipeDecrease(item._id);
@@ -110,6 +122,10 @@ export const PantryItemRow = React.memo(function PantryItemRow({
     onAddToList(item._id);
   }, [item._id, onAddToList]);
 
+  const handleLongPress = useCallback(() => {
+    onLongPress?.(item._id);
+  }, [item._id, onLongPress]);
+
   const panGesture = Gesture.Pan()
     .activeOffsetX([-20, 20])
     .failOffsetY([-10, 10])
@@ -120,6 +136,24 @@ export const PantryItemRow = React.memo(function PantryItemRow({
         runOnJS(handleSwipeIncrease)();
       }
     });
+
+  // Long-press gesture
+  const longPressGesture = Gesture.LongPress()
+    .minDuration(500)
+    .onEnd((_e, success) => {
+      if (success && onLongPress) {
+        runOnJS(handleLongPress)();
+      }
+    });
+
+  // Compose pan + long-press (simultaneous so both can fire)
+  const composedGesture = onLongPress
+    ? Gesture.Race(longPressGesture, panGesture)
+    : panGesture;
+
+  const isArchived = isArchivedResult || item.status === "archived";
+  const isPinned = item.pinned === true;
+  const isEssential = isPinned || (item.purchaseCount ?? 0) >= 3;
 
   const stockLabel =
     item.stockLevel === "stocked"
@@ -135,25 +169,59 @@ export const PantryItemRow = React.memo(function PantryItemRow({
   return (
     <Animated.View
       exiting={FadeOut.duration(150)}
-      style={styles.itemRowContainer}
+      style={[styles.itemRowContainer, isArchived && styles.archivedRowContainer]}
     >
-      <GestureDetector gesture={panGesture}>
+      <GestureDetector gesture={composedGesture}>
         <Animated.View>
           <View collapsable={false}>
-            <GlassCard style={styles.itemCard}>
+            <GlassCard style={[styles.itemCard, isArchived && styles.archivedCard]}>
               <GaugeIndicator level={item.stockLevel as StockLevel} size="small" />
 
               <View style={styles.itemInfo}>
-                <Text style={styles.itemName} numberOfLines={1}>
-                  {displayName}
-                </Text>
+                <View style={styles.nameRow}>
+                  <Text
+                    style={[styles.itemName, isArchived && styles.archivedText]}
+                    numberOfLines={1}
+                  >
+                    {displayName}
+                  </Text>
+                  {isPinned && (
+                    <MaterialCommunityIcons
+                      name="pin"
+                      size={14}
+                      color={colors.accent.primary}
+                      style={styles.pinIcon}
+                    />
+                  )}
+                </View>
                 <View style={styles.itemSubRow}>
-                  <Text style={styles.stockLevelText}>{stockLabel}</Text>
+                  <Text style={[styles.stockLevelText, isArchived && styles.archivedSubText]}>
+                    {isArchived ? "Archived" : stockLabel}
+                  </Text>
+                  {isArchived && (
+                    <View style={styles.archivedBadge}>
+                      <MaterialCommunityIcons
+                        name="archive-outline"
+                        size={10}
+                        color={colors.text.tertiary}
+                      />
+                      <Text style={styles.archivedBadgeText}>Archived</Text>
+                    </View>
+                  )}
+                  {!isArchived && isEssential && !isPinned && (
+                    <View style={styles.frequentBadge}>
+                      <Text style={styles.frequentBadgeText}>Frequent</Text>
+                    </View>
+                  )}
                 </View>
               </View>
 
-              <AddToListButton onPress={handleAddToList} size="sm" />
-              <RemoveButton onPress={handleRemove} size="sm" />
+              {!isArchived && (
+                <>
+                  <AddToListButton onPress={handleAddToList} size="sm" />
+                  <RemoveButton onPress={handleRemove} size="sm" />
+                </>
+              )}
             </GlassCard>
           </View>
         </Animated.View>
@@ -167,20 +235,39 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     marginBottom: spacing.sm,
   },
+  archivedRowContainer: {
+    opacity: 0.55,
+  },
   itemCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: spacing.md,
     gap: spacing.lg,
   },
+  archivedCard: {
+    borderStyle: "dashed" as const,
+    borderColor: colors.glass.border,
+  },
   itemInfo: {
     flex: 1,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   itemName: {
     fontSize: 20,
     fontWeight: "600",
     lineHeight: 26,
     color: colors.text.primary,
+    flexShrink: 1,
+  },
+  archivedText: {
+    color: colors.text.tertiary,
+  },
+  pinIcon: {
+    marginLeft: 2,
   },
   stockLevelText: {
     fontSize: 18,
@@ -188,9 +275,42 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: colors.text.tertiary,
   },
+  archivedSubText: {
+    fontSize: 14,
+    color: colors.text.tertiary,
+  },
   itemSubRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  archivedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: `${colors.text.tertiary}15`,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  archivedBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.text.tertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  frequentBadge: {
+    backgroundColor: `${colors.accent.primary}15`,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  frequentBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.accent.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 });

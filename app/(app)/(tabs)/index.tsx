@@ -19,6 +19,7 @@ import {
   NotificationFeedbackType,
   ImpactFeedbackStyle,
 } from "expo-haptics";
+import { haptic } from "@/lib/haptics/safeHaptics";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
@@ -72,6 +73,59 @@ function getGreeting(firstName?: string): string {
 }
 
 type PantryViewMode = "attention" | "all";
+
+/** Determine which lifecycle tier an item belongs to */
+function getItemTier(item: { pinned?: boolean; purchaseCount?: number; status?: string }): 1 | 2 | 3 {
+  if (item.status === "archived") return 3;
+  if (item.pinned) return 1;
+  if ((item.purchaseCount ?? 0) >= 3) return 1;
+  return 2;
+}
+
+/** Sentinel value for the Essentials section title */
+const ESSENTIALS_SECTION_TITLE = "\u2605 Essentials";
+
+// =============================================================================
+// ESSENTIALS SECTION HEADER
+// =============================================================================
+
+interface EssentialsSectionHeaderProps {
+  count: number;
+  isCollapsed: boolean;
+  onToggle: () => void;
+}
+
+const EssentialsSectionHeader = React.memo(function EssentialsSectionHeader({
+  count,
+  isCollapsed,
+  onToggle,
+}: EssentialsSectionHeaderProps) {
+  const handlePress = useCallback(() => {
+    impactAsync(ImpactFeedbackStyle.Light);
+    onToggle();
+  }, [onToggle]);
+
+  return (
+    <TouchableOpacity
+      style={styles.categoryHeader}
+      onPress={handlePress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.categoryTitleRow}>
+        <MaterialCommunityIcons name="star" size={18} color={colors.accent.primary} />
+        <Text style={[styles.categoryTitle, styles.essentialsSectionTitle]}>Essentials</Text>
+        <View style={[styles.categoryCountBadge, styles.essentialsCountBadge]}>
+          <Text style={[styles.categoryCount, styles.essentialsCount]}>{count}</Text>
+        </View>
+      </View>
+      <MaterialCommunityIcons
+        name={isCollapsed ? "chevron-right" : "chevron-down"}
+        size={24}
+        color={colors.accent.primary}
+      />
+    </TouchableOpacity>
+  );
+});
 
 // =============================================================================
 // CATEGORY SECTION HEADER (shared between attention + all modes)
@@ -132,6 +186,13 @@ export default function PantryScreen() {
   const addListItem = useMutation(api.listItems.create);
   const migrateIcons = useMutation(api.pantryItems.migrateIcons);
   const removePantryItem = useMutation(api.pantryItems.remove);
+
+  // Pantry lifecycle mutations
+  const togglePin = useMutation(api.pantryItems.togglePin);
+  const archiveItemMut = useMutation(api.pantryItems.archiveItem);
+  const unarchiveItemMut = useMutation(api.pantryItems.unarchiveItem);
+  const archivedItems = useQuery(api.pantryItems.getArchivedItems);
+  const archivedCount = archivedItems?.length ?? 0;
 
   // Migrate icons for items that don't have them yet
   useEffect(() => {
@@ -237,40 +298,77 @@ export default function PantryScreen() {
   });
 
   // Filter items based on view mode, search, stock level (Amazon-style)
+  // When searching, also include archived items so users can find everything
   const filteredItems = useMemo(() => {
     if (!items) return [];
+    const isSearching = searchQuery.trim().length > 0;
+    const searchLower = searchQuery.toLowerCase();
 
-    return items.filter((item) => {
+    // Start with active items
+    const activeResults = items.filter((item) => {
+      // Skip archived items in the main active list (they come from archivedItems query)
+      if (item.status === "archived") return false;
+
       const level = item.stockLevel as StockLevel;
       if (viewMode === "attention") {
-        // Attention mode: only low/out items
         if (level !== "low" && level !== "out") return false;
-        // If filters selected, also apply them within attention items
         if (stockFilters.size > 0 && !stockFilters.has(level)) return false;
       } else {
-        // Amazon-style: empty = show all, otherwise show only selected
         if (stockFilters.size > 0 && !stockFilters.has(level)) return false;
       }
-      if (searchQuery.trim()) {
-        return item.name.toLowerCase().includes(searchQuery.toLowerCase());
+      if (isSearching) {
+        return item.name.toLowerCase().includes(searchLower);
       }
       return true;
     });
-  }, [items, searchQuery, stockFilters, viewMode]);
 
-  // Step 1.1: Memoize groupedItems + sections
+    // When searching, also include matching archived items
+    if (isSearching && archivedItems) {
+      const archivedResults = archivedItems.filter((item) =>
+        item.name.toLowerCase().includes(searchLower)
+      );
+      return [...activeResults, ...archivedResults];
+    }
+
+    return activeResults;
+  }, [items, archivedItems, searchQuery, stockFilters, viewMode]);
+
+  // Step 1.1: Memoize groupedItems + sections (with Essentials tier at top)
   const sections = useMemo(() => {
-    const grouped: Record<string, typeof filteredItems> = {};
+    const essentials: typeof filteredItems = [];
+    const regular: typeof filteredItems = [];
+
     filteredItems.forEach((item) => {
+      const tier = getItemTier(item);
+      if (tier === 1) {
+        essentials.push(item);
+      } else {
+        regular.push(item);
+      }
+    });
+
+    // Group regular items by category
+    const grouped: Record<string, typeof filteredItems> = {};
+    regular.forEach((item) => {
       if (!grouped[item.category]) {
         grouped[item.category] = [];
       }
       grouped[item.category].push(item);
     });
-    return Object.entries(grouped).map(([category, data]) => ({
-      title: category,
-      data,
-    }));
+
+    const result: { title: string; data: typeof filteredItems }[] = [];
+
+    // Essentials section first (only if items exist)
+    if (essentials.length > 0) {
+      result.push({ title: ESSENTIALS_SECTION_TITLE, data: essentials });
+    }
+
+    // Then category sections
+    Object.entries(grouped).forEach(([category, data]) => {
+      result.push({ title: category, data });
+    });
+
+    return result;
   }, [filteredItems]);
 
   // Amazon-style: show how many filters are selected (0 = show all, no badge)
@@ -539,9 +637,90 @@ export default function PantryScreen() {
     setAddToListItem(null);
   }, []);
 
+  // ── Pantry lifecycle: long-press context menu ─────────────────────────
+
+  const handleItemLongPress = useCallback((itemId: Id<"pantryItems">) => {
+    // Find item in active items or archived items
+    const item = items?.find((i) => i._id === itemId)
+      ?? archivedItems?.find((i) => i._id === itemId);
+    if (!item) return;
+
+    haptic("medium");
+
+    const isArchived = item.status === "archived";
+    const isPinned = item.pinned === true;
+
+    if (isArchived) {
+      // Archived item: offer Restore
+      alert("Archived Item", `"${item.name}" is archived.`, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Restore to Pantry",
+          onPress: async () => {
+            try {
+              await unarchiveItemMut({ pantryItemId: item._id });
+              haptic("success");
+            } catch (err) {
+              console.error("Failed to unarchive:", err);
+            }
+          },
+        },
+      ]);
+      return;
+    }
+
+    // Active item: offer Pin/Unpin + Archive
+    const pinLabel = isPinned ? "Unpin from Essentials" : "Pin to Essentials";
+    const options: { text: string; style?: "cancel" | "destructive"; onPress?: () => void }[] = [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: pinLabel,
+        onPress: async () => {
+          try {
+            await togglePin({ pantryItemId: item._id });
+            haptic("light");
+          } catch (err) {
+            console.error("Failed to toggle pin:", err);
+          }
+        },
+      },
+    ];
+
+    // Only show Archive for non-pinned active items
+    if (!isPinned) {
+      options.push({
+        text: "Archive",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await archiveItemMut({ pantryItemId: item._id });
+            haptic("light");
+          } catch (err) {
+            console.error("Failed to archive:", err);
+          }
+        },
+      });
+    }
+
+    alert("Item Options", `"${item.name}"`, options);
+  }, [items, archivedItems, togglePin, archiveItemMut, unarchiveItemMut, alert]);
+
   // ── Step 1.5: SectionList renderers ───────────────────────────────────
 
-  const renderSectionHeader = useCallback(({ section }: { section: { title: string; data: any[] } }) => {
+  const toggleEssentials = useCallback(() => {
+    toggleCategory(ESSENTIALS_SECTION_TITLE);
+  }, [toggleCategory]);
+
+  const renderSectionHeader = useCallback(({ section }: { section: { title: string; data: (typeof filteredItems) } }) => {
+    if (section.title === ESSENTIALS_SECTION_TITLE) {
+      return (
+        <EssentialsSectionHeader
+          count={section.data.length}
+          isCollapsed={collapsedCategories.has(ESSENTIALS_SECTION_TITLE)}
+          onToggle={toggleEssentials}
+        />
+      );
+    }
     return (
       <CategoryHeader
         category={section.title}
@@ -550,11 +729,16 @@ export default function PantryScreen() {
         onToggle={toggleCategory}
       />
     );
-  }, [collapsedCategories, toggleCategory]);
+  }, [collapsedCategories, toggleCategory, toggleEssentials]);
 
-  const renderItem = useCallback(({ item, section }: { item: any; section: { title: string } }) => {
+  const renderItem = useCallback(({ item, section }: {
+    item: (typeof filteredItems)[number];
+    section: { title: string };
+  }) => {
     // If category is collapsed, render nothing
     if (collapsedCategories.has(section.title)) return null;
+
+    const isArchivedResult = item.status === "archived";
 
     return (
       <PantryItemRow
@@ -563,27 +747,49 @@ export default function PantryScreen() {
         onSwipeIncrease={handleSwipeIncrease}
         onRemove={handleRemoveItem}
         onAddToList={handleAddToList}
+        onLongPress={handleItemLongPress}
+        isArchivedResult={isArchivedResult}
       />
     );
-  }, [collapsedCategories, handleSwipeDecrease, handleSwipeIncrease, handleRemoveItem, handleAddToList]);
+  }, [collapsedCategories, handleSwipeDecrease, handleSwipeIncrease, handleRemoveItem, handleAddToList, handleItemLongPress]);
 
   const keyExtractor = useCallback((item: any) => item._id, []);
 
   const ListHeader = useMemo(() => {
-    if (filteredItems.length === 0 && viewMode === "attention") {
-      return (
-        <View style={styles.attentionEmptyContainer}>
-          <MaterialCommunityIcons
-            name="check-circle-outline"
-            size={64}
-            color={colors.accent.success}
-          />
-          <Text style={styles.attentionEmptyTitle}>All stocked up!</Text>
-          <Text style={styles.attentionEmptySubtitle}>
-            Nothing needs restocking right now. Tap "All Items" to browse your full stock.
-          </Text>
-        </View>
-      );
+    if (filteredItems.length === 0) {
+      // Active search with no results → show "no results" regardless of tab
+      if (searchQuery.trim()) {
+        return (
+          <View style={styles.attentionEmptyContainer}>
+            <MaterialCommunityIcons
+              name="magnify-close"
+              size={64}
+              color={colors.text.tertiary}
+            />
+            <Text style={styles.attentionEmptyTitle}>No items found</Text>
+            <Text style={styles.attentionEmptySubtitle}>
+              Nothing matches "{searchQuery.trim()}". Try a different search or check the other tab.
+            </Text>
+          </View>
+        );
+      }
+
+      // No search, attention tab, genuinely empty → all stocked up
+      if (viewMode === "attention") {
+        return (
+          <View style={styles.attentionEmptyContainer}>
+            <MaterialCommunityIcons
+              name="check-circle-outline"
+              size={64}
+              color={colors.accent.success}
+            />
+            <Text style={styles.attentionEmptyTitle}>All stocked up!</Text>
+            <Text style={styles.attentionEmptySubtitle}>
+              Nothing needs restocking right now. Tap "All Items" to browse your full stock.
+            </Text>
+          </View>
+        );
+      }
     }
 
     return (
@@ -597,7 +803,7 @@ export default function PantryScreen() {
 
       </>
     );
-  }, [filteredItems.length, viewMode, hasExpandedCategory]);
+  }, [filteredItems.length, viewMode, hasExpandedCategory, searchQuery]);
 
   // ── Loading & empty states ────────────────────────────────────────────
 
@@ -756,7 +962,24 @@ export default function PantryScreen() {
           renderItem={renderItem}
           renderSectionHeader={renderSectionHeader}
           ListHeaderComponent={ListHeader}
-          ListFooterComponent={<View style={{ height: 140 + insets.bottom }} />}
+          ListFooterComponent={
+            <View>
+              {/* Archived items footer (only in "all" mode, not during search) */}
+              {viewMode === "all" && !searchQuery.trim() && archivedCount > 0 && (
+                <View style={styles.archivedFooter}>
+                  <MaterialCommunityIcons
+                    name="archive-outline"
+                    size={16}
+                    color={colors.text.tertiary}
+                  />
+                  <Text style={styles.archivedFooterText}>
+                    {archivedCount} archived item{archivedCount !== 1 ? "s" : ""} (search to find them)
+                  </Text>
+                </View>
+              )}
+              <View style={{ height: 140 + insets.bottom }} />
+            </View>
+          }
           stickySectionHeadersEnabled={false}
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -1023,5 +1246,32 @@ const styles = StyleSheet.create({
     ...typography.labelMedium,
     color: colors.accent.primary,
     fontWeight: "700",
+  },
+  // Essentials section header
+  essentialsSectionTitle: {
+    color: colors.accent.primary,
+  },
+  essentialsCountBadge: {
+    backgroundColor: `${colors.accent.primary}20`,
+  },
+  essentialsCount: {
+    color: colors.accent.primary,
+  },
+  // Archived footer
+  archivedFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.glass.border,
+  },
+  archivedFooterText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    fontSize: 13,
   },
 });
