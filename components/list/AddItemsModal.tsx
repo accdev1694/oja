@@ -12,6 +12,7 @@ import {
   ScrollView,
   type ListRenderItemInfo,
 } from "react-native";
+import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -31,10 +32,10 @@ import { haptic } from "@/lib/haptics/safeHaptics";
 import { useProductScanner } from "@/hooks/useProductScanner";
 import { useItemSuggestions } from "@/hooks/useItemSuggestions";
 import type { ItemSuggestion } from "@/hooks/useItemSuggestions";
-import { ItemSuggestionsDropdown } from "@/components/list/ItemSuggestionsDropdown";
 import { VariantPicker } from "@/components/items/VariantPicker";
 import type { VariantOption } from "@/components/items/VariantPicker";
 import { useVariantPrefetch } from "@/hooks/useVariantPrefetch";
+import { getIconForItem } from "@/lib/icons/iconMatcher";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,7 +73,14 @@ interface PantryItemData {
   defaultUnit?: string;
 }
 
-type ActiveView = "suggestions" | "variants" | "pantry";
+interface AddedFeedbackItem {
+  id: number;
+  name: string;
+  size?: string;
+  price?: number;
+}
+
+type ActiveView = "search" | "pantry";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pantry Row Component (memoized)
@@ -80,24 +88,22 @@ type ActiveView = "suggestions" | "variants" | "pantry";
 
 interface PantryRowProps {
   item: PantryItemData;
-  isSelected: boolean;
   isOnList: boolean;
-  onToggle: (item: PantryItemData) => void;
+  onAdd: (item: PantryItemData) => void;
 }
 
 const PantryRow = memo(function PantryRow({
   item,
-  isSelected,
   isOnList,
-  onToggle,
+  onAdd,
 }: PantryRowProps) {
   const iconName = (item.icon ?? "food-variant") as keyof typeof MaterialCommunityIcons.glyphMap;
 
   return (
     <Pressable
-      style={[styles.row, isSelected && styles.rowSelected]}
+      style={styles.row}
       onPress={() => {
-        if (!isOnList) onToggle(item);
+        if (!isOnList) onAdd(item);
       }}
       disabled={isOnList}
     >
@@ -110,22 +116,10 @@ const PantryRow = memo(function PantryRow({
               color={colors.text.tertiary}
             />
           </View>
-        ) : isSelected ? (
-          <Pressable
-            style={styles.checkButton}
-            onPress={() => onToggle(item)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons
-              name="check-circle"
-              size={22}
-              color={colors.accent.primary}
-            />
-          </Pressable>
         ) : (
           <Pressable
             style={styles.addButton}
-            onPress={() => onToggle(item)}
+            onPress={() => onAdd(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <MaterialCommunityIcons
@@ -202,14 +196,13 @@ export function AddItemsModal({
   const [manualQty, setManualQty] = useState("1");
   const [manualPrice, setManualPrice] = useState("");
   const [editingField, setEditingField] = useState<"size" | "qty" | "price" | null>(null);
-  const [activeView, setActiveView] = useState<ActiveView>("suggestions");
+  const [activeView, setActiveView] = useState<ActiveView>("search");
   const [selectedSuggestion, setSelectedSuggestion] = useState<ItemSuggestion | null>(null);
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>(undefined);
   const [scannedCategory, setScannedCategory] = useState<string | undefined>(undefined);
-  const [selectedItems, setSelectedItems] = useState<Map<string, SelectedItem>>(
-    new Map()
-  );
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [addedThisSession, setAddedThisSession] = useState<AddedFeedbackItem[]>([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const feedbackIdRef = useRef(0);
   const { alert } = useGlassAlert();
 
   const itemInputRef = useRef<TextInput>(null);
@@ -222,7 +215,6 @@ export function AddItemsModal({
     suggestions,
     isLoading: isSuggestionsLoading,
     search: searchItems,
-    acceptSuggestion,
     clear: clearSuggestions,
   } = useItemSuggestions({ storeName: listStoreName });
 
@@ -231,76 +223,12 @@ export function AddItemsModal({
   });
 
   // ── Product scanner (camera) ──────────────────────────────────────────────
-  const productScanner = useProductScanner();
+  const productScanner = useProductScanner({
+    onDuplicate: (existing) => {
+      alert("Already Scanned", `${existing.name} is already in this session.`);
+    },
+  });
   const enrichVariant = useMutation(api.itemVariants.enrichFromScan);
-
-  const handleCameraScan = useCallback(async () => {
-    haptic("medium");
-    try {
-      const product = await productScanner.captureProduct();
-      if (product) {
-        // Auto-add scanned item to selectedItems
-        const key = product.name.toLowerCase().trim();
-        setSelectedItems((prev) => {
-          const next = new Map(prev);
-          next.set(key, {
-            name: product.name,
-            quantity: 1,
-            size: product.size || undefined,
-            unit: product.unit || undefined,
-            estimatedPrice:
-              product.estimatedPrice != null && isFinite(product.estimatedPrice)
-                ? product.estimatedPrice
-                : undefined,
-            category: product.category,
-            source: "manual",
-          });
-          return next;
-        });
-
-        // Reset for next item (zero-tap loop)
-        setItemName("");
-        setManualSize("");
-        setManualQty("1");
-        setManualPrice("");
-        setEditingField(null);
-        setSelectedSuggestion(null);
-        setSelectedVariantName(undefined);
-        setScannedCategory(undefined);
-        setActiveView("suggestions");
-        clearSuggestions();
-
-        // Refocus input for next item
-        setTimeout(() => itemInputRef.current?.focus(), 150);
-
-        // Enrich itemVariants with scan data (fire-and-forget)
-        if (product.size && product.category) {
-          const baseItem = selectedSuggestion?.name
-            ?? (product.name
-              .replace(/^\d+\s*(pk|pack|g|kg|ml|l|pt|pint)s?\s*/i, "")
-              .replace(/\s+\d+\s*(pk|pack|g|kg|ml|l|pt|pint)s?\s*$/i, "")
-              .trim()
-            || product.name);
-          const label = product.brand
-            ? `${product.brand} ${product.size}`
-            : product.size;
-          enrichVariant({
-            baseItem,
-            size: product.size,
-            unit: product.unit ?? "",
-            category: product.category,
-            brand: product.brand,
-            productName: product.name,
-            displayLabel: label,
-            estimatedPrice: product.estimatedPrice,
-          }).catch(() => {});
-        }
-      }
-    } catch (error) {
-      console.error("Camera scan failed:", error);
-      haptic("error");
-    }
-  }, [productScanner, enrichVariant, selectedSuggestion, clearSuggestions]);
 
   const priceEstimate = useQuery(
     api.currentPrices.getEstimate,
@@ -336,7 +264,6 @@ export function AddItemsModal({
 
   // ── Convex queries & mutations ────────────────────────────────────────────
   const pantryItems = useQuery(api.pantryItems.getByUser);
-  const addFromPantryBulk = useMutation(api.listItems.addFromPantryBulk);
   const createItem = useMutation(api.listItems.create);
   const addAndSeedPantry = useMutation(api.listItems.addAndSeedPantry);
 
@@ -350,11 +277,6 @@ export function AddItemsModal({
     }
     return names;
   }, [existingItems]);
-
-  const existingItemNamesList = useMemo(
-    () => existingItems?.map((i) => i.name) ?? [],
-    [existingItems]
-  );
 
   const isItemOnList = useCallback(
     (name: string) => existingItemNames.has(name.toLowerCase().trim()),
@@ -406,46 +328,160 @@ export function AddItemsModal({
   const isPantryLoading = pantryItems === undefined;
   const pantryNeedCount = outOfStock.length + runningLow.length;
 
-  // Whether suggestions dropdown should be visible
-  const showSuggestions =
-    activeView === "suggestions" &&
-    !selectedSuggestion &&
-    itemName.trim().length >= 2;
+  // ── Auto-select top suggestion as user types ─────────────────────────────
+  useEffect(() => {
+    if (activeView !== "search") return;
+    if (suggestions.length > 0 && itemName.trim().length >= 2) {
+      const top = suggestions[0];
+      // Only update if the top suggestion actually changed
+      if (!selectedSuggestion || selectedSuggestion.name !== top.name) {
+        setSelectedSuggestion(top);
+        if (top.estimatedPrice != null) {
+          setManualPrice(top.estimatedPrice.toFixed(2));
+        }
+        if (top.size) {
+          setManualSize(top.size);
+        }
+      }
+    } else if (itemName.trim().length < 2) {
+      if (selectedSuggestion) setSelectedSuggestion(null);
+    }
+  }, [suggestions, itemName, activeView]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Other matching items for disambiguation (skip the auto-selected top one)
+  const altSuggestions = useMemo(() => {
+    if (!selectedSuggestion || suggestions.length <= 1) return [];
+    return suggestions.filter((s) => s.name !== selectedSuggestion.name).slice(0, 5);
+  }, [suggestions, selectedSuggestion]);
+
+  // ── Reset helper ───────────────────────────────────────────────────────────
+
+  const resetInputFields = useCallback(() => {
+    setItemName("");
+    setManualSize("");
+    setManualQty("1");
+    setManualPrice("");
+    setEditingField(null);
+    setSelectedSuggestion(null);
+    setSelectedVariantName(undefined);
+    setScannedCategory(undefined);
+    setActiveView("search");
+    clearSuggestions();
+    setTimeout(() => itemInputRef.current?.focus(), 150);
+  }, [clearSuggestions]);
+
+  // ── Show feedback pill ────────────────────────────────────────────────────
+
+  const showAddedFeedback = useCallback(
+    (name: string, size?: string, price?: number) => {
+      const id = ++feedbackIdRef.current;
+      setAddedThisSession((prev) => [{ id, name, size, price }, ...prev]);
+      // Auto-dismiss after 2.5s
+      setTimeout(() => {
+        setAddedThisSession((prev) => prev.filter((f) => f.id !== id));
+      }, 2500);
+    },
+    []
+  );
+
+  // ── Per-item add to list ──────────────────────────────────────────────────
+
+  const addItemToList = useCallback(
+    async (item: SelectedItem, force = false) => {
+      setIsAdding(true);
+      try {
+        let result: { status: string; existingName?: string; existingQuantity?: number } | undefined;
+
+        if (!item.category && !item.pantryItemId) {
+          // Custom item without category → seed pantry
+          result = await addAndSeedPantry({
+            listId,
+            name: item.name,
+            category: "Uncategorized",
+            size: item.size,
+            unit: item.unit,
+            estimatedPrice: item.estimatedPrice,
+            quantity: item.quantity,
+            force,
+          }) as typeof result;
+        } else {
+          // Has category or pantryItemId → standard create
+          result = await createItem({
+            listId,
+            name: item.name,
+            quantity: item.quantity,
+            category: item.category,
+            size: item.size,
+            unit: item.unit,
+            estimatedPrice: item.estimatedPrice,
+            ...(item.pantryItemId ? { pantryItemId: item.pantryItemId } : {}),
+            force,
+          }) as typeof result;
+        }
+
+        // Handle duplicate response
+        if (result && typeof result === "object" && "status" in result && result.status === "duplicate") {
+          const existingName = result.existingName ?? item.name;
+          const existingQty = result.existingQuantity ?? 1;
+          const existingSize = (result as Record<string, unknown>).existingSize as string | undefined;
+          const sizeLabel = existingSize ? ` (${existingSize})` : "";
+          alert(
+            "Already on List",
+            `"${existingName}"${sizeLabel} (\u00D7${existingQty}) is already on your list. Add again?`,
+            [
+              { text: "Skip", style: "cancel" },
+              {
+                text: "Add Anyway",
+                onPress: () => { addItemToList(item, true); },
+              },
+            ]
+          );
+          return;
+        }
+
+        haptic("success");
+        showAddedFeedback(item.name, item.size, item.estimatedPrice);
+      } catch (error) {
+        console.error("Failed to add item:", error);
+        haptic("error");
+      } finally {
+        setIsAdding(false);
+      }
+    },
+    [listId, createItem, addAndSeedPantry, alert, showAddedFeedback]
+  );
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleNameChange = useCallback(
     (text: string) => {
       setItemName(text);
-      if (selectedSuggestion) {
-        setSelectedSuggestion(null);
-        setSelectedVariantName(undefined);
-      }
+      setSelectedVariantName(undefined);
       if (scannedCategory) setScannedCategory(undefined);
-      if (activeView !== "suggestions") setActiveView("suggestions");
+      if (activeView !== "search") setActiveView("search");
       searchItems(text);
       triggerPrefetch(text);
     },
-    [activeView, selectedSuggestion, scannedCategory, searchItems, triggerPrefetch]
+    [activeView, scannedCategory, searchItems, triggerPrefetch]
   );
 
-  const handleSelectSuggestion = useCallback(
+  const handleSelectAltSuggestion = useCallback(
     (suggestion: ItemSuggestion) => {
       haptic("light");
-      const name = acceptSuggestion(suggestion);
-      setItemName(name);
       setSelectedSuggestion(suggestion);
-      setActiveView("variants");
-
-      // Pre-fill fields from suggestion
+      setSelectedVariantName(undefined);
       if (suggestion.estimatedPrice != null) {
         setManualPrice(suggestion.estimatedPrice.toFixed(2));
+      } else {
+        setManualPrice("");
       }
       if (suggestion.size) {
         setManualSize(suggestion.size);
+      } else {
+        setManualSize("");
       }
     },
-    [acceptSuggestion]
+    []
   );
 
   const handleVariantSelect = useCallback(
@@ -456,76 +492,53 @@ export function AddItemsModal({
       const name = selectedSuggestion?.name ?? itemName.trim();
       if (!name) return;
 
-      // Auto-add item with selected variant to selectedItems
-      const key = name.toLowerCase();
-      setSelectedItems((prev) => {
-        const next = new Map(prev);
-        next.set(key, {
-          name,
-          quantity: parseInt(manualQty, 10) || 1,
-          size: variant?.size || manualSize || undefined,
-          unit: variant?.unit || undefined,
-          estimatedPrice: variant?.price ?? (manualPrice ? parseFloat(manualPrice) : undefined),
-          category: selectedSuggestion?.category || scannedCategory,
-          source: "manual",
-          pantryItemId: selectedSuggestion?.pantryItemId
-            ? (selectedSuggestion.pantryItemId as Id<"pantryItems">)
-            : undefined,
-        });
-        return next;
+      // Reset immediately so keyboard stays open and input is ready for next item
+      resetInputFields();
+
+      // Add item to list in the background (don't await)
+      addItemToList({
+        name,
+        quantity: parseInt(manualQty, 10) || 1,
+        size: variant?.size || manualSize || undefined,
+        unit: variant?.unit || undefined,
+        estimatedPrice: variant?.price ?? (manualPrice ? parseFloat(manualPrice) : undefined),
+        category: selectedSuggestion?.category || scannedCategory,
+        source: "manual",
+        pantryItemId: selectedSuggestion?.pantryItemId
+          ? (selectedSuggestion.pantryItemId as Id<"pantryItems">)
+          : undefined,
+      });
+    },
+    [variantOptions, selectedSuggestion, itemName, manualQty, manualSize, manualPrice, scannedCategory, addItemToList, resetInputFields]
+  );
+
+  const addPantryItem = useCallback(
+    async (item: PantryItemData) => {
+      haptic("light");
+
+      // Add to list immediately
+      await addItemToList({
+        name: item.name,
+        category: item.category,
+        size: item.defaultSize,
+        unit: item.defaultUnit,
+        estimatedPrice: item.lastPrice,
+        quantity: 1,
+        source: "pantry",
+        pantryItemId: item._id,
       });
 
-      // Reset for next item (zero-tap loop)
-      setItemName("");
-      setManualSize("");
-      setManualQty("1");
-      setManualPrice("");
-      setEditingField(null);
-      setSelectedSuggestion(null);
-      setSelectedVariantName(undefined);
-      setScannedCategory(undefined);
-      setActiveView("suggestions");
-      clearSuggestions();
-
-      // Refocus input for next item
+      // Refocus input (zero-tap loop)
       setTimeout(() => itemInputRef.current?.focus(), 150);
     },
-    [variantOptions, selectedSuggestion, itemName, manualQty, manualSize, manualPrice, scannedCategory, clearSuggestions]
+    [addItemToList]
   );
 
-  const togglePantryItem = useCallback(
-    (item: PantryItemData) => {
-      haptic("light");
-      setSelectedItems((prev) => {
-        const next = new Map(prev);
-        const key = item.name.toLowerCase().trim();
-
-        if (next.has(key)) {
-          next.delete(key);
-        } else {
-          next.set(key, {
-            name: item.name,
-            category: item.category,
-            size: item.defaultSize,
-            unit: item.defaultUnit,
-            estimatedPrice: item.lastPrice,
-            quantity: 1,
-            source: "pantry",
-            pantryItemId: item._id,
-          });
-        }
-        return next;
-      });
-    },
-    []
-  );
-
-  const handleAddManualItem = useCallback(() => {
+  const handleAddManualItem = useCallback(async () => {
     const trimmed = itemName.trim();
     if (!trimmed) return;
 
     haptic("light");
-    const key = trimmed.toLowerCase();
     const qty = parseInt(manualQty, 10) || 1;
     const price = manualPrice
       ? parseFloat(manualPrice)
@@ -536,38 +549,22 @@ export function AddItemsModal({
       (v) => v.variantName === selectedVariantName
     );
 
-    setSelectedItems((prev) => {
-      const next = new Map(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.set(key, {
-          name: trimmed,
-          quantity: qty,
-          size: manualSize || undefined,
-          unit: selectedVariant?.unit || undefined,
-          estimatedPrice: price,
-          category: selectedSuggestion?.category || scannedCategory,
-          source: "manual",
-          pantryItemId: selectedSuggestion?.pantryItemId
-            ? (selectedSuggestion.pantryItemId as Id<"pantryItems">)
-            : undefined,
-        });
-      }
-      return next;
+    // Add to list immediately
+    await addItemToList({
+      name: trimmed,
+      quantity: qty,
+      size: manualSize || undefined,
+      unit: selectedVariant?.unit || undefined,
+      estimatedPrice: price,
+      category: selectedSuggestion?.category || scannedCategory,
+      source: "manual",
+      pantryItemId: selectedSuggestion?.pantryItemId
+        ? (selectedSuggestion.pantryItemId as Id<"pantryItems">)
+        : undefined,
     });
 
-    // Reset fields
-    setItemName("");
-    setManualSize("");
-    setManualQty("1");
-    setManualPrice("");
-    setEditingField(null);
-    setSelectedSuggestion(null);
-    setSelectedVariantName(undefined);
-    setScannedCategory(undefined);
-    setActiveView("suggestions");
-    clearSuggestions();
+    // Reset for next item (zero-tap loop)
+    resetInputFields();
   }, [
     itemName,
     manualSize,
@@ -578,8 +575,62 @@ export function AddItemsModal({
     selectedVariantName,
     scannedCategory,
     variantOptions,
-    clearSuggestions,
+    addItemToList,
+    resetInputFields,
   ]);
+
+  const handleCameraScan = useCallback(async () => {
+    haptic("medium");
+    try {
+      const product = await productScanner.captureProduct();
+      if (product) {
+        // Add scanned item to list immediately
+        await addItemToList({
+          name: product.name,
+          quantity: 1,
+          size: product.size || undefined,
+          unit: product.unit || undefined,
+          estimatedPrice:
+            product.estimatedPrice != null && isFinite(product.estimatedPrice)
+              ? product.estimatedPrice
+              : undefined,
+          category: product.category,
+          source: "manual",
+        });
+
+        // Reset for next item (zero-tap loop)
+        resetInputFields();
+
+        // Enrich itemVariants with scan data (fire-and-forget)
+        if (product.size && product.category) {
+          const baseItem = selectedSuggestion?.name
+            ?? (product.name
+              .replace(/^\d+\s*(pk|pack|g|kg|ml|l|pt|pint)s?\s*/i, "")
+              .replace(/\s+\d+\s*(pk|pack|g|kg|ml|l|pt|pint)s?\s*$/i, "")
+              .trim()
+            || product.name);
+          const label = product.brand
+            ? `${product.brand} ${product.size}`
+            : product.size;
+          enrichVariant({
+            baseItem,
+            size: product.size,
+            unit: product.unit ?? "",
+            category: product.category,
+            brand: product.brand,
+            productName: product.name,
+            displayLabel: label,
+            estimatedPrice: product.estimatedPrice,
+            confidence: product.confidence,
+            imageStorageId: product.imageStorageId as Id<"_storage">,
+          }).catch(() => {});
+        }
+      }
+    } catch (error) {
+      console.error("Camera scan failed:", error);
+      haptic("error");
+    }
+  }, [productScanner, enrichVariant, selectedSuggestion, addItemToList, resetInputFields]);
 
   const handleFieldToggle = useCallback(
     (field: "size" | "qty" | "price") => {
@@ -596,7 +647,7 @@ export function AddItemsModal({
 
   const handleShowPantry = useCallback(() => {
     haptic("light");
-    setActiveView("pantry");
+    setActiveView((prev) => (prev === "pantry" ? "search" : "pantry"));
   }, []);
 
   const handleClose = useCallback(() => {
@@ -605,186 +656,17 @@ export function AddItemsModal({
     setManualQty("1");
     setManualPrice("");
     setEditingField(null);
-    setSelectedItems(new Map());
+    setAddedThisSession([]);
     setSelectedSuggestion(null);
     setSelectedVariantName(undefined);
     setScannedCategory(undefined);
-    setActiveView("suggestions");
+    setActiveView("search");
     clearSuggestions();
     onClose();
   }, [onClose, clearSuggestions]);
 
-  const handleSubmit = useCallback(async () => {
-    if (selectedItems.size === 0) return;
-
-    setIsSubmitting(true);
-    haptic("medium");
-
-    try {
-      const pantryItemIds: Id<"pantryItems">[] = [];
-      const searchItemsToCreate: SelectedItem[] = [];
-      const customItemsToSeed: SelectedItem[] = [];
-
-      // Build a lookup of existing pantry items by normalized name
-      // to prevent creating duplicate pantry entries
-      const pantryByName = new Map<string, Id<"pantryItems">>();
-      if (pantryItems) {
-        for (const p of pantryItems) {
-          pantryByName.set(p.name.toLowerCase().trim(), p._id);
-        }
-      }
-
-      for (const [, item] of selectedItems) {
-        if (item.pantryItemId) {
-          pantryItemIds.push(item.pantryItemId);
-        } else if (
-          (item.source === "search" || item.source === "manual") &&
-          !item.category
-        ) {
-          // Check if a matching pantry item already exists before seeding
-          const existingPantryId = pantryByName.get(item.name.toLowerCase().trim());
-          if (existingPantryId) {
-            // Use createItem with the existing pantryItemId instead of seeding a duplicate
-            searchItemsToCreate.push({ ...item, pantryItemId: existingPantryId });
-          } else {
-            customItemsToSeed.push(item);
-          }
-        } else {
-          searchItemsToCreate.push(item);
-        }
-      }
-
-      // Track duplicates found during mutations
-      interface DuplicateInfo {
-        name: string;
-        existingName: string;
-        existingQuantity: number;
-        mutation: "create" | "seed";
-        args: Record<string, unknown>;
-      }
-      const duplicates: DuplicateInfo[] = [];
-
-      // Pantry bulk add — skippedDuplicates are informational only (no force-add for bulk)
-      if (pantryItemIds.length > 0) {
-        await addFromPantryBulk({ listId, pantryItemIds });
-      }
-
-      // Add search items — check for duplicates
-      for (const item of searchItemsToCreate) {
-        const result = await createItem({
-          listId,
-          name: item.name,
-          quantity: item.quantity,
-          category: item.category,
-          size: item.size,
-          unit: item.unit,
-          estimatedPrice: item.estimatedPrice,
-          ...(item.pantryItemId ? { pantryItemId: item.pantryItemId } : {}),
-        });
-        if (result && typeof result === "object" && "status" in result && result.status === "duplicate") {
-          duplicates.push({
-            name: item.name,
-            existingName: result.existingName as string,
-            existingQuantity: result.existingQuantity as number,
-            mutation: "create",
-            args: {
-              listId,
-              name: item.name,
-              quantity: item.quantity,
-              category: item.category,
-              size: item.size,
-              unit: item.unit,
-              estimatedPrice: item.estimatedPrice,
-              ...(item.pantryItemId ? { pantryItemId: item.pantryItemId } : {}),
-            },
-          });
-        }
-      }
-
-      // Add custom items (seed pantry) — check for duplicates
-      for (const item of customItemsToSeed) {
-        const result = await addAndSeedPantry({
-          listId,
-          name: item.name,
-          category: item.category ?? "Uncategorized",
-          size: item.size,
-          unit: item.unit,
-          estimatedPrice: item.estimatedPrice,
-          quantity: item.quantity,
-        });
-        if (result && typeof result === "object" && "status" in result && result.status === "duplicate") {
-          duplicates.push({
-            name: item.name,
-            existingName: result.existingName as string,
-            existingQuantity: result.existingQuantity as number,
-            mutation: "seed",
-            args: {
-              listId,
-              name: item.name,
-              category: item.category ?? "Uncategorized",
-              size: item.size,
-              unit: item.unit,
-              estimatedPrice: item.estimatedPrice,
-              quantity: item.quantity,
-            },
-          });
-        }
-      }
-
-      // If duplicates found, show confirmation dialog
-      if (duplicates.length > 0) {
-        const dupList = duplicates
-          .map((d) => `"${d.existingName}" (\u00D7${d.existingQuantity})`)
-          .join(", ");
-        const message = duplicates.length === 1
-          ? `${dupList} is already on your list. Add again?`
-          : `These items are already on your list: ${dupList}. Add again?`;
-
-        setIsSubmitting(false);
-        handleClose();
-
-        alert("Items Already on List", message, [
-          { text: "Skip", style: "cancel" },
-          {
-            text: "Add Anyway",
-            onPress: async () => {
-              try {
-                for (const dup of duplicates) {
-                  if (dup.mutation === "create") {
-                    await createItem({ ...dup.args, force: true } as Parameters<typeof createItem>[0]);
-                  } else {
-                    await addAndSeedPantry({ ...dup.args, force: true } as Parameters<typeof addAndSeedPantry>[0]);
-                  }
-                }
-                haptic("success");
-              } catch (err) {
-                console.error("Failed to force-add duplicates:", err);
-                haptic("error");
-              }
-            },
-          },
-        ]);
-        return;
-      }
-
-      haptic("success");
-      handleClose();
-    } catch (error) {
-      console.error("Failed to add items:", error);
-      haptic("error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [
-    selectedItems,
-    listId,
-    pantryItems,
-    addFromPantryBulk,
-    createItem,
-    addAndSeedPantry,
-    handleClose,
-    alert,
-  ]);
+  // Session stats for bottom bar
+  const addedCount = addedThisSession.length;
 
   // ── Render helpers ──────────────────────────────────────────────────────────
 
@@ -806,17 +688,15 @@ export function AddItemsModal({
         );
       }
 
-      const key = item.data.name.toLowerCase().trim();
       return (
         <PantryRow
           item={item.data}
-          isSelected={selectedItems.has(key)}
           isOnList={isItemOnList(item.data.name)}
-          onToggle={togglePantryItem}
+          onAdd={addPantryItem}
         />
       );
     },
-    [selectedItems, isItemOnList, togglePantryItem]
+    [isItemOnList, addPantryItem]
   );
 
   const pantryKeyExtractor = useCallback(
@@ -831,15 +711,6 @@ export function AddItemsModal({
         : `pantry-${item.data._id}-${index}`,
     []
   );
-
-  const selectedCount = selectedItems.size;
-  const selectedSubtotal = useMemo(() => {
-    let total = 0;
-    for (const [, item] of selectedItems) {
-      total += (item.estimatedPrice ?? 0) * item.quantity;
-    }
-    return total;
-  }, [selectedItems]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -1096,6 +967,32 @@ export function AddItemsModal({
 
       </View>
 
+      {/* Added feedback pills */}
+      {addedThisSession.length > 0 && (
+        <View style={styles.feedbackContainer}>
+          {addedThisSession.slice(0, 3).map((item) => (
+            <Animated.View
+              key={item.id}
+              entering={FadeInDown.duration(250)}
+              exiting={FadeOut.duration(200)}
+              style={styles.feedbackPill}
+            >
+              <MaterialCommunityIcons
+                name="check-circle"
+                size={14}
+                color={colors.accent.primary}
+              />
+              <Text style={styles.feedbackText} numberOfLines={1}>
+                {item.name}
+                {item.size ? ` ${item.size}` : ""}
+                {item.price != null ? ` \u00B7 \u00A3${item.price.toFixed(2)}` : ""}
+                {" added"}
+              </Text>
+            </Animated.View>
+          ))}
+        </View>
+      )}
+
       {/* Content Area */}
       <View style={styles.contentArea}>
         {activeView === "pantry" ? (
@@ -1129,89 +1026,126 @@ export function AddItemsModal({
               />
             )}
           </>
-        ) : activeView === "variants" && selectedSuggestion ? (
-          /* ── Variant picker view ────────────────────────── */
+        ) : (
+          /* ── Search view — single-layer variants ────────── */
           <ScrollView
             style={styles.variantScrollView}
             contentContainerStyle={styles.variantScrollContent}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            showsVerticalScrollIndicator={false}
           >
-            {isVariantsLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={colors.accent.primary} />
-                <Text style={styles.loadingText}>Loading sizes...</Text>
-              </View>
-            ) : variantOptions.length === 0 ? (
-              <View style={styles.variantEmptyContainer}>
-                <MaterialCommunityIcons
-                  name="information-outline"
-                  size={24}
-                  color={colors.text.tertiary}
-                />
-                <Text style={styles.variantEmptyText}>
-                  No size options found for {selectedSuggestion.name}
-                </Text>
-                <Text style={styles.emptySubtext}>
-                  You can set the size manually using the buttons above
-                </Text>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.variantSectionTitle}>Pick a size</Text>
-                <VariantPicker
-                  baseItem={selectedSuggestion.name}
-                  variants={variantOptions}
-                  selectedVariant={selectedVariantName}
-                  onSelect={handleVariantSelect}
-                  showPricePerUnit
-                  isLoading={isVariantsLoading}
-                />
-              </>
-            )}
-          </ScrollView>
-        ) : (
-          /* ── Suggestions view (default) ─────────────────── */
-          <>
-            {showSuggestions ? (
-              <View style={styles.suggestionsContainer}>
-                <ItemSuggestionsDropdown
-                  suggestions={suggestions}
-                  isLoading={isSuggestionsLoading}
-                  onSelect={handleSelectSuggestion}
-                  onDismiss={() => {}}
-                  visible
-                  existingItemNames={existingItemNamesList}
-                />
-              </View>
-            ) : (
+            {itemName.trim().length < 2 ? (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyHint}>
                   Search above or add from pantry
                 </Text>
               </View>
+            ) : isSuggestionsLoading && !selectedSuggestion ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={colors.accent.primary} />
+                <Text style={styles.loadingText}>Searching...</Text>
+              </View>
+            ) : !selectedSuggestion ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyHint}>
+                  No matches found — tap &quot;Add Item&quot; to add manually
+                </Text>
+              </View>
+            ) : (
+              <>
+                {/* Matched item label + variant chips (single line header) */}
+                <View style={styles.matchedItemRow}>
+                  <Text style={styles.matchedItemLabel}>
+                    {selectedSuggestion.name}
+                    {selectedSuggestion.source === "pantry" && (
+                      <Text style={styles.matchedItemBadge}> · in pantry</Text>
+                    )}
+                  </Text>
+                </View>
+
+                {/* Variant chips */}
+                {isVariantsLoading ? (
+                  <VariantPicker
+                    baseItem={selectedSuggestion.name}
+                    variants={[]}
+                    onSelect={handleVariantSelect}
+                    isLoading
+                    compact
+                  />
+                ) : variantOptions.length > 0 ? (
+                  <VariantPicker
+                    baseItem={selectedSuggestion.name}
+                    variants={variantOptions}
+                    selectedVariant={selectedVariantName}
+                    onSelect={handleVariantSelect}
+                    showPricePerUnit
+                    compact
+                  />
+                ) : (
+                  <Text style={styles.noVariantsHint}>
+                    No size options — use Size button above or tap &quot;Add Item&quot;
+                  </Text>
+                )}
+
+                {/* Disambiguation: other matching items */}
+                {altSuggestions.length > 0 && (
+                  <View style={styles.altSuggestionsSection}>
+                    <Text style={styles.altSuggestionsLabel}>Did you mean?</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      keyboardShouldPersistTaps="always"
+                      contentContainerStyle={styles.altSuggestionsRow}
+                    >
+                      {altSuggestions.map((s) => (
+                        <Pressable
+                          key={s.name}
+                          style={styles.altSuggestionChip}
+                          onPress={() => handleSelectAltSuggestion(s)}
+                        >
+                          <Text style={styles.altSuggestionText} numberOfLines={1}>
+                            {s.name}
+                          </Text>
+                          {s.source === "pantry" && (
+                            <View style={[styles.stockDot, {
+                              backgroundColor:
+                                s.stockLevel === "out" ? colors.accent.error :
+                                s.stockLevel === "low" ? colors.accent.warning :
+                                colors.accent.success,
+                            }]} />
+                          )}
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </>
             )}
-          </>
+
+          </ScrollView>
         )}
       </View>
 
-      {/* Sticky Bottom Button */}
+      {/* Sticky Bottom Bar */}
       <View style={styles.bottomBar}>
-        {selectedCount > 0 && (
+        {addedCount > 0 && (
           <Text style={styles.subtotalText}>
-            {selectedCount} item{selectedCount !== 1 ? "s" : ""} · £{selectedSubtotal.toFixed(2)}
+            {addedCount} item{addedCount !== 1 ? "s" : ""} added
           </Text>
         )}
         <GlassButton
           variant="primary"
           size="lg"
-          onPress={handleSubmit}
-          disabled={selectedCount === 0 || isSubmitting}
-          loading={isSubmitting}
+          onPress={itemName.trim().length > 0 ? handleAddManualItem : handleClose}
+          disabled={isAdding || (itemName.trim().length === 0 && addedCount === 0)}
+          loading={isAdding}
           style={styles.submitButton}
         >
-          {selectedCount === 0
+          {itemName.trim().length > 0
             ? "Add Item"
-            : `Add ${selectedCount} Item${selectedCount !== 1 ? "s" : ""}`}
+            : addedCount > 0
+              ? "Done"
+              : "Add Item"}
         </GlassButton>
       </View>
     </GlassModal>
@@ -1267,7 +1201,7 @@ const styles = StyleSheet.create({
   // Unified input bar
   inputSection: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.glass.border,
     gap: spacing.xs,
@@ -1311,6 +1245,7 @@ const styles = StyleSheet.create({
   fieldButtonRow: {
     flexDirection: "row",
     gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   fieldButton: {
     flex: 1,
@@ -1365,6 +1300,29 @@ const styles = StyleSheet.create({
 
   // (pantry badge styles moved to inputBarBadge above)
 
+  // Feedback pills
+  feedbackContainer: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xs,
+    gap: spacing.xs,
+  },
+  feedbackPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: "rgba(0, 212, 170, 0.1)",
+    borderRadius: borderRadius.full,
+    alignSelf: "flex-start",
+  },
+  feedbackText: {
+    ...typography.bodySmall,
+    color: colors.accent.primary,
+    fontWeight: "500",
+    flexShrink: 1,
+  },
+
   // Content area
   contentArea: {
     flex: 1,
@@ -1375,40 +1333,73 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
   },
 
-  // Suggestions container
-  suggestionsContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    flex: 1,
-  },
-
   // Variant picker
   variantScrollView: {
     flex: 1,
   },
   variantScrollContent: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: spacing.lg,
   },
-  variantSectionTitle: {
-    ...typography.labelLarge,
-    color: colors.text.secondary,
-    marginBottom: spacing.md,
-  },
-  variantEmptyContainer: {
+
+  // Matched item row (single line: name + badge)
+  matchedItemRow: {
+    flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing["3xl"],
     paddingHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
   },
-  variantEmptyText: {
-    ...typography.bodyMedium,
+  matchedItemLabel: {
+    ...typography.labelLarge,
     color: colors.text.primary,
-    textAlign: "center",
-    width: "100%",
+    fontWeight: "600",
+  },
+  matchedItemBadge: {
+    ...typography.labelSmall,
+    color: colors.accent.primary,
+    fontWeight: "500",
+  },
+  noVariantsHint: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.sm,
   },
 
+  // Alt suggestions (disambiguation)
+  altSuggestionsSection: {
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.xl,
+  },
+  altSuggestionsLabel: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    marginBottom: spacing.sm,
+  },
+  altSuggestionsRow: {
+    gap: spacing.sm,
+  },
+  altSuggestionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  altSuggestionText: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    fontWeight: "500",
+  },
+  stockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   // Loading
   loadingContainer: {
     flex: 1,
@@ -1491,10 +1482,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.glass.border,
   },
-  rowSelected: {
-    borderColor: colors.accent.primary,
-    backgroundColor: "rgba(0, 212, 170, 0.08)",
-  },
   rowLeft: {
     flexDirection: "row",
     alignItems: "center",
@@ -1536,13 +1523,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  checkButton: {
-    width: 28,
-    height: 28,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
   // On-list badge
   onListBadge: {
     width: 28,
@@ -1585,4 +1565,5 @@ const styles = StyleSheet.create({
   submitButton: {
     width: "100%",
   },
+
 });

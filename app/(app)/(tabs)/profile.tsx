@@ -26,6 +26,7 @@ import {
   useGlassAlert,
 } from "@/components/ui/glass";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { haptic } from "@/lib/haptics/safeHaptics";
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
@@ -580,4 +581,5 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     textAlign: "center",
   },
+
 });
