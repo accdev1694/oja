@@ -143,13 +143,18 @@ export default function CuisineSelectionScreen() {
     );
   }
 
+  const PINNED_BUTTON_HEIGHT = 64 + spacing.md * 2; // button + vertical padding
+
   return (
     <GlassScreen>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.lg },
+          {
+            paddingTop: insets.top + spacing.lg,
+            paddingBottom: PINNED_BUTTON_HEIGHT + insets.bottom + spacing.md,
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -192,21 +197,21 @@ export default function CuisineSelectionScreen() {
             />
           ))}
         </View>
-
-        {/* Continue Button */}
-        <View style={styles.buttonContainer}>
-          <GlassButton
-            variant="primary"
-            size="lg"
-            icon="arrow-right"
-            onPress={handleContinue}
-            loading={isSaving}
-            disabled={selectedCuisines.length === 0 || isSaving}
-          >
-            {`Continue (${selectedCuisines.length} selected)`}
-          </GlassButton>
-        </View>
       </ScrollView>
+
+      {/* Pinned Continue Button */}
+      <View style={[styles.pinnedButtonContainer, { paddingBottom: insets.bottom + spacing.sm }]}>
+        <GlassButton
+          variant="primary"
+          size="lg"
+          icon="arrow-right"
+          onPress={handleContinue}
+          loading={isSaving}
+          disabled={selectedCuisines.length === 0 || isSaving}
+        >
+          {`Continue (${selectedCuisines.length} selected)`}
+        </GlassButton>
+      </View>
     </GlassScreen>
   );
 }
@@ -394,7 +399,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  buttonContainer: {
-    marginBottom: spacing.lg,
+  pinnedButtonContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    backgroundColor: "rgba(13, 21, 40, 0.95)",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.08)",
   },
 });
