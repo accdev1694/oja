@@ -1,26 +1,75 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
-import { calculateSimilarity, isDuplicateItemName } from "./lib/fuzzyMatch";
+import { calculateSimilarity, isDuplicateItemName, isDuplicateItem } from "./lib/fuzzyMatch";
+
+const ACTIVE_PANTRY_CAP = 150;
 
 /**
- * Find an existing pantry item by name using fuzzy matching.
+ * Determine the tier of a pantry item:
+ *   1 = Essential (pinned or purchaseCount >= 3)
+ *   2 = Regular (active, not essential)
+ *   3 = Archived
+ */
+export function getItemTier(item: { pinned?: boolean; purchaseCount?: number; status?: string }): 1 | 2 | 3 {
+  if (item.status === "archived") return 3;
+  if (item.pinned) return 1;
+  if ((item.purchaseCount ?? 0) >= 3) return 1;
+  return 2;
+}
+
+/**
+ * Enforce the 150-item active pantry cap.
+ * If at/over the limit, archives the oldest non-pinned item
+ * (by lastPurchasedAt, falling back to updatedAt).
+ */
+async function enforceActiveCap(ctx: MutationCtx, userId: Id<"users">) {
+  const activeItems = await ctx.db
+    .query("pantryItems")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .filter((q) => q.neq(q.field("status"), "archived"))
+    .collect();
+
+  if (activeItems.length >= ACTIVE_PANTRY_CAP) {
+    // Find oldest non-pinned item by lastPurchasedAt (or updatedAt fallback)
+    const archivable = activeItems
+      .filter((item) => !item.pinned)
+      .sort((a, b) => {
+        const aTime = a.lastPurchasedAt ?? a.updatedAt;
+        const bTime = b.lastPurchasedAt ?? b.updatedAt;
+        return aTime - bTime; // oldest first
+      });
+
+    if (archivable.length > 0) {
+      await ctx.db.patch(archivable[0]._id, {
+        status: "archived",
+        archivedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    }
+  }
+}
+
+/**
+ * Find an existing pantry item by name+size using fuzzy matching.
  * Catches plurals, common prefixes, typos, and case differences.
+ * Size-aware: "Milk 1L" and "Milk 2L" are treated as distinct items.
  * Returns the matching item or null.
  */
 async function findExistingPantryItem(
   ctx: MutationCtx,
   userId: Id<"users">,
   name: string,
+  size?: string | null,
 ) {
   const items = await ctx.db
     .query("pantryItems")
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .collect();
-  return items.find((item) => isDuplicateItemName(name, item.name)) ?? null;
+  return items.find((item) => isDuplicateItem(name, size, item.name, item.defaultSize)) ?? null;
 }
 
 /**
@@ -68,13 +117,13 @@ export const bulkCreate = mutation({
       .query("pantryItems")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
-    const knownNames: string[] = existing.map((e) => e.name);
+    const knownItems: { name: string; size?: string }[] = existing.map((e) => ({ name: e.name, size: e.defaultSize }));
 
-    // Insert only items that don't fuzzy-match any existing item
+    // Insert only items that don't fuzzy-match any existing item (size-aware)
     const newItems = args.items.filter((item) => {
-      const isDup = knownNames.some((n) => isDuplicateItemName(item.name, n));
+      const isDup = knownItems.some((known) => isDuplicateItem(item.name, item.defaultSize, known.name, known.size));
       if (!isDup) {
-        knownNames.push(item.name); // prevent dupes within the batch too
+        knownItems.push({ name: item.name, size: item.defaultSize }); // prevent dupes within the batch too
         return true;
       }
       return false;
@@ -87,6 +136,7 @@ export const bulkCreate = mutation({
         category: item.category,
         icon: getIconForItem(item.name, item.category),
         stockLevel: item.stockLevel,
+        status: "active" as const,
         // Price seeding from AI estimates
         ...(item.estimatedPrice !== undefined && {
           lastPrice: item.estimatedPrice,
@@ -131,7 +181,8 @@ export const bulkCreate = mutation({
 });
 
 /**
- * Get all pantry items for the current user
+ * Get all active pantry items for the current user.
+ * Filters out archived items; treats missing status as "active" (backward compat).
  */
 export const getByUser = query({
   args: {},
@@ -150,9 +201,42 @@ export const getByUser = query({
       return [];
     }
 
-    return await ctx.db
+    const items = await ctx.db
       .query("pantryItems")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    // Filter out archived items; treat missing status as "active" for backward compat
+    return items.filter((item) => item.status !== "archived");
+  },
+});
+
+/**
+ * Get archived pantry items for the current user.
+ * Uses the by_user_status index for efficient lookup.
+ */
+export const getArchivedItems = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      return [];
+    }
+
+    return await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", user._id).eq("status", "archived")
+      )
       .collect();
   },
 });
@@ -232,12 +316,16 @@ export const create = mutation({
 
     const now = Date.now();
 
+    // Enforce active pantry cap before inserting
+    await enforceActiveCap(ctx, user._id);
+
     const itemId = await ctx.db.insert("pantryItems", {
       userId: user._id,
       name: args.name,
       category: args.category,
       icon: getIconForItem(args.name, args.category),
       stockLevel: args.stockLevel,
+      status: "active" as const,
       autoAddToList: args.autoAddToList ?? false,
       lastPrice: args.lastPrice,
       priceSource: args.priceSource,
@@ -354,6 +442,99 @@ export const remove = mutation({
 });
 
 /**
+ * Toggle pin on a pantry item.
+ * Pinned items become Tier 1 (Essentials) and are never auto-archived.
+ * If an archived item is pinned, it is automatically unarchived.
+ */
+export const togglePin = mutation({
+  args: { pantryItemId: v.id("pantryItems") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const item = await ctx.db.get(args.pantryItemId);
+    if (!item || item.userId !== user._id) throw new Error("Item not found");
+
+    const updates: Record<string, unknown> = {
+      pinned: !item.pinned,
+      updatedAt: Date.now(),
+    };
+
+    // If archived and being pinned, unarchive
+    if (item.status === "archived" && !item.pinned) {
+      updates.status = "active";
+      updates.archivedAt = undefined;
+    }
+
+    await ctx.db.patch(args.pantryItemId, updates);
+  },
+});
+
+/**
+ * Archive a pantry item.
+ * Moves it to Tier 3 and clears pinned status.
+ */
+export const archiveItem = mutation({
+  args: { pantryItemId: v.id("pantryItems") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const item = await ctx.db.get(args.pantryItemId);
+    if (!item || item.userId !== user._id) throw new Error("Item not found");
+
+    await ctx.db.patch(args.pantryItemId, {
+      status: "archived",
+      archivedAt: Date.now(),
+      pinned: false,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Unarchive a pantry item.
+ * Moves it back to active status, enforcing the 150-item active cap.
+ */
+export const unarchiveItem = mutation({
+  args: { pantryItemId: v.id("pantryItems") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const item = await ctx.db.get(args.pantryItemId);
+    if (!item || item.userId !== user._id) throw new Error("Item not found");
+
+    // Enforce 150-item active cap (may archive oldest non-pinned item)
+    await enforceActiveCap(ctx, user._id);
+
+    await ctx.db.patch(args.pantryItemId, {
+      status: "active",
+      archivedAt: undefined,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/**
  * Update just the stock level of an item (optimized for frequent updates)
  */
 export const updateStockLevel = mutation({
@@ -437,6 +618,13 @@ export const bulkRestockFromTrip = mutation({
 
       await ctx.db.patch(item.pantryItemId, {
         stockLevel: "stocked",
+        // Pantry lifecycle: track purchase activity + auto-resurface archived items
+        purchaseCount: (pantryItem.purchaseCount ?? 0) + 1,
+        lastPurchasedAt: now,
+        ...(pantryItem.status === "archived" && {
+          status: "active" as const,
+          archivedAt: undefined,
+        }),
         updatedAt: now,
       });
       restockedCount++;
@@ -614,6 +802,13 @@ export const autoRestockFromReceipt = mutation({
           // Update size/unit from receipt if available (improves over time)
           ...(receiptItem.size && { defaultSize: receiptItem.size }),
           ...(receiptItem.unit && { defaultUnit: receiptItem.unit }),
+          // Pantry lifecycle: track purchase activity + auto-resurface archived items
+          purchaseCount: (exactMatch.purchaseCount ?? 0) + 1,
+          lastPurchasedAt: now,
+          ...(exactMatch.status === "archived" && {
+            status: "active" as const,
+            archivedAt: undefined,
+          }),
           updatedAt: now,
         };
 
@@ -760,6 +955,13 @@ export const restockFromCheckedItems = mutation({
 
       await ctx.db.patch(pantryItemId, {
         stockLevel: "stocked" as const,
+        // Pantry lifecycle: track purchase activity + auto-resurface archived items
+        purchaseCount: (pantryItem.purchaseCount ?? 0) + 1,
+        lastPurchasedAt: now,
+        ...(pantryItem.status === "archived" && {
+          status: "active" as const,
+          archivedAt: undefined,
+        }),
         updatedAt: now,
         ...(price !== undefined && {
           lastPrice: price,
@@ -815,6 +1017,13 @@ export const confirmFuzzyRestock = mutation({
       // Update size/unit from receipt if available
       ...(args.size && { defaultSize: args.size }),
       ...(args.unit && { defaultUnit: args.unit }),
+      // Pantry lifecycle: track purchase activity + auto-resurface archived items
+      purchaseCount: (pantryItem.purchaseCount ?? 0) + 1,
+      lastPurchasedAt: Date.now(),
+      ...(pantryItem.status === "archived" && {
+        status: "active" as const,
+        archivedAt: undefined,
+      }),
       updatedAt: Date.now(),
     };
 
@@ -873,7 +1082,7 @@ export const addFromReceipt = mutation({
     const now = Date.now();
 
     // Dedup: if item exists, update price/stock from receipt instead of creating duplicate
-    const existing = await findExistingPantryItem(ctx, user._id, args.name);
+    const existing = await findExistingPantryItem(ctx, user._id, args.name, args.size);
     if (existing) {
       await ctx.db.patch(existing._id, {
         stockLevel: "stocked",
@@ -884,10 +1093,20 @@ export const addFromReceipt = mutation({
         }),
         ...(args.size && { defaultSize: args.size }),
         ...(args.unit && { defaultUnit: args.unit }),
+        // Pantry lifecycle: track purchase activity + auto-resurface archived items
+        purchaseCount: (existing.purchaseCount ?? 0) + 1,
+        lastPurchasedAt: now,
+        ...(existing.status === "archived" && {
+          status: "active" as const,
+          archivedAt: undefined,
+        }),
         updatedAt: now,
       });
       return existing._id;
     }
+
+    // Enforce active pantry cap before inserting
+    await enforceActiveCap(ctx, user._id);
 
     const pantryItemId = await ctx.db.insert("pantryItems", {
       userId: user._id,
@@ -895,6 +1114,9 @@ export const addFromReceipt = mutation({
       category: args.category || "other",
       icon: getIconForItem(args.name, args.category || "other"),
       stockLevel: "stocked",
+      status: "active" as const,
+      purchaseCount: 1,
+      lastPurchasedAt: now,
       ...(args.price !== undefined && {
         lastPrice: args.price,
         priceSource: "receipt" as const,
@@ -1030,12 +1252,12 @@ export const addBatchFromScan = mutation({
     let updated = 0;
 
     for (const item of args.items) {
-      const existingItem = existing.find((p) => isDuplicateItemName(item.name, p.name));
+      const existingItem = existing.find((p) => isDuplicateItem(item.name, item.size, p.name, p.defaultSize));
 
       if (existingItem) {
         // Update existing item with new info
         await ctx.db.patch(existingItem._id, {
-          stockLevel: "stocked",
+          stockLevel: "low",
           ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "ai_estimate" as const } : {}),
           ...(item.size ? { defaultSize: item.size } : {}),
           ...(item.unit ? { defaultUnit: item.unit } : {}),
@@ -1047,12 +1269,16 @@ export const addBatchFromScan = mutation({
         const access = await canAddPantryItem(ctx, user._id);
         if (!access.allowed) continue;
 
+        // Enforce active pantry cap before inserting
+        await enforceActiveCap(ctx, user._id);
+
         await ctx.db.insert("pantryItems", {
           userId: user._id,
           name: item.name,
           category: item.category,
           icon: getIconForItem(item.name, item.category),
-          stockLevel: "stocked",
+          stockLevel: "low",
+          status: "active" as const,
           autoAddToList: false,
           ...(item.size ? { defaultSize: item.size } : {}),
           ...(item.unit ? { defaultUnit: item.unit } : {}),
@@ -1067,3 +1293,50 @@ export const addBatchFromScan = mutation({
     return { added, updated };
   },
 });
+
+/**
+ * Auto-archive stale pantry items.
+ * Runs as a daily cron job. Archives items that are:
+ *   - Active (not already archived)
+ *   - Not pinned
+ *   - Stock level "out"
+ *   - No purchase activity in the last 90 days
+ */
+export const archiveStaleItems = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+
+    // Find items that are: active, not pinned, stockLevel "out", and not purchased in 90 days
+    const staleItems = await ctx.db
+      .query("pantryItems")
+      .filter((q) =>
+        q.and(
+          q.neq(q.field("status"), "archived"),
+          q.neq(q.field("pinned"), true),
+          q.eq(q.field("stockLevel"), "out"),
+        )
+      )
+      .collect();
+
+    const now = Date.now();
+    let archived = 0;
+
+    for (const item of staleItems) {
+      const lastActivity = item.lastPurchasedAt ?? item.updatedAt;
+      if (lastActivity < ninetyDaysAgo) {
+        await ctx.db.patch(item._id, {
+          status: "archived",
+          archivedAt: now,
+          updatedAt: now,
+        });
+        archived++;
+      }
+    }
+
+    if (archived > 0) {
+      console.log(`Archived ${archived} stale pantry items`);
+    }
+  },
+});
+

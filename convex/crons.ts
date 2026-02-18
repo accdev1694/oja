@@ -25,4 +25,12 @@ crons.daily(
   internal.notifications.pruneOld
 );
 
+// Auto-archive stale pantry items — runs daily at 3am UTC
+// Archives items that are out-of-stock, not pinned, with no purchase in 90 days
+crons.daily(
+  "archive stale pantry items",
+  { hourUTC: 3, minuteUTC: 0 },
+  internal.pantryItems.archiveStaleItems,
+);
+
 export default crons;

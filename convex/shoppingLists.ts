@@ -324,6 +324,13 @@ export const createFromReceipt = mutation({
             lastStoreName: receipt.storeName,
             ...(size && { defaultSize: size }),
             ...(unit && { defaultUnit: unit }),
+            // Pantry lifecycle: track purchase activity + auto-resurface archived items
+            purchaseCount: (existingPantry.purchaseCount ?? 0) + 1,
+            lastPurchasedAt: now,
+            ...(existingPantry.status === "archived" && {
+              status: "active" as const,
+              archivedAt: undefined,
+            }),
             updatedAt: now,
           });
         }
@@ -344,6 +351,13 @@ export const createFromReceipt = mutation({
           lastStoreName: receipt.storeName,
           ...(size && { defaultSize: size }),
           ...(unit && { defaultUnit: unit }),
+          // Pantry lifecycle: track purchase activity + auto-resurface archived items
+          purchaseCount: (existingPantry.purchaseCount ?? 0) + 1,
+          lastPurchasedAt: now,
+          ...(existingPantry.status === "archived" && {
+            status: "active" as const,
+            archivedAt: undefined,
+          }),
           updatedAt: now,
         });
       } else {
@@ -356,6 +370,9 @@ export const createFromReceipt = mutation({
             category: item.category || "other",
             icon: getIconForItem(item.name, item.category || "other"),
             stockLevel: "stocked",
+            status: "active" as const,
+            purchaseCount: 1,
+            lastPurchasedAt: now,
             lastPrice: item.unitPrice,
             priceSource: "receipt" as const,
             lastStoreName: receipt.storeName,
