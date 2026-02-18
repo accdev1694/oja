@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { normalizeStoreName } from "./lib/storeNormalizer";
+import { isValidProductName } from "./lib/communityHelpers";
 
 /** Confidence score: higher reportCount + more recent = higher confidence (0-1) */
 function computeConfidence(reportCount: number, daysSinceLastSeen: number): number {
@@ -231,6 +232,8 @@ export const upsertFromReceipt = mutation({
         );
 
         if (!isDuplicate) {
+          const nameOk = isValidProductName(item.name);
+
           await ctx.db.insert("itemVariants", {
             baseItem: baseItem || normalizedName,
             variantName: item.name,
@@ -238,8 +241,27 @@ export const upsertFromReceipt = mutation({
             unit: item.unit,
             category: item.category || "Other",
             source: "receipt_discovered",
+            ...(nameOk
+              ? {
+                  scanCount: 1,
+                  userCount: 1,
+                  lastSeenAt: now,
+                }
+              : {}),
           });
           variantsDiscovered++;
+        } else {
+          // Variant already exists -- enrich community fields
+          const matchingVariant = existingVariants.find(
+            (v) => v.variantName.toLowerCase() === item.name.toLowerCase()
+          );
+          if (matchingVariant) {
+            await ctx.db.patch(matchingVariant._id, {
+              scanCount: (matchingVariant.scanCount ?? 0) + 1,
+              userCount: (matchingVariant.userCount ?? 0) + 1,
+              lastSeenAt: now,
+            });
+          }
         }
       }
     }

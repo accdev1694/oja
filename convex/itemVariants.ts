@@ -7,6 +7,11 @@ import {
   getUnitLabel,
 } from "./lib/sizeUtils";
 import { resolvePrice } from "./lib/priceResolver";
+import { normalizeItemName } from "./lib/fuzzyMatch";
+import {
+  isValidProductName,
+  variantKey,
+} from "./lib/communityHelpers";
 
 /**
  * Get all variants for a base item (e.g., "milk" → [1pt, 2pt, 4pt]).
@@ -360,6 +365,10 @@ export const upsert = mutation({
  * Enrich or create a variant from scan data.
  * If a variant with matching baseItem + size exists, enrich it with brand/productName.
  * Otherwise create a new variant. Increments scanCount each time.
+ *
+ * Community enrichment (updating userCount, lastSeenAt, imageStorageId) is gated on:
+ * 1. AI confidence >= 70
+ * 2. Valid product name (not garbage OCR)
  */
 export const enrichFromScan = mutation({
   args: {
@@ -371,10 +380,17 @@ export const enrichFromScan = mutation({
     productName: v.optional(v.string()),
     displayLabel: v.optional(v.string()),
     estimatedPrice: v.optional(v.number()),
+    confidence: v.optional(v.number()),
+    imageStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const normalizedBase = args.baseItem.toLowerCase().trim();
     const normalizedSize = args.size.toLowerCase().trim();
+
+    // Determine if community enrichment is allowed
+    const confidenceOk = (args.confidence ?? 0) >= 70;
+    const nameValid = isValidProductName(args.productName ?? args.baseItem);
+    const communityEnrich = confidenceOk && nameValid;
 
     // Try exact baseItem match first
     let existing = await ctx.db
@@ -383,7 +399,7 @@ export const enrichFromScan = mutation({
       .collect();
 
     // Fuzzy fallback: if no match, check if any baseItem is a suffix of
-    // the scanned name (e.g. scanned "free range eggs" → DB has "eggs")
+    // the scanned name (e.g. scanned "free range eggs" -> DB has "eggs")
     if (existing.length === 0) {
       const words = normalizedBase.split(/\s+/);
       for (let i = 1; i < words.length; i++) {
@@ -399,13 +415,24 @@ export const enrichFromScan = mutation({
       }
     }
 
-    // Match by size (normalized)
-    const match = existing.find(
-      (v) => v.size.toLowerCase().trim() === normalizedSize
+    // Compute variant key for community dedup
+    const scanKey = variantKey(
+      args.productName ?? args.baseItem,
+      args.size
     );
 
+    // Match by size (normalized) OR by variant key for community matching
+    const match =
+      existing.find((v) => v.size.toLowerCase().trim() === normalizedSize) ??
+      (communityEnrich
+        ? existing.find(
+            (v) =>
+              variantKey(v.productName ?? v.variantName, v.size) === scanKey
+          )
+        : undefined);
+
     if (match) {
-      // Enrich existing variant with scan data — newer scans overwrite
+      // Enrich existing variant with scan data -- newer scans overwrite
       const updates: Record<string, unknown> = {
         scanCount: (match.scanCount ?? 0) + 1,
       };
@@ -416,6 +443,17 @@ export const enrichFromScan = mutation({
         updates.estimatedPrice = args.estimatedPrice;
       }
       if (match.source === "ai_seeded") updates.source = "scan_enriched";
+
+      // Community enrichment: update shared fields when gating passes
+      if (communityEnrich) {
+        updates.lastSeenAt = Date.now();
+        updates.userCount = (match.userCount ?? 0) + 1;
+        // First image wins -- only set if not already present
+        if (!match.imageStorageId && args.imageStorageId) {
+          updates.imageStorageId = args.imageStorageId;
+        }
+      }
+
       await ctx.db.patch(match._id, updates);
       return match._id;
     }
@@ -423,13 +461,13 @@ export const enrichFromScan = mutation({
     // Create new variant under the existing baseItem if we found one,
     // otherwise use the scanned name
     const targetBase = existing.length > 0 ? existing[0].baseItem : normalizedBase;
-    const variantName = args.productName
+    const newVariantName = args.productName
       ? `${args.productName} ${args.size}`
       : `${args.baseItem} ${args.size}`;
 
     return await ctx.db.insert("itemVariants", {
       baseItem: targetBase,
-      variantName,
+      variantName: newVariantName,
       size: args.size,
       unit: args.unit,
       category: args.category,
@@ -439,6 +477,16 @@ export const enrichFromScan = mutation({
       displayLabel: args.displayLabel,
       estimatedPrice: args.estimatedPrice,
       scanCount: 1,
+      // Community fields on new variants (if gating passes)
+      ...(communityEnrich
+        ? {
+            userCount: 1,
+            lastSeenAt: Date.now(),
+            ...(args.imageStorageId
+              ? { imageStorageId: args.imageStorageId }
+              : {}),
+          }
+        : {}),
     });
   },
 });
@@ -503,3 +551,4 @@ export const bulkUpsert = mutation({
     return { inserted, updated };
   },
 });
+
