@@ -7,6 +7,7 @@ import { resolveVariantWithPrice } from "./lib/priceResolver";
 import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
 import { isDuplicateItem } from "./lib/fuzzyMatch";
+import { enrichGlobalFromProductScan } from "./lib/globalEnrichment";
 
 /**
  * Helper to get price estimate from currentPrices table
@@ -1201,6 +1202,9 @@ export const addBatchFromScan = mutation({
         unit: v.optional(v.string()),
         estimatedPrice: v.optional(v.number()),
         quantity: v.optional(v.number()),
+        brand: v.optional(v.string()),
+        confidence: v.optional(v.number()),
+        imageStorageId: v.optional(v.string()),
       })
     ),
   },
@@ -1302,6 +1306,9 @@ export const addBatchFromScan = mutation({
       itemIds.push(listItemId);
       knownListItems.push({ name: item.name, size: item.size });
       knownPantryNames.push(item.name);
+
+      // Global DB enrichment — update itemVariants + currentPrices
+      await enrichGlobalFromProductScan(ctx, item, user._id);
     }
 
     if (itemIds.length > 0) {

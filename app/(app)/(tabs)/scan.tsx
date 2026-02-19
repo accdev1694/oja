@@ -284,6 +284,9 @@ export default function ScanScreen() {
           size: p.size,
           unit: p.unit,
           estimatedPrice: p.estimatedPrice,
+          brand: p.brand,
+          confidence: p.confidence,
+          imageStorageId: p.imageStorageId,
         })),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -327,6 +330,9 @@ export default function ScanScreen() {
           size: p.size,
           unit: p.unit,
           estimatedPrice: p.estimatedPrice,
+          brand: p.brand,
+          confidence: p.confidence,
+          imageStorageId: p.imageStorageId,
         })),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

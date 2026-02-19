@@ -5,6 +5,7 @@ import { Id } from "./_generated/dataModel";
 import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
 import { calculateSimilarity, isDuplicateItemName, isDuplicateItem } from "./lib/fuzzyMatch";
+import { enrichGlobalFromProductScan } from "./lib/globalEnrichment";
 
 const ACTIVE_PANTRY_CAP = 150;
 
@@ -1227,6 +1228,9 @@ export const addBatchFromScan = mutation({
         size: v.optional(v.string()),
         unit: v.optional(v.string()),
         estimatedPrice: v.optional(v.number()),
+        brand: v.optional(v.string()),
+        confidence: v.optional(v.number()),
+        imageStorageId: v.optional(v.string()),
       })
     ),
   },
@@ -1288,6 +1292,9 @@ export const addBatchFromScan = mutation({
         });
         added++;
       }
+
+      // Global DB enrichment — update itemVariants + currentPrices
+      await enrichGlobalFromProductScan(ctx, item, user._id);
     }
 
     return { added, updated };
