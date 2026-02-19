@@ -154,20 +154,6 @@ export default defineSchema({
     // Provenance: which receipt this list was created from (create-from-receipt flow)
     sourceReceiptId: v.optional(v.id("receipts")),
 
-    // List-level approval (Epic 4 - Partner Mode)
-    approvalStatus: v.optional(v.union(
-      v.literal("draft"),
-      v.literal("pending_approval"),
-      v.literal("approved"),
-      v.literal("rejected"),
-      v.literal("changes_requested")
-    )),
-    approvalRequestedAt: v.optional(v.number()),
-    approvalRequestedBy: v.optional(v.id("users")),
-    approvalRespondedAt: v.optional(v.number()),
-    approvalRespondedBy: v.optional(v.id("users")),
-    approvalNote: v.optional(v.string()),
-
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -213,14 +199,6 @@ export default defineSchema({
     // Multi-store: which store the item was actually purchased at
     purchasedAtStoreId: v.optional(v.string()),
     purchasedAtStoreName: v.optional(v.string()),
-
-    // Approval workflow (Epic 4 - Partner Mode)
-    approvalStatus: v.optional(v.union(
-      v.literal("pending"),
-      v.literal("approved"),
-      v.literal("rejected")
-    )),
-    approvalNote: v.optional(v.string()),
 
     // Notes
     notes: v.optional(v.string()),
@@ -388,11 +366,11 @@ export default defineSchema({
 
   // === Epic 4: Partner Mode & Collaboration ===
 
-  // List partners (shared list membership)
+  // List partners (shared list membership) — single "member" role
   listPartners: defineTable({
     listId: v.id("shoppingLists"),
     userId: v.id("users"),
-    role: v.union(v.literal("viewer"), v.literal("editor"), v.literal("approver")),
+    role: v.union(v.literal("member"), v.literal("viewer"), v.literal("editor"), v.literal("approver")),
     invitedBy: v.id("users"),
     invitedAt: v.number(),
     acceptedAt: v.optional(v.number()),
@@ -407,7 +385,7 @@ export default defineSchema({
     code: v.string(),
     listId: v.id("shoppingLists"),
     createdBy: v.id("users"),
-    role: v.union(v.literal("viewer"), v.literal("editor"), v.literal("approver")),
+    role: v.union(v.literal("member"), v.literal("viewer"), v.literal("editor"), v.literal("approver")),
     expiresAt: v.number(),
     usedBy: v.optional(v.id("users")),
     usedAt: v.optional(v.number()),

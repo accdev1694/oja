@@ -47,7 +47,7 @@ import {
   NotificationBell,
   NotificationDropdown,
 } from "@/components/partners";
-import { ListApprovalBanner } from "@/components/partners/ListApprovalBanner";
+
 import { ListChatThread } from "@/components/partners/ListChatThread";
 import { GlassToast } from "@/components/ui/glass/GlassToast";
 import { useDelightToast } from "@/hooks/useDelightToast";
@@ -107,8 +107,7 @@ export default function ListDetailScreen() {
   const userFavorites = (currentUser?.storePreferences?.favorites ?? []) as string[];
 
   // Partner mode
-  const { isOwner, isPartner, canEdit, canApprove, loading: roleLoading } = usePartnerRole(id);
-  const handleApproval = useMutation(api.partners.handleApproval);
+  const { isOwner, isPartner, canEdit, loading: roleLoading } = usePartnerRole(id);
   const listItemIds = useMemo(() => items?.map((i) => i._id) ?? [], [items]);
   const rawCommentCounts = useQuery(api.partners.getCommentCounts, items ? { listItemIds } : "skip");
   const commentCounts = useStableValue(rawCommentCounts, shallowRecordEqual);
@@ -143,18 +142,10 @@ export default function ListDetailScreen() {
   // List chat state
   const [showListChat, setShowListChat] = useState(false);
 
-  // Partner data for approval banner
+  // Partner data
   const listPartners = useQuery(api.partners.getByList, { listId: id });
-  const hasApprovers = (listPartners ?? []).some(
-    (p: any) => p.status === "accepted" && p.role === "approver"
-  );
   const hasPartners = (listPartners ?? []).some((p: any) => p.status === "accepted");
   const listMessageCount = useQuery(api.partners.getListMessageCount, hasPartners ? { listId: id } : "skip");
-
-  // Resolve approver name for banner
-  const approverName = list?.approvalRespondedBy
-    ? (listPartners ?? []).find((p: any) => p.userId === list.approvalRespondedBy)?.userName
-    : undefined;
 
   // Edit budget modal state
   const [showEditBudgetModal, setShowEditBudgetModal] = useState(false);
@@ -262,20 +253,14 @@ export default function ListDetailScreen() {
   const miniBarLabel = isPlanning ? "planned" : "spent";
 
   // Memoized category data + display items
-  const { listCategories, listCategoryCounts, displayItems, pendingCount } = useMemo(() => {
+  const { listCategories, listCategoryCounts, displayItems } = useMemo(() => {
     const cats = [...new Set(safeItems.map((i) => i.category).filter(Boolean) as string[])].sort();
     const counts: Record<string, number> = {};
     safeItems.forEach((i) => { if (i.category) counts[i.category] = (counts[i.category] || 0) + 1; });
     const filtered = listCategoryFilter
       ? safeItems.filter((i) => i.category === listCategoryFilter)
       : safeItems;
-    const sorted = [...filtered].sort((a, b) => {
-      const aPending = a.approvalStatus === "pending" ? 0 : 1;
-      const bPending = b.approvalStatus === "pending" ? 0 : 1;
-      return aPending - bPending;
-    });
-    const pending = filtered.filter((i) => i.approvalStatus === "pending").length;
-    return { listCategories: cats, listCategoryCounts: counts, displayItems: sorted, pendingCount: pending };
+    return { listCategories: cats, listCategoryCounts: counts, displayItems: filtered };
   }, [safeItems, listCategoryFilter]);
 
   const isShopping = listStatus === "shopping";
@@ -721,29 +706,6 @@ export default function ListDetailScreen() {
     },
   }, [focusedInput, scrollByOverlap]);
 
-  // Partner mode handlers
-  const handleApproveItem = useCallback(async (itemId: Id<"listItems">) => {
-    haptic("medium");
-    try {
-      await handleApproval({ listItemId: itemId, decision: "approved" });
-      haptic("success");
-    } catch (error) {
-      console.error("Failed to approve item:", error);
-      alert("Error", "Failed to approve item");
-    }
-  }, [handleApproval, alert]);
-
-  const handleRejectItem = useCallback(async (itemId: Id<"listItems">) => {
-    haptic("medium");
-    try {
-      await handleApproval({ listItemId: itemId, decision: "rejected" });
-      haptic("success");
-    } catch (error) {
-      console.error("Failed to reject item:", error);
-      alert("Error", "Failed to reject item");
-    }
-  }, [handleApproval, alert]);
-
   const openCommentThread = useCallback((itemId: Id<"listItems">, itemName: string) => {
     haptic("light");
     setCommentState({ visible: true, itemId, itemName });
@@ -772,17 +734,14 @@ export default function ListDetailScreen() {
       onPriorityChange={handlePriorityChange}
       isShopping={isShopping}
       isOwner={isOwner}
-      canApprove={canApprove}
       commentCount={commentCounts?.[item._id as string] ?? 0}
-      onApprove={handleApproveItem}
-      onReject={handleRejectItem}
       onOpenComments={stableOpenComments}
       isSelected={selectedItemsRef.current.has(item._id)}
       onSelectToggle={toggleItemSelection}
     />
   ), [handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange,
-      isShopping, isOwner, canApprove, commentCounts, handleApproveItem,
-      handleRejectItem, stableOpenComments, selectionVersion, toggleItemSelection]);
+      isShopping, isOwner, commentCounts,
+      stableOpenComments, selectionVersion, toggleItemSelection]);
 
   // ─── FlashList ListHeaderComponent ───────────────────────────────────────────
   const listHeader = useMemo(() => (
@@ -814,19 +773,6 @@ export default function ListDetailScreen() {
             <Text style={styles.pausedResumeText}>Resume</Text>
           </Pressable>
         </View>
-      )}
-
-      {/* List-Level Approval Banner */}
-      {hasPartners && (
-        <ListApprovalBanner
-          listId={id}
-          approvalStatus={list?.approvalStatus}
-          approvalNote={list?.approvalNote}
-          approverName={approverName}
-          isOwner={isOwner}
-          canApprove={canApprove}
-          hasApprovers={hasApprovers}
-        />
       )}
 
       {/* Action Row: Store / Add Items (planning mode) */}
@@ -964,28 +910,16 @@ export default function ListDetailScreen() {
             onSelect={setListCategoryFilter}
             counts={listCategoryCounts}
           />
-          {pendingCount > 0 && (
-            <View style={styles.pendingBanner}>
-              <MaterialCommunityIcons
-                name="clock-outline"
-                size={16}
-                color={colors.accent.warning}
-              />
-              <Text style={styles.pendingBannerText}>
-                {pendingCount} {pendingCount === 1 ? "item needs" : "items need"} approval
-              </Text>
-            </View>
-          )}
         </View>
       )}
     </View>
-  ), [budget, estimatedTotal, checkedTotal, list?.status, list?.approvalStatus,
-      list?.approvalNote, list?.userId, list?.storeName, list?.normalizedStoreId,
+  ), [budget, estimatedTotal, checkedTotal, list?.status,
+      list?.userId, list?.storeName, list?.normalizedStoreId,
       list?.shoppingStartedAt, list?.pausedAt,
-      hasPartners, id, approverName,
-      isOwner, canApprove, hasApprovers, items,
+      hasPartners, id,
+      isOwner, items,
       selectionVersion, listCategories, listCategoryFilter,
-      listCategoryCounts, pendingCount,
+      listCategoryCounts,
       isPaused, dialTransitioning, checkedCount, totalCount]);
 
   // ─── FlashList ListEmptyComponent ────────────────────────────────────────────
@@ -1444,23 +1378,6 @@ const styles = StyleSheet.create({
     color: colors.accent.primary,
     fontSize: typography.bodySmall.fontSize,
     fontWeight: "700" as const,
-  },
-
-  // Pending approval banner
-  pendingBanner: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: spacing.xs,
-    backgroundColor: "rgba(245, 158, 11, 0.12)",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-  },
-  pendingBannerText: {
-    color: colors.accent.warning,
-    fontSize: typography.bodyMedium.fontSize,
-    fontWeight: "600" as const,
   },
 
   // Header styles

@@ -35,7 +35,6 @@ export type ListItem = {
   isChecked: boolean;
   autoAdded?: boolean;
   priority?: "must-have" | "should-have" | "nice-to-have";
-  approvalStatus?: "pending" | "approved" | "rejected";
   // Size fields for display (e.g., "250g", "2pt")
   size?: string;
   unit?: string;
@@ -88,10 +87,7 @@ export interface ShoppingListItemProps {
   onAddToList?: () => void;
   // Partner mode props
   isOwner?: boolean;
-  canApprove?: boolean;
   commentCount?: number;
-  onApprove?: (itemId: Id<"listItems">) => void;
-  onReject?: (itemId: Id<"listItems">) => void;
   onOpenComments?: (itemId: Id<"listItems">, itemName: string) => void;
   // Selection mode
   isSelected?: boolean;
@@ -111,10 +107,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
   isShopping,
   onAddToList,
   isOwner,
-  canApprove,
   commentCount,
-  onApprove,
-  onReject,
   onOpenComments,
   isSelected,
   onSelectToggle,
@@ -217,7 +210,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
           <Animated.View style={[{ borderRadius: borderRadius.lg }, checkFlashStyle]}>
             <GlassCard
               variant="standard"
-              style={[itemStyles.itemCard, item.isChecked && itemStyles.itemCardChecked, item.approvalStatus === "pending" && itemStyles.itemCardPending]}
+              style={[itemStyles.itemCard, item.isChecked && itemStyles.itemCardChecked]}
             >
               <View style={itemStyles.itemRow}>
                 {/* Selection checkbox — planning mode only */}
@@ -320,10 +313,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
     prevProps.isShopping === nextProps.isShopping &&
     prevProps.onAddToList === nextProps.onAddToList &&
     prevProps.isOwner === nextProps.isOwner &&
-    prevProps.canApprove === nextProps.canApprove &&
     prevProps.commentCount === nextProps.commentCount &&
-    prevProps.onApprove === nextProps.onApprove &&
-    prevProps.onReject === nextProps.onReject &&
     prevProps.onOpenComments === nextProps.onOpenComments &&
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.onSelectToggle === nextProps.onSelectToggle
@@ -372,11 +362,6 @@ const itemStyles = StyleSheet.create({
   },
   itemCardChecked: {
     opacity: 0.7,
-  },
-  itemCardPending: {
-    opacity: 0.6,
-    borderColor: "rgba(245, 158, 11, 0.4)",
-    borderWidth: 1,
   },
   itemRow: {
     flexDirection: "row",

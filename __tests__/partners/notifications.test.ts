@@ -7,13 +7,8 @@ describe("Partner Notifications", () => {
   type NotificationType =
     | "partner_joined"
     | "partner_left"
-    | "approval_requested"
-    | "item_approved"
-    | "item_rejected"
     | "comment_added"
-    | "contest_opened"
-    | "contest_resolved"
-    | "role_changed";
+    | "list_message";
 
   interface Notification {
     userId: string;
@@ -72,22 +67,6 @@ describe("Partner Notifications", () => {
     );
   }
 
-  function notifyApprovalRequested(
-    approverId: string,
-    requesterName: string,
-    itemName: string,
-    listId: string,
-    itemId: string
-  ): Notification {
-    return createNotification(
-      approverId,
-      "approval_requested",
-      "Approval Needed",
-      `${requesterName} wants to add "${itemName}"`,
-      { listId, itemId }
-    );
-  }
-
   describe("createNotification", () => {
     it("should create unread notification", () => {
       const n = createNotification("user_1", "partner_joined", "Test", "Body");
@@ -110,7 +89,7 @@ describe("Partner Notifications", () => {
       const notifications: Notification[] = [
         createNotification("user_1", "partner_joined", "A", "B"),
         { ...createNotification("user_1", "comment_added", "C", "D"), isRead: true },
-        createNotification("user_1", "item_approved", "E", "F"),
+        createNotification("user_1", "list_message", "E", "F"),
       ];
       expect(getUnreadCount(notifications)).toBe(2);
     });
@@ -158,28 +137,12 @@ describe("Partner Notifications", () => {
     });
   });
 
-  describe("notifyApprovalRequested", () => {
-    it("should create correct notification for approver", () => {
-      const n = notifyApprovalRequested("approver_1", "Bob", "Organic Milk", "list_1", "item_1");
-      expect(n.userId).toBe("approver_1");
-      expect(n.type).toBe("approval_requested");
-      expect(n.body).toContain("Bob");
-      expect(n.body).toContain("Organic Milk");
-      expect(n.itemId).toBe("item_1");
-    });
-  });
-
   describe("Notification types for partner actions", () => {
     const allTypes: NotificationType[] = [
       "partner_joined",
       "partner_left",
-      "approval_requested",
-      "item_approved",
-      "item_rejected",
       "comment_added",
-      "contest_opened",
-      "contest_resolved",
-      "role_changed",
+      "list_message",
     ];
 
     it("should support all partner notification types", () => {

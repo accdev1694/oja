@@ -3,8 +3,7 @@ describe("Schema Validation", () => {
   const validStockLevels = ["stocked", "low", "out"];
   const validPriorities = ["must-have", "should-have", "nice-to-have"];
   const validListStatuses = ["active", "shopping", "completed", "archived"];
-  const validPartnerRoles = ["viewer", "editor", "approver"];
-  const validApprovalStatuses = ["pending", "approved", "rejected"];
+  const validPartnerRoles = ["member"];
   const validSubscriptionPlans = ["free", "premium_monthly", "premium_annual"];
   const validSubscriptionStatuses = ["active", "cancelled", "expired", "trial"];
   const validTiers = ["bronze", "silver", "gold", "platinum"];
@@ -51,16 +50,12 @@ describe("Schema Validation", () => {
   });
 
   describe("Partner Roles", () => {
-    it("should have 3 roles", () => {
-      expect(validPartnerRoles).toHaveLength(3);
+    it("should have 1 role (member)", () => {
+      expect(validPartnerRoles).toHaveLength(1);
     });
 
-    it("should include viewer (least privileges)", () => {
-      expect(validPartnerRoles).toContain("viewer");
-    });
-
-    it("should include approver (most privileges)", () => {
-      expect(validPartnerRoles).toContain("approver");
+    it("should include member", () => {
+      expect(validPartnerRoles).toContain("member");
     });
   });
 

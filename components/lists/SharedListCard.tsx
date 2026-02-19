@@ -34,9 +34,7 @@ export interface SharedListCardProps {
 }
 
 const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
-  viewer: { label: "Viewer", color: colors.text.tertiary },
-  editor: { label: "Editor", color: colors.accent.primary },
-  approver: { label: "Approver", color: colors.accent.secondary },
+  member: { label: "Member", color: colors.accent.primary },
 };
 
 export const SharedListCard = React.memo(function SharedListCard({ list, onPress, formatDateTime }: SharedListCardProps) {
@@ -59,7 +57,7 @@ export const SharedListCard = React.memo(function SharedListCard({ list, onPress
     onPress(list._id);
   }, [onPress, list._id]);
 
-  const role = ROLE_CONFIG[list.role] ?? ROLE_CONFIG.viewer;
+  const role = ROLE_CONFIG[list.role] ?? ROLE_CONFIG.member;
 
   return (
     <Animated.View style={animatedStyle}>

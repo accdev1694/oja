@@ -39,19 +39,18 @@ export async function getUserListPermissions(
 ): Promise<{
   isOwner: boolean;
   isPartner: boolean;
-  role: "viewer" | "editor" | "approver" | null;
+  role: "member" | null;
   canView: boolean;
   canEdit: boolean;
-  canApprove: boolean;
 }> {
   const list = await ctx.db.get(listId);
   if (!list) {
-    return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false, canApprove: false };
+    return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false };
   }
 
   const isOwner = list.userId === userId;
   if (isOwner) {
-    return { isOwner: true, isPartner: false, role: null, canView: true, canEdit: true, canApprove: true };
+    return { isOwner: true, isPartner: false, role: null, canView: true, canEdit: true };
   }
 
   // Check partner record
@@ -61,17 +60,15 @@ export async function getUserListPermissions(
     .unique();
 
   if (!partner || partner.status !== "accepted") {
-    return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false, canApprove: false };
+    return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false };
   }
 
-  const role = partner.role;
   return {
     isOwner: false,
     isPartner: true,
-    role,
+    role: "member",
     canView: true,
-    canEdit: role === "editor" || role === "approver",
-    canApprove: role === "approver",
+    canEdit: true,
   };
 }
 
@@ -83,14 +80,14 @@ export const getMyPermissions = query({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false, canApprove: false };
+      return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false };
     }
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) {
-      return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false, canApprove: false };
+      return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false };
     }
     return getUserListPermissions(ctx, args.listId, user._id);
   },
@@ -102,7 +99,6 @@ export const getMyPermissions = query({
 export const createInviteCode = mutation({
   args: {
     listId: v.id("shoppingLists"),
-    role: v.union(v.literal("viewer"), v.literal("editor"), v.literal("approver")),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
@@ -124,7 +120,7 @@ export const createInviteCode = mutation({
       code,
       listId: args.listId,
       createdBy: user._id,
-      role: args.role,
+      role: "member",
       expiresAt,
       isActive: true,
     });
@@ -158,11 +154,11 @@ export const acceptInvite = mutation({
 
     const now = Date.now();
 
-    // Create partner record
+    // Create partner record (always "member" — legacy invites may have old roles)
     await ctx.db.insert("listPartners", {
       listId: invite.listId,
       userId: user._id,
-      role: invite.role,
+      role: "member",
       invitedBy: invite.createdBy,
       invitedAt: now,
       acceptedAt: now,
@@ -217,27 +213,6 @@ export const getByList = query({
     );
 
     return enriched;
-  },
-});
-
-/**
- * Update a partner's role
- */
-export const updateRole = mutation({
-  args: {
-    partnerId: v.id("listPartners"),
-    role: v.union(v.literal("viewer"), v.literal("editor"), v.literal("approver")),
-  },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const partner = await ctx.db.get(args.partnerId);
-    if (!partner) throw new Error("Partner not found");
-
-    const list = await ctx.db.get(partner.listId);
-    if (!list || list.userId !== user._id) throw new Error("Unauthorized");
-
-    await ctx.db.patch(args.partnerId, { role: args.role });
-    return { success: true };
   },
 });
 
@@ -347,90 +322,6 @@ export const getSharedLists = query({
 });
 
 /**
- * Request approval for a list item
- */
-export const requestApproval = mutation({
-  args: {
-    listItemId: v.id("listItems"),
-    note: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const item = await ctx.db.get(args.listItemId);
-    if (!item) throw new Error("Item not found");
-
-    await ctx.db.patch(args.listItemId, {
-      approvalStatus: "pending",
-      approvalNote: args.note,
-      updatedAt: Date.now(),
-    });
-
-    // Notify list owner
-    const list = await ctx.db.get(item.listId);
-    if (list && list.userId !== user._id) {
-      await ctx.db.insert("notifications", {
-        userId: list.userId,
-        type: "approval_requested",
-        title: "Approval Needed",
-        body: `${user.name} wants to add "${item.name}" to the list`,
-        data: { listItemId: args.listItemId, listId: item.listId },
-        read: false,
-        createdAt: Date.now(),
-      });
-    }
-
-    return { success: true };
-  },
-});
-
-/**
- * Approve or reject a list item.
- * Owner can approve/reject partner items.
- * Approver partners can approve/reject owner items.
- */
-export const handleApproval = mutation({
-  args: {
-    listItemId: v.id("listItems"),
-    decision: v.union(v.literal("approved"), v.literal("rejected")),
-    note: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const item = await ctx.db.get(args.listItemId);
-    if (!item) throw new Error("Item not found");
-
-    const perms = await getUserListPermissions(ctx, item.listId, user._id);
-
-    // Owner can approve partner items. Approver partners can approve owner items.
-    if (!perms.isOwner && !perms.canApprove) {
-      throw new Error("You don't have permission to approve items");
-    }
-
-    const now = Date.now();
-    await ctx.db.patch(args.listItemId, {
-      approvalStatus: args.decision,
-      approvalNote: args.note,
-      updatedAt: now,
-    });
-
-    // Notify the item creator
-    if (item.userId !== user._id) {
-      await ctx.db.insert("notifications", {
-        userId: item.userId,
-        type: `item_${args.decision}`,
-        title: args.decision === "approved" ? "Item Approved" : "Item Rejected",
-        body: `"${item.name}" was ${args.decision}`,
-        data: { listItemId: args.listItemId, listId: item.listId },
-        read: false,
-        createdAt: now,
-      });
-    }
-
-    return { success: true };
-  },
-});
-
-/**
  * Add a comment to a list item
  */
 export const addComment = mutation({
@@ -512,129 +403,6 @@ export const getComments = query({
     );
 
     return enriched;
-  },
-});
-
-// ============================================================
-// List-Level Approval
-// ============================================================
-
-/**
- * Submit a list for approval by partner approvers.
- * Only the list owner can submit.
- */
-export const submitListForApproval = mutation({
-  args: { listId: v.id("shoppingLists") },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const list = await ctx.db.get(args.listId);
-    if (!list) throw new Error("List not found");
-    if (list.userId !== user._id) throw new Error("Only the list owner can submit for approval");
-
-    const now = Date.now();
-    await ctx.db.patch(args.listId, {
-      approvalStatus: "pending_approval",
-      approvalRequestedAt: now,
-      approvalRequestedBy: user._id,
-      approvalRespondedAt: undefined,
-      approvalRespondedBy: undefined,
-      approvalNote: undefined,
-      updatedAt: now,
-    });
-
-    // Notify all accepted approver partners
-    const partners = await ctx.db
-      .query("listPartners")
-      .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
-      .collect();
-
-    for (const p of partners) {
-      if (p.status === "accepted" && p.role === "approver") {
-        await ctx.db.insert("notifications", {
-          userId: p.userId,
-          type: "list_approval_requested",
-          title: "Approval Needed",
-          body: `${user.name} submitted "${list.name}" for your approval`,
-          data: { listId: args.listId },
-          read: false,
-          createdAt: now,
-        });
-      }
-    }
-
-    // System message in list chat
-    await ctx.db.insert("listMessages", {
-      listId: args.listId,
-      userId: user._id,
-      text: `${user.name} submitted this list for approval`,
-      isSystem: true,
-      createdAt: now,
-    });
-
-    return { success: true };
-  },
-});
-
-/**
- * Approve, reject, or request changes on a list.
- * Only users with canApprove permission can respond.
- */
-export const handleListApproval = mutation({
-  args: {
-    listId: v.id("shoppingLists"),
-    decision: v.union(
-      v.literal("approved"),
-      v.literal("rejected"),
-      v.literal("changes_requested")
-    ),
-    note: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const list = await ctx.db.get(args.listId);
-    if (!list) throw new Error("List not found");
-
-    const perms = await getUserListPermissions(ctx, args.listId, user._id);
-    if (!perms.canApprove) throw new Error("You don't have permission to approve this list");
-
-    const now = Date.now();
-    await ctx.db.patch(args.listId, {
-      approvalStatus: args.decision,
-      approvalRespondedAt: now,
-      approvalRespondedBy: user._id,
-      approvalNote: args.note,
-      updatedAt: now,
-    });
-
-    // Notify list owner
-    const decisionLabel =
-      args.decision === "approved" ? "approved" :
-      args.decision === "rejected" ? "rejected" : "requested changes on";
-    const notifType = args.decision === "approved" ? "list_approved" : "list_rejected";
-
-    await ctx.db.insert("notifications", {
-      userId: list.userId,
-      type: notifType,
-      title: args.decision === "approved" ? "List Approved" : "Changes Requested",
-      body: `${user.name} ${decisionLabel} "${list.name}"${args.note ? `: ${args.note}` : ""}`,
-      data: { listId: args.listId },
-      read: false,
-      createdAt: now,
-    });
-
-    // System message in list chat
-    const systemText = args.note
-      ? `${user.name} ${decisionLabel} this list: "${args.note}"`
-      : `${user.name} ${decisionLabel} this list`;
-    await ctx.db.insert("listMessages", {
-      listId: args.listId,
-      userId: user._id,
-      text: systemText,
-      isSystem: true,
-      createdAt: now,
-    });
-
-    return { success: true };
   },
 });
 

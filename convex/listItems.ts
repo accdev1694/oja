@@ -222,24 +222,6 @@ export const create = mutation({
       }
     }
 
-    // Determine approval status:
-    // - Owner adds → check if any approver partner exists → set pending for approver to review
-    // - Partner adds → set pending for owner to review
-    let approvalStatus: "pending" | "approved" | undefined;
-
-    if (perms.isPartner) {
-      // Partner adding item → always needs owner approval
-      approvalStatus = "pending";
-    } else if (perms.isOwner) {
-      // Owner adding → check if there's an approver partner on this list
-      const partners = await ctx.db
-        .query("listPartners")
-        .withIndex("by_list", (q) => q.eq("listId", args.listId))
-        .collect();
-      const hasApprover = partners.some((p) => p.role === "approver" && p.status === "accepted");
-      approvalStatus = hasApprover ? "pending" : undefined;
-    }
-
     const itemId = await ctx.db.insert("listItems", {
       listId: args.listId,
       userId: user._id,
@@ -256,48 +238,12 @@ export const create = mutation({
       isChecked: false,
       autoAdded: args.autoAdded ?? false,
       notes: args.notes,
-      ...(approvalStatus ? { approvalStatus } : {}),
       createdAt: now,
       updatedAt: now,
     });
 
     // Recalculate list total after adding item
     await recalculateListTotal(ctx, args.listId);
-
-    // Notify the other party about pending approval
-    if (approvalStatus === "pending") {
-      if (perms.isPartner) {
-        // Notify list owner
-        await ctx.db.insert("notifications", {
-          userId: list.userId,
-          type: "approval_requested",
-          title: "Approval Needed",
-          body: `${user.name} wants to add "${args.name}" to the list`,
-          data: { listItemId: itemId, listId: args.listId },
-          read: false,
-          createdAt: now,
-        });
-      } else {
-        // Notify approver partners
-        const partners = await ctx.db
-          .query("listPartners")
-          .withIndex("by_list", (q) => q.eq("listId", args.listId))
-          .collect();
-        for (const p of partners) {
-          if (p.role === "approver" && p.status === "accepted") {
-            await ctx.db.insert("notifications", {
-              userId: p.userId,
-              type: "approval_requested",
-              title: "Approval Needed",
-              body: `${user.name} wants to add "${args.name}" to the list`,
-              data: { listItemId: itemId, listId: args.listId },
-              read: false,
-              createdAt: now,
-            });
-          }
-        }
-      }
-    }
 
     return { status: "added" as const, itemId };
   },
@@ -444,11 +390,6 @@ export const toggleChecked = mutation({
     const perms = await getUserListPermissions(ctx, item.listId, user._id);
     if (!perms.canEdit) {
       throw new Error("You don't have permission to check items on this list");
-    }
-
-    // Block checking pending items
-    if (item.approvalStatus === "pending") {
-      throw new Error("This item is pending approval and cannot be checked off yet");
     }
 
     const newCheckedStatus = !item.isChecked;
@@ -899,20 +840,6 @@ export const addFromPantryBulk = mutation({
       .collect();
     const knownItems: { name: string; size?: string }[] = existingListItems.map((i) => ({ name: i.name, size: i.size }));
 
-    // Determine approval status (same logic as create mutation)
-    let approvalStatus: "pending" | "approved" | undefined;
-
-    if (perms.isPartner) {
-      approvalStatus = "pending";
-    } else if (perms.isOwner) {
-      const partners = await ctx.db
-        .query("listPartners")
-        .withIndex("by_list", (q) => q.eq("listId", args.listId))
-        .collect();
-      const hasApprover = partners.some((p) => p.role === "approver" && p.status === "accepted");
-      approvalStatus = hasApprover ? "pending" : undefined;
-    }
-
     for (const pantryItemId of args.pantryItemIds) {
       const pantryItem = await ctx.db.get(pantryItemId);
       if (!pantryItem || pantryItem.userId !== user._id) continue;
@@ -986,7 +913,6 @@ export const addFromPantryBulk = mutation({
         priority: "should-have",
         isChecked: false,
         autoAdded: false,
-        ...(approvalStatus ? { approvalStatus } : {}),
         createdAt: now,
         updatedAt: now,
       });
@@ -994,43 +920,6 @@ export const addFromPantryBulk = mutation({
       itemIds.push(itemId);
       addedItemNames.push(pantryItem.name);
       knownItems.push({ name: pantryItem.name, size });
-    }
-
-    // Send approval notification (batched — one notification for the whole bulk add)
-    if (approvalStatus === "pending" && addedItemNames.length > 0) {
-      const itemsSummary = addedItemNames.length <= 3
-        ? addedItemNames.join(", ")
-        : `${addedItemNames.slice(0, 3).join(", ")} and ${addedItemNames.length - 3} more`;
-
-      if (perms.isPartner) {
-        await ctx.db.insert("notifications", {
-          userId: list.userId,
-          type: "approval_requested",
-          title: "Approval Needed",
-          body: `${user.name} wants to add ${addedItemNames.length} items: ${itemsSummary}`,
-          data: { listId: args.listId },
-          read: false,
-          createdAt: now,
-        });
-      } else {
-        const partners = await ctx.db
-          .query("listPartners")
-          .withIndex("by_list", (q) => q.eq("listId", args.listId))
-          .collect();
-        for (const p of partners) {
-          if (p.role === "approver" && p.status === "accepted") {
-            await ctx.db.insert("notifications", {
-              userId: p.userId,
-              type: "approval_requested",
-              title: "Approval Needed",
-              body: `${user.name} wants to add ${addedItemNames.length} items: ${itemsSummary}`,
-              data: { listId: args.listId },
-              read: false,
-              createdAt: now,
-            });
-          }
-        }
-      }
     }
 
     // Recalculate list total after adding items
