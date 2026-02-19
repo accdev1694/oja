@@ -1,5 +1,5 @@
 import { action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
@@ -86,12 +86,25 @@ export interface SeedItem {
   defaultUnit?: string;       // For hasVariants=false: "g", "tin", "each"
 }
 
+/** Deduplicate SeedItems by normalized name (case-insensitive, first wins) */
+function deduplicateItems(items: SeedItem[]): SeedItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.name.toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /**
- * Generate hybrid pantry seed items using AI
+ * Generate hybrid pantry seed items.
  *
- * Generates 200 items:
- * - 60% local/universal staples (based on country)
- * - 40% cultural items (split evenly across selected cuisines)
+ * Strategy (global DB first, AI gap-fill):
+ * 1. Query the global itemVariants table for scan-verified products
+ * 2. Enrich with crowdsourced prices from currentPrices
+ * 3. Use AI only to fill remaining slots up to 200
+ * 4. Fall back to hardcoded items if everything fails
  */
 export const generateHybridSeedItems = action({
   args: {
@@ -100,17 +113,74 @@ export const generateHybridSeedItems = action({
   },
   handler: async (ctx, args): Promise<SeedItem[]> => {
     const { country, cuisines } = args;
-
-    // Calculate item distribution
     const totalItems = 200;
-    const localItems = Math.floor(totalItems * 0.6); // 120 items
-    const culturalItems = totalItems - localItems; // 80 items
-    const itemsPerCuisine = Math.floor(culturalItems / cuisines.length);
 
+    // ── Step 1: Query global DB for scan-verified items ──
+    let globalItems: SeedItem[] = [];
+    try {
+      const popularVariants = await ctx.runQuery(
+        internal.itemVariants.getPopularForSeeding,
+        { limit: totalItems }
+      );
+
+      if (popularVariants.length > 0) {
+        // Get crowdsourced prices for these items
+        const normalizedNames = popularVariants.map((variant) =>
+          (variant.name ?? "").toLowerCase().trim()
+        );
+        const crowdPrices = await ctx.runQuery(
+          internal.currentPrices.getBatchPrices,
+          { normalizedNames }
+        );
+
+        globalItems = popularVariants.map((variant) => {
+          const normName = (variant.name ?? "").toLowerCase().trim();
+          const crowdPrice = crowdPrices[normName];
+          return {
+            name: variant.name,
+            category: variant.category,
+            stockLevel: "low" as const,
+            source: "local" as const,
+            estimatedPrice: crowdPrice?.price ?? variant.estimatedPrice,
+            hasVariants: true,
+            defaultSize: variant.size,
+            defaultUnit: variant.unit,
+          };
+        });
+
+        console.log(`[generateHybridSeedItems] Found ${globalItems.length} scan-verified items from global DB`);
+      }
+    } catch (error) {
+      console.warn("[generateHybridSeedItems] Global DB query failed, falling back to full AI generation:", error);
+    }
+
+    // ── Step 2: Calculate how many items AI still needs to generate ──
+    const remainingSlots = totalItems - globalItems.length;
+
+    if (remainingSlots <= 0) {
+      // Global DB has enough items — deduplicate and return
+      console.log("[generateHybridSeedItems] Global DB filled all slots, no AI needed");
+      return deduplicateItems(globalItems).slice(0, totalItems);
+    }
+
+    // ── Step 3: Build the AI prompt (full generation or gap-fill) ──
     const cuisineList = cuisines.join(", ");
-    const cuisineBreakdown = cuisines.map((c, i) => `   - ${itemsPerCuisine} items for ${c} cuisine`).join("\n");
+    const existingNames = new Set(globalItems.map((i) => i.name.toLowerCase().trim()));
 
-    const prompt = `You are a household inventory expert. Generate a realistic stock starter list for a household.
+    // If no global items found, run original full AI generation
+    const isFullGeneration = remainingSlots === totalItems;
+    const itemCount = isFullGeneration ? totalItems : remainingSlots;
+
+    let prompt: string;
+
+    if (isFullGeneration) {
+      // Original full 200-item prompt (no global data available)
+      const localItems = Math.floor(totalItems * 0.6); // 120 items
+      const culturalItems = totalItems - localItems; // 80 items
+      const itemsPerCuisine = Math.floor(culturalItems / cuisines.length);
+      const cuisineBreakdown = cuisines.map((c) => `   - ${itemsPerCuisine} items for ${c} cuisine`).join("\n");
+
+      prompt = `You are a household inventory expert. Generate a realistic stock starter list for a household.
 
 USER PROFILE:
 - Location: ${country}
@@ -148,10 +218,40 @@ IMPORTANT:
 - Every item MUST have "source": "local" (for universal staples) or "source": "cultural" (for cuisine-specific items)
 - No explanations, ONLY the JSON array
 - Exactly ${totalItems} items`;
+    } else {
+      // Gap-fill prompt: AI generates only what the global DB didn't cover
+      console.log(`[generateHybridSeedItems] Global DB provided ${globalItems.length} items, AI will fill ${remainingSlots} remaining slots`);
 
-    const fullPrompt = `You are a household inventory expert who generates realistic stock lists covering groceries and household essentials. Always respond with valid JSON only.
+      prompt = `You are a household inventory expert. Generate exactly ${remainingSlots} additional household stock items in JSON format.
 
-${prompt}`;
+USER PROFILE:
+- Location: ${country}
+- Cuisines they cook: ${cuisineList}
+
+ITEMS ALREADY IN THEIR PANTRY (DO NOT duplicate these):
+${globalItems.slice(0, 80).map((i) => `- ${i.name}`).join("\n")}
+
+Generate ${remainingSlots} MORE items that are NOT in the list above. Focus on:
+- Common ${country} household staples and groceries not yet covered
+- Cultural items for: ${cuisineList}
+- Non-food household essentials if not covered
+
+CATEGORIES: Dairy, Bakery, Produce, Meat, Pantry Staples, Spices & Seasonings, Condiments, Beverages, Snacks, Frozen, Canned Goods, Grains & Pasta, Oils & Vinegars, Baking, Ethnic Ingredients, Household, Personal Care, Health & Wellness, Baby & Kids, Pets, Electronics, Clothing, Garden & Outdoor, Office & Stationery
+
+Return ONLY valid JSON array:
+[{"name": "Product Name", "category": "Category", "stockLevel": "low", "source": "local", "estimatedPrice": 1.50, "hasVariants": false, "defaultSize": "400g", "defaultUnit": "g"}, ...]
+
+IMPORTANT:
+- Use ${country} product names and prices in GBP
+- Be culturally accurate for listed cuisines
+- Set hasVariants to true for items where size materially affects price
+- For non-variant items, include defaultSize and defaultUnit
+- Every item MUST have "source": "local" or "source": "cultural"
+- No explanations, ONLY the JSON array
+- Exactly ${remainingSlots} items`;
+    }
+
+    const fullPrompt = `You are a household inventory expert who generates realistic stock lists covering groceries and household essentials. Always respond with valid JSON only.\n\n${prompt}`;
 
     function parseSeedResponse(responseText: string): SeedItem[] {
       if (!responseText) throw new Error("No response from AI");
@@ -170,6 +270,8 @@ ${prompt}`;
         .filter((item) => {
           const key = item.name.toLowerCase().trim();
           if (seen.has(key)) return false;
+          // Also skip items that already came from the global DB
+          if (existingNames.has(key)) return false;
           seen.add(key);
           return true;
         })
@@ -182,21 +284,30 @@ ${prompt}`;
           defaultSize: typeof item.defaultSize === "string" ? item.defaultSize : undefined,
           defaultUnit: typeof item.defaultUnit === "string" ? item.defaultUnit : undefined,
         }))
-        .slice(0, totalItems);
+        .slice(0, itemCount);
 
-      if (validItems.length < 50) throw new Error("Not enough valid items generated");
+      if (isFullGeneration && validItems.length < 50) throw new Error("Not enough valid items generated");
       return validItems;
     }
 
     try {
-      return await withAIFallback(
+      const aiItems = await withAIFallback(
         async () => parseSeedResponse(await geminiGenerate(fullPrompt, { temperature: 0.8 })),
         async () => parseSeedResponse(await openaiGenerate(fullPrompt, { temperature: 0.8 })),
-        "generateHybridSeedItems"
+        isFullGeneration ? "generateHybridSeedItems" : "generateHybridSeedItems-gap"
       );
+
+      const combined = [...globalItems, ...aiItems];
+      return deduplicateItems(combined).slice(0, totalItems);
     } catch (error) {
       console.error("AI generation failed:", error);
-      return getFallbackItems(country, cuisines);
+      const fallback = getFallbackItems(country, cuisines);
+      if (globalItems.length > 0) {
+        // Merge global items with fallback (global items take priority)
+        const combined = [...globalItems, ...fallback.filter((f) => !existingNames.has(f.name.toLowerCase().trim()))];
+        return deduplicateItems(combined).slice(0, totalItems);
+      }
+      return fallback;
     }
   },
 });

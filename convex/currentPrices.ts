@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 import { normalizeStoreName } from "./lib/storeNormalizer";
 import { isValidProductName } from "./lib/communityHelpers";
 
@@ -488,5 +488,40 @@ export const getComparisonByStores = query({
       averagePrice,
       storesWithData: availablePrices.length,
     };
+  },
+});
+
+/**
+ * Get crowdsourced prices for a list of item names.
+ * Returns the cheapest verified price per item (excludes AI Estimate entries).
+ */
+export const getBatchPrices = internalQuery({
+  args: {
+    normalizedNames: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const results: Record<string, { price: number; storeName: string; confidence: number }> = {};
+
+    for (const name of args.normalizedNames) {
+      const prices = await ctx.db
+        .query("currentPrices")
+        .withIndex("by_item", (q) => q.eq("normalizedName", name))
+        .collect();
+
+      // Filter to receipt-verified prices only (reportCount > 0)
+      const verified = prices.filter((p) => p.reportCount > 0);
+      if (verified.length === 0) continue;
+
+      // Pick cheapest
+      verified.sort((a, b) => a.unitPrice - b.unitPrice);
+      const best = verified[0];
+      results[name] = {
+        price: best.unitPrice,
+        storeName: best.storeName,
+        confidence: best.confidence ?? 0,
+      };
+    }
+
+    return results;
   },
 });
