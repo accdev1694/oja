@@ -17,9 +17,8 @@ import {
 
 const typeIcons: Record<string, string> = {
   partner_joined: "account-check",
-  approval_requested: "shield-alert-outline",
-  item_approved: "check-circle",
-  item_rejected: "close-circle",
+  comment_added: "comment-text",
+  list_message: "chat",
   achievement_unlocked: "trophy",
   trial_started: "star",
   tier_upgrade: "arrow-up-bold",
@@ -27,9 +26,8 @@ const typeIcons: Record<string, string> = {
 
 const typeColors: Record<string, string> = {
   partner_joined: colors.accent.primary,
-  approval_requested: colors.semantic.warning,
-  item_approved: colors.semantic.success,
-  item_rejected: colors.semantic.danger,
+  comment_added: colors.accent.primary,
+  list_message: colors.accent.primary,
   achievement_unlocked: colors.accent.secondary,
   trial_started: colors.accent.primary,
   tier_upgrade: colors.accent.secondary,
@@ -57,9 +55,8 @@ export default function NotificationsScreen() {
       case "trial_started":
         router.push("/(app)/subscription" as any);
         break;
-      case "approval_requested":
-      case "item_approved":
-      case "item_rejected":
+      case "comment_added":
+      case "list_message":
         if (notification.data?.listId) {
           router.push(`/(app)/list/${notification.data.listId}` as any);
         }

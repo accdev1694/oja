@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     fontSize: typography.bodySmall.fontSize,
   },
-  // System messages (approval events)
+  // System messages (partner events)
   systemMessage: {
     alignItems: "center",
     paddingVertical: spacing.xs,

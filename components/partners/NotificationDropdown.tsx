@@ -27,13 +27,7 @@ interface NotificationDropdownProps {
 const typeIcons: Record<string, { icon: string; color: string }> = {
   partner_joined: { icon: "account-plus", color: colors.accent.primary },
   partner_left: { icon: "account-minus", color: colors.accent.warning },
-  approval_requested: { icon: "clock-outline", color: colors.accent.warning },
-  item_approved: { icon: "check-circle", color: colors.accent.success },
-  item_rejected: { icon: "close-circle", color: colors.accent.error },
   comment_added: { icon: "comment-text", color: colors.accent.primary },
-  list_approval_requested: { icon: "clipboard-check-outline", color: colors.accent.warning },
-  list_approved: { icon: "clipboard-check", color: colors.accent.success },
-  list_rejected: { icon: "clipboard-remove", color: colors.accent.error },
   list_message: { icon: "chat", color: colors.accent.primary },
 };
 

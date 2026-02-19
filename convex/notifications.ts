@@ -113,7 +113,7 @@ export const markListNotificationsRead = mutation({
       .withIndex("by_user_read", (q: any) => q.eq("userId", user._id).eq("read", false))
       .collect();
 
-    const listTypes = ["list_message", "list_approval_requested", "list_approved", "list_rejected"];
+    const listTypes = ["list_message", "comment_added"];
     let count = 0;
     for (const n of unread) {
       if (listTypes.includes(n.type) && n.data?.listId === args.listId) {

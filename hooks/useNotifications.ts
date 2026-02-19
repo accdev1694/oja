@@ -32,13 +32,7 @@ export function useNotifications() {
       case "partner_joined":
       case "partner_left":
         return "/(app)/partners";
-      case "approval_requested":
-      case "item_approved":
-      case "item_rejected":
       case "comment_added":
-      case "list_approval_requested":
-      case "list_approved":
-      case "list_rejected":
       case "list_message":
         return data.listId ? `/(app)/list/${data.listId}` : null;
       case "achievement_unlocked":

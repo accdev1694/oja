@@ -370,7 +370,7 @@ export default defineSchema({
   listPartners: defineTable({
     listId: v.id("shoppingLists"),
     userId: v.id("users"),
-    role: v.union(v.literal("member"), v.literal("viewer"), v.literal("editor"), v.literal("approver")),
+    role: v.literal("member"),
     invitedBy: v.id("users"),
     invitedAt: v.number(),
     acceptedAt: v.optional(v.number()),
@@ -385,7 +385,7 @@ export default defineSchema({
     code: v.string(),
     listId: v.id("shoppingLists"),
     createdBy: v.id("users"),
-    role: v.union(v.literal("member"), v.literal("viewer"), v.literal("editor"), v.literal("approver")),
+    role: v.literal("member"),
     expiresAt: v.number(),
     usedBy: v.optional(v.id("users")),
     usedAt: v.optional(v.number()),

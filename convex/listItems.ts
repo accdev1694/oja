@@ -440,7 +440,7 @@ export const remove = mutation({
     if (!user) throw new Error("User not found");
 
     const perms = await getUserListPermissions(ctx, item.listId, user._id);
-    // Owner can always remove. Editors/approvers can remove their own items.
+    // Owner can always remove. Members can remove their own items.
     if (!perms.isOwner && !(perms.canEdit && item.userId === user._id)) {
       throw new Error("You don't have permission to remove this item");
     }
@@ -477,7 +477,7 @@ export const removeMultiple = mutation({
       if (!item) continue;
 
       const perms = await getUserListPermissions(ctx, item.listId, user._id);
-      // Owner can always remove. Editors/approvers can remove their own items.
+      // Owner can always remove. Members can remove their own items.
       if (perms.isOwner || (perms.canEdit && item.userId === user._id)) {
         await ctx.db.delete(id);
         deleted++;
