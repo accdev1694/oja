@@ -21,6 +21,7 @@ import type * as itemVariants from "../itemVariants.js";
 import type * as lib_communityHelpers from "../lib/communityHelpers.js";
 import type * as lib_featureGating from "../lib/featureGating.js";
 import type * as lib_fuzzyMatch from "../lib/fuzzyMatch.js";
+import type * as lib_globalEnrichment from "../lib/globalEnrichment.js";
 import type * as lib_priceBracketMatcher from "../lib/priceBracketMatcher.js";
 import type * as lib_priceResolver from "../lib/priceResolver.js";
 import type * as lib_receiptHelpers from "../lib/receiptHelpers.js";
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   "lib/communityHelpers": typeof lib_communityHelpers;
   "lib/featureGating": typeof lib_featureGating;
   "lib/fuzzyMatch": typeof lib_fuzzyMatch;
+  "lib/globalEnrichment": typeof lib_globalEnrichment;
   "lib/priceBracketMatcher": typeof lib_priceBracketMatcher;
   "lib/priceResolver": typeof lib_priceResolver;
   "lib/receiptHelpers": typeof lib_receiptHelpers;
