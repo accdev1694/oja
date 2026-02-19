@@ -448,7 +448,7 @@ export default function SubscriptionScreen() {
             {plans
               .filter((p: any) => p.id !== "free")
               .map((plan: any) => {
-                const isCurrentPlan = plan.id === subscription?.plan;
+                const isCurrentPlan = plan.id === subscription?.plan && subscription?.status === "active";
                 const isLoading = checkoutLoading === plan.id;
                 return (
                   <GlassCard

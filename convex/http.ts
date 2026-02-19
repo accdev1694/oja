@@ -49,6 +49,7 @@ http.route({
       "customer.subscription.updated",
       "customer.subscription.deleted",
       "invoice.payment_failed",
+      "invoice.created",
     ];
 
     if (relevantEvents.includes(event.type)) {

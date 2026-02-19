@@ -18,7 +18,7 @@ export const AI_LIMITS = {
   },
 } as const;
 
-function getFreeFeatures() {
+export function getFreeFeatures() {
   return {
     maxLists: 3,
     maxPantryItems: 50,
@@ -26,13 +26,13 @@ function getFreeFeatures() {
     maxVoiceRequests: AI_LIMITS.voice.free,
     receiptScanning: true,
     priceHistory: true,
-    partnerMode: true,
+    partnerMode: false,
     insights: true,
     exportData: true,
   };
 }
 
-function getPlanFeatures(plan: string) {
+export function getPlanFeatures(plan: string) {
   if (plan === "free") return getFreeFeatures();
   const voiceLimit = AI_LIMITS.voice[plan as keyof typeof AI_LIMITS.voice] ?? 200;
   return {
@@ -49,11 +49,59 @@ function getPlanFeatures(plan: string) {
 }
 
 /** Read-time guard: treat expired trials as expired even if the cron hasn't run yet. */
-function isEffectivelyPremium(sub: any): boolean {
-  if (sub.status === "trial" && sub.trialEndsAt != null && sub.trialEndsAt <= Date.now()) {
-    return false;
+export function isTrialExpired(sub: any): boolean {
+  return sub.status === "trial" && sub.trialEndsAt != null && sub.trialEndsAt <= Date.now();
+}
+
+export function effectiveStatus(sub: any): string {
+  if (isTrialExpired(sub)) return "expired";
+  return sub.status;
+}
+
+export function isEffectivelyPremium(sub: any): boolean {
+  const status = effectiveStatus(sub);
+  return status === "active" || status === "trial";
+}
+
+// ============================================================================
+// TIER SYSTEM — Scan-based tiers with credit rates
+// ============================================================================
+
+export type TierName = "bronze" | "silver" | "gold" | "platinum";
+
+export interface TierConfig {
+  tier: TierName;
+  creditPerScan: number;
+  maxScans: number;     // monthly cap
+  maxCredits: number;   // monthly max credit (£)
+  threshold: number;    // lifetime scans to reach
+}
+
+export const TIER_TABLE: TierConfig[] = [
+  { tier: "bronze",   threshold: 0,   creditPerScan: 0.25, maxScans: 4, maxCredits: 1.00 },
+  { tier: "silver",   threshold: 20,  creditPerScan: 0.25, maxScans: 5, maxCredits: 1.25 },
+  { tier: "gold",     threshold: 50,  creditPerScan: 0.30, maxScans: 5, maxCredits: 1.50 },
+  { tier: "platinum", threshold: 100, creditPerScan: 0.30, maxScans: 6, maxCredits: 1.79 },
+];
+
+export function getTierFromScans(lifetimeScans: number): TierConfig {
+  for (let i = TIER_TABLE.length - 1; i >= 0; i--) {
+    if (lifetimeScans >= TIER_TABLE[i].threshold) return TIER_TABLE[i];
   }
-  return sub.status === "active" || sub.status === "trial";
+  return TIER_TABLE[0];
+}
+
+export function getNextTierInfo(lifetimeScans: number) {
+  const current = getTierFromScans(lifetimeScans);
+  const currentIdx = TIER_TABLE.findIndex((t) => t.tier === current.tier);
+  if (currentIdx >= TIER_TABLE.length - 1) {
+    return { nextTier: null, scansToNextTier: 0 };
+  }
+  const next = TIER_TABLE[currentIdx + 1];
+  return {
+    nextTier: next.tier,
+    scansToNextTier: Math.max(0, next.threshold - lifetimeScans),
+  };
 }
 
 /**

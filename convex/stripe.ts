@@ -8,7 +8,8 @@
 import { v } from "convex/values";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type Stripe from "stripe";
+import type { Id } from "./_generated/dataModel";
+import { getTierFromScans } from "./lib/featureGating";
 
 // =============================================================================
 // STRIPE CHECKOUT SESSION
@@ -164,6 +165,36 @@ export const processWebhookEvent = action({
         });
         break;
       }
+
+      case "invoice.created": {
+        // Apply scan credits as a discount before the invoice is finalized
+        // Handles both first subscription and renewals
+        const isSubscriptionInvoice =
+          data.billing_reason === "subscription_cycle" ||
+          data.billing_reason === "subscription_create";
+        if (isSubscriptionInvoice && data.status === "draft") {
+          const creditResult: any = await ctx.runMutation(
+            internal.stripe.getAndMarkScanCredits,
+            {
+              stripeCustomerId: data.customer,
+              stripeInvoiceId: data.id,
+            }
+          );
+          if (creditResult && creditResult.creditsToApply > 0) {
+            const stripe = await getStripeClient();
+            // Add a negative invoice item (credit) to the draft invoice
+            const creditAmountPence = Math.round(creditResult.creditsToApply * 100);
+            await stripe.invoiceItems.create({
+              customer: data.customer,
+              invoice: data.id,
+              amount: -creditAmountPence,
+              currency: "gbp",
+              description: `Scan credit reward (${creditResult.tier} tier, ${creditResult.scansThisPeriod} scans)`,
+            });
+          }
+        }
+        break;
+      }
     }
 
     return { success: true };
@@ -230,14 +261,26 @@ export const handleCheckoutCompleted = internalMutation({
   handler: async (ctx, args) => {
     const now = Date.now();
 
-    // Find user — userId from Stripe metadata is a string
-    const allUsers = await ctx.db.query("users").collect();
-    const user = allUsers.find((u) => u._id.toString() === args.userId);
-    if (!user) return;
+    // Find user by Convex ID (stored as string in Stripe metadata)
+    const userId = args.userId as Id<"users">;
+    let user;
+    try {
+      user = await ctx.db.get(userId);
+    } catch {
+      user = null;
+    }
+    if (!user) {
+      console.error(
+        `[handleCheckoutCompleted] User not found for ID: ${args.userId}. ` +
+        `Stripe customer: ${args.stripeCustomerId}, plan: ${args.planId}. ` +
+        `Payment succeeded but subscription NOT activated.`
+      );
+      throw new Error(`User not found for Stripe checkout: ${args.userId}`);
+    }
 
     const existing = await ctx.db
       .query("subscriptions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", (q: any) => q.eq("userId", userId))
       .order("desc")
       .first();
 
@@ -254,7 +297,7 @@ export const handleCheckoutCompleted = internalMutation({
       });
     } else {
       await ctx.db.insert("subscriptions", {
-        userId: user._id,
+        userId,
         plan: plan as "premium_monthly" | "premium_annual",
         status: "active",
         stripeCustomerId: args.stripeCustomerId,
@@ -267,7 +310,7 @@ export const handleCheckoutCompleted = internalMutation({
     }
 
     await ctx.db.insert("notifications", {
-      userId: user._id,
+      userId,
       type: "subscription_activated",
       title: "Premium Activated!",
       body: "Welcome to Oja Premium. Enjoy all features!",
@@ -275,7 +318,45 @@ export const handleCheckoutCompleted = internalMutation({
       createdAt: now,
     });
 
-    // (Old loyalty points bonus removed — unified scan rewards system)
+    // Create initial scanCredits record for the first billing period
+    // Carry forward lifetime scans from trial period if they exist
+    const prevCredit = await ctx.db
+      .query("scanCredits")
+      .withIndex("by_user", (q: any) => q.eq("userId", userId))
+      .order("desc")
+      .first();
+
+    const lifetimeScans = prevCredit?.lifetimeScans ?? 0;
+    const tier = prevCredit?.tier ?? "bronze";
+    const isAnnual = plan === "premium_annual";
+    const tierConfig = getTierFromScans(lifetimeScans);
+
+    const periodStart = existing?.currentPeriodStart ?? now;
+    const periodEnd = existing?.currentPeriodEnd ?? now + 30 * 24 * 60 * 60 * 1000;
+    const maxScans = isAnnual ? tierConfig.maxScans * 12 : tierConfig.maxScans;
+    const maxCredits = isAnnual
+      ? parseFloat((tierConfig.maxCredits * 12).toFixed(2))
+      : tierConfig.maxCredits;
+
+    // Only create if no active-period record exists
+    const hasActiveCreditRecord = prevCredit && prevCredit.periodEnd > now && !prevCredit.appliedToInvoice;
+    if (!hasActiveCreditRecord) {
+      await ctx.db.insert("scanCredits", {
+        userId,
+        periodStart,
+        periodEnd,
+        scansThisPeriod: 0,
+        creditsEarned: 0,
+        maxScans,
+        maxCredits,
+        creditPerScan: tierConfig.creditPerScan,
+        appliedToInvoice: false,
+        lifetimeScans,
+        tier: tier as "bronze" | "silver" | "gold" | "platinum",
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
   },
 });
 
@@ -327,17 +408,8 @@ export const handleSubscriptionUpdated = internalMutation({
       const lifetimeScans = prevCredit?.lifetimeScans ?? 0;
       const tier = prevCredit?.tier ?? "bronze";
 
-      // Tier-aware caps
-      const tierTable = [
-        { tier: "bronze",   threshold: 0,   creditPerScan: 0.25, maxScans: 4, maxCredits: 1.00 },
-        { tier: "silver",   threshold: 20,  creditPerScan: 0.25, maxScans: 5, maxCredits: 1.25 },
-        { tier: "gold",     threshold: 50,  creditPerScan: 0.30, maxScans: 5, maxCredits: 1.50 },
-        { tier: "platinum", threshold: 100, creditPerScan: 0.30, maxScans: 6, maxCredits: 1.79 },
-      ];
-      let tierConfig = tierTable[0];
-      for (let i = tierTable.length - 1; i >= 0; i--) {
-        if (lifetimeScans >= tierTable[i].threshold) { tierConfig = tierTable[i]; break; }
-      }
+      // Tier-aware caps (using shared tier config)
+      const tierConfig = getTierFromScans(lifetimeScans);
 
       const maxScans = isAnnual ? tierConfig.maxScans * 12 : tierConfig.maxScans;
       const maxCredits = isAnnual
@@ -388,6 +460,52 @@ export const handleSubscriptionDeleted = internalMutation({
       read: false,
       createdAt: Date.now(),
     });
+  },
+});
+
+/**
+ * Get unapplied scan credits for a Stripe customer and mark them as applied.
+ * Called during invoice.created to apply credits as a discount.
+ */
+export const getAndMarkScanCredits = internalMutation({
+  args: {
+    stripeCustomerId: v.string(),
+    stripeInvoiceId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Find subscription by Stripe customer ID
+    const sub = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_stripe_customer", (q: any) =>
+        q.eq("stripeCustomerId", args.stripeCustomerId)
+      )
+      .first();
+
+    if (!sub) return null;
+
+    // Find the latest unapplied scan credit record for this user
+    const credit = await ctx.db
+      .query("scanCredits")
+      .withIndex("by_user", (q: any) => q.eq("userId", sub.userId))
+      .order("desc")
+      .first();
+
+    if (!credit || credit.appliedToInvoice || credit.creditsEarned <= 0) {
+      return null;
+    }
+
+    // Mark as applied with invoice ID for audit trail
+    await ctx.db.patch(credit._id, {
+      appliedToInvoice: true,
+      stripeInvoiceId: args.stripeInvoiceId,
+      updatedAt: Date.now(),
+    });
+
+    return {
+      creditsToApply: credit.creditsEarned,
+      scansThisPeriod: credit.scansThisPeriod,
+      tier: credit.tier ?? "bronze",
+    };
   },
 });
 

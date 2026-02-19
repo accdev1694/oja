@@ -1,5 +1,14 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
+import {
+  getFreeFeatures,
+  getPlanFeatures,
+  effectiveStatus,
+  isEffectivelyPremium,
+  getTierFromScans,
+  getNextTierInfo,
+  type TierName,
+} from "./lib/featureGating";
 
 async function requireUser(ctx: any) {
   const identity = await ctx.auth.getUserIdentity();
@@ -10,25 +19,6 @@ async function requireUser(ctx: any) {
     .unique();
   if (!user) throw new Error("User not found");
   return user;
-}
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-/** Read-time guard: treat expired trials as expired even if the cron hasn't run yet. */
-function isTrialExpired(sub: any): boolean {
-  return sub.status === "trial" && sub.trialEndsAt != null && sub.trialEndsAt <= Date.now();
-}
-
-function effectiveStatus(sub: any): string {
-  if (isTrialExpired(sub)) return "expired";
-  return sub.status;
-}
-
-function isEffectivelyPremium(sub: any): boolean {
-  const status = effectiveStatus(sub);
-  return status === "active" || status === "trial";
 }
 
 // ============================================================================
@@ -75,31 +65,6 @@ export const getCurrentSubscription = query({
     };
   },
 });
-
-function getFreeFeatures() {
-  return {
-    maxLists: 3,
-    maxPantryItems: 50,
-    receiptScanning: true,
-    priceHistory: true,
-    partnerMode: true,
-    insights: true,
-    exportData: true,
-  };
-}
-
-function getPlanFeatures(plan: string) {
-  if (plan === "free") return getFreeFeatures();
-  return {
-    maxLists: -1, // unlimited
-    maxPantryItems: -1,
-    receiptScanning: true,
-    priceHistory: true,
-    partnerMode: true,
-    insights: true,
-    exportData: true,
-  };
-}
 
 /**
  * Create or update subscription (called from Stripe webhook or manually)
@@ -236,47 +201,6 @@ export const hasPremium = query({
     return isEffectivelyPremium(sub);
   },
 });
-
-// ============================================================================
-// TIER SYSTEM — Scan-based tiers with credit rates
-// ============================================================================
-
-type TierName = "bronze" | "silver" | "gold" | "platinum";
-
-interface TierConfig {
-  tier: TierName;
-  creditPerScan: number;
-  maxScans: number;     // monthly cap
-  maxCredits: number;   // monthly max credit (£)
-  threshold: number;    // lifetime scans to reach
-}
-
-const TIER_TABLE: TierConfig[] = [
-  { tier: "bronze",   threshold: 0,   creditPerScan: 0.25, maxScans: 4, maxCredits: 1.00 },
-  { tier: "silver",   threshold: 20,  creditPerScan: 0.25, maxScans: 5, maxCredits: 1.25 },
-  { tier: "gold",     threshold: 50,  creditPerScan: 0.30, maxScans: 5, maxCredits: 1.50 },
-  { tier: "platinum", threshold: 100, creditPerScan: 0.30, maxScans: 6, maxCredits: 1.79 },
-];
-
-function getTierFromScans(lifetimeScans: number): TierConfig {
-  for (let i = TIER_TABLE.length - 1; i >= 0; i--) {
-    if (lifetimeScans >= TIER_TABLE[i].threshold) return TIER_TABLE[i];
-  }
-  return TIER_TABLE[0];
-}
-
-function getNextTierInfo(lifetimeScans: number) {
-  const current = getTierFromScans(lifetimeScans);
-  const currentIdx = TIER_TABLE.findIndex((t) => t.tier === current.tier);
-  if (currentIdx >= TIER_TABLE.length - 1) {
-    return { nextTier: null, scansToNextTier: 0 };
-  }
-  const next = TIER_TABLE[currentIdx + 1];
-  return {
-    nextTier: next.tier,
-    scansToNextTier: Math.max(0, next.threshold - lifetimeScans),
-  };
-}
 
 /**
  * Check if user has premium, throw if not.
@@ -593,15 +517,12 @@ export const expireTrials = internalMutation({
 
     const trialSubs = await ctx.db
       .query("subscriptions")
+      .withIndex("by_status", (q: any) => q.eq("status", "trial"))
       .collect();
 
     let expired = 0;
     for (const sub of trialSubs) {
-      if (
-        sub.status === "trial" &&
-        sub.trialEndsAt &&
-        sub.trialEndsAt <= now
-      ) {
+      if (sub.trialEndsAt && sub.trialEndsAt <= now) {
         await ctx.db.patch(sub._id, {
           status: "expired",
           updatedAt: now,

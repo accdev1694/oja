@@ -232,6 +232,50 @@ GEMINI_API_KEY, OPENAI_API_KEY, STRIPE_SECRET_KEY, CLERK_SECRET_KEY
 | (tabs)/index.tsx | 1,084 | Pantry screen (improved from 1800+) |
 | admin.tsx | 1,032 | Admin dashboard |
 
+## Subscription System (PINNED — Revisit Later)
+
+**Status:** Core bugs fixed (Feb 2025). Needs Stripe Dashboard config + end-to-end live testing.
+
+### Architecture
+- **Trial:** 7 days, auto-started in `convex/users.ts:completeOnboarding()` (lines 182-212). Sets `plan: "premium_monthly"`, `status: "trial"`.
+- **Feature Gating:** Single source of truth in `convex/lib/featureGating.ts`. Free tier: 3 lists, 50 pantry, 3 scans/mo, 20 voice/mo, `partnerMode: false`. Premium: unlimited (voice capped at 200/mo).
+- **Tier System:** Bronze→Silver(20)→Gold(50)→Platinum(100) based on lifetime scans. Config in `featureGating.ts:TIER_TABLE`.
+- **Scan Credits:** Premium users earn £0.25-0.30/scan, capped per tier. Applied as negative invoice item via `invoice.created` webhook.
+- **Stripe Flow:** `createCheckoutSession` → Stripe Checkout → `checkout.session.completed` webhook → `handleCheckoutCompleted` → subscription active + scanCredits record created.
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `convex/lib/featureGating.ts` | **Single source** for features, tiers, premium checks |
+| `convex/subscriptions.ts` | Queries, mutations, earnScanCredit, expireTrials cron |
+| `convex/stripe.ts` | Checkout, portal, webhooks, getAndMarkScanCredits |
+| `convex/http.ts` | Webhook route (5 events including `invoice.created`) |
+| `convex/users.ts:159-216` | `completeOnboarding` — auto-starts 7-day trial |
+| `convex/schema.ts:502-516` | subscriptions table (has `by_status` index) |
+| `convex/schema.ts:540-573` | scanCredits + scanCreditTransactions tables |
+| `app/(app)/subscription.tsx` | Subscription UI page |
+
+### Bugs Fixed (This Session)
+1. **"Current Plan" badge during trial** — `subscription.tsx:451` now checks `status === "active"`
+2. **handleCheckoutCompleted full table scan** — replaced `.collect().find()` with `ctx.db.get(userId)`, throws on failure instead of silent return
+3. **expireTrials full table scan** — added `by_status` index to schema, query uses `.withIndex("by_status")`
+4. **Duplicate helpers** — `getFreeFeatures`, `getPlanFeatures`, `isEffectivelyPremium`, `effectiveStatus`, tier config all consolidated into `featureGating.ts`. `subscriptions.ts` and `stripe.ts` import from there
+5. **partnerMode gating** — set to `false` in free features so `requireFeature()` correctly blocks free users
+6. **Tier table duplication** — `stripe.ts:handleSubscriptionUpdated` now imports `getTierFromScans` from featureGating
+7. **Scan credits never applied to Stripe** — implemented `invoice.created` webhook handler + `getAndMarkScanCredits` mutation. Adds negative invoice item for earned credits
+8. **First invoice skipped** — `billing_reason` filter now includes both `subscription_cycle` AND `subscription_create`
+9. **No scanCredits at checkout** — `handleCheckoutCompleted` now creates initial scanCredits record, carrying forward trial-period lifetime scans
+10. **stripeInvoiceId dead field** — now populated when credits are applied to invoice
+
+### Before Going Live — Checklist
+- [ ] Enable `invoice.created` event in Stripe Dashboard webhook settings
+- [ ] Verify `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL` in Convex Dashboard
+- [ ] Live test: signup → trial → scan receipts → subscribe → verify first invoice has credit discount
+- [ ] Live test: monthly renewal → verify credits reset and apply to next invoice
+- [ ] Live test: cancel → verify features drop to free tier
+- [ ] Consider: trial-period credits — currently they accumulate but only apply if user subscribes before trial ends and `invoice.created` fires
+- [ ] Consider: Stripe↔Convex reconciliation cron (no sync exists if webhooks are missed)
+
 ## BMAD Workflow
 
 Artifacts in `_bmad-output/`. Sprint status in `_bmad-output/implementation-artifacts/sprint-status.yaml`.
