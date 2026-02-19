@@ -70,6 +70,7 @@ export default function ConfirmReceiptScreen() {
   const checkPriceAlerts = useMutation(api.priceHistory.checkPriceAlerts);
   const checkDuplicate = useMutation(api.receipts.checkDuplicate);
   const upsertCurrentPrices = useMutation(api.currentPrices.upsertFromReceipt);
+  const improveArchivedPrices = useMutation(api.currentPrices.improveArchivedListPrices);
 
   // Gamification mutations
   const earnScanCredit = useMutation(api.subscriptions.earnScanCredit);
@@ -277,6 +278,13 @@ export default function ConfirmReceiptScreen() {
 
       // Step 3: Upsert current prices (freshest price database)
       await upsertCurrentPrices({ receiptId });
+
+      // Step 3b: Retroactively improve archived list prices (per-store scoped)
+      try {
+        await improveArchivedPrices({ receiptId });
+      } catch {
+        // Non-critical — don't block receipt save
+      }
 
       // Step 4: Check for price alerts
       const alerts = await checkPriceAlerts({ receiptId });

@@ -93,6 +93,9 @@ export default defineSchema({
     // Auto-add to list when out
     autoAddToList: v.boolean(),
 
+    // Name provenance: "system" = auto-generated (AI, onboarding, scan); "user" = manually edited
+    nameSource: v.optional(v.union(v.literal("system"), v.literal("user"))),
+
     // Pantry lifecycle (tiered pantry with auto-archiving)
     status: v.optional(v.union(v.literal("active"), v.literal("archived"))), // defaults to "active"
     pinned: v.optional(v.boolean()),            // user manually pinned → Essentials tier

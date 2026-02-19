@@ -371,6 +371,7 @@ export const createFromReceipt = mutation({
             icon: getIconForItem(item.name, item.category || "other"),
             stockLevel: "stocked",
             status: "active" as const,
+            nameSource: "system" as const,
             purchaseCount: 1,
             lastPurchasedAt: now,
             lastPrice: item.unitPrice,

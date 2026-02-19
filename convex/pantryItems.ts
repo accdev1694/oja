@@ -138,6 +138,7 @@ export const bulkCreate = mutation({
         icon: getIconForItem(item.name, item.category),
         stockLevel: item.stockLevel,
         status: "active" as const,
+        nameSource: "system" as const,
         // Price seeding from AI estimates
         ...(item.estimatedPrice !== undefined && {
           lastPrice: item.estimatedPrice,
@@ -327,6 +328,7 @@ export const create = mutation({
       icon: getIconForItem(args.name, args.category),
       stockLevel: args.stockLevel,
       status: "active" as const,
+      nameSource: "system" as const,
       autoAddToList: args.autoAddToList ?? false,
       lastPrice: args.lastPrice,
       priceSource: args.priceSource,
@@ -401,7 +403,13 @@ export const update = mutation({
       updatedAt: Date.now(),
     };
 
-    if (args.name !== undefined) updates.name = args.name;
+    if (args.name !== undefined) {
+      updates.name = args.name;
+      // User manually edited the name — protect it from auto-improvement
+      if (args.name !== item.name) {
+        updates.nameSource = "user";
+      }
+    }
     if (args.category !== undefined) updates.category = args.category;
     if (args.stockLevel !== undefined) updates.stockLevel = args.stockLevel;
     if (args.autoAddToList !== undefined) updates.autoAddToList = args.autoAddToList;
@@ -803,6 +811,12 @@ export const autoRestockFromReceipt = mutation({
           // Update size/unit from receipt if available (improves over time)
           ...(receiptItem.size && { defaultSize: receiptItem.size }),
           ...(receiptItem.unit && { defaultUnit: receiptItem.unit }),
+          // Improve name from receipt if user hasn't customized it
+          ...(exactMatch.nameSource !== "user" && receiptItem.name !== exactMatch.name && {
+            name: receiptItem.name,
+            icon: getIconForItem(receiptItem.name, exactMatch.category),
+            nameSource: "system" as const,
+          }),
           // Pantry lifecycle: track purchase activity + auto-resurface archived items
           purchaseCount: (exactMatch.purchaseCount ?? 0) + 1,
           lastPurchasedAt: now,
@@ -1116,6 +1130,7 @@ export const addFromReceipt = mutation({
       icon: getIconForItem(args.name, args.category || "other"),
       stockLevel: "stocked",
       status: "active" as const,
+      nameSource: "system" as const,
       purchaseCount: 1,
       lastPurchasedAt: now,
       ...(args.price !== undefined && {
@@ -1260,13 +1275,20 @@ export const addBatchFromScan = mutation({
 
       if (existingItem) {
         // Update existing item with new info
-        await ctx.db.patch(existingItem._id, {
+        const patchData: Record<string, unknown> = {
           stockLevel: "low",
           ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "ai_estimate" as const } : {}),
           ...(item.size ? { defaultSize: item.size } : {}),
           ...(item.unit ? { defaultUnit: item.unit } : {}),
           updatedAt: now,
-        });
+        };
+        // Improve name only if user hasn't customized it
+        if (existingItem.nameSource !== "user" && item.name !== existingItem.name) {
+          patchData.name = item.name;
+          patchData.icon = getIconForItem(item.name, item.category);
+          patchData.nameSource = "system";
+        }
+        await ctx.db.patch(existingItem._id, patchData);
         updated++;
       } else {
         // Check pantry limit
@@ -1283,6 +1305,7 @@ export const addBatchFromScan = mutation({
           icon: getIconForItem(item.name, item.category),
           stockLevel: "low",
           status: "active" as const,
+          nameSource: "system" as const,
           autoAddToList: false,
           ...(item.size ? { defaultSize: item.size } : {}),
           ...(item.unit ? { defaultUnit: item.unit } : {}),

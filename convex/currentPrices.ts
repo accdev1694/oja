@@ -492,6 +492,95 @@ export const getComparisonByStores = query({
 });
 
 /**
+ * Retroactively improve estimated prices on archived/completed list items
+ * for the same store as the receipt. Only updates items that have NO actualPrice
+ * (i.e., lists completed without a receipt scan).
+ *
+ * Per-store scoped: a Tesco receipt only improves archived Tesco list items.
+ */
+export const improveArchivedListPrices = mutation({
+  args: {
+    receiptId: v.id("receipts"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const receipt = await ctx.db.get(args.receiptId);
+    if (!receipt || receipt.userId !== user._id) {
+      throw new Error("Receipt not found or unauthorized");
+    }
+
+    const receiptStoreId = receipt.normalizedStoreId;
+    if (!receiptStoreId) return { updated: 0 };
+
+    // Build a price lookup from this receipt's items
+    const priceMap = new Map<string, number>();
+    for (const item of receipt.items) {
+      priceMap.set(item.name.toLowerCase().trim(), item.unitPrice);
+    }
+    if (priceMap.size === 0) return { updated: 0 };
+
+    // Find user's archived + completed lists for the same store
+    const archivedLists = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", user._id).eq("status", "archived")
+      )
+      .collect();
+
+    const completedLists = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", user._id).eq("status", "completed")
+      )
+      .collect();
+
+    // Filter to same store only
+    const sameLists = [...archivedLists, ...completedLists].filter(
+      (l) => l.normalizedStoreId === receiptStoreId
+    );
+
+    if (sameLists.length === 0) return { updated: 0 };
+
+    const now = Date.now();
+    let updated = 0;
+
+    for (const list of sameLists) {
+      const items = await ctx.db
+        .query("listItems")
+        .withIndex("by_list", (q) => q.eq("listId", list._id))
+        .collect();
+
+      for (const item of items) {
+        // Only update items that have NO actualPrice (never receipt-verified)
+        if (item.actualPrice != null) continue;
+
+        const normalizedName = item.name.toLowerCase().trim();
+        const newPrice = priceMap.get(normalizedName);
+
+        if (newPrice !== undefined && newPrice !== item.estimatedPrice) {
+          await ctx.db.patch(item._id, {
+            estimatedPrice: newPrice,
+            priceSource: "crowdsourced",
+            updatedAt: now,
+          });
+          updated++;
+        }
+      }
+    }
+
+    return { updated };
+  },
+});
+
+/**
  * Get crowdsourced prices for a list of item names.
  * Returns the cheapest verified price per item (excludes AI Estimate entries).
  */
