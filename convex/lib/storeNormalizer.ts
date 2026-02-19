@@ -487,7 +487,7 @@ const UK_STORES: readonly StoreInfo[] = [
   },
   {
     id: "asian_supermarket",
-    displayName: "Asian Supermarket",
+    displayName: "Asian Store",
     color: "#FF6B35",
     type: "specialty",
     marketShare: 0.1,
@@ -506,7 +506,7 @@ const UK_STORES: readonly StoreInfo[] = [
   },
   {
     id: "african_grocery",
-    displayName: "African Grocery",
+    displayName: "African Store",
     color: "#009639",
     type: "specialty",
     marketShare: 0.1,
@@ -529,7 +529,7 @@ const UK_STORES: readonly StoreInfo[] = [
   },
   {
     id: "southasian_grocery",
-    displayName: "South Asian Grocery",
+    displayName: "Indian Store",
     color: "#FF9933",
     type: "specialty",
     marketShare: 0.1,
@@ -551,7 +551,7 @@ const UK_STORES: readonly StoreInfo[] = [
   },
   {
     id: "middleeastern_grocery",
-    displayName: "Middle Eastern Grocery",
+    displayName: "Middle Eastern Store",
     color: "#006847",
     type: "specialty",
     marketShare: 0.1,
@@ -573,7 +573,7 @@ const UK_STORES: readonly StoreInfo[] = [
   },
   {
     id: "latin_grocery",
-    displayName: "Latin American Grocery",
+    displayName: "Latin American Store",
     color: "#CE1126",
     type: "specialty",
     marketShare: 0.1,
