@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback } from "react";
 import {
   View,
   Text,
@@ -67,7 +67,6 @@ export function NotificationDropdown({
   const { notifications, markAsRead, markAllAsRead, dismiss, getRoute, unreadCount } =
     useNotifications();
   const router = useRouter();
-  const swipeableRefs = useRef<Map<string, ReanimatedSwipeable>>(new Map());
 
   const handleTap = async (notification: (typeof notifications)[0]) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -150,10 +149,6 @@ export function NotificationDropdown({
               };
               return (
                 <ReanimatedSwipeable
-                  ref={(ref) => {
-                    if (ref) swipeableRefs.current.set(item._id, ref);
-                    else swipeableRefs.current.delete(item._id);
-                  }}
                   renderLeftActions={renderLeftActions}
                   onSwipeableOpen={() => handleDismiss(item._id)}
                   overshootLeft={false}
