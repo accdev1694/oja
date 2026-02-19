@@ -5,9 +5,13 @@ import {
   Pressable,
   FlatList,
   StyleSheet,
-  TouchableOpacity,
 } from "react-native";
-import { GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
+import Reanimated, {
+  SharedValue,
+  useAnimatedStyle,
+} from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -44,6 +48,18 @@ function timeAgo(timestamp: number): string {
   return `${days}d`;
 }
 
+function RenderLeftAction({ drag }: { drag: SharedValue<number> }) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: drag.value - 72 }],
+  }));
+
+  return (
+    <Reanimated.View style={[styles.dismissAction, animatedStyle]}>
+      <MaterialCommunityIcons name="trash-can-outline" size={20} color="#fff" />
+    </Reanimated.View>
+  );
+}
+
 export function NotificationDropdown({
   visible,
   onClose,
@@ -51,7 +67,7 @@ export function NotificationDropdown({
   const { notifications, markAsRead, markAllAsRead, dismiss, getRoute, unreadCount } =
     useNotifications();
   const router = useRouter();
-  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
+  const swipeableRefs = useRef<Map<string, ReanimatedSwipeable>>(new Map());
 
   const handleTap = async (notification: (typeof notifications)[0]) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -75,11 +91,14 @@ export function NotificationDropdown({
     await markAllAsRead();
   };
 
-  const renderLeftActions = useCallback(() => (
-    <TouchableOpacity style={styles.dismissAction} activeOpacity={0.7}>
-      <MaterialCommunityIcons name="trash-can-outline" size={20} color="#fff" />
-    </TouchableOpacity>
-  ), []);
+  const renderLeftActions = useCallback(
+    (_progress: SharedValue<number>, drag: SharedValue<number>) => {
+      return (
+        <RenderLeftAction drag={drag} />
+      );
+    },
+    []
+  );
 
   return (
     <GlassModal
@@ -130,7 +149,7 @@ export function NotificationDropdown({
                 color: colors.text.secondary,
               };
               return (
-                <Swipeable
+                <ReanimatedSwipeable
                   ref={(ref) => {
                     if (ref) swipeableRefs.current.set(item._id, ref);
                     else swipeableRefs.current.delete(item._id);
@@ -178,7 +197,7 @@ export function NotificationDropdown({
                     </Text>
                     {!item.read && <View style={styles.unreadDot} />}
                   </Pressable>
-                </Swipeable>
+                </ReanimatedSwipeable>
               );
             }}
           />
