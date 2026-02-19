@@ -39,7 +39,17 @@ export type UKStoreId =
   | "budgens"
   | "farmfoods"
   | "costco"
-  | "booker";
+  | "booker"
+  // Specialty / ethnic stores
+  | "wingyip"
+  | "loonfung"
+  | "seewoo"
+  | "hoo_hing"
+  | "asian_supermarket"
+  | "african_grocery"
+  | "southasian_grocery"
+  | "middleeastern_grocery"
+  | "latin_grocery";
 
 /**
  * Store type categories for grouping and filtering.
@@ -50,7 +60,27 @@ export type StoreType =
   | "convenience"
   | "premium"
   | "frozen"
-  | "wholesale";
+  | "wholesale"
+  | "specialty";
+
+/**
+ * Cuisine identifiers matching the onboarding cuisine-selection screen.
+ */
+export type CuisineId =
+  | "british"
+  | "nigerian"
+  | "indian"
+  | "chinese"
+  | "italian"
+  | "pakistani"
+  | "caribbean"
+  | "mexican"
+  | "middle-eastern"
+  | "japanese"
+  | "korean"
+  | "thai"
+  | "vietnamese"
+  | "ethiopian";
 
 /**
  * Complete store information including display metadata and aliases.
@@ -68,6 +98,8 @@ export interface StoreInfo {
   aliases: string[];
   /** Approximate UK market share (for sorting) */
   marketShare: number;
+  /** Cuisines this specialty store is relevant for */
+  cuisines?: CuisineId[];
 }
 
 // -----------------------------------------------------------------------------
@@ -388,6 +420,175 @@ const UK_STORES: readonly StoreInfo[] = [
       "booker makro",
     ],
   },
+
+  // ── Specialty / Ethnic Stores ──────────────────────────────────────────────
+  {
+    id: "wingyip",
+    displayName: "Wing Yip",
+    color: "#CC0000",
+    type: "specialty",
+    marketShare: 0.1,
+    cuisines: ["chinese", "japanese", "korean", "thai", "vietnamese"],
+    aliases: [
+      "wing yip",
+      "wing yip superstore",
+      "wing yip oriental",
+      "wing yip chinese",
+      "wing yip birmingham",
+      "wing yip manchester",
+      "wing yip croydon",
+      "wing yip cricklewood",
+    ],
+  },
+  {
+    id: "loonfung",
+    displayName: "Loon Fung",
+    color: "#D4262C",
+    type: "specialty",
+    marketShare: 0.1,
+    cuisines: ["chinese", "japanese", "korean", "thai", "vietnamese"],
+    aliases: [
+      "loon fung",
+      "loon fung supermarket",
+      "loon fung chinese",
+      "loon fung chinese supermarket",
+    ],
+  },
+  {
+    id: "seewoo",
+    displayName: "SeeWoo",
+    color: "#E31937",
+    type: "specialty",
+    marketShare: 0.1,
+    cuisines: ["chinese", "japanese", "korean", "thai", "vietnamese"],
+    aliases: [
+      "seewoo",
+      "see woo",
+      "seewoo supermarket",
+      "see woo chinese",
+      "seewoo oriental",
+      "see woo oriental",
+    ],
+  },
+  {
+    id: "hoo_hing",
+    displayName: "Hoo Hing",
+    color: "#B22222",
+    type: "specialty",
+    marketShare: 0.1,
+    cuisines: ["chinese", "japanese", "korean", "thai", "vietnamese"],
+    aliases: [
+      "hoo hing",
+      "hoohing",
+      "hoo hing wholesale",
+      "hoo hing chinese",
+      "hoo hing oriental",
+    ],
+  },
+  {
+    id: "asian_supermarket",
+    displayName: "Asian Supermarket",
+    color: "#FF6B35",
+    type: "specialty",
+    marketShare: 0.1,
+    cuisines: ["chinese", "japanese", "korean", "thai", "vietnamese"],
+    aliases: [
+      "asian supermarket",
+      "oriental supermarket",
+      "oriental grocery",
+      "asian grocery",
+      "chinese supermarket",
+      "chinese grocery",
+      "asian food store",
+      "oriental store",
+      "far east supermarket",
+    ],
+  },
+  {
+    id: "african_grocery",
+    displayName: "African Grocery",
+    color: "#009639",
+    type: "specialty",
+    marketShare: 0.1,
+    cuisines: ["nigerian", "ethiopian", "caribbean"],
+    aliases: [
+      "african grocery",
+      "african food store",
+      "african store",
+      "african supermarket",
+      "afro caribbean store",
+      "afro caribbean grocery",
+      "african food market",
+      "west african grocery",
+      "east african grocery",
+      "nigerian grocery",
+      "nigerian store",
+      "nigerian food store",
+      "african market",
+    ],
+  },
+  {
+    id: "southasian_grocery",
+    displayName: "South Asian Grocery",
+    color: "#FF9933",
+    type: "specialty",
+    marketShare: 0.1,
+    cuisines: ["indian", "pakistani"],
+    aliases: [
+      "south asian grocery",
+      "indian grocery",
+      "indian store",
+      "indian supermarket",
+      "pakistani grocery",
+      "pakistani store",
+      "desi store",
+      "desi grocery",
+      "bangla grocery",
+      "bangladeshi grocery",
+      "sri lankan grocery",
+      "asian grocery store",
+    ],
+  },
+  {
+    id: "middleeastern_grocery",
+    displayName: "Middle Eastern Grocery",
+    color: "#006847",
+    type: "specialty",
+    marketShare: 0.1,
+    cuisines: ["middle-eastern"],
+    aliases: [
+      "middle eastern grocery",
+      "middle eastern store",
+      "arabic grocery",
+      "arab store",
+      "halal grocery",
+      "persian grocery",
+      "turkish grocery",
+      "turkish store",
+      "lebanese grocery",
+      "mediterranean grocery",
+      "halal store",
+      "halal supermarket",
+    ],
+  },
+  {
+    id: "latin_grocery",
+    displayName: "Latin American Grocery",
+    color: "#CE1126",
+    type: "specialty",
+    marketShare: 0.1,
+    cuisines: ["mexican"],
+    aliases: [
+      "latin grocery",
+      "latin american grocery",
+      "latin american store",
+      "mexican grocery",
+      "mexican store",
+      "latino store",
+      "latin supermarket",
+      "south american grocery",
+    ],
+  },
 ] as const;
 
 /**
@@ -407,6 +608,9 @@ const STRIP_SUFFIXES = [
   "plc",
   "uk",
   "gb",
+  "oriental",
+  "grocery",
+  "wholesale",
 ];
 
 // -----------------------------------------------------------------------------
@@ -593,4 +797,41 @@ export function isValidStoreId(id: string): id is UKStoreId {
  */
 export function getAllStoreIds(): UKStoreId[] {
   return UK_STORES.map((store) => store.id);
+}
+
+// -----------------------------------------------------------------------------
+// Cuisine-to-Store Mapping
+// -----------------------------------------------------------------------------
+
+/**
+ * Returns specialty stores relevant to the given cuisines (deduplicated).
+ */
+export function getStoresForCuisines(cuisines: string[]): StoreInfo[] {
+  const seen = new Set<UKStoreId>();
+  const result: StoreInfo[] = [];
+
+  for (const store of UK_STORES) {
+    if (!store.cuisines || store.cuisines.length === 0) continue;
+    const matches = store.cuisines.some((c) => cuisines.includes(c));
+    if (matches && !seen.has(store.id)) {
+      seen.add(store.id);
+      result.push(store);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Returns all mainstream (non-specialty) stores.
+ */
+export function getMainstreamStores(): StoreInfo[] {
+  return UK_STORES.filter((s) => s.type !== "specialty");
+}
+
+/**
+ * Returns all specialty stores.
+ */
+export function getSpecialtyStores(): StoreInfo[] {
+  return UK_STORES.filter((s) => s.type === "specialty");
 }

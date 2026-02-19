@@ -34,8 +34,10 @@ export default function StoreSelectionScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ country?: string; cuisines?: string }>();
 
-  // Fetch all UK stores
-  const stores = useQuery(api.stores.getAll);
+  const cuisineList = params.cuisines?.split(",").filter(Boolean) ?? [];
+
+  // Fetch stores split by cuisine relevance
+  const storeData = useQuery(api.stores.getForCuisines, { cuisines: cuisineList });
   const setStorePreferences = useMutation(api.stores.setUserPreferences);
 
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
@@ -93,7 +95,7 @@ export default function StoreSelectionScreen() {
   }
 
   // Loading state
-  if (!stores) {
+  if (!storeData) {
     return (
       <GlassScreen>
         <View style={styles.loadingContainer}>
@@ -111,13 +113,18 @@ export default function StoreSelectionScreen() {
     );
   }
 
+  const PINNED_BUTTON_HEIGHT = 64 + 48 + spacing.md * 2 + spacing.sm; // primary + ghost + padding + gap
+
   return (
     <GlassScreen>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.lg },
+          {
+            paddingTop: insets.top + spacing.lg,
+            paddingBottom: PINNED_BUTTON_HEIGHT + insets.bottom + spacing.md,
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -131,9 +138,27 @@ export default function StoreSelectionScreen() {
           </Text>
         </View>
 
-        {/* Store Grid */}
+        {/* Recommended Specialty Stores */}
+        {storeData.recommended.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Recommended for your cuisines</Text>
+            <View style={styles.storeGrid}>
+              {storeData.recommended.map((store) => (
+                <StoreButton
+                  key={store.id}
+                  store={store}
+                  isSelected={selectedStores.includes(store.id)}
+                  onToggle={() => toggleStore(store.id)}
+                />
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* Mainstream UK Supermarkets */}
+        <Text style={styles.sectionTitle}>UK supermarkets</Text>
         <View style={styles.storeGrid}>
-          {stores.map((store) => (
+          {storeData.mainstream.map((store) => (
             <StoreButton
               key={store.id}
               store={store}
@@ -142,32 +167,32 @@ export default function StoreSelectionScreen() {
             />
           ))}
         </View>
-
-        {/* Continue Button */}
-        <View style={styles.buttonContainer}>
-          <GlassButton
-            variant="primary"
-            size="lg"
-            icon="arrow-right"
-            onPress={handleContinue}
-            loading={isSaving}
-            disabled={selectedStores.length === 0 || isSaving}
-          >
-            {selectedStores.length === 0
-              ? "Select at least one store"
-              : `Continue (${selectedStores.length} selected)`}
-          </GlassButton>
-
-          <GlassButton
-            variant="ghost"
-            size="md"
-            onPress={handleSkip}
-            disabled={isSaving}
-          >
-            Skip for now
-          </GlassButton>
-        </View>
       </ScrollView>
+
+      {/* Pinned Buttons */}
+      <View style={[styles.pinnedButtonContainer, { paddingBottom: insets.bottom + spacing.sm }]}>
+        <GlassButton
+          variant="primary"
+          size="lg"
+          icon="arrow-right"
+          onPress={handleContinue}
+          loading={isSaving}
+          disabled={selectedStores.length === 0 || isSaving}
+        >
+          {selectedStores.length === 0
+            ? "Select at least one store"
+            : `Continue (${selectedStores.length} selected)`}
+        </GlassButton>
+
+        <GlassButton
+          variant="ghost"
+          size="md"
+          onPress={handleSkip}
+          disabled={isSaving}
+        >
+          Skip for now
+        </GlassButton>
+      </View>
     </GlassScreen>
   );
 }
@@ -300,6 +325,11 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     lineHeight: 22,
   },
+  sectionTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: spacing.md,
+  },
   storeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -349,8 +379,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  buttonContainer: {
-    marginBottom: spacing.lg,
+  pinnedButtonContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     gap: spacing.sm,
+    backgroundColor: "rgba(13, 21, 40, 0.95)",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.08)",
   },
 });

@@ -748,9 +748,9 @@ describe("getStoreInfoSafe", () => {
 // ============================================================================
 
 describe("getAllStores", () => {
-  test("returns 20 stores", () => {
+  test("returns 29 stores", () => {
     const stores = getAllStores();
-    expect(stores).toHaveLength(20);
+    expect(stores).toHaveLength(29);
   });
 
   test("stores are sorted by market share (descending)", () => {
@@ -885,9 +885,9 @@ describe("isValidStoreId", () => {
 // ============================================================================
 
 describe("getAllStoreIds", () => {
-  test("returns array of 20 store IDs", () => {
+  test("returns array of 29 store IDs", () => {
     const ids = getAllStoreIds();
-    expect(ids).toHaveLength(20);
+    expect(ids).toHaveLength(29);
   });
 
   test("includes all major stores", () => {

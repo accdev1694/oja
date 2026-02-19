@@ -4,6 +4,8 @@ import {
   getAllStores,
   getStoreInfo,
   getStoreInfoSafe,
+  getStoresForCuisines,
+  getMainstreamStores,
   isValidStoreId,
   type UKStoreId,
 } from "./lib/storeNormalizer";
@@ -27,6 +29,22 @@ export const getAll = query({
   args: {},
   handler: async () => {
     return getAllStores();
+  },
+});
+
+/**
+ * Get stores split into cuisine-recommended specialty stores and mainstream stores.
+ * Used by the onboarding store-selection screen.
+ */
+export const getForCuisines = query({
+  args: { cuisines: v.array(v.string()) },
+  handler: async (_ctx, args) => {
+    const recommended = getStoresForCuisines(args.cuisines);
+    const recommendedIds = new Set(recommended.map((s) => s.id));
+    const mainstream = getMainstreamStores().filter(
+      (s) => !recommendedIds.has(s.id)
+    );
+    return { recommended, mainstream };
   },
 });
 

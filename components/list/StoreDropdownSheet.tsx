@@ -86,11 +86,12 @@ export function StoreDropdownSheet({
   currentStoreId,
   userFavorites,
 }: StoreDropdownSheetProps) {
+  const [specialtyExpanded, setSpecialtyExpanded] = useState(false)
   const [otherExpanded, setOtherExpanded] = useState(false)
 
   // ── Compute store lists ──────────────────────────────────────────────────
 
-  const { userStores, otherStores } = useMemo(() => {
+  const { userStores, specialtyStores, otherStores } = useMemo(() => {
     const allStores = getAllStores()
     const favSet = new Set(userFavorites)
 
@@ -100,9 +101,11 @@ export function StoreDropdownSheet({
       if (info) user.push(info)
     }
 
-    const other = allStores.filter((s) => !favSet.has(s.id))
+    const remaining = allStores.filter((s) => !favSet.has(s.id))
+    const specialty = remaining.filter((s) => s.type === 'specialty')
+    const other = remaining.filter((s) => s.type !== 'specialty')
 
-    return { userStores: user, otherStores: other }
+    return { userStores: user, specialtyStores: specialty, otherStores: other }
   }, [userFavorites])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -114,6 +117,11 @@ export function StoreDropdownSheet({
     },
     [onSelect]
   )
+
+  const toggleSpecialty = useCallback(() => {
+    haptic('light')
+    setSpecialtyExpanded((prev) => !prev)
+  }, [])
 
   const toggleOther = useCallback(() => {
     haptic('light')
@@ -156,6 +164,30 @@ export function StoreDropdownSheet({
                 onPress={() => handleSelect(store.id)}
               />
             ))}
+          </>
+        )}
+
+        {/* ── Specialty stores (collapsible) ───────────────────── */}
+        {specialtyStores.length > 0 && (
+          <>
+            <Pressable style={styles.otherShopsToggle} onPress={toggleSpecialty}>
+              <Text style={styles.otherShopsText}>Specialty Stores</Text>
+              <MaterialCommunityIcons
+                name={specialtyExpanded ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color={colors.text.tertiary}
+              />
+            </Pressable>
+
+            {specialtyExpanded &&
+              specialtyStores.map((store) => (
+                <StoreRow
+                  key={store.id}
+                  store={store}
+                  isSelected={store.id === currentStoreId}
+                  onPress={() => handleSelect(store.id)}
+                />
+              ))}
           </>
         )}
 
