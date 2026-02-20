@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
   },
   bottomSpacer: {
     height: 140,
@@ -500,8 +500,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.xs,
+    gap: 6,
     paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
   },
   slidingPill: {
@@ -514,6 +515,7 @@ const styles = StyleSheet.create({
   tabText: {
     ...typography.labelMedium,
     color: colors.text.tertiary,
+    fontSize: 13,
   },
   tabTextActive: {
     color: colors.accent.primary,
