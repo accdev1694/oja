@@ -99,7 +99,7 @@ export async function haptic(type: HapticType): Promise<void> {
  */
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export async function hapticPattern(pattern: 'double' | 'triple' | 'rising'): Promise<void> {
+export async function hapticPattern(pattern: 'double' | 'triple' | 'rising' | 'celebration'): Promise<void> {
   if (!deviceSupports || !isEnabled) return;
 
   try {
@@ -124,6 +124,16 @@ export async function hapticPattern(pattern: 'double' | 'triple' | 'rising'): Pr
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         await delay(50);
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        break;
+
+      case 'celebration':
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await delay(120);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        await delay(60);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        await delay(60);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         break;
     }
   } catch (error) {

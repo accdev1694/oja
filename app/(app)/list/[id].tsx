@@ -65,6 +65,7 @@ import {
   ListPickerModal,
   TripSummaryModal,
 } from "@/components/list/modals";
+import { ScanReceiptNudgeModal } from "@/components/list/modals/ScanReceiptNudgeModal";
 import type { TripStats } from "@/hooks/useTripSummary";
 import { ListComparisonSummary } from "@/components/lists/ListComparisonSummary";
 import { StoreSwitchPreview, type StoreSwitchItem } from "@/components/lists/StoreSwitchPreview";
@@ -153,6 +154,19 @@ export default function ListDetailScreen() {
 
   // Trip summary modal state
   const [showTripSummary, setShowTripSummary] = useState(false);
+
+  // Scan receipt nudge modal state
+  const [showScanNudge, setShowScanNudge] = useState(false);
+
+  // Scan credit info for receipt nudge modal
+  const scanCredits = useQuery(api.subscriptions.getScanCredits);
+
+  // Streaks for receipt nudge modal (receipt_scanner streak)
+  const streaks = useQuery(api.insights.getStreaks);
+  const receiptStreakCount = useMemo(() => {
+    const streak = streaks?.find((s) => s.type === "receipt_scanner");
+    return streak?.currentCount ?? 0;
+  }, [streaks]);
 
   // Track dial transition animation
   const [dialTransitioning, setDialTransitioning] = useState(false);
@@ -649,7 +663,7 @@ export default function ListDetailScreen() {
       const result = await restockFromCheckedItems({ listId: id });
       haptic("success");
       setShowTripSummary(false);
-      router.back();
+      setShowScanNudge(true);
     } catch (error) {
       console.error("Failed to complete shopping:", error);
       alert("Error", "Failed to complete shopping");
@@ -659,7 +673,14 @@ export default function ListDetailScreen() {
   // Called from TripSummaryModal "Scan Receipt" button
   function handleScanReceipt() {
     setShowTripSummary(false);
-    router.push("/(app)/(tabs)/scan");
+    setShowScanNudge(false);
+    router.push(`/(app)/(tabs)/scan?listId=${id}`);
+  }
+
+  // Called from ScanReceiptNudgeModal "Maybe Later" button
+  function handleDismissNudge() {
+    setShowScanNudge(false);
+    router.replace("/(app)/(tabs)/lists");
   }
 
   // Called from TripSummaryModal "Remove unchecked item"
@@ -1194,6 +1215,16 @@ export default function ListDetailScreen() {
         onRemoveItem={handleRemoveUncheckedItem}
         onMoveItem={handleMoveUncheckedItem}
         stats={tripStats ?? null}
+      />
+
+      {/* Receipt Scan Nudge Modal */}
+      <ScanReceiptNudgeModal
+        visible={showScanNudge}
+        onScanReceipt={handleScanReceipt}
+        onDismiss={handleDismissNudge}
+        storeName={list?.storeName}
+        scanCredits={scanCredits ?? null}
+        streakCount={receiptStreakCount}
       />
 
       {/* Mid-Shop Store Picker */}

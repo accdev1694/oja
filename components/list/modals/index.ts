@@ -18,3 +18,6 @@ export type { StartShoppingModalProps } from "./StartShoppingModal";
 
 export { TripSummaryModal } from "./TripSummaryModal";
 export type { TripSummaryModalProps } from "./TripSummaryModal";
+
+export { ScanReceiptNudgeModal } from "./ScanReceiptNudgeModal";
+export type { ScanReceiptNudgeModalProps } from "./ScanReceiptNudgeModal";
