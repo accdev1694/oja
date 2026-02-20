@@ -62,9 +62,9 @@ const useSpeechEvent = useSpeechRecognitionEvent ?? noopEventHook;
 
 const MAX_HISTORY = 12; // 6 turns (user + model each)
 const RATE_LIMIT_MS = 6000; // 1 request per 6 seconds
-const DAILY_LIMIT = 200;
-const DAILY_COUNT_KEY = "oja_voice_daily_count";
-const DAILY_DATE_KEY = "oja_voice_daily_date";
+const CONVERSATION_HISTORY_KEY = "oja_voice_history";
+const CONVERSATION_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes — history expires after inactivity
+const PENDING_ACTION_TIMEOUT_MS = 30_000; // 30 seconds to confirm a pending action
 
 interface UseVoiceAssistantOptions {
   currentScreen: string;
@@ -96,6 +96,45 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
   const sheetOpenRef = useRef(false); // Track sheet state for continuous mode
   const startListeningRef = useRef<((isAutoResume?: boolean) => Promise<void>) | null>(null); // For auto-listen callback
   const soundRef = useRef<any>(null); // For audio playback cleanup (expo-av Sound)
+  const isSpeakingRef = useRef(false); // Gap 6: Track TTS playback to mute mic
+  const pendingActionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Gap 7: Auto-cancel timer
+
+  // ── Gap 1: Conversation persistence helpers ─────────────────────────────
+
+  const saveHistory = useCallback(async (history: ConversationMessage[]) => {
+    try {
+      await AsyncStorage.setItem(
+        CONVERSATION_HISTORY_KEY,
+        JSON.stringify({ history, savedAt: Date.now() })
+      );
+    } catch {
+      // Silently fail — persistence is best-effort
+    }
+  }, []);
+
+  const loadHistory = useCallback(async (): Promise<ConversationMessage[]> => {
+    try {
+      const raw = await AsyncStorage.getItem(CONVERSATION_HISTORY_KEY);
+      if (!raw) return [];
+      const { history, savedAt } = JSON.parse(raw);
+      // Expire after 30 minutes of inactivity
+      if (Date.now() - savedAt > CONVERSATION_EXPIRY_MS) {
+        await AsyncStorage.removeItem(CONVERSATION_HISTORY_KEY);
+        return [];
+      }
+      return history || [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const clearPersistedHistory = useCallback(async () => {
+    try {
+      await AsyncStorage.removeItem(CONVERSATION_HISTORY_KEY);
+    } catch {
+      // Silently fail
+    }
+  }, []);
 
   // ── Neural TTS with fallback to device TTS ────────────────────────────
 
@@ -103,12 +142,26 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
     async (text: string, onDone?: () => void) => {
       console.log("[Voice] speakText called with:", text.substring(0, 50) + "...");
 
+      // Gap 5: Truncate TTS text to stay within cloud TTS character limits (5000 chars)
+      const MAX_TTS_CHARS = 4500;
+      const ttsText = text.length > MAX_TTS_CHARS
+        ? text.substring(0, MAX_TTS_CHARS) + "... That's the summary."
+        : text;
+
+      // Gap 6: Mark speaking state — mic won't auto-resume while speaking
+      isSpeakingRef.current = true;
+
+      const wrappedOnDone = () => {
+        isSpeakingRef.current = false;
+        onDone?.();
+      };
+
       // Only try neural TTS if expo-av is available
       if (AUDIO_AVAILABLE) {
         console.log("[Voice] Trying neural TTS...");
         try {
           // Try Google Cloud / Azure Neural TTS first
-          const result = await textToSpeech({ text, voiceGender: "MALE" });
+          const result = await textToSpeech({ text: ttsText, voiceGender: "MALE" });
           console.log("[Voice] TTS result:", result.provider, result.error ? `Error: ${result.error}` : "Success");
 
           if (result.audioBase64) {
@@ -124,7 +177,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
               if (status.isLoaded && status.didJustFinish) {
                 sound.unloadAsync();
                 soundRef.current = null;
-                onDone?.();
+                wrappedOnDone();
               }
             });
             return;
@@ -152,20 +205,20 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
           voices.find((v) => v.language?.startsWith("en-GB")) ||
           undefined;
 
-        Speech.speak(text, {
+        Speech.speak(ttsText, {
           language: "en-GB",
           voice: britishVoice?.identifier,
           rate: 0.92,
           pitch: 1.05,
-          onDone,
+          onDone: wrappedOnDone,
         });
       } catch {
         // If voice selection fails, use defaults
-        Speech.speak(text, {
+        Speech.speak(ttsText, {
           language: "en-GB",
           rate: 0.92,
           pitch: 1.05,
-          onDone,
+          onDone: wrappedOnDone,
         });
       }
     },
@@ -174,6 +227,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
 
   // Stop any playing audio
   const stopSpeaking = useCallback(async () => {
+    isSpeakingRef.current = false;
     Speech.stop();
     if (soundRef.current) {
       try {
@@ -217,10 +271,9 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
     }));
   });
 
-  // ── Rate Limiting ──────────────────────────────────────────────────
+  // ── Rate Limiting (Gap 10: only per-request throttle; monthly limits enforced server-side) ──
 
-  const checkRateLimit = useCallback(async (): Promise<boolean> => {
-    // Per-request throttle
+  const checkRateLimit = useCallback((): boolean => {
     const now = Date.now();
     if (now - lastRequestTime.current < RATE_LIMIT_MS) {
       setState((s) => ({
@@ -229,36 +282,6 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
       }));
       return false;
     }
-
-    // Daily limit
-    try {
-      const storedDate = await AsyncStorage.getItem(DAILY_DATE_KEY);
-      const today = new Date().toDateString();
-
-      if (storedDate !== today) {
-        await AsyncStorage.setItem(DAILY_DATE_KEY, today);
-        await AsyncStorage.setItem(DAILY_COUNT_KEY, "1");
-        return true;
-      }
-
-      const count = parseInt(
-        (await AsyncStorage.getItem(DAILY_COUNT_KEY)) || "0",
-        10
-      );
-      if (count >= DAILY_LIMIT) {
-        setState((s) => ({
-          ...s,
-          error:
-            "I've reached my daily limit. I'll be back tomorrow — check the app for now!",
-        }));
-        return false;
-      }
-
-      await AsyncStorage.setItem(DAILY_COUNT_KEY, String(count + 1));
-    } catch {
-      // If AsyncStorage fails, allow the request
-    }
-
     lastRequestTime.current = now;
     return true;
   }, []);
@@ -273,6 +296,12 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
         ...s,
         error: "Voice requires a dev build. Not available in Expo Go.",
       }));
+      return;
+    }
+
+    // Gap 6: Don't start listening while Tobi is still speaking (prevents echo)
+    if (isSpeakingRef.current && isAutoResume) {
+      console.log("[Voice] Skipping auto-resume — still speaking");
       return;
     }
 
@@ -327,7 +356,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
     async (transcript: string) => {
       if (!transcript.trim()) return;
 
-      const allowed = await checkRateLimit();
+      const allowed = checkRateLimit();
       if (!allowed) return;
 
       setState((s) => ({ ...s, isProcessing: true, error: null }));
@@ -342,12 +371,13 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
           conversationHistory: historyRef.current,
         });
 
-        // Update conversation history
+        // Update conversation history + persist (Gap 1)
         historyRef.current.push({ role: "user", text: transcript });
         historyRef.current.push({ role: "model", text: result.text });
         if (historyRef.current.length > MAX_HISTORY) {
           historyRef.current = historyRef.current.slice(-MAX_HISTORY);
         }
+        saveHistory(historyRef.current);
 
         const hasPendingAction = !!result.pendingAction;
 
@@ -358,6 +388,18 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
           pendingAction: result.pendingAction || null,
           conversationHistory: [...historyRef.current],
         }));
+
+        // Gap 7: Start pending action timeout — auto-cancel after 30s
+        if (hasPendingAction) {
+          if (pendingActionTimerRef.current) clearTimeout(pendingActionTimerRef.current);
+          pendingActionTimerRef.current = setTimeout(() => {
+            setState((s) => {
+              if (!s.pendingAction) return s;
+              return { ...s, pendingAction: null, response: "That confirmation timed out. Just ask again if you'd like." };
+            });
+            pendingActionTimerRef.current = null;
+          }, PENDING_ACTION_TIMEOUT_MS);
+        }
 
         // TTS with auto-resume listening when done
         console.log("[Voice] TTS check:", { ttsEnabled, hasText: !!result.text });
@@ -401,11 +443,18 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
       speakText,
       voiceAssistant,
       checkRateLimit,
+      saveHistory,
     ]
   );
 
   const confirmAction = useCallback(async () => {
     if (!state.pendingAction) return;
+
+    // Gap 7: Clear pending action timer on confirm
+    if (pendingActionTimerRef.current) {
+      clearTimeout(pendingActionTimerRef.current);
+      pendingActionTimerRef.current = null;
+    }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setState((s) => ({ ...s, isProcessing: true }));
@@ -455,6 +504,11 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
   }, [state.pendingAction, executeAction, ttsEnabled, speakText]);
 
   const cancelAction = useCallback(() => {
+    // Gap 7: Clear pending action timer on cancel
+    if (pendingActionTimerRef.current) {
+      clearTimeout(pendingActionTimerRef.current);
+      pendingActionTimerRef.current = null;
+    }
     setState((s) => ({ ...s, pendingAction: null }));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // Auto-resume listening after cancel
@@ -467,11 +521,22 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
     }
   }, []);
 
-  const openSheet = useCallback(() => {
+  const openSheet = useCallback(async () => {
     sheetOpenRef.current = true;
-    setState((s) => ({ ...s, isSheetOpen: true }));
+    // Gap 1: Restore persisted conversation history
+    const restored = await loadHistory();
+    if (restored.length > 0) {
+      historyRef.current = restored;
+      setState((s) => ({
+        ...s,
+        isSheetOpen: true,
+        conversationHistory: restored,
+      }));
+    } else {
+      setState((s) => ({ ...s, isSheetOpen: true }));
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
+  }, [loadHistory]);
 
   const closeSheet = useCallback(() => {
     sheetOpenRef.current = false; // Stop continuous mode
@@ -484,6 +549,11 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
 
   const resetConversation = useCallback(() => {
     historyRef.current = [];
+    clearPersistedHistory();
+    if (pendingActionTimerRef.current) {
+      clearTimeout(pendingActionTimerRef.current);
+      pendingActionTimerRef.current = null;
+    }
     setState((s) => ({
       ...s,
       transcript: "",
@@ -493,7 +563,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
       error: null,
       conversationHistory: [],
     }));
-  }, []);
+  }, [clearPersistedHistory]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -504,6 +574,9 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
       }
       if (STT_AVAILABLE) {
         SpeechRecognitionModule.stop();
+      }
+      if (pendingActionTimerRef.current) {
+        clearTimeout(pendingActionTimerRef.current);
       }
     };
   }, []);

@@ -555,6 +555,57 @@ export const voiceFunctionDeclarations: FunctionDeclaration[] = [
       required: ["listId"],
     },
   },
+  // Gap 8: Complete/finish a shopping list
+  {
+    name: "complete_shopping_list",
+    description:
+      "Mark a shopping list as completed. Use when user says 'I'm done shopping', 'finish my list', or 'complete the list'. Calculates actual total from checked items.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        listName: {
+          type: SchemaType.STRING,
+          description:
+            "The name of the list to complete (optional — uses active list if not specified)",
+        },
+      },
+    },
+  },
+  // Gap 9: Edit any item on a list by name
+  {
+    name: "edit_list_item",
+    description:
+      "Edit any item on a shopping list by name. Use when user says 'change eggs to 12', 'make the butter 500g', 'update the milk quantity to 3'. Can change quantity, size, or item name.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        itemName: {
+          type: SchemaType.STRING,
+          description: "The name of the item to edit (fuzzy match)",
+        },
+        listId: {
+          type: SchemaType.STRING,
+          description:
+            "The ID of the list (optional — uses active list context)",
+        },
+        newQuantity: {
+          type: SchemaType.NUMBER,
+          description: "New quantity for the item (optional)",
+        },
+        newSize: {
+          type: SchemaType.STRING,
+          description:
+            "New size for the item (optional, e.g., '4pt', '500g', '2kg')",
+        },
+        newName: {
+          type: SchemaType.STRING,
+          description:
+            "New name for the item (optional, e.g., rename 'eggs' to 'free range eggs')",
+        },
+      },
+      required: ["itemName"],
+    },
+  },
 ];
 
 // ─── Write tool names ───────────────────────────────────────────────────
@@ -573,6 +624,8 @@ const WRITE_TOOLS = new Set([
   "set_preferred_stores",
   "change_item_size",
   "edit_last_item",
+  "complete_shopping_list",
+  "edit_list_item",
 ]);
 
 // ─── System Prompt ─────────────────────────────────────────────────────
@@ -585,6 +638,8 @@ export interface VoiceContext {
   activeListSpent?: number;
   activeListsCount?: number;
   lowStockCount?: number;
+  lowStockItems?: string[]; // Gap 4: injected pantry items that are low/out
+  activeListNames?: string[]; // Gap 4: injected active list names with budgets
   userName?: string;
 }
 
@@ -643,6 +698,8 @@ WRITE Operations:
 - set_preferred_stores: Set user's favorite stores (e.g., "Tesco and Aldi")
 - change_item_size: Change the size of an item (e.g., "change milk to 2 pints")
 - edit_last_item: Edit the most recently added item (size, quantity, or price)
+- complete_shopping_list: Mark a shopping list as completed (e.g., "I'm done shopping")
+- edit_list_item: Edit any item on a list by name (change quantity, size, or name)
 
 RULES FOR WRITE OPERATIONS (IMPORTANT):
 - NEVER ask "Would you like me to do X?" or "Shall I confirm?" — if user asks for something, just DO it.
@@ -680,7 +737,7 @@ CURRENT CONTEXT:
 - Active list: ${activeListInfo}
 - ${budgetInfo}
 - Active lists count: ${context.activeListsCount ?? "unknown"}
-- Items running low: ${context.lowStockCount ?? "unknown"}`;
+- Items running low: ${context.lowStockCount ?? "unknown"}${context.lowStockItems && context.lowStockItems.length > 0 ? `\n- Low/out items: ${context.lowStockItems.join(", ")}` : ""}${context.activeListNames && context.activeListNames.length > 0 ? `\n- Your lists: ${context.activeListNames.join("; ")}` : ""}`;
 }
 
 // ─── Tool Dispatcher ───────────────────────────────────────────────────
@@ -1872,6 +1929,162 @@ async function executeWriteTool(
           success: true,
           message: `Updated ${lastItem.name} to ${changes.join(", ")}`,
           itemName: lastItem.name,
+          ...updates,
+        },
+      };
+    }
+
+    // Gap 8: Complete a shopping list
+    case "complete_shopping_list": {
+      // Find list by name or use active/first list
+      const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+      if (lists.length === 0) {
+        return {
+          type: "data",
+          result: { success: false, message: "No active shopping lists to complete." },
+        };
+      }
+
+      let targetList = lists[0];
+      if (args.listName) {
+        const match = lists.find(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (l: any) => l.name.toLowerCase().includes((args.listName as string).toLowerCase())
+        );
+        if (match) targetList = match;
+      }
+
+      try {
+        await ctx.runMutation(api.shoppingLists.completeShopping, {
+          id: targetList._id,
+        });
+
+        return {
+          type: "data",
+          result: {
+            success: true,
+            message: `Done! Marked "${targetList.name}" as completed. Nice one!`,
+            listName: targetList.name,
+          },
+        };
+      } catch (err) {
+        return {
+          type: "data",
+          result: {
+            success: false,
+            message: `Couldn't complete "${targetList.name}": ${err instanceof Error ? err.message : "Unknown error"}`,
+          },
+        };
+      }
+    }
+
+    // Gap 9: Edit any item on a list by name
+    case "edit_list_item": {
+      if (!args.itemName) {
+        return {
+          type: "data",
+          result: { success: false, message: "Which item do you want to edit?" },
+        };
+      }
+
+      // Resolve which list to edit from
+      let listId = args.listId as Id<"shoppingLists"> | undefined;
+      if (!listId) {
+        const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+        if (lists.length === 0) {
+          return {
+            type: "data",
+            result: { success: false, message: "No active lists to edit items from." },
+          };
+        }
+        // Pick the in-progress/shopping list, or first active
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const shopping = lists.find((l: any) => l.status === "shopping");
+        listId = (shopping || lists[0])._id;
+      }
+
+      const listItems = await ctx.runQuery(api.listItems.getByList, {
+        listId: listId!,
+      });
+
+      // Fuzzy match item by name
+      const nameLower = (args.itemName as string).toLowerCase();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const matchItem = listItems.find((i: any) =>
+        i.name.toLowerCase().includes(nameLower)
+      );
+
+      if (!matchItem) {
+        return {
+          type: "data",
+          result: { success: false, message: `Couldn't find "${args.itemName}" on the list.` },
+        };
+      }
+
+      // Build update payload
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updates: Record<string, any> = {};
+      const changes: string[] = [];
+
+      if (args.newQuantity !== undefined) {
+        updates.quantity = args.newQuantity;
+        changes.push(`quantity → ${args.newQuantity}`);
+      }
+      if (args.newName !== undefined) {
+        updates.name = args.newName;
+        changes.push(`renamed to "${args.newName}"`);
+      }
+      if (args.newSize !== undefined) {
+        // Lookup price for new size
+        const list = await ctx.runQuery(api.shoppingLists.getById, {
+          id: listId!,
+        });
+        const storeName = list?.normalizedStoreId || list?.storeName || "tesco";
+        const sizesResult = await ctx.runQuery(api.itemVariants.getSizesForStore, {
+          itemName: matchItem.name.toLowerCase().trim(),
+          store: storeName,
+        });
+        const newSizeLower = (args.newSize as string).toLowerCase().replace(/\s+/g, "");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const matchingSize = sizesResult.sizes.find((s: any) => {
+          const sizeLower = (s.size || "").toLowerCase().replace(/\s+/g, "");
+          const sizeNormLower = (s.sizeNormalized || "").toLowerCase().replace(/\s+/g, "");
+          return sizeLower === newSizeLower ||
+                 sizeNormLower === newSizeLower ||
+                 sizeLower.includes(newSizeLower) ||
+                 newSizeLower.includes(sizeLower);
+        });
+
+        if (matchingSize) {
+          updates.size = matchingSize.sizeNormalized || matchingSize.size;
+          updates.estimatedPrice = matchingSize.price;
+          updates.sizeOverride = true;
+          changes.push(`${matchingSize.sizeNormalized || matchingSize.size} at £${(matchingSize.price || 0).toFixed(2)}`);
+        } else {
+          updates.size = args.newSize;
+          updates.sizeOverride = true;
+          changes.push(`size → ${args.newSize}`);
+        }
+      }
+
+      if (changes.length === 0) {
+        return {
+          type: "data",
+          result: { success: false, message: "Nothing to change — tell me what to update." },
+        };
+      }
+
+      await ctx.runMutation(api.listItems.update, {
+        id: matchItem._id,
+        ...updates,
+      });
+
+      return {
+        type: "data",
+        result: {
+          success: true,
+          message: `Updated ${matchItem.name}: ${changes.join(", ")}`,
+          itemName: matchItem.name,
           ...updates,
         },
       };

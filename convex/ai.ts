@@ -1195,10 +1195,10 @@ export const voiceAssistant = action({
       };
     }
 
-    // Check and increment voice usage
+    // Check voice usage (pre-check, will increment after we know token count)
     const usageResult = await ctx.runMutation(api.aiUsage.incrementUsage, {
       feature: "voice",
-      tokenCount: 500, // Estimated tokens per voice request
+      tokenCount: 500, // Initial estimate — updated post-response
     }) as { allowed: boolean; usage: number; limit: number; percentage: number; message?: string };
 
     if (!usageResult.allowed) {
@@ -1214,6 +1214,24 @@ export const voiceAssistant = action({
       };
     }
 
+    // Gap 4: Fetch live pantry & list snapshot for richer context
+    let lowStockItems: string[] = [];
+    let activeListNames: string[] = [];
+    try {
+      const pantryItems = await ctx.runQuery(api.pantryItems.getByUser, {});
+      lowStockItems = pantryItems
+        .filter((i: Record<string, unknown>) => i.stockLevel === "low" || i.stockLevel === "out")
+        .slice(0, 8)
+        .map((i: Record<string, unknown>) => `${i.name} (${i.stockLevel})`);
+
+      const activeLists = await ctx.runQuery(api.shoppingLists.getActive, {});
+      activeListNames = activeLists.map((l: Record<string, unknown>) =>
+        `${l.name}${l.budget ? ` — £${l.budget} budget` : ""}`
+      );
+    } catch {
+      // Non-critical — proceed without extra context
+    }
+
     const systemPrompt = buildSystemPrompt({
       currentScreen: args.currentScreen,
       activeListId: args.activeListId,
@@ -1222,6 +1240,8 @@ export const voiceAssistant = action({
       activeListSpent: args.activeListSpent,
       activeListsCount: args.activeListsCount,
       lowStockCount: args.lowStockCount,
+      lowStockItems,
+      activeListNames,
       userName: args.userName,
     });
 
@@ -1246,10 +1266,10 @@ export const voiceAssistant = action({
       const chat = model.startChat({ history });
       let response = await chat.sendMessage(args.transcript);
 
-       
+
       let pendingAction: {
         action: string;
-         
+
         params: Record<string, any>;
         confirmLabel: string;
       } | null = null;
@@ -1291,6 +1311,27 @@ export const voiceAssistant = action({
         ]);
       }
 
+      // Gap 2: Extract actual token count from Gemini response metadata
+      try {
+        const usageMeta = response.response.usageMetadata;
+        if (usageMeta) {
+          const actualTokens = (usageMeta.promptTokenCount ?? 0) + (usageMeta.candidatesTokenCount ?? 0);
+          if (actualTokens > 0) {
+            // Correct the estimated 500 with actual usage (delta only, no requestCount bump)
+            const delta = actualTokens - 500;
+            if (delta !== 0) {
+              await ctx.runMutation(api.aiUsage.correctTokenCount, {
+                feature: "voice",
+                tokenDelta: delta,
+              });
+            }
+          }
+          console.log(`[voiceAssistant] Actual tokens: prompt=${usageMeta.promptTokenCount}, candidates=${usageMeta.candidatesTokenCount}`);
+        }
+      } catch {
+        // Non-critical — token tracking is best-effort
+      }
+
       const finalText =
         response.response.text() || "Sorry, I couldn't process that.";
 
@@ -1302,30 +1343,99 @@ export const voiceAssistant = action({
     } catch (error) {
       console.error("[voiceAssistant] Gemini failed, trying OpenAI fallback:", error);
 
-      // Degraded fallback: simple prompt without function calling
+      // Gap 3: OpenAI fallback WITH function calling (not degraded text-only)
       try {
-        const fallbackPrompt = `${buildSystemPrompt({
-          currentScreen: args.currentScreen,
-          activeListId: args.activeListId,
-          activeListName: args.activeListName,
-          userName: args.userName,
-        })}
+        const openaiTools = voiceFunctionDeclarations.map((decl) => ({
+          type: "function" as const,
+          function: {
+            name: decl.name,
+            description: decl.description || "",
+            parameters: decl.parameters as unknown as Record<string, unknown>,
+          },
+        }));
 
-The user said: "${args.transcript}"
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const openaiMessages: Array<any> = [
+          { role: "system", content: systemPrompt },
+          ...(args.conversationHistory || []).map((msg) => ({
+            role: msg.role === "model" ? "assistant" : "user",
+            content: msg.text,
+          })),
+          { role: "user", content: args.transcript },
+        ];
 
-You cannot look up any data right now. If they asked a question about their data, apologise and suggest they check the app directly. If they want to create a list or add items, let them know you can't do that right now. Be warm and helpful.`;
+        let pendingAction: {
+          action: string;
+          params: Record<string, unknown>;
+          confirmLabel: string;
+        } | null = null;
 
-        const fallbackResponse = await openaiGenerate(fallbackPrompt, {
+        // Function-calling loop for OpenAI (max 3 iterations)
+        for (let i = 0; i < 3; i++) {
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: openaiMessages,
+            tools: openaiTools,
+            temperature: 0.3,
+            max_tokens: 500,
+          });
+
+          const choice = completion.choices[0];
+          if (!choice) break;
+
+          // If no tool calls, we have the final answer
+          if (!choice.message.tool_calls || choice.message.tool_calls.length === 0) {
+            const fallbackText = choice.message.content || "I'm having a bit of trouble. Try again in a moment?";
+            return {
+              type: pendingAction ? ("confirm_action" as const) : ("answer" as const),
+              text: fallbackText,
+              pendingAction,
+            };
+          }
+
+          // Process tool calls — push full assistant message with tool_calls
+          openaiMessages.push(choice.message);
+
+          for (const toolCall of choice.message.tool_calls) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const tc = toolCall as any;
+            const fnName = tc.function.name as string;
+            const fnArgs = JSON.parse(tc.function.arguments || "{}");
+            console.log(`[voiceAssistant/openai] Tool call ${i + 1}: ${fnName}`, fnArgs);
+
+            const toolResult = await executeVoiceTool(ctx, fnName, fnArgs);
+
+            if (toolResult.type === "confirm") {
+              pendingAction = {
+                action: toolResult.result.action,
+                params: toolResult.result.params,
+                confirmLabel: toolResult.result.description,
+              };
+            }
+
+            openaiMessages.push({
+              role: "tool",
+              content: JSON.stringify(toolResult.result),
+              tool_call_id: tc.id,
+            });
+          }
+        }
+
+        // If we exhausted iterations, send one final request for text
+        const finalCompletion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: openaiMessages,
           temperature: 0.3,
-          maxTokens: 300,
+          max_tokens: 500,
         });
 
         return {
-          type: "answer" as const,
-          text: fallbackResponse || "I'm having a bit of trouble. Try again in a moment?",
-          pendingAction: null,
+          type: pendingAction ? ("confirm_action" as const) : ("answer" as const),
+          text: finalCompletion.choices[0]?.message?.content || "Done!",
+          pendingAction,
         };
-      } catch {
+      } catch (fallbackError) {
+        console.error("[voiceAssistant] OpenAI fallback also failed:", fallbackError);
         return {
           type: "error" as const,
           text: "I'm having trouble right now. You can still use the app normally!",

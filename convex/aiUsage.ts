@@ -180,6 +180,43 @@ export const incrementUsage = mutation({
 });
 
 /**
+ * Correct token count for a usage record without incrementing requestCount.
+ * Used after Gemini returns actual token usage metadata.
+ */
+export const correctTokenCount = mutation({
+  args: {
+    feature: v.string(),
+    tokenDelta: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) return;
+
+    const { end } = getCurrentPeriod();
+
+    const usage = await ctx.db
+      .query("aiUsage")
+      .withIndex("by_user_feature_period", (q) =>
+        q.eq("userId", user._id).eq("feature", args.feature).eq("periodEnd", end)
+      )
+      .unique();
+
+    if (!usage) return;
+
+    await ctx.db.patch(usage._id, {
+      tokenCount: (usage.tokenCount ?? 0) + args.tokenDelta,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/**
  * Check if user can use a feature (without incrementing)
  */
 export const canUseFeature = query({

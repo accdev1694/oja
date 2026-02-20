@@ -275,6 +275,7 @@ GEMINI_API_KEY, OPENAI_API_KEY, STRIPE_SECRET_KEY, CLERK_SECRET_KEY
 - [ ] Live test: cancel → verify features drop to free tier
 - [ ] Consider: trial-period credits — currently they accumulate but only apply if user subscribes before trial ends and `invoice.created` fires
 - [ ] Consider: Stripe↔Convex reconciliation cron (no sync exists if webhooks are missed)
+- [ ] Finalize voice/AI request rate limiting — currently only monthly caps (20 free / 200 premium) + 6s client throttle. Decide if daily caps are needed (e.g., max 30/day to prevent burning all 200 in one session). Client-side daily limit was removed as redundant; add server-side daily enforcement here if desired
 
 ## BMAD Workflow
 
