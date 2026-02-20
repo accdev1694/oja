@@ -282,26 +282,26 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.glass.border,
   },
   solidBackground: {
-    backgroundColor: `${colors.background.primary}F0`, // 94% opacity
+    backgroundColor: `${colors.background.secondary}F5`, // 96% opacity, matches SimpleHeader
   },
   blurView: {
     flex: 1,
   },
   headerOuter: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xs,
   },
   headerTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 48,
+    minHeight: 40,
   },
   headerBottomRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingLeft: 44 + spacing.sm,
-    marginTop: -6,
+    paddingLeft: 44 + spacing.md,
+    marginTop: -4,
   },
   leftContainer: {
     minWidth: 44,
@@ -432,9 +432,9 @@ const simpleStyles = StyleSheet.create({});
 Object.assign(styles, {
   simpleHeader: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-    marginBottom: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    marginBottom: spacing.lg,
     backgroundColor: `${colors.background.secondary}F5`,
     borderBottomWidth: 1,
     borderBottomColor: colors.glass.border,
