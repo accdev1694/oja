@@ -26,7 +26,7 @@ import {
 // TYPES
 // =============================================================================
 
-export type GlassCheckboxSize = "sm" | "md" | "lg";
+export type GlassCheckboxSize = "xs" | "sm" | "md" | "lg";
 
 export interface GlassCheckboxProps {
   /** Checked state */
@@ -64,6 +64,12 @@ const sizeStyles: Record<
     borderWidth: number;
   }
 > = {
+  xs: {
+    size: 16,
+    borderRadius: 4,
+    iconSize: 10,
+    borderWidth: 1.5,
+  },
   sm: {
     size: 20,
     borderRadius: 6,

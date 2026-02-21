@@ -91,6 +91,7 @@ export interface ShoppingListItemProps {
   commentCount?: number;
   onOpenComments?: (itemId: Id<"listItems">, itemName: string) => void;
   // Selection mode
+  selectionActive?: boolean;
   isSelected?: boolean;
   onSelectToggle?: (itemId: Id<"listItems">) => void;
 }
@@ -111,6 +112,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
   isOwner,
   commentCount,
   onOpenComments,
+  selectionActive,
   isSelected,
   onSelectToggle,
 }: ShoppingListItemProps) {
@@ -130,6 +132,37 @@ export const ShoppingListItem = memo(function ShoppingListItem({
   const currentPriority = item.priority || "should-have";
   const priorityConfig = PRIORITY_CONFIG[currentPriority];
 
+  // ── Unified press handlers ──────────────────────────────────────────────
+  const handlePress = useCallback(() => {
+    if (selectionActive) {
+      // Selection mode: tap = toggle selection
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onSelectToggle?.(item._id);
+      return;
+    }
+
+    if (isShopping) {
+      // Shopping: tap = check off
+      if (canEdit) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onToggle(item._id);
+      }
+    } else {
+      // Planning: tap = edit
+      if (canEdit && !item.isChecked) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onEdit(item);
+      }
+    }
+  }, [selectionActive, isShopping, canEdit, item, onToggle, onEdit, onSelectToggle]);
+
+  const handleLongPress = useCallback(() => {
+    // Both modes: long press = toggle selection
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onSelectToggle?.(item._id);
+  }, [item._id, onSelectToggle]);
+
+  // ── Priority swipe (planning mode only) ─────────────────────────────────
   const triggerPriorityChange = useCallback((direction: "left" | "right") => {
     const currentIndex = PRIORITY_ORDER.indexOf(currentPriority);
     let newIndex: number;
@@ -148,9 +181,8 @@ export const ShoppingListItem = memo(function ShoppingListItem({
 
   const panGesture = Gesture.Pan()
     .activeOffsetX([-20, 20])
-    .enabled(canEdit)
+    .enabled(canEdit && !isShopping)
     .onUpdate((event) => {
-      // Clamp the translation
       translateX.value = Math.max(-80, Math.min(80, event.translationX));
     })
     .onEnd((event) => {
@@ -165,7 +197,6 @@ export const ShoppingListItem = memo(function ShoppingListItem({
       translateX.value = withSpring(0, { damping: 15 });
     });
 
-  // Only use pan gesture for priority swipes (tap is handled by Pressable)
   const composedGesture = panGesture;
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -194,99 +225,82 @@ export const ShoppingListItem = memo(function ShoppingListItem({
   // Name already includes size (AI embeds it). Use as-is.
   const displayName = item.name;
 
+
+  // Selected state background tint (planning mode)
+  const selectedTint = isSelected
+    ? { backgroundColor: `${colors.accent.primary}15` }
+    : undefined;
+
   return (
     <View style={itemStyles.swipeContainer}>
-      {/* Left action (increase priority) */}
-      <Animated.View style={[itemStyles.swipeAction, itemStyles.swipeActionLeft, leftActionStyle]}>
-        <MaterialCommunityIcons name="arrow-up-bold" size={20} color="#fff" />
-        <Text style={itemStyles.swipeActionText}>Priority ↑</Text>
-      </Animated.View>
-
-      {/* Right action (decrease priority) */}
-      <Animated.View style={[itemStyles.swipeAction, itemStyles.swipeActionRight, rightActionStyle]}>
-        <Text style={itemStyles.swipeActionText}>Priority ↓</Text>
-        <MaterialCommunityIcons name="arrow-down-bold" size={20} color="#fff" />
-      </Animated.View>
+      {/* Swipe actions — planning mode only */}
+      {!isShopping && (
+        <>
+          <Animated.View style={[itemStyles.swipeAction, itemStyles.swipeActionLeft, leftActionStyle]}>
+            <MaterialCommunityIcons name="arrow-up-bold" size={20} color="#fff" />
+            <Text style={itemStyles.swipeActionText}>Priority ↑</Text>
+          </Animated.View>
+          <Animated.View style={[itemStyles.swipeAction, itemStyles.swipeActionRight, rightActionStyle]}>
+            <Text style={itemStyles.swipeActionText}>Priority ↓</Text>
+            <MaterialCommunityIcons name="arrow-down-bold" size={20} color="#fff" />
+          </Animated.View>
+        </>
+      )}
 
       <GestureDetector gesture={composedGesture}>
         <Animated.View style={animatedStyle}>
           <Animated.View style={[{ borderRadius: borderRadius.lg }, checkFlashStyle]}>
             <GlassCard
               variant="standard"
-              style={[itemStyles.itemCard, item.isChecked && itemStyles.itemCardChecked]}
+              style={[itemStyles.itemCard, selectedTint, item.isChecked && itemStyles.itemCardChecked]}
             >
-              <View style={itemStyles.itemRow}>
-                {/* Selection checkbox — planning mode only, owners only */}
-                {!isShopping && canEdit && (
-                  <Pressable
-                    onPress={() => onSelectToggle?.(item._id)}
-                    style={itemStyles.selectionCheckbox}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <MaterialCommunityIcons
-                      name={isSelected ? "checkbox-marked" : "checkbox-blank-outline"}
-                      size={16}
-                      color={isSelected ? colors.accent.primary : colors.text.tertiary}
-                    />
-                  </Pressable>
+              <Pressable
+                style={itemStyles.itemRow}
+                onPress={handlePress}
+                onLongPress={handleLongPress}
+                delayLongPress={400}
+              >
+                {/* Selection checkbox — visible when selection mode is active */}
+                {selectionActive && (
+                  <GlassCircularCheckbox
+                    checked={!!isSelected}
+                    size="xs"
+                    style={{ marginRight: spacing.xs }}
+                  />
                 )}
 
-                {/* Tappable area for checking off in shopping mode */}
-                <Pressable
-                  style={itemStyles.itemTappableArea}
-                  onPress={
-                    isShopping && canEdit
-                      ? () => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          onToggle(item._id);
-                        }
-                      : undefined
-                  }
-                  disabled={!isShopping || !canEdit}
+                {/* Shopping mode checkbox — only when not in selection mode */}
+                {isShopping && !selectionActive && (
+                  <GlassCircularCheckbox
+                    checked={item.isChecked}
+                    size="xs"
+                    style={{ marginRight: spacing.xs }}
+                  />
+                )}
+
+                {/* Item name */}
+                <Text
+                  style={[itemStyles.itemName, item.isChecked && itemStyles.itemNameChecked]}
+                  numberOfLines={1}
                 >
-                  {/* Shopping mode checkbox — visible during shopping */}
-                  {isShopping && (
-                    <GlassCircularCheckbox
-                      checked={item.isChecked}
-                      onToggle={canEdit ? () => onToggle(item._id) : undefined}
-                      size="md"
-                    />
-                  )}
+                  {displayName}
+                </Text>
 
-                  {/* Item Name — tap to edit (owner only) */}
-                  <Pressable
-                    style={itemStyles.itemPairLeft}
-                    onPress={() => {
-                      if (!item.isChecked && canEdit) {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        onEdit(item);
-                      }
-                    }}
-                    disabled={item.isChecked || !canEdit}
-                  >
-                    <Text
-                      style={[itemStyles.itemName, item.isChecked && itemStyles.itemNameChecked]}
-                      numberOfLines={1}
-                    >
-                      {displayName}
-                    </Text>
-                  </Pressable>
-
-                  {/* Qty × Price */}
-                  <View style={itemStyles.qtyPriceRow}>
-                    <Text style={[itemStyles.itemQty, item.isChecked && itemStyles.itemPriceChecked]}>
-                      {item.quantity}x
-                    </Text>
-                    <Text style={[itemStyles.itemPrice, item.isChecked && itemStyles.itemPriceChecked]}>
-                      £{((item.actualPrice || item.estimatedPrice || 0) * item.quantity).toFixed(2)}
-                    </Text>
-                  </View>
-                </Pressable>
+                {/* Qty × Price */}
+                <View style={itemStyles.qtyPriceRow}>
+                  <Text style={[itemStyles.itemQty, item.isChecked && itemStyles.itemPriceChecked]}>
+                    {item.quantity}x
+                  </Text>
+                  <Text style={[itemStyles.itemPrice, item.isChecked && itemStyles.itemPriceChecked]}>
+                    £{((item.actualPrice || item.estimatedPrice || 0) * item.quantity).toFixed(2)}
+                  </Text>
+                </View>
 
                 {/* Comment button — visible when partner mode is active */}
                 {onOpenComments && (
                   <Pressable
-                    onPress={() => {
+                    onPress={(e) => {
+                      e.stopPropagation();
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       onOpenComments(item._id, item.name);
                     }}
@@ -310,10 +324,30 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                   </Pressable>
                 )}
 
-                {/* Delete button — hidden for view-only partners */}
+                {/* Edit button — both modes */}
+                {canEdit && !item.isChecked && (
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      onEdit(item);
+                    }}
+                    style={itemStyles.iconButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialCommunityIcons
+                      name="pencil-outline"
+                      size={18}
+                      color={colors.text.tertiary}
+                    />
+                  </Pressable>
+                )}
+
+                {/* Delete button — both modes */}
                 {canEdit && (
                   <Pressable
-                    onPress={() => {
+                    onPress={(e) => {
+                      e.stopPropagation();
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       onRemove(item._id, item.name);
                     }}
@@ -327,7 +361,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                     />
                   </Pressable>
                 )}
-              </View>
+              </Pressable>
             </GlassCard>
           </Animated.View>
         </Animated.View>
@@ -348,6 +382,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
     prevProps.isOwner === nextProps.isOwner &&
     prevProps.commentCount === nextProps.commentCount &&
     prevProps.onOpenComments === nextProps.onOpenComments &&
+    prevProps.selectionActive === nextProps.selectionActive &&
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.onSelectToggle === nextProps.onSelectToggle
   );
@@ -400,20 +435,6 @@ const itemStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
-  },
-  selectionCheckbox: {
-    marginRight: 2,
-  },
-  itemTappableArea: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  itemPairLeft: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
   },
   itemName: {
     ...typography.bodyMedium,
