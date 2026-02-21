@@ -22,6 +22,7 @@ import {
   GlassCard,
   GlassButton,
   SimpleHeader,
+  GlassCapsuleSwitcher,
   colors,
   typography,
   spacing,
@@ -42,6 +43,9 @@ export default function ScanScreen() {
   const { alert } = useGlassAlert();
   const { firstName } = useCurrentUser();
   const [scanMode, setScanMode] = useState<ScanMode>("receipt");
+  const handleScanModeSwitch = useCallback((index: number) => {
+    setScanMode(index === 0 ? "receipt" : "product");
+  }, []);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -453,40 +457,23 @@ export default function ScanScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Mode Toggle */}
-        <View style={styles.modeToggle}>
-          <Pressable
-            style={[styles.modeOption, scanMode === "receipt" && styles.modeOptionActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setScanMode("receipt");
-            }}
-          >
-            <MaterialCommunityIcons
-              name="receipt"
-              size={16}
-              color={scanMode === "receipt" ? colors.accent.primary : colors.text.tertiary}
-            />
-            <Text style={[styles.modeOptionText, scanMode === "receipt" && styles.modeOptionTextActive]}>
-              Receipt
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.modeOption, scanMode === "product" && styles.modeOptionActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setScanMode("product");
-            }}
-          >
-            <MaterialCommunityIcons
-              name="barcode-scan"
-              size={16}
-              color={scanMode === "product" ? colors.accent.primary : colors.text.tertiary}
-            />
-            <Text style={[styles.modeOptionText, scanMode === "product" && styles.modeOptionTextActive]}>
-              Product
-            </Text>
-          </Pressable>
-        </View>
+        <GlassCapsuleSwitcher
+          tabs={[
+            {
+              label: "Receipt",
+              activeColor: colors.accent.primary,
+              icon: "receipt",
+            },
+            {
+              label: "Product",
+              activeColor: colors.accent.primary,
+              icon: "barcode-scan",
+            },
+          ]}
+          activeIndex={scanMode === "receipt" ? 0 : 1}
+          onTabChange={handleScanModeSwitch}
+          style={styles.modeToggle}
+        />
 
         {scanMode === "receipt" ? (
           <>
@@ -495,7 +482,7 @@ export default function ScanScreen() {
               <View style={styles.iconContainer}>
                 <MaterialCommunityIcons
                   name="camera"
-                  size={64}
+                  size={48}
                   color={colors.semantic.scan}
                 />
               </View>
@@ -1052,11 +1039,11 @@ const styles = StyleSheet.create({
   // Icon Section
   iconSection: {
     alignItems: "center",
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.md,
   },
   iconContainer: {
-    width: 120,
-    height: 120,
+    width: 84,
+    height: 84,
     borderRadius: borderRadius.full,
     backgroundColor: `${colors.semantic.scan}20`,
     justifyContent: "center",
@@ -1326,33 +1313,7 @@ const styles = StyleSheet.create({
 
   // Mode Toggle
   modeToggle: {
-    flexDirection: "row",
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    padding: 3,
     marginBottom: spacing.md,
-  },
-  modeOption: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  modeOptionActive: {
-    backgroundColor: colors.glass.backgroundStrong,
-  },
-  modeOptionText: {
-    ...typography.labelSmall,
-    color: colors.text.tertiary,
-    fontWeight: "600",
-  },
-  modeOptionTextActive: {
-    color: colors.accent.primary,
   },
 
   // Product Scanning

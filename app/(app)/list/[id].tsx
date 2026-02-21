@@ -979,7 +979,7 @@ export default function ListDetailScreen() {
       <View style={styles.emptyIconContainer}>
         <MaterialCommunityIcons
           name="cart-outline"
-          size={64}
+          size={54}
           color={colors.text.tertiary}
         />
       </View>
@@ -1307,7 +1307,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   listHeaderContainer: {
-    paddingTop: spacing.md,
+    paddingTop: spacing.xs,
   },
   bottomSpacer: {
     height: 140,
@@ -1321,7 +1321,7 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: "row",
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
   },
   actionButton: {
     flex: 1,
@@ -1348,11 +1348,11 @@ const styles = StyleSheet.create({
   // Empty State
   emptyContainer: {
     alignItems: "center",
-    paddingVertical: spacing["2xl"],
+    paddingVertical: spacing.lg,
   },
   emptyIconContainer: {
-    width: 100,
-    height: 100,
+    width: 72,
+    height: 72,
     borderRadius: borderRadius.full,
     backgroundColor: colors.glass.background,
     justifyContent: "center",

@@ -328,7 +328,7 @@ const tabStyles = StyleSheet.create({
   },
   tabLabel: {
     ...typography.labelSmall,
-    marginTop: spacing.xs,
+    marginTop: 2,
     textTransform: "none",
     letterSpacing: 0,
   },

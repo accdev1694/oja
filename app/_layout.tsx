@@ -70,9 +70,10 @@ function InitialLayout() {
 
     // Wait for user record to load (undefined = loading, null = not found yet)
     if (isSignedIn && currentUser !== undefined && currentUser !== null) {
+      const inAppGroup = segments[0] === "(app)";
       if (!currentUser.onboardingComplete && !inOnboarding) {
         router.replace("/onboarding/welcome");
-      } else if (currentUser.onboardingComplete && inOnboarding) {
+      } else if (currentUser.onboardingComplete && !inAppGroup) {
         router.replace("/(app)/(tabs)");
       }
     }

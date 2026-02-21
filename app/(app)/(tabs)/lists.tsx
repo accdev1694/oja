@@ -13,13 +13,6 @@ import { useState, useCallback } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  interpolateColor,
-} from "react-native-reanimated";
-
 import {
   GlassScreen,
   GlassCard,
@@ -27,6 +20,7 @@ import {
   SkeletonCard,
   EmptyLists,
   TrialNudgeBanner,
+  GlassCapsuleSwitcher,
   colors,
   typography,
   spacing,
@@ -59,35 +53,11 @@ export default function ListsScreen() {
   const { unreadCount } = useNotifications();
 
 
-  // Sliding pill animation: 0 = active (left), 1 = history (right)
-  const tabProgress = useSharedValue(0);
-  const tabPillWidth = useSharedValue(0);
-
-  const onTabContainerLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
-    tabPillWidth.value = (e.nativeEvent.layout.width - 8) / 2;
-  }, []);
-
-  const slidingPillStyle = useAnimatedStyle(() => {
-    return {
-      width: tabPillWidth.value,
-      transform: [{ translateX: tabProgress.value * tabPillWidth.value }],
-      backgroundColor: interpolateColor(
-        tabProgress.value,
-        [0, 1],
-        [`${colors.accent.primary}25`, `${colors.accent.primary}25`]
-      ),
-    };
-  });
-
-  const handleTabSwitch = (mode: TabMode) => {
+  const handleTabSwitch = useCallback((index: number) => {
+    const mode: TabMode = index === 0 ? "active" : "history";
     if (mode === tabMode) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setTabMode(mode);
-    tabProgress.value = withSpring(mode === "history" ? 1 : 0, {
-      damping: 18,
-      stiffness: 180,
-    });
-  };
+  }, [tabMode]);
 
   const handleDeleteList = useCallback((listId: Id<"shoppingLists">, listName: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -234,45 +204,27 @@ export default function ListsScreen() {
       />
 
       {/* Tab Toggle */}
-      <View style={styles.tabContainer} onLayout={onTabContainerLayout}>
-        <Animated.View style={[styles.slidingPill, slidingPillStyle]} />
-        <Pressable
-          style={styles.tab}
-          onPress={() => handleTabSwitch("active")}
-        >
-          <MaterialCommunityIcons
-            name="clipboard-list"
-            size={16}
-            color={tabMode === "active" ? colors.accent.primary : colors.text.tertiary}
-          />
-          <Text style={[styles.tabText, tabMode === "active" && styles.tabTextActive]}>
-            Active
-          </Text>
-          {(displayList.length + activeShared.length) > 0 && (
-            <View style={styles.tabBadge}>
-              <Text style={styles.tabBadgeText}>{displayList.length + activeShared.length}</Text>
-            </View>
-          )}
-        </Pressable>
-        <Pressable
-          style={styles.tab}
-          onPress={() => handleTabSwitch("history")}
-        >
-          <MaterialCommunityIcons
-            name="history"
-            size={16}
-            color={tabMode === "history" ? colors.accent.primary : colors.text.tertiary}
-          />
-          <Text style={[styles.tabText, tabMode === "history" && styles.tabTextActive]}>
-            History
-          </Text>
-          {history && history.length > 0 && (
-            <View style={styles.tabBadge}>
-              <Text style={styles.tabBadgeText}>{history.length}</Text>
-            </View>
-          )}
-        </Pressable>
-      </View>
+      <GlassCapsuleSwitcher
+        tabs={[
+          {
+            label: "Active",
+            activeColor: colors.accent.primary,
+            icon: "clipboard-list",
+            badge: (displayList.length + activeShared.length) > 0
+              ? displayList.length + activeShared.length
+              : undefined,
+          },
+          {
+            label: "History",
+            activeColor: colors.accent.primary,
+            icon: "history",
+            badge: history && history.length > 0 ? history.length : undefined,
+          },
+        ]}
+        activeIndex={tabMode === "active" ? 0 : 1}
+        onTabChange={handleTabSwitch}
+        style={styles.tabContainer}
+      />
 
       {/* Trial Nudge Banner */}
       <TrialNudgeBanner />
@@ -485,54 +437,8 @@ const styles = StyleSheet.create({
 
   // Tab toggle
   tabContainer: {
-    flexDirection: "row",
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.lg,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    overflow: "hidden",
-  },
-  tab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  slidingPill: {
-    position: "absolute",
-    top: 4,
-    bottom: 4,
-    left: 4,
-    borderRadius: borderRadius.md,
-  },
-  tabText: {
-    ...typography.labelMedium,
-    color: colors.text.tertiary,
-    fontSize: 13,
-  },
-  tabTextActive: {
-    color: colors.accent.primary,
-    fontWeight: "600",
-  },
-  tabBadge: {
-    backgroundColor: `${colors.accent.primary}20`,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  tabBadgeText: {
-    color: colors.accent.primary,
-    fontWeight: "700",
-    fontSize: 10,
   },
 
   // Empty history

@@ -1,24 +1,17 @@
-import { Redirect } from "expo-router";
-import { useAuth } from "@clerk/clerk-expo";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { colors } from "@/lib/design/glassTokens";
 
+/**
+ * Root index — renders a loading spinner while _layout.tsx's InitialLayout
+ * handles all auth routing (sign-in, onboarding, app).
+ * Does NOT call useAuth() because it mounts before ClerkProvider is ready.
+ */
 export default function Index() {
-  const { isLoaded, isSignedIn } = useAuth();
-
-  if (!isLoaded) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color={colors.accent.primary} />
-      </View>
-    );
-  }
-
-  if (isSignedIn) {
-    return <Redirect href="/(app)/(tabs)" />;
-  }
-
-  return <Redirect href="/(auth)/sign-in" />;
+  return (
+    <View style={styles.container}>
+      <ActivityIndicator size="large" color={colors.accent.primary} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

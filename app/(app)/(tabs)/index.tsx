@@ -21,13 +21,6 @@ import {
 } from "expo-haptics";
 import { haptic } from "@/lib/haptics/safeHaptics";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  interpolateColor,
-} from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -47,6 +40,7 @@ import {
   GlassScreen,
   GlassCard,
   GlassSearchInput,
+  GlassCapsuleSwitcher,
   SimpleHeader,
   SkeletonPantryItem,
   EmptyPantry,
@@ -63,14 +57,9 @@ import { defaultListName } from "@/lib/list/helpers";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
-/** Time-based greeting with optional name */
+/** Simple greeting with optional name */
 function getGreeting(firstName?: string): string {
-  const hour = new Date().getHours();
-  let greeting = "Hello";
-  if (hour < 12) greeting = "Good morning";
-  else if (hour < 17) greeting = "Good afternoon";
-  else greeting = "Good evening";
-  return firstName ? `${greeting}, ${firstName}` : greeting;
+  return firstName ? `Hello, ${firstName}` : "Hello";
 }
 
 type PantryViewMode = "attention" | "all";
@@ -210,13 +199,8 @@ export default function PantryScreen() {
   // View mode: "attention" shows only Low+Out items, "all" shows everything
   const [viewMode, setViewMode] = useState<PantryViewMode>("attention");
 
-  // Sliding pill animation: 0 = attention (left), 1 = all (right)
-  const tabProgress = useSharedValue(0);
-  const tabPillWidth = useSharedValue(0);
-
-  const onTabContainerLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
-    tabPillWidth.value = (e.nativeEvent.layout.width - 8) / 2;
-  }, []);
+  // Capsule switcher active index: 0 = attention, 1 = all
+  const capsuleActiveIndex = viewMode === "attention" ? 0 : 1;
 
   // UI State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -286,17 +270,6 @@ export default function PantryScreen() {
     ).length;
   }, [items]);
 
-  const slidingPillStyle = useAnimatedStyle(() => {
-    return {
-      width: tabPillWidth.value,
-      transform: [{ translateX: tabProgress.value * tabPillWidth.value }],
-      backgroundColor: interpolateColor(
-        tabProgress.value,
-        [0, 1],
-        [`${colors.accent.warning}25`, `${colors.accent.primary}25`]
-      ),
-    };
-  });
 
   // Filter items based on view mode, search, stock level (Amazon-style)
   // When searching, also include archived items so users can find everything
@@ -599,14 +572,9 @@ export default function PantryScreen() {
     });
   }, []);
 
-  const handleViewModeSwitch = useCallback((mode: PantryViewMode) => {
+  const handleViewModeSwitch = useCallback((index: number) => {
+    const mode: PantryViewMode = index === 0 ? "attention" : "all";
     if (mode === viewMode) return;
-    impactAsync(ImpactFeedbackStyle.Light);
-
-    tabProgress.value = withSpring(mode === "all" ? 1 : 0, {
-      damping: 18,
-      stiffness: 180,
-    });
 
     startTransition(() => {
       setViewMode(mode);
@@ -615,7 +583,7 @@ export default function PantryScreen() {
         setCollapsedCategories(new Set(categories));
       }
     });
-  }, [viewMode, categories, tabProgress]);
+  }, [viewMode, categories]);
 
   const handleOpenAddModal = useCallback(() => {
     impactAsync(ImpactFeedbackStyle.Light);
@@ -888,62 +856,29 @@ export default function PantryScreen() {
         {/* Contextual Tips */}
         <TipBanner context="pantry" />
 
-        {/* View Mode Tabs — sliding pill animates between red↔green */}
-        <View style={styles.viewModeTabs} onLayout={onTabContainerLayout}>
-          <Animated.View style={[styles.slidingPill, slidingPillStyle]} />
-
-          <Pressable
-            style={styles.viewModeTab}
-            onPress={() => handleViewModeSwitch("attention")}
-          >
-            {attentionCount > 0 && (
-              <MaterialCommunityIcons
-                name="alert-circle-outline"
-                size={16}
-                color={viewMode === "attention" ? colors.semantic.danger : colors.text.tertiary}
-              />
-            )}
-            <Text style={[
-              styles.viewModeTabText,
-              viewMode === "attention" && (attentionCount === 0 ? styles.viewModeTabTextAllGood : styles.viewModeTabTextAttention),
-            ]}>
-              Needs Restocking
-            </Text>
-            {attentionCount > 0 ? (
-              <View style={[styles.viewModeBadge, viewMode === "attention" && styles.viewModeBadgeAttention]}>
-                <Text style={[styles.viewModeBadgeText, viewMode === "attention" && styles.viewModeBadgeTextAttention]}>
-                  {attentionCount}
-                </Text>
-              </View>
-            ) : (
-              <View style={[styles.viewModeBadge, styles.viewModeBadgeAllGood]}>
-                <MaterialCommunityIcons
-                  name="check"
-                  size={12}
-                  color={colors.semantic.success}
-                />
-              </View>
-            )}
-          </Pressable>
-          <Pressable
-            style={styles.viewModeTab}
-            onPress={() => handleViewModeSwitch("all")}
-          >
-            <MaterialCommunityIcons
-              name="view-list-outline"
-              size={16}
-              color={viewMode === "all" ? colors.accent.primary : colors.text.tertiary}
-            />
-            <Text style={[styles.viewModeTabText, viewMode === "all" && styles.viewModeTabTextActive]}>
-              All Items
-            </Text>
-            <View style={[styles.viewModeBadge, viewMode === "all" && styles.viewModeBadgeActive]}>
-              <Text style={[styles.viewModeBadgeText, viewMode === "all" && styles.viewModeBadgeTextActive]}>
-                {items.length}
-              </Text>
-            </View>
-          </Pressable>
-        </View>
+        {/* View Mode Tabs — sliding pill animates between warning↔primary */}
+        <GlassCapsuleSwitcher
+          tabs={[
+            {
+              label: "Needs Restocking",
+              activeColor: attentionCount === 0 ? colors.semantic.success : colors.accent.warning,
+              icon: attentionCount > 0 ? "alert-circle-outline" : undefined,
+              badge: attentionCount > 0 ? attentionCount : undefined,
+              badgeCustom: attentionCount === 0 ? (
+                <MaterialCommunityIcons name="check" size={12} color={colors.semantic.success} />
+              ) : undefined,
+            },
+            {
+              label: "All Items",
+              activeColor: colors.accent.primary,
+              icon: "view-list-outline",
+              badge: items.length,
+            },
+          ]}
+          activeIndex={capsuleActiveIndex}
+          onTabChange={handleViewModeSwitch}
+          style={styles.viewModeTabs}
+        />
 
         {/* Search field */}
         <View style={styles.searchContainer}>
@@ -1066,77 +1001,8 @@ const styles = StyleSheet.create({
     padding: spacing["2xl"],
   },
   viewModeTabs: {
-    flexDirection: "row",
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.lg,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    overflow: "hidden",
-  },
-  viewModeTab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  slidingPill: {
-    position: "absolute",
-    top: 4,
-    bottom: 4,
-    left: 4,
-    borderRadius: borderRadius.md,
-  },
-  viewModeTabText: {
-    ...typography.labelMedium,
-    color: colors.text.tertiary,
-    fontSize: 13,
-  },
-  viewModeTabTextAttention: {
-    color: colors.accent.warning,
-    fontWeight: "600",
-  },
-  viewModeTabTextAllGood: {
-    color: colors.semantic.success,
-    fontWeight: "600",
-  },
-  viewModeTabTextActive: {
-    color: colors.accent.primary,
-    fontWeight: "600",
-  },
-  viewModeBadge: {
-    backgroundColor: colors.glass.backgroundHover,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 1,
-    borderRadius: borderRadius.full,
-    minWidth: 22,
-    alignItems: "center",
-  },
-  viewModeBadgeAttention: {
-    backgroundColor: `${colors.accent.warning}30`,
-  },
-  viewModeBadgeAllGood: {
-    backgroundColor: `${colors.semantic.success}25`,
-  },
-  viewModeBadgeActive: {
-    backgroundColor: `${colors.accent.primary}30`,
-  },
-  viewModeBadgeText: {
-    ...typography.labelSmall,
-    color: colors.text.tertiary,
-    fontSize: 11,
-  },
-  viewModeBadgeTextAttention: {
-    color: colors.accent.warning,
-  },
-  viewModeBadgeTextActive: {
-    color: colors.accent.primary,
   },
   attentionEmptyContainer: {
     flex: 1,
