@@ -67,7 +67,7 @@ export default function ScanScreen() {
     }
   }, [listIdParam]);
 
-  const shoppingLists = useQuery(api.shoppingLists.getByUser, {});
+  const shoppingLists = useQuery(api.shoppingLists.getCompletedWithStores, {});
   const allReceipts = useQuery(api.receipts.getByUser, {});
   const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);
   const createReceipt = useMutation(api.receipts.create);
@@ -581,7 +581,12 @@ export default function ScanScreen() {
                     <Text style={styles.listOptionText}>No list (standalone receipt)</Text>
                   </TouchableOpacity>
 
-                  {shoppingLists.map((list) => (
+                  {shoppingLists.map((list) => {
+                    const created = new Date(list._creationTime);
+                    const date = created.toLocaleDateString([], { day: "numeric", month: "short" });
+                    const time = created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                    const storesText = list.storeNames?.join(" \u2022 ") || "";
+                    return (
                     <TouchableOpacity
                       key={list._id}
                       style={[
@@ -604,20 +609,33 @@ export default function ScanScreen() {
                         }
                       />
                       <View style={styles.listOptionInfo}>
-                        <Text
-                          style={[
-                            styles.listOptionText,
-                            selectedListId === list._id && styles.listOptionTextActive,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {list.name}
-                        </Text>
-                        {(list.budget ?? 0) > 0 && (
-                          <Text style={styles.listOptionBudget}>
-                            £{(list.budget ?? 0).toFixed(2)} budget
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                          <Text
+                            style={[
+                              styles.listOptionText,
+                              selectedListId === list._id && styles.listOptionTextActive,
+                              { flex: 1 },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {list.name}
                           </Text>
-                        )}
+                          {list.listNumber != null && (
+                            <Text style={[styles.listOptionBudget, { marginLeft: spacing.sm }]}>
+                              #{list.listNumber}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                          <Text style={styles.listOptionBudget}>
+                            {date} · {time}
+                          </Text>
+                          {storesText ? (
+                            <Text style={[styles.listOptionBudget, { marginLeft: spacing.sm }]} numberOfLines={1}>
+                              {storesText}
+                            </Text>
+                          ) : null}
+                        </View>
                       </View>
                       {selectedListId === list._id && (
                         <MaterialCommunityIcons
@@ -627,7 +645,8 @@ export default function ScanScreen() {
                         />
                       )}
                     </TouchableOpacity>
-                  ))}
+                    );
+                  })}
                 </ScrollView>
               </GlassCard>
             )}
@@ -739,7 +758,12 @@ export default function ScanScreen() {
                 {showProductListPicker && shoppingLists && (
                   <GlassCard variant="standard" style={styles.listPickerCard}>
                     <ScrollView style={styles.listPickerScroll} nestedScrollEnabled>
-                      {shoppingLists.map((list) => (
+                      {shoppingLists.map((list) => {
+                        const created = new Date(list._creationTime);
+                        const date = created.toLocaleDateString([], { day: "numeric", month: "short" });
+                        const time = created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                        const storesText = list.storeNames?.join(" \u2022 ") || "";
+                        return (
                         <TouchableOpacity
                           key={list._id}
                           style={styles.listOption}
@@ -751,17 +775,30 @@ export default function ScanScreen() {
                             color={colors.text.secondary}
                           />
                           <View style={styles.listOptionInfo}>
-                            <Text style={styles.listOptionText} numberOfLines={1}>
-                              {list.name}
-                            </Text>
-                            {(list.budget ?? 0) > 0 && (
-                              <Text style={styles.listOptionBudget}>
-                                £{(list.budget ?? 0).toFixed(2)} budget
+                            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                              <Text style={[styles.listOptionText, { flex: 1 }]} numberOfLines={1}>
+                                {list.name}
                               </Text>
-                            )}
+                              {list.listNumber != null && (
+                                <Text style={[styles.listOptionBudget, { marginLeft: spacing.sm }]}>
+                                  #{list.listNumber}
+                                </Text>
+                              )}
+                            </View>
+                            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                              <Text style={styles.listOptionBudget}>
+                                {date} · {time}
+                              </Text>
+                              {storesText ? (
+                                <Text style={[styles.listOptionBudget, { marginLeft: spacing.sm }]} numberOfLines={1}>
+                                  {storesText}
+                                </Text>
+                              ) : null}
+                            </View>
                           </View>
                         </TouchableOpacity>
-                      ))}
+                        );
+                      })}
                     </ScrollView>
                   </GlassCard>
                 )}

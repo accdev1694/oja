@@ -30,7 +30,7 @@ import {
 import {
   GlassScreen,
   GlassButton,
-  GlassHeader,
+  SimpleHeader,
   CircularBudgetDial,
   OfflineBanner,
   GuidedBorder,
@@ -1023,15 +1023,14 @@ export default function ListDetailScreen() {
 
       <Animated.View style={keyboardContainerStyle}>
         {/* Header */}
-        <GlassHeader
+        <SimpleHeader
           title={list.name}
-          subtitle={`${checkedCount}/${totalCount} items`}
+          subtitle={`${list.listNumber != null ? `#${list.listNumber} \u00B7 ` : ""}${checkedCount}/${totalCount} items`}
           showBack
-          topRightElement={
-            <NotificationBell onPress={() => setShowNotifications(true)} />
-          }
-          rightElement={
+          titleStyle={{ fontSize: 20, lineHeight: 28, textAlign: "center" }}
+          bottomRightElement={
             <View style={styles.headerRightRow}>
+              <NotificationBell onPress={() => setShowNotifications(true)} />
               {hasPartners && (
                 <Pressable
                   onPress={() => {
