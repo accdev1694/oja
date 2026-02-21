@@ -84,6 +84,7 @@ export interface ShoppingListItemProps {
   onEdit: (item: ListItem) => void;
   onPriorityChange: (itemId: Id<"listItems">, priority: "must-have" | "should-have" | "nice-to-have") => void;
   isShopping: boolean;
+  canEdit?: boolean;
   onAddToList?: () => void;
   // Partner mode props
   isOwner?: boolean;
@@ -105,6 +106,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
   onEdit,
   onPriorityChange,
   isShopping,
+  canEdit = true,
   onAddToList,
   isOwner,
   commentCount,
@@ -146,6 +148,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
 
   const panGesture = Gesture.Pan()
     .activeOffsetX([-20, 20])
+    .enabled(canEdit)
     .onUpdate((event) => {
       // Clamp the translation
       translateX.value = Math.max(-80, Math.min(80, event.translationX));
@@ -213,8 +216,8 @@ export const ShoppingListItem = memo(function ShoppingListItem({
               style={[itemStyles.itemCard, item.isChecked && itemStyles.itemCardChecked]}
             >
               <View style={itemStyles.itemRow}>
-                {/* Selection checkbox — planning mode only */}
-                {!isShopping && (
+                {/* Selection checkbox — planning mode only, owners only */}
+                {!isShopping && canEdit && (
                   <Pressable
                     onPress={() => onSelectToggle?.(item._id)}
                     style={itemStyles.selectionCheckbox}
@@ -232,34 +235,34 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                 <Pressable
                   style={itemStyles.itemTappableArea}
                   onPress={
-                    isShopping
+                    isShopping && canEdit
                       ? () => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           onToggle(item._id);
                         }
                       : undefined
                   }
-                  disabled={!isShopping}
+                  disabled={!isShopping || !canEdit}
                 >
                   {/* Shopping mode checkbox — visible during shopping */}
                   {isShopping && (
                     <GlassCircularCheckbox
                       checked={item.isChecked}
-                      onToggle={() => onToggle(item._id)}
+                      onToggle={canEdit ? () => onToggle(item._id) : undefined}
                       size="md"
                     />
                   )}
 
-                  {/* Item Name — tap to edit */}
+                  {/* Item Name — tap to edit (owner only) */}
                   <Pressable
                     style={itemStyles.itemPairLeft}
                     onPress={() => {
-                      if (!item.isChecked) {
+                      if (!item.isChecked && canEdit) {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         onEdit(item);
                       }
                     }}
-                    disabled={item.isChecked}
+                    disabled={item.isChecked || !canEdit}
                   >
                     <Text
                       style={[itemStyles.itemName, item.isChecked && itemStyles.itemNameChecked]}
@@ -280,21 +283,50 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                   </View>
                 </Pressable>
 
-                {/* Delete button */}
-                <Pressable
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    onRemove(item._id, item.name);
-                  }}
-                  style={itemStyles.iconButton}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <MaterialCommunityIcons
-                    name="trash-can-outline"
-                    size={18}
-                    color={colors.semantic.danger}
-                  />
-                </Pressable>
+                {/* Comment button — visible when partner mode is active */}
+                {onOpenComments && (
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      onOpenComments(item._id, item.name);
+                    }}
+                    style={itemStyles.iconButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <View>
+                      <MaterialCommunityIcons
+                        name="comment-outline"
+                        size={18}
+                        color={colors.text.tertiary}
+                      />
+                      {(commentCount ?? 0) > 0 && (
+                        <View style={itemStyles.commentBadge}>
+                          <Text style={itemStyles.commentBadgeText}>
+                            {commentCount! > 9 ? "9+" : commentCount}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </Pressable>
+                )}
+
+                {/* Delete button — hidden for view-only partners */}
+                {canEdit && (
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      onRemove(item._id, item.name);
+                    }}
+                    style={itemStyles.iconButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialCommunityIcons
+                      name="trash-can-outline"
+                      size={18}
+                      color={colors.semantic.danger}
+                    />
+                  </Pressable>
+                )}
               </View>
             </GlassCard>
           </Animated.View>
@@ -311,6 +343,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
     prevProps.onEdit === nextProps.onEdit &&
     prevProps.onPriorityChange === nextProps.onPriorityChange &&
     prevProps.isShopping === nextProps.isShopping &&
+    prevProps.canEdit === nextProps.canEdit &&
     prevProps.onAddToList === nextProps.onAddToList &&
     prevProps.isOwner === nextProps.isOwner &&
     prevProps.commentCount === nextProps.commentCount &&
@@ -410,5 +443,23 @@ const itemStyles = StyleSheet.create({
   },
   itemPriceChecked: {
     color: colors.text.tertiary,
+  },
+  commentBadge: {
+    position: "absolute",
+    top: -4,
+    right: -6,
+    backgroundColor: colors.accent.primary,
+    borderRadius: 7,
+    minWidth: 14,
+    height: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 2,
+  },
+  commentBadgeText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#fff",
+    textAlign: "center",
   },
 });

@@ -1597,17 +1597,9 @@ export const switchStore = mutation({
       throw new Error("List not found");
     }
 
-    // Verify ownership or accepted partnership
+    // Only the list owner can switch stores
     if (list.userId !== user._id) {
-      const partner = await ctx.db
-        .query("listPartners")
-        .withIndex("by_list_user", (q: any) =>
-          q.eq("listId", args.listId).eq("userId", user._id)
-        )
-        .unique();
-      if (!partner || partner.status !== "accepted") {
-        throw new Error("Unauthorized: You don't have permission to switch stores for this list");
-      }
+      throw new Error("Unauthorized: Only the list owner can switch stores");
     }
 
     // Validate the new store ID

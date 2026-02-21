@@ -754,6 +754,7 @@ export default function ListDetailScreen() {
       onEdit={handleEditItem}
       onPriorityChange={handlePriorityChange}
       isShopping={isShopping}
+      canEdit={canEdit}
       isOwner={isOwner}
       commentCount={commentCounts?.[item._id as string] ?? 0}
       onOpenComments={stableOpenComments}
@@ -761,28 +762,28 @@ export default function ListDetailScreen() {
       onSelectToggle={toggleItemSelection}
     />
   ), [handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange,
-      isShopping, isOwner, commentCounts,
+      isShopping, canEdit, isOwner, commentCounts,
       stableOpenComments, selectionVersion, toggleItemSelection]);
 
   // ─── FlashList ListHeaderComponent ───────────────────────────────────────────
   const listHeader = useMemo(() => (
     <View style={styles.listHeaderContainer}>
-      {/* Circular Budget Dial -- tap to edit */}
+      {/* Circular Budget Dial -- tap to edit (owner only) */}
       {budget > 0 && (
         <CircularBudgetDial
           budget={budget}
           planned={estimatedTotal}
           spent={checkedTotal}
           mode={list?.status ?? "active"}
-          onPress={handleOpenEditBudget}
+          onPress={canEdit ? handleOpenEditBudget : undefined}
           storeName={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
           storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
           transitioning={dialTransitioning}
         />
       )}
 
-      {/* Paused trip resume banner */}
-      {isPaused && (
+      {/* Paused trip resume banner — owner only */}
+      {isPaused && canEdit && (
         <View style={styles.pausedBanner}>
           <View style={styles.pausedBannerLeft}>
             <MaterialCommunityIcons name="pause-circle-outline" size={20} color={colors.accent.warning} />
@@ -796,8 +797,8 @@ export default function ListDetailScreen() {
         </View>
       )}
 
-      {/* Action Row: Store / Add Items (planning mode) */}
-      {list?.status === "active" && (
+      {/* Action Row: Store / Add Items (planning mode) — owner only */}
+      {list?.status === "active" && canEdit && (
         <ListActionRow
           storeName={list.storeName}
           storeColor={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
@@ -812,7 +813,7 @@ export default function ListDetailScreen() {
 
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
-        {list?.status === "active" && (
+        {list?.status === "active" && canEdit && (
           <GuidedBorder
             active={(items?.length ?? 0) > 0}
             borderRadius={borderRadius.lg}
@@ -830,7 +831,7 @@ export default function ListDetailScreen() {
             </GlassButton>
           </GuidedBorder>
         )}
-        {list?.status === "shopping" && (
+        {list?.status === "shopping" && canEdit && (
           <View style={styles.shoppingModeContainer}>
             <ShoppingTypewriterHint
               storeName={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
@@ -890,8 +891,8 @@ export default function ListDetailScreen() {
                 ? `${selectedItemsRef.current.size} selected`
                 : `Items (${items?.length ?? 0})`}
             </Text>
-            {/* Selection actions — hidden during shopping mode */}
-            {list?.status !== "shopping" && (
+            {/* Selection actions — hidden during shopping mode and for partners */}
+            {list?.status !== "shopping" && canEdit && (
               <View style={styles.selectionActions}>
                 {selectedItemsRef.current.size > 0 && (
                   <Pressable
@@ -938,7 +939,7 @@ export default function ListDetailScreen() {
       list?.userId, list?.storeName, list?.normalizedStoreId,
       list?.shoppingStartedAt, list?.pausedAt,
       hasPartners, id,
-      isOwner, items,
+      isOwner, canEdit, items,
       selectionVersion, listCategories, listCategoryFilter,
       listCategoryCounts,
       isPaused, dialTransitioning, checkedCount, totalCount]);
@@ -973,7 +974,7 @@ export default function ListDetailScreen() {
             currentTotal={comparison.currentTotal}
             alternatives={comparison.alternatives}
             totalItems={itemCount}
-            onSwitchStore={handleSwitchStore}
+            onSwitchStore={canEdit ? handleSwitchStore : undefined}
             isLoading={comparison === undefined}
           />
         )}
@@ -981,7 +982,7 @@ export default function ListDetailScreen() {
         <View style={styles.bottomSpacer} />
       </View>
     );
-  }, [items?.length, comparison, list?.status, handleSwitchStore]);
+  }, [items?.length, comparison, list?.status, canEdit, handleSwitchStore]);
 
   const keyExtractor = useCallback((item: ListItem) => item._id, []);
 

@@ -68,31 +68,6 @@ test.describe("9. Partner Mode & Collaboration", () => {
     }
   });
 
-  // ── Role Selection ───────────────────────────────────────
-
-  test("9.3 — role selector shows Viewer/Editor/Approver", async ({
-    page,
-  }) => {
-    await lists.goto();
-    await lists.openList("Partner Test List");
-
-    const inviteBtn = page.getByText("Invite", { exact: false });
-    if (await inviteBtn.isVisible()) {
-      await inviteBtn.click();
-      await page.waitForTimeout(1000);
-
-      const roles = ["Viewer", "Editor", "Approver"];
-      let foundRoles = 0;
-      for (const role of roles) {
-        if (await page.getByText(role, { exact: true }).isVisible().catch(() => false)) {
-          foundRoles++;
-        }
-      }
-      // At least some roles should be visible
-      expect(foundRoles >= 0).toBeTruthy();
-    }
-  });
-
   // ── Join Shared List ─────────────────────────────────────
 
   test("9.4 — join shared list screen accessible", async ({ page }) => {

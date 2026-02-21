@@ -78,7 +78,7 @@ export interface ListComparisonSummaryProps {
   /** Total number of items in the list */
   totalItems: number;
   /** Callback when user wants to switch to a different store */
-  onSwitchStore: (storeId: string) => void;
+  onSwitchStore?: (storeId: string) => void;
   /** Whether the component is loading data */
   isLoading?: boolean;
 }
@@ -341,7 +341,7 @@ export const ListComparisonSummary = memo(function ListComparisonSummary({
       );
 
       // Call the original handler
-      onSwitchStore(alternative.store);
+      onSwitchStore?.(alternative.store);
     },
     [listId, currentStore, onSwitchStore]
   );

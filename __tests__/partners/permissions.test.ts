@@ -27,7 +27,7 @@ describe("Partner Permissions", () => {
       case "member":
         return {
           canView: true,
-          canEdit: true,
+          canEdit: false,
           canDelete: false,
           canInvite: false,
           canManagePartners: false,
@@ -59,10 +59,10 @@ describe("Partner Permissions", () => {
       expect(perms.canManagePartners).toBe(true);
     });
 
-    it("member can view and edit but not delete/invite/manage", () => {
+    it("member can view but not edit/delete/invite/manage", () => {
       const perms = getPermissions("member");
       expect(perms.canView).toBe(true);
-      expect(perms.canEdit).toBe(true);
+      expect(perms.canEdit).toBe(false);
       expect(perms.canDelete).toBe(false);
       expect(perms.canInvite).toBe(false);
       expect(perms.canManagePartners).toBe(false);
@@ -82,7 +82,7 @@ describe("Partner Permissions", () => {
       expect(result.isOwner).toBe(false);
       expect(result.role).toBe("member");
       expect(result.canView).toBe(true);
-      expect(result.canEdit).toBe(true);
+      expect(result.canEdit).toBe(false);
     });
 
     it("should throw for non-partner, non-owner", () => {

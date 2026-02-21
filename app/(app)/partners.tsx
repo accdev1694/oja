@@ -123,9 +123,11 @@ export default function PartnersScreen() {
         showBack
         onBack={() => router.back()}
         rightElement={
-          <GlassButton variant="primary" size="sm" icon="account-plus" onPress={handleCreateInvite}>
-            Invite
-          </GlassButton>
+          isOwner ? (
+            <GlassButton variant="primary" size="sm" icon="account-plus" onPress={handleCreateInvite}>
+              Invite
+            </GlassButton>
+          ) : undefined
         }
       />
 
