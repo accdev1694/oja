@@ -33,6 +33,7 @@ import {
   animations,
   blur as blurConfig,
 } from "@/lib/design/glassTokens";
+import { headerLayout } from "@/lib/design/layoutPatterns";
 
 // =============================================================================
 // TYPES
@@ -64,8 +65,6 @@ export interface GlassHeaderProps {
   leftElement?: React.ReactNode;
   /** Custom right element (replaces actions, shown in bottom row) */
   rightElement?: React.ReactNode;
-  /** Element shown at the right of the top row (title row) */
-  topRightElement?: React.ReactNode;
   /** Container styles */
   style?: StyleProp<ViewStyle>;
 }
@@ -181,7 +180,6 @@ export function GlassHeader({
   transparent = false,
   leftElement,
   rightElement,
-  topRightElement,
   style,
 }: GlassHeaderProps) {
   const router = useRouter();
@@ -194,32 +192,33 @@ export function GlassHeader({
     }
   };
 
+  const hasBottomRow = (!largeTitle && subtitle) || rightElement || actions;
+
   const headerContent = (
     <View style={styles.headerOuter}>
-      {/* Row 1: Back + Title */}
-      <View style={styles.headerTopRow}>
+      {/* Row 1: Back + Title (flex: 1, left-aligned) */}
+      <View style={headerLayout.topRow}>
         <View style={styles.leftContainer}>
           {leftElement || (showBack && <BackButton onPress={handleBack} />)}
         </View>
         {!largeTitle && (
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={styles.title}>
             {title}
           </Text>
         )}
-        {topRightElement}
       </View>
 
-      {/* Row 2: Subtitle + Right actions */}
-      {(!largeTitle && subtitle) || rightElement || actions ? (
-        <View style={styles.headerBottomRow}>
-          {!largeTitle && subtitle ? (
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          ) : (
-            <View />
-          )}
-          <View style={styles.rightContainer}>
+      {/* Row 2: [Left container] ← space-between → [Right container] */}
+      {hasBottomRow ? (
+        <View style={[headerLayout.bottomRow, { paddingLeft: 36 + spacing.sm }]}>
+          <View style={headerLayout.bottomRowLeft}>
+            {!largeTitle && subtitle ? (
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          <View style={headerLayout.bottomRowRight}>
             {rightElement || (
               actions?.map((action, index) => (
                 <ActionButton key={index} action={action} />
@@ -292,26 +291,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
   },
-  headerTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    minHeight: 32,
-  },
-  headerBottomRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingLeft: 36 + spacing.sm,
-  },
   leftContainer: {
     minWidth: 36,
     alignItems: "flex-start",
-  },
-  rightContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: spacing.sm,
   },
   title: {
     ...typography.headlineSmall,
@@ -356,30 +338,6 @@ const styles = StyleSheet.create({
   actionButtonDisabled: {
     opacity: 0.5,
   },
-  // Simple Header styles
-  simpleHeader: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.lg,
-  },
-  simpleHeaderContent: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-  },
-  simpleHeaderText: {
-    flex: 1,
-  },
-  simpleTitle: {
-    ...typography.displaySmall,
-    color: colors.text.primary,
-  },
-  simpleSubtitle: {
-    ...typography.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
 });
 
 // =============================================================================
@@ -388,12 +346,12 @@ const styles = StyleSheet.create({
 
 export interface SimpleHeaderProps {
   title: string;
+  /** Subtitle string — rendered in bottom row left container */
   subtitle?: string;
+  /** Custom left element for bottom row (replaces subtitle text) */
+  subtitleElement?: React.ReactNode;
+  /** Right container in bottom row (action icons/buttons) */
   rightElement?: React.ReactNode;
-  /** Element shown at the right of the title row (e.g. notification bell) */
-  topRightElement?: React.ReactNode;
-  /** Element shown at the right of the subtitle row */
-  bottomRightElement?: React.ReactNode;
   /** Show back button */
   showBack?: boolean;
   /** Custom back handler (defaults to router.back) */
@@ -410,12 +368,11 @@ export interface SimpleHeaderProps {
 export function SimpleHeader({
   title,
   subtitle,
+  subtitleElement,
   rightElement,
-  topRightElement,
-  bottomRightElement,
   showBack = false,
   onBack,
-  includeSafeArea = false, // Default false - assumes used inside GlassScreen which handles safe area
+  includeSafeArea = false,
   accentColor,
   titleStyle,
   style,
@@ -431,39 +388,45 @@ export function SimpleHeader({
     }
   };
 
+  const leftContent = subtitleElement ?? (subtitle ? (
+    <Text style={simpleHeaderStyles.subtitle} numberOfLines={1}>{subtitle}</Text>
+  ) : null);
+
+  const hasBottomRow = leftContent || rightElement;
+
   return (
     <View
       style={[
-        styles.simpleHeader,
+        simpleHeaderStyles.container,
         includeSafeArea && { paddingTop: insets.top },
         style,
       ]}
     >
-      <View style={styles.simpleHeaderContent}>
+      {/* Row 1: Back button (optional) + Title (flex: 1, left-aligned) */}
+      <View style={headerLayout.topRow}>
         {showBack && <BackButton onPress={handleBack} />}
-        <Text style={[styles.simpleTitle, { flex: 1 }, titleStyle]} numberOfLines={1}>{title}</Text>
-        {topRightElement}
-        {rightElement}
+        <Text style={[simpleHeaderStyles.title, { flex: 1 }, titleStyle]}>{title}</Text>
       </View>
-      {(subtitle || bottomRightElement) && (
-        <View style={[{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const }, showBack && { marginLeft: 32 + spacing.sm }]}>
-          {subtitle ? (
-            <Text style={styles.simpleSubtitle}>{subtitle}</Text>
-          ) : (
-            <View />
+
+      {/* Row 2: [Left container] ← space-between → [Right container] */}
+      {hasBottomRow && (
+        <View style={headerLayout.bottomRow}>
+          <View style={headerLayout.bottomRowLeft}>
+            {leftContent}
+          </View>
+          {rightElement && (
+            <View style={headerLayout.bottomRowRight}>
+              {rightElement}
+            </View>
           )}
-          {bottomRightElement}
         </View>
       )}
     </View>
   );
 }
 
-const simpleStyles = StyleSheet.create({});
-
-// Extend styles
-Object.assign(styles, {
-  simpleHeader: {
+const simpleHeaderStyles = StyleSheet.create({
+  container: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
@@ -472,20 +435,11 @@ Object.assign(styles, {
     borderBottomWidth: 1,
     borderBottomColor: colors.glass.border,
   },
-  simpleHeaderContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-  },
-  simpleHeaderText: {
-    flex: 1,
-  },
-  simpleTitle: {
+  title: {
     ...typography.displaySmall,
     color: colors.text.primary,
   },
-  simpleSubtitle: {
+  subtitle: {
     ...typography.bodyMedium,
     fontSize: 12,
     lineHeight: 16,

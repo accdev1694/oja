@@ -175,11 +175,16 @@ export default function ReviewItemsScreen() {
       const itemsToSave = items
         .filter((_, i) => selectedItems.has(i))
         .map((item) => ({
-          ...item,
-          stockLevel: stockMap[item.stockLevel] || item.stockLevel,
+          name: item.name,
+          category: item.category,
+          stockLevel: (stockMap[item.stockLevel] || item.stockLevel) as "stocked" | "low" | "out",
+          estimatedPrice: item.estimatedPrice,
+          hasVariants: item.hasVariants,
+          defaultSize: item.defaultSize,
+          defaultUnit: item.defaultUnit,
         }));
 
-      await bulkCreate({ items: itemsToSave as any });
+      await bulkCreate({ items: itemsToSave });
       await completeOnboarding();
       safeHaptics.success();
 
