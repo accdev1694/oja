@@ -10,7 +10,7 @@ import {
   GlassScreen,
   GlassCard,
   GlassButton,
-  GlassHeader,
+  SimpleHeader,
   colors,
   typography,
   spacing,
@@ -50,7 +50,7 @@ export default function JoinListScreen() {
 
   return (
     <GlassScreen>
-      <GlassHeader title="Join a List" showBack onBack={() => router.back()} />
+      <SimpleHeader title="Join a List" showBack onBack={() => router.back()} />
 
       <SafeKeyboardAwareScrollView
         style={styles.scrollView}

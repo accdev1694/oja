@@ -27,7 +27,7 @@ import { impactAsync, ImpactFeedbackStyle } from "expo-haptics";
 import {
   GlassScreen,
   GlassCard,
-  GlassHeader,
+  SimpleHeader,
   GlassProgressBar,
   GlassCollapsible,
   GlassToast,
@@ -147,7 +147,7 @@ export default function InsightsScreen() {
   if (loading) {
     return (
       <GlassScreen>
-        <GlassHeader title="Insights" showBack onBack={() => router.back()} />
+        <SimpleHeader title="Insights" showBack onBack={() => router.back()} />
         <View style={styles.loading}>
           <SkeletonCard />
           <SkeletonCard />
@@ -159,7 +159,7 @@ export default function InsightsScreen() {
 
   return (
     <GlassScreen>
-      <GlassHeader
+      <SimpleHeader
         title={firstName ? `${firstName}'s Insights` : "Insights"}
         subtitle={
           savingsJar && savingsJar.totalSaved > 0

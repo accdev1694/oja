@@ -19,7 +19,7 @@ import {
   GlassScreen,
   GlassCard,
   GlassButton,
-  GlassHeader,
+  SimpleHeader,
   GlassToast,
   colors,
   typography,
@@ -173,7 +173,7 @@ export default function CreateListFromReceiptScreen() {
   if (receipts === undefined) {
     return (
       <GlassScreen>
-        <GlassHeader title="Create from Receipt" showBack onBack={() => router.back()} />
+        <SimpleHeader title="Create from Receipt" showBack onBack={() => router.back()} />
         <View style={styles.centered}>
           <ActivityIndicator color={colors.accent.primary} size="large" />
         </View>
@@ -188,7 +188,7 @@ export default function CreateListFromReceiptScreen() {
 
     return (
       <GlassScreen>
-        <GlassHeader
+        <SimpleHeader
           title="Review Receipt"
           showBack
           onBack={handleBackToPicker}
@@ -323,7 +323,7 @@ export default function CreateListFromReceiptScreen() {
 
   return (
     <GlassScreen>
-      <GlassHeader title="Create from Receipt" showBack onBack={() => router.back()} />
+      <SimpleHeader title="Create from Receipt" showBack onBack={() => router.back()} />
 
       <ScrollView
         style={styles.scrollView}

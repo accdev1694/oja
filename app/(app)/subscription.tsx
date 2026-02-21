@@ -17,7 +17,7 @@ import {
   GlassScreen,
   GlassCard,
   GlassButton,
-  GlassHeader,
+  SimpleHeader,
   GlassModal,
   SkeletonCard,
   colors,
@@ -141,7 +141,7 @@ export default function SubscriptionScreen() {
   if (loading) {
     return (
       <GlassScreen>
-        <GlassHeader title="Premium" showBack onBack={() => router.back()} />
+        <SimpleHeader title="Premium" showBack onBack={() => router.back()} />
         <View style={styles.loading}>
           <SkeletonCard />
           <SkeletonCard />
@@ -153,7 +153,7 @@ export default function SubscriptionScreen() {
 
   return (
     <GlassScreen>
-      <GlassHeader
+      <SimpleHeader
         title="Premium & Rewards"
         showBack
         onBack={() => router.back()}

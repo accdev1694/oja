@@ -20,7 +20,7 @@ import {
   GlassScreen,
   GlassCard,
   GlassButton,
-  GlassHeader,
+  SimpleHeader,
   SkeletonCard,
   colors,
   typography,
@@ -41,7 +41,7 @@ export default function AdminScreen() {
   if (analytics === null) {
     return (
       <GlassScreen>
-        <GlassHeader title="Admin" showBack onBack={() => router.back()} />
+        <SimpleHeader title="Admin" showBack onBack={() => router.back()} />
         <View style={styles.accessDenied}>
           <MaterialCommunityIcons name="shield-lock-outline" size={64} color={colors.semantic.danger} />
           <Text style={styles.accessTitle}>Access Denied</Text>
@@ -54,7 +54,7 @@ export default function AdminScreen() {
   if (loading) {
     return (
       <GlassScreen>
-        <GlassHeader title="Admin Dashboard" showBack onBack={() => router.back()} />
+        <SimpleHeader title="Admin Dashboard" showBack onBack={() => router.back()} />
         <View style={styles.loading}>
           <SkeletonCard />
           <SkeletonCard />
@@ -74,7 +74,7 @@ export default function AdminScreen() {
 
   return (
     <GlassScreen>
-      <GlassHeader title="Admin Dashboard" subtitle="Platform management" showBack onBack={() => router.back()} />
+      <SimpleHeader title="Admin Dashboard" subtitle="Platform management" showBack onBack={() => router.back()} />
 
       {/* Tab Bar */}
       <View style={styles.tabBar}>

@@ -8,7 +8,7 @@ import {
   GlassScreen,
   GlassCard,
   GlassButton,
-  GlassHeader,
+  SimpleHeader,
   SkeletonCard,
   colors,
   typography,
@@ -85,7 +85,7 @@ export default function NotificationsScreen() {
   if (notifications === undefined) {
     return (
       <GlassScreen>
-        <GlassHeader title="Notifications" showBack onBack={() => router.back()} />
+        <SimpleHeader title="Notifications" showBack onBack={() => router.back()} />
         <View style={styles.loading}>
           <SkeletonCard />
           <SkeletonCard />
@@ -97,7 +97,7 @@ export default function NotificationsScreen() {
 
   return (
     <GlassScreen>
-      <GlassHeader
+      <SimpleHeader
         title="Notifications"
         showBack
         onBack={() => router.back()}

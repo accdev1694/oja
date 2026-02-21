@@ -184,7 +184,6 @@ export function GlassHeader({
   topRightElement,
   style,
 }: GlassHeaderProps) {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const handleBack = () => {
@@ -196,7 +195,7 @@ export function GlassHeader({
   };
 
   const headerContent = (
-    <View style={[styles.headerOuter, { paddingTop: insets.top }]}>
+    <View style={styles.headerOuter}>
       {/* Row 1: Back + Title */}
       <View style={styles.headerTopRow}>
         <View style={styles.leftContainer}>
@@ -280,6 +279,7 @@ const styles = StyleSheet.create({
   container: {
     borderBottomWidth: 1,
     borderBottomColor: colors.glass.border,
+    marginBottom: spacing.sm,
   },
   solidBackground: {
     backgroundColor: `${colors.background.secondary}F5`, // 96% opacity, matches SimpleHeader
@@ -289,22 +289,22 @@ const styles = StyleSheet.create({
   },
   headerOuter: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xs,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
   },
   headerTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 40,
+    minHeight: 32,
   },
   headerBottomRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingLeft: 44 + spacing.md,
-    marginTop: -4,
+    paddingLeft: 36 + spacing.sm,
   },
   leftContainer: {
-    minWidth: 44,
+    minWidth: 36,
     alignItems: "flex-start",
   },
   rightContainer: {
@@ -338,9 +338,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.glass.background,
@@ -383,17 +383,27 @@ const styles = StyleSheet.create({
 });
 
 // =============================================================================
-// SIMPLE HEADER (no navigation features)
+// SIMPLE HEADER
 // =============================================================================
 
 export interface SimpleHeaderProps {
   title: string;
   subtitle?: string;
   rightElement?: React.ReactNode;
+  /** Element shown at the right of the title row (e.g. notification bell) */
+  topRightElement?: React.ReactNode;
+  /** Element shown at the right of the subtitle row */
+  bottomRightElement?: React.ReactNode;
+  /** Show back button */
+  showBack?: boolean;
+  /** Custom back handler (defaults to router.back) */
+  onBack?: () => void;
   /** Include safe area top padding (set false when used inside GlassScreen) */
   includeSafeArea?: boolean;
   /** Optional accent color shown as a subtle dot next to the title */
   accentColor?: string;
+  /** Override title text styles */
+  titleStyle?: StyleProp<import("react-native").TextStyle>;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -401,11 +411,25 @@ export function SimpleHeader({
   title,
   subtitle,
   rightElement,
+  topRightElement,
+  bottomRightElement,
+  showBack = false,
+  onBack,
   includeSafeArea = false, // Default false - assumes used inside GlassScreen which handles safe area
   accentColor,
+  titleStyle,
   style,
 }: SimpleHeaderProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      router.back();
+    }
+  };
 
   return (
     <View
@@ -416,11 +440,20 @@ export function SimpleHeader({
       ]}
     >
       <View style={styles.simpleHeaderContent}>
-        <Text style={[styles.simpleTitle, { flex: 1 }]}>{title}</Text>
+        {showBack && <BackButton onPress={handleBack} />}
+        <Text style={[styles.simpleTitle, { flex: 1 }, titleStyle]} numberOfLines={1}>{title}</Text>
+        {topRightElement}
         {rightElement}
       </View>
-      {subtitle && (
-        <Text style={styles.simpleSubtitle}>{subtitle}</Text>
+      {(subtitle || bottomRightElement) && (
+        <View style={[{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const }, showBack && { marginLeft: 32 + spacing.sm }]}>
+          {subtitle ? (
+            <Text style={styles.simpleSubtitle}>{subtitle}</Text>
+          ) : (
+            <View />
+          )}
+          {bottomRightElement}
+        </View>
       )}
     </View>
   );
@@ -441,8 +474,9 @@ Object.assign(styles, {
   },
   simpleHeaderContent: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
+    gap: spacing.sm,
   },
   simpleHeaderText: {
     flex: 1,
@@ -456,7 +490,6 @@ Object.assign(styles, {
     fontSize: 12,
     lineHeight: 16,
     color: colors.text.secondary,
-    marginTop: spacing.xs,
   },
 });
 

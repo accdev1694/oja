@@ -9,7 +9,7 @@ import Animated from "react-native-reanimated";
 import {
   GlassScreen,
   GlassCard,
-  GlassHeader,
+  SimpleHeader,
   SkeletonCard,
   colors,
   typography,
@@ -40,7 +40,7 @@ export default function AIUsageScreen() {
   if (usageSummary === undefined) {
     return (
       <GlassScreen>
-        <GlassHeader
+        <SimpleHeader
           title="AI Usage"
           subtitle="Loading..."
           showBack
@@ -71,7 +71,7 @@ export default function AIUsageScreen() {
 
   return (
     <GlassScreen>
-      <GlassHeader
+      <SimpleHeader
         title="AI Usage"
         subtitle="This month"
         showBack

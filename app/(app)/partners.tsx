@@ -11,7 +11,7 @@ import {
   GlassScreen,
   GlassCard,
   GlassButton,
-  GlassHeader,
+  SimpleHeader,
   GlassModal,
   colors,
   typography,
@@ -117,7 +117,7 @@ export default function PartnersScreen() {
 
   return (
     <GlassScreen>
-      <GlassHeader
+      <SimpleHeader
         title="Partners"
         subtitle={partners ? `${partners.length} partner${partners.length !== 1 ? "s" : ""}` : "Loading..."}
         showBack

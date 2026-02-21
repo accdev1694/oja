@@ -18,7 +18,7 @@ import {
   GlassScreen,
   GlassCard,
   GlassButton,
-  GlassHeader,
+  SimpleHeader,
   GlassSkeleton,
   GlassToast,
   colors,
@@ -161,7 +161,7 @@ export default function TripSummaryScreen() {
   if (summary === undefined) {
     return (
       <GlassScreen>
-        <GlassHeader title="Trip Summary" showBack onBack={() => router.back()} />
+        <SimpleHeader title="Trip Summary" showBack onBack={() => router.back()} />
         <View style={styles.container}>
           <GlassSkeleton variant="card" />
           <GlassSkeleton variant="card" />
@@ -174,7 +174,7 @@ export default function TripSummaryScreen() {
   if (!summary) {
     return (
       <GlassScreen>
-        <GlassHeader title="Trip Summary" showBack onBack={() => router.back()} />
+        <SimpleHeader title="Trip Summary" showBack onBack={() => router.back()} />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Trip not found</Text>
           <GlassButton variant="primary" onPress={() => router.back()}>
@@ -210,7 +210,7 @@ export default function TripSummaryScreen() {
 
   return (
     <GlassScreen>
-      <GlassHeader
+      <SimpleHeader
         title={list.name}
         showBack
         onBack={() => router.back()}
