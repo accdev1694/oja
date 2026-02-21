@@ -862,7 +862,6 @@ export default function PantryScreen() {
             <View style={styles.headerButtons}>
               <Pressable style={styles.addButton} onPress={handleOpenAddModal}>
                 <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
-                <Text style={styles.addButtonText}>Add</Text>
               </Pressable>
               <Pressable
                 style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
@@ -1163,8 +1162,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   filterButton: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     borderRadius: borderRadius.full,
     backgroundColor: colors.glass.background,
     alignItems: "center",
@@ -1233,20 +1232,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   addButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    height: 38,
-    paddingHorizontal: spacing.md,
+    width: 36,
+    height: 36,
     borderRadius: borderRadius.full,
     backgroundColor: `${colors.accent.primary}20`,
     borderWidth: 1,
     borderColor: `${colors.accent.primary}40`,
-  },
-  addButtonText: {
-    ...typography.labelMedium,
-    color: colors.accent.primary,
-    fontWeight: "700",
+    alignItems: "center",
+    justifyContent: "center",
   },
   // Essentials section header
   essentialsSectionTitle: {

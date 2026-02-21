@@ -208,19 +208,16 @@ export default function PartnersScreen() {
             <View style={styles.inviteIconCircle}>
               <MaterialCommunityIcons name="content-copy" size={24} color={colors.text.primary} />
             </View>
-            <Text style={styles.inviteActionLabel}>Copy</Text>
           </Pressable>
           <Pressable style={styles.inviteActionBtn} onPress={handleShareCode}>
             <View style={styles.inviteIconCircle}>
               <MaterialCommunityIcons name="share-variant" size={24} color={colors.text.primary} />
             </View>
-            <Text style={styles.inviteActionLabel}>Share</Text>
           </Pressable>
           <Pressable style={styles.inviteActionBtn} onPress={() => setShowInviteModal(false)}>
             <View style={[styles.inviteIconCircle, styles.inviteDoneCircle]}>
               <MaterialCommunityIcons name="check-bold" size={28} color={colors.text.primary} />
             </View>
-            <Text style={[styles.inviteActionLabel, styles.inviteDoneLabel]}>Done</Text>
           </Pressable>
         </View>
       </GlassModal>
@@ -287,15 +284,6 @@ const styles = StyleSheet.create({
   inviteDoneCircle: {
     backgroundColor: `${colors.accent.primary}30`,
     borderColor: colors.accent.primary,
-  },
-  inviteActionLabel: {
-    ...typography.bodySmall,
-    color: colors.text.secondary,
-    fontWeight: "600",
-  },
-  inviteDoneLabel: {
-    color: colors.accent.primary,
-    fontWeight: "700",
   },
   leaveButton: {
     marginTop: spacing.lg,

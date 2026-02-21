@@ -23,7 +23,6 @@ import Animated, {
 import {
   GlassScreen,
   GlassCard,
-  GlassButton,
   SimpleHeader,
   SkeletonCard,
   EmptyLists,
@@ -222,16 +221,13 @@ export default function ListsScreen() {
               )}
             </Pressable>
             {tabMode === "active" && (
-              <GlassButton
-                variant="primary"
-                size="sm"
-                icon="plus"
+              <Pressable
+                style={[styles.addButton, isCreating && { opacity: 0.5 }]}
                 onPress={handleCreateList}
-                loading={isCreating}
                 disabled={isCreating}
               >
-                New List
-              </GlassButton>
+                <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
+              </Pressable>
             )}
           </View>
         }
@@ -252,6 +248,11 @@ export default function ListsScreen() {
           <Text style={[styles.tabText, tabMode === "active" && styles.tabTextActive]}>
             Active
           </Text>
+          {(displayList.length + activeShared.length) > 0 && (
+            <View style={styles.tabBadge}>
+              <Text style={styles.tabBadgeText}>{displayList.length + activeShared.length}</Text>
+            </View>
+          )}
         </Pressable>
         <Pressable
           style={styles.tab}
@@ -349,7 +350,6 @@ export default function ListsScreen() {
               list={list}
               onPress={handleListPress}
               onDelete={handleDeletePress}
-              formatDateTime={stableFormatDateTime}
             />
           ))}
 
@@ -522,19 +522,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   tabBadge: {
-    backgroundColor: colors.accent.primary,
-    borderRadius: borderRadius.sm,
-    minWidth: 20,
+    backgroundColor: `${colors.accent.primary}20`,
+    width: 20,
     height: 20,
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: spacing.sm,
   },
   tabBadgeText: {
-    ...typography.labelSmall,
-    color: colors.text.primary,
+    color: colors.accent.primary,
     fontWeight: "700",
-    fontSize: 11,
+    fontSize: 10,
   },
 
   // Empty history
@@ -574,7 +572,17 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.md,
+  },
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.full,
+    backgroundColor: `${colors.accent.primary}20`,
+    borderWidth: 1,
+    borderColor: `${colors.accent.primary}40`,
+    alignItems: "center",
+    justifyContent: "center",
   },
   bellButton: {
     position: "relative",

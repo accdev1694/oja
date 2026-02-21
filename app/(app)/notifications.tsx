@@ -103,9 +103,7 @@ export default function NotificationsScreen() {
         onBack={() => router.back()}
         rightElement={
           notifications.length > 0 ? (
-            <GlassButton variant="ghost" size="sm" onPress={handleMarkAllRead}>
-              Read All
-            </GlassButton>
+            <GlassButton variant="ghost" size="sm" icon="check-all" onPress={handleMarkAllRead} />
           ) : undefined
         }
       />

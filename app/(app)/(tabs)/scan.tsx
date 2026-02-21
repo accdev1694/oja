@@ -390,9 +390,7 @@ export default function ScanScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             }}
             style={{ marginTop: spacing.xl }}
-          >
-            Cancel
-          </GlassButton>
+          />
         </View>
       </GlassScreen>
     );
@@ -421,9 +419,7 @@ export default function ScanScreen() {
               onPress={handleRetake}
               disabled={isUploading}
               style={styles.actionButton}
-            >
-              Retake
-            </GlassButton>
+            />
 
             <GlassButton
               variant="primary"
