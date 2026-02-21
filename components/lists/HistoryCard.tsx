@@ -29,6 +29,7 @@ export interface HistoryCardProps {
     createdAt: number;
     storeName?: string;
     storeSegments?: Array<{ storeId: string; storeName: string; switchedAt: number }>;
+    listNumber?: number;
   };
   onPress: (id: Id<"shoppingLists">) => void;
   formatDateTime: (timestamp: number) => string;
@@ -103,6 +104,9 @@ export const HistoryCard = React.memo(function HistoryCard({ list, onPress, form
                 {list.name}
               </Text>
             </View>
+            {list.listNumber != null && (
+              <Text style={styles.listNumberText}>#{list.listNumber}</Text>
+            )}
           </View>
 
           {/* Middle row: savings/spend + status badge */}
@@ -143,7 +147,7 @@ export const HistoryCard = React.memo(function HistoryCard({ list, onPress, form
             </View>
           </View>
 
-          {/* Bottom row: stores + date */}
+          {/* Bottom row: number + stores + date */}
           <View style={styles.bottomRow}>
             <View style={styles.bottomLeft}>
               {storeNames.length > 0 && (
@@ -174,6 +178,7 @@ export const HistoryCard = React.memo(function HistoryCard({ list, onPress, form
     prev.list.storeName === next.list.storeName &&
     prev.list.storeSegments?.length === next.list.storeSegments?.length &&
     prev.list.name === next.list.name &&
+    prev.list.listNumber === next.list.listNumber &&
     prev.onPress === next.onPress &&
     prev.formatDateTime === next.formatDateTime
   );
@@ -199,6 +204,11 @@ const styles = StyleSheet.create({
     ...typography.headlineSmall,
     color: colors.text.primary,
     flex: 1,
+  },
+  listNumberText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginLeft: spacing.sm,
   },
   middleRow: {
     flexDirection: "row",
@@ -238,6 +248,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
+    gap: spacing.sm,
   },
   metaItem: {
     flexDirection: "row",

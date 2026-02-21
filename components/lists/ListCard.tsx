@@ -40,6 +40,9 @@ export interface ListCardProps {
     shoppingStartedAt?: number;
     pausedAt?: number;
     actualTotal?: number;
+    listNumber?: number;
+    storeName?: string;
+    storeSegments?: Array<{ storeId: string; storeName: string; switchedAt: number }>;
   };
   onPress: (id: Id<"shoppingLists">) => void;
   onDelete: (id: Id<"shoppingLists">, name: string) => void;
@@ -242,6 +245,16 @@ export const ListCard = React.memo(function ListCard({
 
   const spent = list.totalEstimatedCost ?? 0;
 
+  // Collect unique store names
+  const storeNames: string[] = [];
+  if (list.storeSegments && list.storeSegments.length > 0) {
+    for (const seg of list.storeSegments) {
+      if (!storeNames.includes(seg.storeName)) storeNames.push(seg.storeName);
+    }
+  } else if (list.storeName) {
+    storeNames.push(list.storeName);
+  }
+
   // Paused state gets a subtle amber left border
   const cardBorderStyle: ViewStyle | undefined = isPaused
     ? { borderLeftWidth: 3, borderLeftColor: colors.accent.warning }
@@ -270,6 +283,9 @@ export const ListCard = React.memo(function ListCard({
                 {displayName}
               </Text>
             </View>
+            {list.listNumber != null && (
+              <Text style={styles.listNumberText}>#{list.listNumber}</Text>
+            )}
           </View>
 
           {/* Budget mini-bar */}
@@ -277,40 +293,57 @@ export const ListCard = React.memo(function ListCard({
             <BudgetMiniBar budget={list.budget} spent={spent} />
           )}
 
-          {/* Budget info */}
-          {list.budget != null && list.budget > 0 && (
+          {/* Budget + store row */}
+          {list.budget != null && list.budget > 0 ? (
             <View style={styles.budgetRow}>
-              <MaterialCommunityIcons
-                name="wallet-outline"
-                size={16}
-                color={
-                  budgetStatus === "exceeded"
-                    ? colors.semantic.danger
-                    : budgetStatus === "caution"
-                      ? colors.semantic.warning
-                      : colors.accent.primary
-                }
-              />
-              <Text
-                style={[
-                  styles.budgetText,
-                  {
-                    color:
-                      budgetStatus === "exceeded"
-                        ? colors.semantic.danger
-                        : budgetStatus === "caution"
-                          ? colors.semantic.warning
-                          : colors.accent.primary,
-                  },
-                ]}
-              >
-                {"\u00A3"}{list.budget.toFixed(2)} budget
-                {list.totalEstimatedCost
-                  ? ` \u2022 \u00A3${list.totalEstimatedCost.toFixed(2)} estimated`
-                  : ""}
+              <View style={styles.budgetLeft}>
+                <MaterialCommunityIcons
+                  name="wallet-outline"
+                  size={16}
+                  color={
+                    budgetStatus === "exceeded"
+                      ? colors.semantic.danger
+                      : budgetStatus === "caution"
+                        ? colors.semantic.warning
+                        : colors.accent.primary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.budgetText,
+                    {
+                      color:
+                        budgetStatus === "exceeded"
+                          ? colors.semantic.danger
+                          : budgetStatus === "caution"
+                            ? colors.semantic.warning
+                            : colors.accent.primary,
+                    },
+                  ]}
+                >
+                  {"\u00A3"}{list.budget.toFixed(2)} budget
+                  {list.totalEstimatedCost
+                    ? ` \u2022 \u00A3${list.totalEstimatedCost.toFixed(2)} est.`
+                    : ""}
+                </Text>
+              </View>
+              {storeNames.length > 0 && (
+                <View style={styles.storeInfo}>
+                  <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    {storeNames.join(" \u2022 ")}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : storeNames.length > 0 ? (
+            <View style={styles.storeRow}>
+              <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
+              <Text style={styles.metaText} numberOfLines={1}>
+                {storeNames.join(" \u2022 ")}
               </Text>
             </View>
-          )}
+          ) : null}
 
           {/* Meta row: date, progress, status badge, delete */}
           <View style={styles.metaRow}>
@@ -391,6 +424,9 @@ export const ListCard = React.memo(function ListCard({
     prev.list.actualTotal === next.list.actualTotal &&
     prev.list.createdAt === next.list.createdAt &&
     prev.list.name === next.list.name &&
+    prev.list.listNumber === next.list.listNumber &&
+    prev.list.storeName === next.list.storeName &&
+    prev.list.storeSegments?.length === next.list.storeSegments?.length &&
     prev.onPress === next.onPress &&
     prev.onDelete === next.onDelete &&
     prev.formatDateTime === next.formatDateTime
@@ -422,6 +458,11 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     flex: 1,
   },
+  listNumberText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginLeft: spacing.sm,
+  },
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -447,12 +488,30 @@ const styles = StyleSheet.create({
   budgetRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
+    justifyContent: "space-between",
     marginBottom: spacing.sm,
+  },
+  budgetLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    flex: 1,
   },
   budgetText: {
     ...typography.bodyMedium,
     fontWeight: "600",
+  },
+  storeInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    flexShrink: 1,
+  },
+  storeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
   metaRow: {
     flexDirection: "row",
