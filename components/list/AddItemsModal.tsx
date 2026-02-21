@@ -12,7 +12,17 @@ import {
   ScrollView,
   type ListRenderItemInfo,
 } from "react-native";
-import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
+import Animated, {
+  FadeInDown,
+  FadeOut,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  cancelAnimation,
+  Easing,
+} from "react-native-reanimated";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -81,6 +91,7 @@ interface AddedFeedbackItem {
 }
 
 type ActiveView = "search" | "pantry";
+type PantryFilter = "low" | "all";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pantry Row Component (memoized)
@@ -197,6 +208,7 @@ export function AddItemsModal({
   const [manualPrice, setManualPrice] = useState("");
   const [editingField, setEditingField] = useState<"size" | "qty" | "price" | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("search");
+  const [pantryFilter, setPantryFilter] = useState<PantryFilter>("low");
   const [selectedSuggestion, setSelectedSuggestion] = useState<ItemSuggestion | null>(null);
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>(undefined);
   const [scannedCategory, setScannedCategory] = useState<string | undefined>(undefined);
@@ -204,6 +216,30 @@ export function AddItemsModal({
   const [sessionAddCount, setSessionAddCount] = useState(0);
   const [isAdding, setIsAdding] = useState(false);
   const feedbackIdRef = useRef(0);
+
+  // Gentle pulse for capsule + icons
+  const capsulePulse = useSharedValue(1);
+
+  useEffect(() => {
+    if (activeView === "pantry") {
+      capsulePulse.value = withRepeat(
+        withSequence(
+          withTiming(1.2, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        false,
+      );
+    } else {
+      cancelAnimation(capsulePulse);
+      capsulePulse.value = 1;
+    }
+    return () => cancelAnimation(capsulePulse);
+  }, [activeView, capsulePulse]);
+
+  const capsulePulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: capsulePulse.value }],
+  }));
   const { alert } = useGlassAlert();
 
   const itemInputRef = useRef<TextInput>(null);
@@ -285,11 +321,12 @@ export function AddItemsModal({
   );
 
   // Pantry items split into sections
-  const { outOfStock, runningLow } = useMemo(() => {
-    if (!pantryItems) return { outOfStock: [], runningLow: [] };
+  const { outOfStock, runningLow, fullyStocked } = useMemo(() => {
+    if (!pantryItems) return { outOfStock: [], runningLow: [], fullyStocked: [] };
 
     const out: PantryItemData[] = [];
     const low: PantryItemData[] = [];
+    const stocked: PantryItemData[] = [];
 
     for (const item of pantryItems) {
       const data: PantryItemData = {
@@ -304,30 +341,36 @@ export function AddItemsModal({
       };
       if (item.stockLevel === "out") out.push(data);
       else if (item.stockLevel === "low") low.push(data);
+      else stocked.push(data);
     }
 
-    return { outOfStock: out, runningLow: low };
+    return { outOfStock: out, runningLow: low, fullyStocked: stocked };
   }, [pantryItems]);
 
+  // Flat list of pantry items based on active filter
   const pantryListData = useMemo(() => {
-    type SectionHeader = { type: "header"; title: string; count: number };
-    type PantryEntry = { type: "item"; data: PantryItemData };
-    const entries: (SectionHeader | PantryEntry)[] = [];
-
-    if (outOfStock.length > 0) {
-      entries.push({ type: "header", title: "Out of Stock", count: outOfStock.length });
-      for (const item of outOfStock) entries.push({ type: "item", data: item });
+    if (pantryFilter === "low") {
+      return [...outOfStock, ...runningLow];
     }
-    if (runningLow.length > 0) {
-      entries.push({ type: "header", title: "Running Low", count: runningLow.length });
-      for (const item of runningLow) entries.push({ type: "item", data: item });
-    }
-
-    return entries;
-  }, [outOfStock, runningLow]);
+    return [...outOfStock, ...runningLow, ...fullyStocked];
+  }, [outOfStock, runningLow, fullyStocked, pantryFilter]);
 
   const isPantryLoading = pantryItems === undefined;
   const pantryNeedCount = outOfStock.length + runningLow.length;
+  const totalPantryCount = (pantryItems?.length) ?? 0;
+
+  // Addable counts per filter mode (items not already on list)
+  const lowAddableCount = useMemo(() => {
+    return [...outOfStock, ...runningLow].filter(
+      (item) => !isItemOnList(item.name)
+    ).length;
+  }, [outOfStock, runningLow, isItemOnList]);
+
+  const allAddableCount = useMemo(() => {
+    return [...outOfStock, ...runningLow, ...fullyStocked].filter(
+      (item) => !isItemOnList(item.name)
+    ).length;
+  }, [outOfStock, runningLow, fullyStocked, isItemOnList]);
 
   // ── Auto-select top suggestion as user types ─────────────────────────────
   useEffect(() => {
@@ -536,6 +579,56 @@ export function AddItemsModal({
     [addItemToList]
   );
 
+  const [bulkAddingFilter, setBulkAddingFilter] = useState<PantryFilter | null>(null);
+
+  const executeBulkAdd = useCallback(async (filter: PantryFilter) => {
+    const items = filter === "low"
+      ? [...outOfStock, ...runningLow]
+      : [...outOfStock, ...runningLow, ...fullyStocked];
+    const itemsToAdd = items.filter((item) => !isItemOnList(item.name));
+    if (itemsToAdd.length === 0) return;
+
+    haptic("medium");
+    setBulkAddingFilter(filter);
+
+    try {
+      for (const item of itemsToAdd) {
+        await addItemToList({
+          name: item.name,
+          category: item.category,
+          size: item.defaultSize,
+          unit: item.defaultUnit,
+          estimatedPrice: item.lastPrice,
+          quantity: 1,
+          source: "pantry",
+          pantryItemId: item._id,
+        });
+      }
+      haptic("success");
+    } catch (error) {
+      console.error("Bulk add failed:", error);
+      haptic("error");
+    } finally {
+      setBulkAddingFilter(null);
+    }
+  }, [outOfStock, runningLow, fullyStocked, isItemOnList, addItemToList]);
+
+  const addAllFilteredItems = useCallback((filter: PantryFilter) => {
+    const count = filter === "low" ? lowAddableCount : allAddableCount;
+    if (count === 0) return;
+
+    haptic("light");
+    const label = filter === "low" ? "low" : "pantry";
+    alert(
+      `Add ${count} item${count !== 1 ? "s" : ""}?`,
+      `This will add all ${label} items to your shopping list.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Add All", onPress: () => executeBulkAdd(filter) },
+      ]
+    );
+  }, [lowAddableCount, allAddableCount, alert, executeBulkAdd]);
+
   const handleAddManualItem = useCallback(async () => {
     const trimmed = itemName.trim();
     if (!trimmed) return;
@@ -664,51 +757,26 @@ export function AddItemsModal({
     setSelectedVariantName(undefined);
     setScannedCategory(undefined);
     setActiveView("search");
+    setPantryFilter("low");
     clearSuggestions();
     onClose();
   }, [onClose, clearSuggestions]);
 
   // ── Render helpers ──────────────────────────────────────────────────────────
 
-  const renderPantryEntry = useCallback(
-    ({
-      item,
-    }: ListRenderItemInfo<
-      | { type: "header"; title: string; count: number }
-      | { type: "item"; data: PantryItemData }
-    >) => {
-      if (item.type === "header") {
-        return (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionHeaderText}>{item.title}</Text>
-            <View style={styles.sectionBadge}>
-              <Text style={styles.sectionBadgeText}>{item.count}</Text>
-            </View>
-          </View>
-        );
-      }
-
-      return (
-        <PantryRow
-          item={item.data}
-          isOnList={isItemOnList(item.data.name)}
-          onAdd={addPantryItem}
-        />
-      );
-    },
+  const renderPantryItem = useCallback(
+    ({ item }: ListRenderItemInfo<PantryItemData>) => (
+      <PantryRow
+        item={item}
+        isOnList={isItemOnList(item.name)}
+        onAdd={addPantryItem}
+      />
+    ),
     [isItemOnList, addPantryItem]
   );
 
   const pantryKeyExtractor = useCallback(
-    (
-      item:
-        | { type: "header"; title: string; count: number }
-        | { type: "item"; data: PantryItemData },
-      index: number
-    ) =>
-      item.type === "header"
-        ? `header-${item.title}`
-        : `pantry-${item.data._id}-${index}`,
+    (item: PantryItemData, index: number) => `pantry-${item._id}-${index}`,
     []
   );
 
@@ -1003,27 +1071,164 @@ export function AddItemsModal({
                 <ActivityIndicator size="small" color={colors.accent.primary} />
                 <Text style={styles.loadingText}>Loading pantry...</Text>
               </View>
-            ) : pantryListData.length === 0 ? (
+            ) : totalPantryCount === 0 ? (
               <View style={styles.emptyContainer}>
                 <MaterialCommunityIcons
                   name="fridge-off-outline"
                   size={48}
                   color={colors.text.disabled}
                 />
-                <Text style={styles.emptyText}>No items need restocking</Text>
+                <Text style={styles.emptyText}>Your pantry is empty</Text>
                 <Text style={styles.emptySubtext}>
-                  Items marked as &quot;Out&quot; or &quot;Low&quot; in your pantry will appear here
+                  Add items to your pantry to quickly restock from here
                 </Text>
               </View>
             ) : (
-              <FlatList
-                data={pantryListData}
-                renderItem={renderPantryEntry}
-                keyExtractor={pantryKeyExtractor}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              />
+              <>
+                {/* Capsule switcher: + Low Items / + All Items */}
+                <View style={styles.pantryCapsuleSwitcher}>
+                  {/* Low Items capsule */}
+                  <View style={[
+                    styles.pantryCapsule,
+                    pantryFilter === "low" && styles.pantryCapsuleActive,
+                  ]}>
+                    <Animated.View style={lowAddableCount > 0 ? capsulePulseStyle : undefined}>
+                      <Pressable
+                        style={styles.capsuleAddButton}
+                        onPress={() => addAllFilteredItems("low")}
+                        disabled={lowAddableCount === 0 || bulkAddingFilter === "low"}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        {bulkAddingFilter === "low" ? (
+                          <ActivityIndicator size={18} color={pantryFilter === "low" ? colors.accent.warning : colors.text.tertiary} />
+                        ) : (
+                          <MaterialCommunityIcons
+                            name="plus-circle-outline"
+                            size={22}
+                            color={
+                              lowAddableCount === 0
+                                ? colors.text.disabled
+                                : pantryFilter === "low"
+                                  ? colors.accent.warning
+                                  : colors.text.tertiary
+                            }
+                          />
+                        )}
+                      </Pressable>
+                    </Animated.View>
+                    <Pressable
+                      style={styles.capsuleLabelArea}
+                      onPress={() => { haptic("light"); setPantryFilter("low"); }}
+                    >
+                      <Text
+                        style={[
+                          styles.pantryCapsuleText,
+                          pantryFilter === "low" && styles.pantryCapsuleTextLow,
+                        ]}
+                      >
+                        Low Items
+                      </Text>
+                      <View
+                        style={[
+                          styles.pantryCapsuleBadge,
+                          pantryFilter === "low" && styles.pantryCapsuleBadgeLow,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.pantryCapsuleBadgeText,
+                            pantryFilter === "low" && styles.pantryCapsuleBadgeTextLow,
+                          ]}
+                        >
+                          {pantryNeedCount}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  </View>
+
+                  {/* All Items capsule */}
+                  <View style={[
+                    styles.pantryCapsule,
+                    pantryFilter === "all" && styles.pantryCapsuleActive,
+                  ]}>
+                    <Animated.View style={allAddableCount > 0 ? capsulePulseStyle : undefined}>
+                      <Pressable
+                        style={styles.capsuleAddButton}
+                        onPress={() => addAllFilteredItems("all")}
+                        disabled={allAddableCount === 0 || bulkAddingFilter === "all"}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        {bulkAddingFilter === "all" ? (
+                          <ActivityIndicator size={18} color={pantryFilter === "all" ? colors.accent.primary : colors.text.tertiary} />
+                        ) : (
+                          <MaterialCommunityIcons
+                            name="plus-circle-outline"
+                            size={22}
+                            color={
+                              allAddableCount === 0
+                                ? colors.text.disabled
+                                : pantryFilter === "all"
+                                  ? colors.accent.primary
+                                  : colors.text.tertiary
+                            }
+                          />
+                        )}
+                      </Pressable>
+                    </Animated.View>
+                    <Pressable
+                      style={styles.capsuleLabelArea}
+                      onPress={() => { haptic("light"); setPantryFilter("all"); }}
+                    >
+                      <Text
+                        style={[
+                          styles.pantryCapsuleText,
+                          pantryFilter === "all" && styles.pantryCapsuleTextAll,
+                        ]}
+                      >
+                        All Items
+                      </Text>
+                      <View
+                        style={[
+                          styles.pantryCapsuleBadge,
+                          pantryFilter === "all" && styles.pantryCapsuleBadgeAll,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.pantryCapsuleBadgeText,
+                            pantryFilter === "all" && styles.pantryCapsuleBadgeTextAll,
+                          ]}
+                        >
+                          {totalPantryCount}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {pantryListData.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <MaterialCommunityIcons
+                      name="check-circle-outline"
+                      size={48}
+                      color={colors.semantic.success}
+                    />
+                    <Text style={styles.emptyText}>All stocked up!</Text>
+                    <Text style={styles.emptySubtext}>
+                      No items need restocking. Switch to &quot;All Items&quot; to browse your full pantry.
+                    </Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={pantryListData}
+                    renderItem={renderPantryItem}
+                    keyExtractor={pantryKeyExtractor}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                  />
+                )}
+              </>
             )}
           </>
         ) : (
@@ -1435,6 +1640,81 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
     width: "100%",
+  },
+
+  // Capsule switcher (pantry filter)
+  pantryCapsuleSwitcher: {
+    flexDirection: "row",
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    backgroundColor: colors.glass.background,
+    borderRadius: borderRadius.lg,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  pantryCapsule: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: borderRadius.md,
+  },
+  capsuleAddButton: {
+    width: 28,
+    height: 28,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  capsuleLabelArea: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  pantryCapsuleActive: {
+    backgroundColor: colors.glass.backgroundActive,
+  },
+  pantryCapsuleText: {
+    ...typography.labelMedium,
+    color: colors.text.tertiary,
+    fontSize: 12,
+  },
+  pantryCapsuleTextLow: {
+    color: colors.accent.warning,
+    fontWeight: "600",
+  },
+  pantryCapsuleTextAll: {
+    color: colors.accent.primary,
+    fontWeight: "600",
+  },
+  pantryCapsuleBadge: {
+    backgroundColor: colors.glass.backgroundHover,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 1,
+    borderRadius: borderRadius.full,
+    minWidth: 20,
+    alignItems: "center",
+  },
+  pantryCapsuleBadgeLow: {
+    backgroundColor: `${colors.accent.warning}30`,
+  },
+  pantryCapsuleBadgeAll: {
+    backgroundColor: `${colors.accent.primary}30`,
+  },
+  pantryCapsuleBadgeText: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    fontSize: 10,
+  },
+  pantryCapsuleBadgeTextLow: {
+    color: colors.accent.warning,
+  },
+  pantryCapsuleBadgeTextAll: {
+    color: colors.accent.primary,
   },
 
   // Section headers (pantry)
