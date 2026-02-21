@@ -46,7 +46,6 @@ export interface ListCardProps {
   };
   onPress: (id: Id<"shoppingLists">) => void;
   onDelete: (id: Id<"shoppingLists">, name: string) => void;
-  formatDateTime: (timestamp: number) => string;
 }
 
 // ---------------------------------------------------------------------------
@@ -113,50 +112,6 @@ const PulseDot = React.memo(function PulseDot({ color }: { color: string }) {
 });
 
 // ---------------------------------------------------------------------------
-// Budget mini-bar
-// ---------------------------------------------------------------------------
-
-function BudgetMiniBar({
-  budget,
-  spent,
-}: {
-  budget: number;
-  spent: number;
-}) {
-  const ratio = Math.min(spent / budget, 1);
-  const isOver = spent > budget;
-
-  return (
-    <View style={miniBarStyles.track}>
-      <View
-        style={[
-          miniBarStyles.fill,
-          {
-            width: `${ratio * 100}%` as ViewStyle["width"],
-            backgroundColor: isOver ? colors.semantic.danger : colors.accent.primary,
-          },
-        ]}
-      />
-    </View>
-  );
-}
-
-const miniBarStyles = StyleSheet.create({
-  track: {
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-    overflow: "hidden",
-  },
-  fill: {
-    height: 3,
-    borderRadius: 1.5,
-  },
-});
-
-// ---------------------------------------------------------------------------
 // Progress text helper
 // ---------------------------------------------------------------------------
 
@@ -192,7 +147,6 @@ export const ListCard = React.memo(function ListCard({
   list,
   onPress,
   onDelete,
-  formatDateTime,
 }: ListCardProps) {
   const scale = useSharedValue(1);
 
@@ -236,15 +190,6 @@ export const ListCard = React.memo(function ListCard({
     !!list.shoppingStartedAt &&
     !!list.pausedAt;
 
-  // Show budget mini-bar for active/shopping states that have a budget
-  const showMiniBar =
-    list.budget != null &&
-    list.budget > 0 &&
-    ((list.status as ListStatus) === "active" ||
-      (list.status as ListStatus) === "shopping");
-
-  const spent = list.totalEstimatedCost ?? 0;
-
   // Collect unique store names
   const storeNames: string[] = [];
   if (list.storeSegments && list.storeSegments.length > 0) {
@@ -273,25 +218,13 @@ export const ListCard = React.memo(function ListCard({
         >
           {/* Header row */}
           <View style={styles.listHeader}>
-            <View style={styles.listTitleContainer}>
-              <MaterialCommunityIcons
-                name="clipboard-list"
-                size={24}
-                color={colors.semantic.lists}
-              />
-              <Text style={styles.listName} numberOfLines={1}>
-                {displayName}
-              </Text>
-            </View>
+            <Text style={styles.listName} numberOfLines={1}>
+              {displayName}
+            </Text>
             {list.listNumber != null && (
               <Text style={styles.listNumberText}>#{list.listNumber}</Text>
             )}
           </View>
-
-          {/* Budget mini-bar */}
-          {showMiniBar && list.budget != null && (
-            <BudgetMiniBar budget={list.budget} spent={spent} />
-          )}
 
           {/* Budget + store row */}
           {list.budget != null && list.budget > 0 ? (
@@ -345,19 +278,9 @@ export const ListCard = React.memo(function ListCard({
             </View>
           ) : null}
 
-          {/* Meta row: date, progress, status badge, delete */}
+          {/* Meta row: progress, status badge, delete */}
           <View style={styles.metaRow}>
             <View style={styles.metaLeft}>
-              <View style={styles.metaItem}>
-                <MaterialCommunityIcons
-                  name="clock-outline"
-                  size={14}
-                  color={colors.text.tertiary}
-                />
-                <Text style={styles.metaText}>
-                  {formatDateTime(list.createdAt)}
-                </Text>
-              </View>
               {progressText && (
                 <View style={styles.metaItem}>
                   <MaterialCommunityIcons
@@ -428,8 +351,7 @@ export const ListCard = React.memo(function ListCard({
     prev.list.storeName === next.list.storeName &&
     prev.list.storeSegments?.length === next.list.storeSegments?.length &&
     prev.onPress === next.onPress &&
-    prev.onDelete === next.onDelete &&
-    prev.formatDateTime === next.formatDateTime
+    prev.onDelete === next.onDelete
   );
 });
 
@@ -446,12 +368,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.sm,
-  },
-  listTitleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    gap: spacing.sm,
   },
   listName: {
     ...typography.headlineSmall,
