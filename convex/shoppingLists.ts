@@ -8,6 +8,29 @@ import { getReceiptIds, pushReceiptId } from "./lib/receiptHelpers";
 import { getIconForItem } from "./iconMapping";
 import { isDuplicateItemName } from "./lib/fuzzyMatch";
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Get next sequential list number for a user (max existing + 1). */
+async function getNextListNumber(
+  ctx: { db: any },
+  userId: Id<"users">
+): Promise<number> {
+  const lists = await ctx.db
+    .query("shoppingLists")
+    .withIndex("by_user", (q: any) => q.eq("userId", userId))
+    .collect();
+
+  let max = 0;
+  for (const l of lists) {
+    if (l.listNumber != null && l.listNumber > max) {
+      max = l.listNumber;
+    }
+  }
+  return max + 1;
+}
+
 /**
  * Get all shopping lists for the current user
  */
@@ -181,6 +204,7 @@ export const create = mutation({
     }
 
     const now = Date.now();
+    const listNumber = await getNextListNumber(ctx, user._id);
 
     const listId = await ctx.db.insert("shoppingLists", {
       userId: user._id,
@@ -190,6 +214,7 @@ export const create = mutation({
       storeName: args.storeName,
       normalizedStoreId: args.normalizedStoreId,
       plannedDate: args.plannedDate,
+      listNumber,
       createdAt: now,
       updatedAt: now,
     });
@@ -248,6 +273,7 @@ export const createFromReceipt = mutation({
 
     const now = Date.now();
     const normalizedStoreId = normalizeStoreName(receipt.storeName);
+    const listNumber = await getNextListNumber(ctx, user._id);
 
     // Smart budget: receipt total rounded up to nearest £5
     const smartBudget = args.budget ?? Math.ceil(receipt.total / 5) * 5;
@@ -264,6 +290,7 @@ export const createFromReceipt = mutation({
       storeName: receipt.storeName,
       ...(normalizedStoreId && { normalizedStoreId }),
       sourceReceiptId: args.receiptId,
+      listNumber,
       createdAt: now,
       updatedAt: now,
     });
@@ -1039,6 +1066,46 @@ export const getHistory = query({
     return [...archived, ...completed].sort(
       (a, b) => (b.completedAt ?? b.updatedAt) - (a.completedAt ?? a.updatedAt)
     );
+  },
+});
+
+/**
+ * Get completed lists enriched with store names.
+ * Used by the scan page list picker for receipt linking.
+ */
+export const getCompletedWithStores = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) return [];
+
+    const completed = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", user._id).eq("status", "completed")
+      )
+      .order("desc")
+      .collect();
+
+    return completed.map((list) => {
+      const storeNames: string[] = [];
+      if (list.storeSegments && list.storeSegments.length > 0) {
+        for (const seg of list.storeSegments) {
+          if (!storeNames.includes(seg.storeName)) {
+            storeNames.push(seg.storeName);
+          }
+        }
+      } else if (list.storeName) {
+        storeNames.push(list.storeName);
+      }
+      return { ...list, storeNames };
+    });
   },
 });
 

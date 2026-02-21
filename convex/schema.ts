@@ -154,6 +154,9 @@ export default defineSchema({
     // Provenance: which receipt this list was created from (create-from-receipt flow)
     sourceReceiptId: v.optional(v.id("receipts")),
 
+    // Per-user sequential number (auto-assigned on creation)
+    listNumber: v.optional(v.number()),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })

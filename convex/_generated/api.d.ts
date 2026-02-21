@@ -30,6 +30,7 @@ import type * as lib_storeNormalizer from "../lib/storeNormalizer.js";
 import type * as lib_voiceParser from "../lib/voiceParser.js";
 import type * as lib_voiceTools from "../lib/voiceTools.js";
 import type * as listItems from "../listItems.js";
+import type * as migrations_backfillListNumbers from "../migrations/backfillListNumbers.js";
 import type * as migrations_backfillListStores from "../migrations/backfillListStores.js";
 import type * as migrations_rephraseItemNames from "../migrations/rephraseItemNames.js";
 import type * as migrations_simplifyPartnerRoles from "../migrations/simplifyPartnerRoles.js";
@@ -75,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   "lib/voiceParser": typeof lib_voiceParser;
   "lib/voiceTools": typeof lib_voiceTools;
   listItems: typeof listItems;
+  "migrations/backfillListNumbers": typeof migrations_backfillListNumbers;
   "migrations/backfillListStores": typeof migrations_backfillListStores;
   "migrations/rephraseItemNames": typeof migrations_rephraseItemNames;
   "migrations/simplifyPartnerRoles": typeof migrations_simplifyPartnerRoles;
