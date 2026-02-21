@@ -160,6 +160,7 @@ Use `react-native-keyboard-controller` (NOT Reanimated's `useAnimatedKeyboard`).
 8. **NEVER kill node.exe** - `taskkill //F //IM node.exe` kills Claude Code itself. To kill other Node processes (e.g., Metro), use `npx kill-port <port>` or find the specific PID with `netstat -ano | findstr :<port>` and kill only that PID
 9. **No `any` types** - Never use `any` type annotations. Use proper types, generics, or `unknown` with type guards
 10. **Parallel sub-agents** - Always deploy multiple sub-agents in parallel where possible to execute tasks concurrently, preserving context window
+11. **Never fix without approval** - Always present analysis and proposed solution first. Never jump into fixing things without the user's express approval
 
 ## Feature Development Workflow
 
