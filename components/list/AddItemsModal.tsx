@@ -20,8 +20,10 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  withSpring,
   cancelAnimation,
   Easing,
+  interpolateColor,
 } from "react-native-reanimated";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -240,6 +242,35 @@ export function AddItemsModal({
   const capsulePulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: capsulePulse.value }],
   }));
+
+  // Sliding pill animation: 0 = low (left), 1 = all (right)
+  const tabProgress = useSharedValue(0);
+  const tabPillWidth = useSharedValue(0);
+
+  const onCapsuleContainerLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
+    tabPillWidth.value = (e.nativeEvent.layout.width - 8) / 2;
+  }, []);
+
+  const slidingPillStyle = useAnimatedStyle(() => ({
+    width: tabPillWidth.value,
+    transform: [{ translateX: tabProgress.value * tabPillWidth.value }],
+    backgroundColor: interpolateColor(
+      tabProgress.value,
+      [0, 1],
+      [`${colors.accent.warning}25`, `${colors.accent.primary}25`]
+    ),
+  }));
+
+  const handlePantryFilterSwitch = useCallback((filter: PantryFilter) => {
+    if (filter === pantryFilter) return;
+    haptic("light");
+    tabProgress.value = withSpring(filter === "all" ? 1 : 0, {
+      damping: 18,
+      stiffness: 180,
+    });
+    setPantryFilter(filter);
+  }, [pantryFilter, tabProgress]);
+
   const { alert } = useGlassAlert();
 
   const itemInputRef = useRef<TextInput>(null);
@@ -758,6 +789,7 @@ export function AddItemsModal({
     setScannedCategory(undefined);
     setActiveView("search");
     setPantryFilter("low");
+    tabProgress.value = 0;
     clearSuggestions();
     onClose();
   }, [onClose, clearSuggestions]);
@@ -1086,12 +1118,11 @@ export function AddItemsModal({
             ) : (
               <>
                 {/* Capsule switcher: + Low Items / + All Items */}
-                <View style={styles.pantryCapsuleSwitcher}>
+                <View style={styles.pantryCapsuleSwitcher} onLayout={onCapsuleContainerLayout}>
+                  <Animated.View style={[styles.slidingPill, slidingPillStyle]} />
+
                   {/* Low Items capsule */}
-                  <View style={[
-                    styles.pantryCapsule,
-                    pantryFilter === "low" && styles.pantryCapsuleActive,
-                  ]}>
+                  <View style={styles.pantryCapsule}>
                     <Animated.View style={lowAddableCount > 0 ? capsulePulseStyle : undefined}>
                       <Pressable
                         style={styles.capsuleAddButton}
@@ -1118,7 +1149,7 @@ export function AddItemsModal({
                     </Animated.View>
                     <Pressable
                       style={styles.capsuleLabelArea}
-                      onPress={() => { haptic("light"); setPantryFilter("low"); }}
+                      onPress={() => handlePantryFilterSwitch("low")}
                     >
                       <Text
                         style={[
@@ -1147,10 +1178,7 @@ export function AddItemsModal({
                   </View>
 
                   {/* All Items capsule */}
-                  <View style={[
-                    styles.pantryCapsule,
-                    pantryFilter === "all" && styles.pantryCapsuleActive,
-                  ]}>
+                  <View style={styles.pantryCapsule}>
                     <Animated.View style={allAddableCount > 0 ? capsulePulseStyle : undefined}>
                       <Pressable
                         style={styles.capsuleAddButton}
@@ -1177,7 +1205,7 @@ export function AddItemsModal({
                     </Animated.View>
                     <Pressable
                       style={styles.capsuleLabelArea}
-                      onPress={() => { haptic("light"); setPantryFilter("all"); }}
+                      onPress={() => handlePantryFilterSwitch("all")}
                     >
                       <Text
                         style={[
@@ -1338,16 +1366,28 @@ export function AddItemsModal({
             {sessionAddCount} item{sessionAddCount !== 1 ? "s" : ""} added
           </Text>
         )}
-        <GlassButton
-          variant="primary"
-          size="lg"
-          onPress={handleAddManualItem}
-          disabled={isAdding || itemName.trim().length === 0}
-          loading={isAdding}
-          style={styles.submitButton}
-        >
-          Add Item
-        </GlassButton>
+        {itemName.trim().length === 0 && !isAdding ? (
+          <GlassButton
+            variant="secondary"
+            size="lg"
+            icon="format-list-checks"
+            onPress={handleClose}
+            style={styles.submitButton}
+          >
+            Go to List
+          </GlassButton>
+        ) : (
+          <GlassButton
+            variant="primary"
+            size="lg"
+            onPress={handleAddManualItem}
+            disabled={isAdding}
+            loading={isAdding}
+            style={styles.submitButton}
+          >
+            Add Item
+          </GlassButton>
+        )}
       </View>
     </GlassModal>
   );
@@ -1653,6 +1693,14 @@ const styles = StyleSheet.create({
     padding: 4,
     borderWidth: 1,
     borderColor: colors.glass.border,
+    overflow: "hidden",
+  },
+  slidingPill: {
+    position: "absolute",
+    top: 4,
+    bottom: 4,
+    left: 4,
+    borderRadius: borderRadius.md,
   },
   pantryCapsule: {
     flex: 1,
@@ -1674,9 +1722,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-  },
-  pantryCapsuleActive: {
-    backgroundColor: colors.glass.backgroundActive,
   },
   pantryCapsuleText: {
     ...typography.labelMedium,
