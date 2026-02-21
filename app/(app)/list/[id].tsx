@@ -12,7 +12,7 @@ import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import React, { useState, useCallback, useMemo, useRef } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { haptic } from "@/lib/haptics/safeHaptics";
@@ -20,6 +20,11 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   runOnJS,
+  withRepeat,
+  withTiming,
+  withSequence,
+  Easing,
+  cancelAnimation,
 } from "react-native-reanimated";
 import {
   useReanimatedKeyboardAnimation,
@@ -33,7 +38,6 @@ import {
   SimpleHeader,
   CircularBudgetDial,
   OfflineBanner,
-  GuidedBorder,
   colors,
   typography,
   spacing,
@@ -206,6 +210,32 @@ export default function ListDetailScreen() {
   const keyboardContainerStyle = useAnimatedStyle(() => ({
     flex: 1,
     paddingBottom: keyboardHeight.value,
+  }));
+
+  // Breathing pulse for Go Shopping button
+  const goShoppingScale = useSharedValue(1);
+  const hasItems = (items?.length ?? 0) > 0;
+  const isActiveStatus = list?.status === "active";
+
+  useEffect(() => {
+    if (hasItems && isActiveStatus) {
+      goShoppingScale.value = withRepeat(
+        withSequence(
+          withTiming(1.02, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        false,
+      );
+    } else {
+      cancelAnimation(goShoppingScale);
+      goShoppingScale.value = 1;
+    }
+    return () => cancelAnimation(goShoppingScale);
+  }, [hasItems, isActiveStatus, goShoppingScale]);
+
+  const goShoppingAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: goShoppingScale.value }],
   }));
 
   // Scroll tracking for sticky mini budget bar (hooks must be before early returns)
@@ -746,6 +776,8 @@ export default function ListDetailScreen() {
   );
 
   // ─── FlashList renderItem ────────────────────────────────────────────────────
+  const selectionActive = selectedItemsRef.current.size > 0;
+
   const renderItem = useCallback(({ item }: { item: ListItem }) => (
     <ShoppingListItem
       item={item}
@@ -758,12 +790,13 @@ export default function ListDetailScreen() {
       isOwner={isOwner}
       commentCount={commentCounts?.[item._id as string] ?? 0}
       onOpenComments={stableOpenComments}
+      selectionActive={selectionActive}
       isSelected={selectedItemsRef.current.has(item._id)}
       onSelectToggle={toggleItemSelection}
     />
   ), [handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange,
       isShopping, canEdit, isOwner, commentCounts,
-      stableOpenComments, selectionVersion, toggleItemSelection]);
+      stableOpenComments, selectionActive, selectionVersion, toggleItemSelection]);
 
   // ─── FlashList ListHeaderComponent ───────────────────────────────────────────
   const listHeader = useMemo(() => (
@@ -814,11 +847,7 @@ export default function ListDetailScreen() {
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
         {list?.status === "active" && canEdit && (
-          <GuidedBorder
-            active={(items?.length ?? 0) > 0}
-            borderRadius={borderRadius.lg}
-            style={styles.actionButton}
-          >
+          <Animated.View style={[styles.actionButton, goShoppingAnimStyle]}>
             <GlassButton
               variant="primary"
               size="md"
@@ -829,7 +858,7 @@ export default function ListDetailScreen() {
             >
               {isPaused ? "Resume Shopping" : "Go Shopping"}
             </GlassButton>
-          </GuidedBorder>
+          </Animated.View>
         )}
         {list?.status === "shopping" && canEdit && (
           <View style={styles.shoppingModeContainer}>
@@ -887,12 +916,12 @@ export default function ListDetailScreen() {
         <View style={styles.itemsContainer}>
           <View style={styles.itemsHeader}>
             <Text style={styles.sectionTitle}>
-              {selectedItemsRef.current.size > 0 && list?.status !== "shopping"
+              {selectedItemsRef.current.size > 0
                 ? `${selectedItemsRef.current.size} selected`
                 : `Items (${items?.length ?? 0})`}
             </Text>
-            {/* Selection actions — hidden during shopping mode and for partners */}
-            {list?.status !== "shopping" && canEdit && (
+            {/* Selection actions — visible in both modes */}
+            {canEdit && (
               <View style={styles.selectionActions}>
                 {selectedItemsRef.current.size > 0 && (
                   <Pressable
@@ -1028,8 +1057,8 @@ export default function ListDetailScreen() {
           title={list.name}
           subtitle={`${list.listNumber != null ? `#${list.listNumber} \u00B7 ` : ""}${checkedCount}/${totalCount} items`}
           showBack
-          titleStyle={{ fontSize: 20, lineHeight: 28, textAlign: "center" }}
-          bottomRightElement={
+          titleStyle={{ fontSize: 20, lineHeight: 28 }}
+          rightElement={
             <View style={styles.headerRightRow}>
               <NotificationBell onPress={() => setShowNotifications(true)} />
               {hasPartners && (
