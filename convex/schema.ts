@@ -93,8 +93,9 @@ export default defineSchema({
     // Auto-add to list when out
     autoAddToList: v.boolean(),
 
-    // Name provenance: "system" = auto-generated (AI, onboarding, scan); "user" = manually edited
-    nameSource: v.optional(v.union(v.literal("system"), v.literal("user"))),
+    // Name provenance: "system" = auto-generated (AI, onboarding); "user" = manually edited; "scan" = replaced via product scan
+    nameSource: v.optional(v.union(v.literal("system"), v.literal("user"), v.literal("scan"))),
+    lastScannedAt: v.optional(v.number()), // timestamp of last product-scan replacement
 
     // Pantry lifecycle (tiered pantry with auto-archiving)
     status: v.optional(v.union(v.literal("active"), v.literal("archived"))), // defaults to "active"

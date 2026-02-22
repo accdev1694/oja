@@ -80,6 +80,9 @@ export default function ScanScreen() {
   const deleteReceipt = useMutation(api.receipts.remove);
   const addBatchToList = useMutation(api.listItems.addBatchFromScan);
   const addBatchToPantry = useMutation(api.pantryItems.addBatchFromScan);
+
+  // Replace pantry item with scanned data
+  const replacePantryMutation = useMutation(api.pantryItems.replaceWithScan);
   const [parseReceiptId, setParseReceiptId] = useState<Id<"receipts"> | null>(null);
 
   const selectedList = shoppingLists?.find((l) => l._id === selectedListId);
@@ -327,8 +330,9 @@ export default function ScanScreen() {
     if (productScanner.scannedProducts.length === 0) return;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const products = productScanner.scannedProducts;
       const result = await addBatchToPantry({
-        items: productScanner.scannedProducts.map((p) => ({
+        items: products.map((p) => ({
           name: p.name,
           category: p.category,
           size: p.size,
@@ -340,11 +344,55 @@ export default function ScanScreen() {
         })),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      const skipped = result.skippedDuplicates ?? [];
       productScanner.clearAll();
-      alert(
-        "Added to Pantry",
-        `${result.added} added, ${result.updated} updated in your pantry.`,
-      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      if (skipped.length > 0) {
+        // Server only returns items where scanned data is genuinely different
+        const match = skipped[0];
+        const scannedProduct = products.find((p) => p.name === match.scannedName);
+        alert(
+          "Similar Item Found",
+          `"${match.existingName}" in your pantry is similar to "${match.scannedName}". Update it?`,
+          [
+            { text: "Skip", style: "cancel" },
+            {
+              text: "Update",
+              onPress: async () => {
+                if (!scannedProduct) return;
+                try {
+                  await replacePantryMutation({
+                    pantryItemId: match.existingId as Id<"pantryItems">,
+                    scannedData: {
+                      name: scannedProduct.name,
+                      category: scannedProduct.category,
+                      size: scannedProduct.size,
+                      unit: scannedProduct.unit,
+                      estimatedPrice: scannedProduct.estimatedPrice,
+                      confidence: scannedProduct.confidence,
+                      imageStorageId: scannedProduct.imageStorageId,
+                    },
+                  });
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                } catch (error) {
+                  console.error("Failed to update item:", error);
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                  alert("Error", "Failed to update item.");
+                }
+              },
+            },
+          ],
+        );
+      } else if (result.added > 0) {
+        alert(
+          "Added to Pantry",
+          `${result.added} item${result.added !== 1 ? "s" : ""} added to your pantry.`,
+        );
+      } else {
+        alert("Already in Pantry", "This item is already in your pantry.");
+      }
     } catch (error) {
       console.error("Failed to add products to pantry:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -477,17 +525,6 @@ export default function ScanScreen() {
 
         {scanMode === "receipt" ? (
           <>
-            {/* Camera Icon */}
-            <View style={styles.iconSection}>
-              <View style={styles.iconContainer}>
-                <MaterialCommunityIcons
-                  name="camera"
-                  size={48}
-                  color={colors.semantic.scan}
-                />
-              </View>
-            </View>
-
             {/* Instructions Card */}
             <GlassCard variant="standard" style={styles.instructionsCard}>
               <View style={styles.instructionsHeader}>
@@ -639,7 +676,7 @@ export default function ScanScreen() {
               <GlassButton
                 variant="primary"
                 size="lg"
-                icon="camera"
+                icon="receipt"
                 onPress={handleTakePhoto}
               >
                 Take Photo
@@ -658,22 +695,26 @@ export default function ScanScreen() {
         ) : (
           /* ────────────── Product Scanning Mode ────────────── */
           <>
-            {/* Scan Product Button */}
-            <View style={styles.iconSection}>
-              <View style={[styles.iconContainer, { backgroundColor: `${colors.accent.primary}20` }]}>
-                <MaterialCommunityIcons
-                  name="cube-scan"
-                  size={64}
-                  color={colors.accent.primary}
-                />
+            {/* Instructions Card */}
+            <GlassCard variant="standard" style={styles.instructionsCard}>
+              <View style={styles.instructionsHeader}>
+                <MaterialCommunityIcons name="lightbulb-outline" size={20} color={colors.accent.primary} />
+                <Text style={styles.instructionsTitle}>How it works</Text>
               </View>
-            </View>
+              <View style={styles.instructionsList}>
+                <InstructionItem number={1} text="Point camera at a product" />
+                <InstructionItem number={2} text="AI reads the label text" />
+                <InstructionItem number={3} text="Scan multiple products in a row" />
+                <InstructionItem number={4} text="Add all to a list or your pantry" />
+              </View>
+            </GlassCard>
 
+            {/* CTA */}
             <View style={styles.buttons}>
               <GlassButton
                 variant="primary"
                 size="lg"
-                icon="camera"
+                icon="shopping-outline"
                 onPress={productScanner.captureProduct}
                 loading={productScanner.isProcessing}
                 disabled={productScanner.isProcessing}
@@ -787,22 +828,6 @@ export default function ScanScreen() {
                 )}
               </View>
             )}
-
-            {/* Empty state hint */}
-            {productScanner.scannedProducts.length === 0 && !productScanner.isProcessing && (
-              <GlassCard variant="standard" style={styles.instructionsCard}>
-                <View style={styles.instructionsHeader}>
-                  <MaterialCommunityIcons name="lightbulb-outline" size={20} color={colors.accent.primary} />
-                  <Text style={styles.instructionsTitle}>How it works</Text>
-                </View>
-                <View style={styles.instructionsList}>
-                  <InstructionItem number={1} text="Point camera at a product" />
-                  <InstructionItem number={2} text="AI reads the label text" />
-                  <InstructionItem number={3} text="Scan multiple products in a row" />
-                  <InstructionItem number={4} text="Add all to a list or your pantry" />
-                </View>
-              </GlassCard>
-            )}
           </>
         )}
 
@@ -891,6 +916,7 @@ export default function ScanScreen() {
         duration={2500}
         onDismiss={dismissDupToast}
       />
+
     </GlassScreen>
   );
 }
@@ -1151,6 +1177,7 @@ const styles = StyleSheet.create({
   // Buttons
   buttons: {
     gap: spacing.md,
+    marginBottom: spacing.xl,
   },
 
   // Preview Mode

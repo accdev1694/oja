@@ -169,6 +169,15 @@ export default function ListsScreen() {
         }
         rightElement={
           <View style={styles.headerActions}>
+            {tabMode === "active" && (
+              <Pressable
+                style={[styles.addButton, isCreating && { opacity: 0.5 }]}
+                onPress={handleCreateList}
+                disabled={isCreating}
+              >
+                <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
+              </Pressable>
+            )}
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -190,15 +199,6 @@ export default function ListsScreen() {
                 </View>
               )}
             </Pressable>
-            {tabMode === "active" && (
-              <Pressable
-                style={[styles.addButton, isCreating && { opacity: 0.5 }]}
-                onPress={handleCreateList}
-                disabled={isCreating}
-              >
-                <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
-              </Pressable>
-            )}
           </View>
         }
       />
@@ -474,11 +474,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Header actions (bell + New List)
+  // Header actions (add + bell)
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   addButton: {
     width: 36,
@@ -491,24 +491,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   bellButton: {
-    position: "relative",
-    padding: spacing.xs,
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.glass.background,
+    alignItems: "center",
+    justifyContent: "center",
   },
   bellBadge: {
     position: "absolute",
-    top: 0,
-    right: 0,
+    top: -2,
+    right: -2,
     backgroundColor: colors.accent.error,
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    borderRadius: borderRadius.sm,
+    minWidth: 18,
+    height: 18,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 3,
+    paddingHorizontal: spacing.xs,
   },
   bellBadgeText: {
+    ...typography.labelSmall,
+    color: colors.text.inverse,
     fontSize: 10,
-    fontWeight: "700",
-    color: "#fff",
   },
 });
