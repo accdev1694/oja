@@ -80,7 +80,6 @@ export default function ConfirmReceiptScreen() {
 
   // Post-save: create list / update pantry
   const addBatchToPantry = useMutation(api.pantryItems.addBatchFromScan);
-  const replacePantryMutation = useMutation(api.pantryItems.replaceWithScan);
 
   // Local state for edited items
   const [editedItems, setEditedItems] = useState<ReceiptItem[]>([]);
@@ -387,38 +386,12 @@ export default function ConfirmReceiptScreen() {
       const result = await addBatchToPantry({ items: mapReceiptItemsForBatch() });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      const skipped = result.skippedDuplicates ?? [];
-      if (skipped.length > 0) {
-        const match = skipped[0];
-        const receiptItem = editedItems.find(
-          (item) => item.name.toLowerCase() === (match.scannedName as string).toLowerCase()
-        );
-        alert(
-          "Similar Item Found",
-          `"${match.existingName}" in your pantry is similar to "${match.scannedName}". Update it?`,
-          [
-            { text: "Skip", style: "cancel" },
-            {
-              text: "Update",
-              onPress: async () => {
-                if (!receiptItem) return;
-                try {
-                  await replacePantryMutation({
-                    pantryItemId: match.existingId as Id<"pantryItems">,
-                    scannedData: {
-                      name: receiptItem.name,
-                      category: receiptItem.category ?? "Uncategorised",
-                      estimatedPrice: receiptItem.quantity > 1 ? receiptItem.unitPrice : receiptItem.totalPrice,
-                    },
-                  });
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                } catch (err) {
-                  console.error("Failed to update item:", err);
-                }
-              },
-            },
-          ]
-        );
+      const parts: string[] = [];
+      if (result.added > 0) parts.push(`${result.added} added`);
+      if (result.restocked > 0) parts.push(`${result.restocked} restocked`);
+
+      if (parts.length > 0) {
+        alert("Pantry Updated", `${parts.join(", ")}. All items marked as fully stocked.`);
       }
 
       setAddedToPantry(true);

@@ -1268,23 +1268,26 @@ export const addBatchFromScan = mutation({
       .collect();
 
     let added = 0;
+    let restocked = 0;
     const skippedDuplicates: { scannedName: string; existingName: string; existingId: string }[] = [];
 
     for (const item of args.items) {
       const existingItem = existing.find((p) => isDuplicateItem(item.name, item.size, p.name, p.defaultSize));
 
       if (existingItem) {
-        // Only prompt for replace if the scanned data is meaningfully different
-        const namesDiffer = normalizeItemName(item.name) !== normalizeItemName(existingItem.name);
-        const sizeIsNew = !!item.size && item.size !== existingItem.defaultSize;
-        if (namesDiffer || sizeIsNew) {
-          skippedDuplicates.push({
-            scannedName: item.name,
-            existingName: existingItem.name,
-            existingId: existingItem._id,
-          });
-        }
-        // Otherwise silently skip — nothing to improve
+        // Mark existing item as fully stocked + update price/size
+        await ctx.db.patch(existingItem._id, {
+          stockLevel: "stocked",
+          ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "receipt" as const } : {}),
+          ...(item.size ? { defaultSize: item.size } : {}),
+          ...(item.unit ? { defaultUnit: item.unit } : {}),
+          purchaseCount: (existingItem.purchaseCount ?? 0) + 1,
+          lastPurchasedAt: now,
+          // Auto-resurface archived items
+          ...(existingItem.status === "archived" ? { status: "active" as const, archivedAt: undefined } : {}),
+          updatedAt: now,
+        });
+        restocked++;
       } else {
         // Check pantry limit
         const access = await canAddPantryItem(ctx, user._id);
@@ -1298,10 +1301,12 @@ export const addBatchFromScan = mutation({
           name: item.name,
           category: item.category,
           icon: getIconForItem(item.name, item.category),
-          stockLevel: "low",
+          stockLevel: "stocked",
           status: "active" as const,
           nameSource: "system" as const,
           autoAddToList: false,
+          purchaseCount: 1,
+          lastPurchasedAt: now,
           ...(item.size ? { defaultSize: item.size } : {}),
           ...(item.unit ? { defaultUnit: item.unit } : {}),
           ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "ai_estimate" as const } : {}),
@@ -1315,7 +1320,7 @@ export const addBatchFromScan = mutation({
       await enrichGlobalFromProductScan(ctx, item, user._id);
     }
 
-    return { added, skippedDuplicates };
+    return { added, restocked, skippedDuplicates };
   },
 });
 

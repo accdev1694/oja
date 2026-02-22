@@ -328,20 +328,15 @@ export default function ScanScreen() {
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      const skipped = result.skippedDuplicates ?? [];
+      const parts: string[] = [];
+      if (result.added > 0) parts.push(`${result.added} added`);
+      if (result.restocked > 0) parts.push(`${result.restocked} restocked`);
 
-      if (skipped.length > 0 && skipped.length < activeReceipt.items.length) {
-        alert(
-          "Some Items Already in Pantry",
-          `${result.added} new item${result.added !== 1 ? "s" : ""} added. ${skipped.length} already in your pantry.`,
-        );
+      if (parts.length > 0) {
+        alert("Pantry Updated", `${parts.join(", ")}. All items marked as fully stocked.`);
       }
 
-      if (result.added > 0) {
-        setReceiptAddedToPantry(true);
-      } else {
-        alert("Already in Pantry", "All receipt items are already in your pantry.");
-      }
+      setReceiptAddedToPantry(true);
     } catch (error) {
       console.error("Failed to add receipt items to pantry:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -424,64 +419,21 @@ export default function ScanScreen() {
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      const skipped = result.skippedDuplicates ?? [];
-
-      if (skipped.length > 0) {
-        const match = skipped[0];
-        alert(
-          "Similar Item Found",
-          `"${match.existingName}" in your pantry is similar to "${item.name}". Update it?`,
-          [
-            { text: "Skip", style: "cancel" },
-            {
-              text: "Update",
-              onPress: async () => {
-                try {
-                  await replacePantryMutation({
-                    pantryItemId: match.existingId as Id<"pantryItems">,
-                    scannedData: {
-                      name: item.name,
-                      category: item.category,
-                      size: item.size,
-                      unit: item.unit,
-                      estimatedPrice: item.estimatedPrice,
-                      confidence: item.confidence,
-                      imageStorageId: item.imageStorageId,
-                    },
-                  });
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                } catch (error) {
-                  console.error("Failed to update item:", error);
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                  alert("Error", "Failed to update item.");
-                }
-              },
-            },
-          ],
-        );
+      if (result.restocked > 0) {
+        alert("Pantry Updated", `"${item.name}" restocked and marked as full.`);
+      } else if (result.added > 0) {
+        alert("Added to Pantry", `"${item.name}" added and marked as fully stocked.`);
       }
 
-      if (result.added > 0) {
-        if (addedToList) {
-          // Both done — close modal
-          setAddedToPantry(false);
-          setAddedToList(false);
-          setActiveProduct(null);
-          setShowScanActionsModal(false);
-        } else {
-          // Pantry done first — stay open for list
-          setAddedToPantry(true);
-        }
+      if (addedToList) {
+        // Both done — close modal
+        setAddedToPantry(false);
+        setAddedToList(false);
+        setActiveProduct(null);
+        setShowScanActionsModal(false);
       } else {
-        // All duplicates — nothing new added to pantry
-        if (addedToList) {
-          // Both tried — close modal
-          setAddedToPantry(false);
-          setAddedToList(false);
-          setActiveProduct(null);
-          setShowScanActionsModal(false);
-        }
-        alert("Already in Pantry", "This item is already in your pantry.");
+        // Pantry done first — stay open for list
+        setAddedToPantry(true);
       }
     } catch (error) {
       console.error("Failed to add products to pantry:", error);
