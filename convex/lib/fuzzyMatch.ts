@@ -83,8 +83,60 @@ export function calculateSimilarity(str1: string, str2: string): number {
 const DUPLICATE_SIMILARITY_THRESHOLD = 85;
 
 /**
+ * Token-overlap similarity threshold for duplicate detection.
+ * Catches cases where the same product scanned from different angles
+ * produces names with different word order or extra/missing descriptors,
+ * e.g. "12 medium free range egg" vs "12pk free range egg".
+ */
+const TOKEN_OVERLAP_THRESHOLD = 0.75;
+
+/**
+ * Tokenize a normalized name into meaningful words for overlap comparison.
+ * Strips common filler words and normalizes pack/quantity formats.
+ */
+function tokenize(normalizedName: string): string[] {
+  // Normalize pack formats: "12pk", "12 pack", "12x", bare "12" at start → "12"
+  let s = normalizedName
+    .replace(/(\d+)\s*pk\b/g, "$1")
+    .replace(/(\d+)\s*pack\b/g, "$1")
+    .replace(/(\d+)\s*x\b/g, "$1")
+    .replace(/\bpack\s*of\s*(\d+)/g, "$1");
+
+  const stopWords = new Set(["of", "the", "a", "an", "and", "in", "with", "for"]);
+  return s
+    .split(/\s+/)
+    .filter((w) => w.length > 0 && !stopWords.has(w));
+}
+
+/**
+ * Calculate token-overlap similarity (Jaccard-like) between two names.
+ * Returns a value between 0 and 1. Uses the smaller set as denominator
+ * so that a subset (e.g. 4/4 tokens match out of 5) scores high.
+ */
+function tokenOverlapSimilarity(norm1: string, norm2: string): number {
+  const tokens1 = tokenize(norm1);
+  const tokens2 = tokenize(norm2);
+
+  if (tokens1.length === 0 || tokens2.length === 0) return 0;
+
+  const set1 = new Set(tokens1);
+  const set2 = new Set(tokens2);
+
+  let overlap = 0;
+  for (const t of set1) {
+    if (set2.has(t)) overlap++;
+  }
+
+  // Use the smaller set size as denominator — if all tokens of the shorter
+  // name appear in the longer one, that's a strong signal they're the same product
+  const minSize = Math.min(set1.size, set2.size);
+  return overlap / minSize;
+}
+
+/**
  * Check if two item names should be considered duplicates.
- * Handles: plurals, common prefixes, typos, case, whitespace.
+ * Handles: plurals, common prefixes, typos, case, whitespace,
+ * and different descriptions of the same product from different scan angles.
  *
  * Returns true if the items are duplicates.
  */
@@ -113,6 +165,12 @@ export function isDuplicateItemName(name1: string, name2: string): boolean {
     const similarity = calculateSimilarity(norm1, norm2);
     if (similarity >= DUPLICATE_SIMILARITY_THRESHOLD) return true;
   }
+
+  // Token-overlap check: catches different descriptions of the same product
+  // e.g. "12 medium free range egg" vs "12pk free range egg"
+  // Both share tokens {12, free, range, egg} → high overlap
+  const tokenSim = tokenOverlapSimilarity(norm1, norm2);
+  if (tokenSim >= TOKEN_OVERLAP_THRESHOLD) return true;
 
   return false;
 }
