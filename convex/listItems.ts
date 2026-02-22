@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { api } from "./_generated/api";
 import { getUserListPermissions } from "./partners";
 import { resolveVariantWithPrice } from "./lib/priceResolver";
 import { getIconForItem } from "./iconMapping";
@@ -184,18 +185,54 @@ export const create = mutation({
 
     const now = Date.now();
 
-    // Price cascade: use provided price, else look up from currentPrices
+    // Resolve size/unit: use provided, else pull from linked pantry item
+    let size = args.size;
+    let unit = args.unit;
     let estimatedPrice = args.estimatedPrice;
+    let priceSource = args.priceSource;
+    let priceConfidence = args.priceConfidence;
+
+    // If pantryItemId provided, pull size/price defaults from it
+    if (args.pantryItemId && (!size || estimatedPrice === undefined)) {
+      const pantryItem = await ctx.db.get(args.pantryItemId);
+      if (pantryItem) {
+        if (!size && pantryItem.defaultSize) {
+          size = pantryItem.defaultSize;
+          unit = pantryItem.defaultUnit;
+        }
+        if (estimatedPrice === undefined && pantryItem.lastPrice != null) {
+          estimatedPrice = pantryItem.lastPrice;
+          priceSource = priceSource ?? "personal";
+          priceConfidence = priceConfidence ?? 0.8;
+        }
+      }
+    }
+
+    // Price cascade: provided → pantry (above) → currentPrices
     if (estimatedPrice === undefined) {
       estimatedPrice = await getPriceFromCurrentPrices(ctx, args.name);
+      if (estimatedPrice !== undefined) {
+        priceSource = priceSource ?? "crowdsourced";
+        priceConfidence = priceConfidence ?? 0.6;
+      }
     }
 
     // Seed pantry: if no pantryItemId provided, find or create one
     let pantryItemId = args.pantryItemId;
     if (!pantryItemId) {
-      const existingPantry = await findDuplicatePantryItem(ctx, user._id, args.name, args.size);
+      const existingPantry = await findDuplicatePantryItem(ctx, user._id, args.name, size);
       if (existingPantry) {
         pantryItemId = existingPantry._id;
+        // Pull size/price from existing pantry item if still missing
+        if (!size && existingPantry.defaultSize) {
+          size = existingPantry.defaultSize;
+          unit = existingPantry.defaultUnit;
+        }
+        if (estimatedPrice === undefined && existingPantry.lastPrice != null) {
+          estimatedPrice = existingPantry.lastPrice;
+          priceSource = priceSource ?? "personal";
+          priceConfidence = priceConfidence ?? 0.8;
+        }
       } else {
         const pantryAccess = await canAddPantryItem(ctx, user._id);
         if (pantryAccess.allowed) {
@@ -209,8 +246,8 @@ export const create = mutation({
             status: "active" as const,
             nameSource: "system" as const,
             autoAddToList: false,
-            ...(args.size ? { defaultSize: args.size } : {}),
-            ...(args.unit ? { defaultUnit: args.unit } : {}),
+            ...(size ? { defaultSize: size } : {}),
+            ...(unit ? { defaultUnit: unit } : {}),
             ...(estimatedPrice != null ? {
               lastPrice: estimatedPrice,
               priceSource: "ai_estimate" as const,
@@ -229,11 +266,11 @@ export const create = mutation({
       name: args.name,
       category: args.category,
       quantity: args.quantity,
-      size: args.size,
-      unit: args.unit,
+      size,
+      unit,
       estimatedPrice,
-      priceSource: args.priceSource,
-      priceConfidence: args.priceConfidence,
+      priceSource,
+      priceConfidence,
       priority: args.priority ?? "should-have",
       isChecked: false,
       autoAdded: args.autoAdded ?? false,
@@ -244,6 +281,14 @@ export const create = mutation({
 
     // Recalculate list total after adding item
     await recalculateListTotal(ctx, args.listId);
+
+    // Schedule AI price estimation if still no price after cascade
+    if (estimatedPrice === undefined) {
+      await ctx.scheduler.runAfter(0, api.ai.estimateItemPrice, {
+        itemName: args.name,
+        userId: user._id,
+      });
+    }
 
     return { status: "added" as const, itemId };
   },
@@ -525,6 +570,8 @@ export const addFromPantryOut = mutation({
 
     const now = Date.now();
     const addedIds: string[] = [];
+    const normalizedStoreId = list.normalizedStoreId ?? undefined;
+    const needsAIEstimate: { itemName: string; userId: Id<"users"> }[] = [];
 
     // Pre-fetch existing list item names for dedup
     const existingListItems = await ctx.db
@@ -539,10 +586,50 @@ export const addFromPantryOut = mutation({
       const isDup = knownItems.some((known) => isDuplicateItem(pantryItem.name, pantryItem.defaultSize, known.name, known.size));
       if (isDup) continue;
 
-      // Price cascade: lastPrice → currentPrices → undefined (AI will fill later)
-      let estimatedPrice = pantryItem.lastPrice;
+      let size: string | undefined;
+      let unit: string | undefined;
+      let estimatedPrice: number | undefined;
+      let priceSource: "personal" | "crowdsourced" | "ai" | "manual" | undefined;
+      let priceConfidence: number | undefined;
+
+      // Priority 1 & 2: Try variant resolution (handles store-aware pricing)
+      const variantResult = await resolveVariantWithPrice(
+        ctx,
+        pantryItem.name,
+        normalizedStoreId,
+        user._id,
+      );
+
+      if (variantResult && variantResult.price !== null) {
+        size = variantResult.variant.size;
+        unit = variantResult.variant.unit;
+        estimatedPrice = variantResult.price;
+        priceSource = variantResult.priceSource;
+        priceConfidence = variantResult.confidence;
+      } else if (variantResult) {
+        size = variantResult.variant.size;
+        unit = variantResult.variant.unit;
+      }
+
+      // Priority 3: Fall back to pantry item defaults
+      if (!size && pantryItem.defaultSize) {
+        size = pantryItem.defaultSize;
+        unit = pantryItem.defaultUnit;
+      }
+      if (estimatedPrice === undefined && pantryItem.lastPrice != null) {
+        estimatedPrice = pantryItem.lastPrice;
+        priceSource = "personal";
+        priceConfidence = 0.8;
+      }
+
+      // Priority 4: Name-only fallback from currentPrices
       if (estimatedPrice === undefined) {
-        estimatedPrice = await getPriceFromCurrentPrices(ctx, pantryItem.name);
+        const fallbackPrice = await getPriceFromCurrentPrices(ctx, pantryItem.name);
+        if (fallbackPrice !== undefined) {
+          estimatedPrice = fallbackPrice;
+          priceSource = "crowdsourced";
+          priceConfidence = 0.6;
+        }
       }
 
       const itemId = await ctx.db.insert("listItems", {
@@ -552,10 +639,11 @@ export const addFromPantryOut = mutation({
         name: pantryItem.name,
         category: pantryItem.category,
         quantity: 1,
-        // Zero-Blank: Use pantryItem's defaultSize/defaultUnit when available
-        size: pantryItem.defaultSize,
-        unit: pantryItem.defaultUnit,
+        size,
+        unit,
         estimatedPrice,
+        priceSource,
+        priceConfidence,
         priority: "must-have",
         isChecked: false,
         autoAdded: true,
@@ -563,13 +651,26 @@ export const addFromPantryOut = mutation({
         updatedAt: now,
       });
 
+      // Track items still missing price for background AI estimation
+      if (estimatedPrice === undefined) {
+        needsAIEstimate.push({ itemName: pantryItem.name, userId: user._id });
+      }
+
       addedIds.push(itemId);
-      knownItems.push({ name: pantryItem.name, size: pantryItem.defaultSize });
+      knownItems.push({ name: pantryItem.name, size });
     }
 
     // Recalculate list total after adding items
     if (addedIds.length > 0) {
       await recalculateListTotal(ctx, args.listId);
+    }
+
+    // Schedule AI price estimation for items that have no price after cascade
+    for (const item of needsAIEstimate) {
+      await ctx.scheduler.runAfter(0, api.ai.estimateItemPrice, {
+        itemName: item.itemName,
+        userId: item.userId,
+      });
     }
 
     return { count: addedIds.length, itemIds: addedIds };
@@ -616,6 +717,9 @@ export const addFromPantrySelected = mutation({
       .collect();
     const addedItems: { name: string; size?: string }[] = existingListItems.map((i) => ({ name: i.name, size: i.size }));
 
+    const normalizedStoreId = list.normalizedStoreId ?? undefined;
+    const needsAIEstimate: { itemId: Id<"listItems">; itemName: string; userId: Id<"users"> }[] = [];
+
     for (const pantryItemId of args.pantryItemIds) {
       const pantryItem = await ctx.db.get(pantryItemId);
       if (!pantryItem || pantryItem.userId !== user._id) continue;
@@ -624,23 +728,64 @@ export const addFromPantrySelected = mutation({
       const isDup = addedItems.some((known) => isDuplicateItem(pantryItem.name, pantryItem.defaultSize, known.name, known.size));
       if (isDup) continue;
 
-      // Price cascade: lastPrice → currentPrices → undefined (AI will fill later)
-      let estimatedPrice = pantryItem.lastPrice;
-      if (estimatedPrice === undefined) {
-        estimatedPrice = await getPriceFromCurrentPrices(ctx, pantryItem.name);
+      let size: string | undefined;
+      let unit: string | undefined;
+      let estimatedPrice: number | undefined;
+      let priceSource: "personal" | "crowdsourced" | "ai" | "manual" | undefined;
+      let priceConfidence: number | undefined;
+
+      // Priority 1 & 2: Try variant resolution (handles store-aware pricing)
+      const variantResult = await resolveVariantWithPrice(
+        ctx,
+        pantryItem.name,
+        normalizedStoreId,
+        user._id,
+      );
+
+      if (variantResult && variantResult.price !== null) {
+        size = variantResult.variant.size;
+        unit = variantResult.variant.unit;
+        estimatedPrice = variantResult.price;
+        priceSource = variantResult.priceSource;
+        priceConfidence = variantResult.confidence;
+      } else if (variantResult) {
+        size = variantResult.variant.size;
+        unit = variantResult.variant.unit;
       }
 
-      await ctx.db.insert("listItems", {
+      // Priority 3: Fall back to pantry item defaults
+      if (!size && pantryItem.defaultSize) {
+        size = pantryItem.defaultSize;
+        unit = pantryItem.defaultUnit;
+      }
+      if (estimatedPrice === undefined && pantryItem.lastPrice != null) {
+        estimatedPrice = pantryItem.lastPrice;
+        priceSource = "personal";
+        priceConfidence = 0.8;
+      }
+
+      // Priority 4: Name-only fallback from currentPrices
+      if (estimatedPrice === undefined) {
+        const fallbackPrice = await getPriceFromCurrentPrices(ctx, pantryItem.name);
+        if (fallbackPrice !== undefined) {
+          estimatedPrice = fallbackPrice;
+          priceSource = "crowdsourced";
+          priceConfidence = 0.6;
+        }
+      }
+
+      const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
         pantryItemId: pantryItem._id,
         name: pantryItem.name,
         category: pantryItem.category,
         quantity: 1,
-        // Zero-Blank: Use pantryItem's defaultSize/defaultUnit when available
-        size: pantryItem.defaultSize,
-        unit: pantryItem.defaultUnit,
+        size,
+        unit,
         estimatedPrice,
+        priceSource,
+        priceConfidence,
         priority: "must-have",
         isChecked: false,
         autoAdded: true,
@@ -648,13 +793,26 @@ export const addFromPantrySelected = mutation({
         updatedAt: now,
       });
 
+      // Track items still missing price for background AI estimation
+      if (estimatedPrice === undefined) {
+        needsAIEstimate.push({ itemId, itemName: pantryItem.name, userId: user._id });
+      }
+
       count++;
-      addedItems.push({ name: pantryItem.name, size: pantryItem.defaultSize });
+      addedItems.push({ name: pantryItem.name, size });
     }
 
     // Recalculate list total after adding items
     if (count > 0) {
       await recalculateListTotal(ctx, args.listId);
+    }
+
+    // Schedule AI price estimation for items that have no price after cascade
+    for (const item of needsAIEstimate) {
+      await ctx.scheduler.runAfter(0, api.ai.estimateItemPrice, {
+        itemName: item.itemName,
+        userId: item.userId,
+      });
     }
 
     return { count };
@@ -832,6 +990,7 @@ export const addFromPantryBulk = mutation({
     const itemIds: string[] = [];
     const addedItemNames: string[] = [];
     const skippedDuplicates: { name: string; existingName: string }[] = [];
+    const needsAIEstimate: { itemName: string; userId: Id<"users"> }[] = [];
 
     // Pre-fetch existing list items for dedup
     const existingListItems = await ctx.db
@@ -881,11 +1040,11 @@ export const addFromPantryBulk = mutation({
       if (!size && pantryItem.defaultSize) {
         size = pantryItem.defaultSize;
         unit = pantryItem.defaultUnit;
-        if (pantryItem.lastPrice != null) {
-          estimatedPrice = pantryItem.lastPrice;
-          priceSource = "personal";
-          priceConfidence = 0.8;
-        }
+      }
+      if (estimatedPrice === undefined && pantryItem.lastPrice != null) {
+        estimatedPrice = pantryItem.lastPrice;
+        priceSource = "personal";
+        priceConfidence = 0.8;
       }
 
       // Priority 4: Name-only fallback -- try currentPrices or leave undefined
@@ -917,6 +1076,11 @@ export const addFromPantryBulk = mutation({
         updatedAt: now,
       });
 
+      // Track items still missing price for background AI estimation
+      if (estimatedPrice === undefined) {
+        needsAIEstimate.push({ itemName: pantryItem.name, userId: user._id });
+      }
+
       itemIds.push(itemId);
       addedItemNames.push(pantryItem.name);
       knownItems.push({ name: pantryItem.name, size });
@@ -925,6 +1089,14 @@ export const addFromPantryBulk = mutation({
     // Recalculate list total after adding items
     if (itemIds.length > 0) {
       await recalculateListTotal(ctx, args.listId);
+    }
+
+    // Schedule AI price estimation for items that have no price after cascade
+    for (const item of needsAIEstimate) {
+      await ctx.scheduler.runAfter(0, api.ai.estimateItemPrice, {
+        itemName: item.itemName,
+        userId: item.userId,
+      });
     }
 
     return { count: itemIds.length, itemIds, skippedDuplicates };
@@ -1212,4 +1384,5 @@ export const addBatchFromScan = mutation({
     return { count: itemIds.length, itemIds, skippedDuplicates };
   },
 });
+
 
