@@ -52,6 +52,8 @@ export default function ScanScreen() {
   const [selectedListId, setSelectedListId] = useState<Id<"shoppingLists"> | null>(null);
   const [showListPicker, setShowListPicker] = useState(false);
   const [showProductListPicker, setShowProductListPicker] = useState(false);
+  const [addedToPantry, setAddedToPantry] = useState(false);
+  const [pantryAddResult, setPantryAddResult] = useState<{ added: number; skipped: number } | null>(null);
 
   // Duplicate toast state
   const [dupToast, setDupToast] = useState({ visible: false, name: "" });
@@ -299,6 +301,8 @@ export default function ScanScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       productScanner.clearAll();
       setShowProductListPicker(false);
+      setAddedToPantry(false);
+      setPantryAddResult(null);
 
       // Build feedback message including skipped duplicates
       const skipped = result.skippedDuplicates ?? [];
@@ -346,8 +350,6 @@ export default function ScanScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       const skipped = result.skippedDuplicates ?? [];
-      productScanner.clearAll();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       if (skipped.length > 0) {
         // Server only returns items where scanned data is genuinely different
@@ -385,12 +387,15 @@ export default function ScanScreen() {
             },
           ],
         );
-      } else if (result.added > 0) {
-        alert(
-          "Added to Pantry",
-          `${result.added} item${result.added !== 1 ? "s" : ""} added to your pantry.`,
-        );
+      }
+
+      if (result.added > 0) {
+        // Stay on screen so user can also add to a list
+        setAddedToPantry(true);
+        setPantryAddResult({ added: result.added, skipped: skipped.length });
       } else {
+        // All duplicates — nothing new added, just clear
+        productScanner.clearAll();
         alert("Already in Pantry", "This item is already in your pantry.");
       }
     } catch (error) {
@@ -398,6 +403,13 @@ export default function ScanScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert("Error", "Failed to add items to pantry");
     }
+  }
+
+  function handleDoneAfterPantry() {
+    productScanner.clearAll();
+    setAddedToPantry(false);
+    setPantryAddResult(null);
+    setShowProductListPicker(false);
   }
 
   // Parsing mode - AI processing receipt
@@ -753,30 +765,62 @@ export default function ScanScreen() {
                   />
                 ))}
 
-                {/* Add to List / Pantry buttons */}
-                <View style={styles.productActions}>
-                  {shoppingLists && shoppingLists.length > 0 && (
+                {/* Action buttons: swap between pre-pantry and post-pantry states */}
+                {addedToPantry ? (
+                  <>
+                    <View style={styles.pantrySuccessBanner}>
+                      <MaterialCommunityIcons name="check-circle" size={18} color={colors.semantic.success} />
+                      <Text style={styles.pantrySuccessText}>
+                        {pantryAddResult?.added ?? 0} added to pantry
+                      </Text>
+                    </View>
+                    <View style={styles.productActions}>
+                      <GlassButton
+                        variant="primary"
+                        size="md"
+                        icon="clipboard-plus"
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setShowProductListPicker(true);
+                        }}
+                      >
+                        Also Add to List
+                      </GlassButton>
+                      <GlassButton
+                        variant="secondary"
+                        size="md"
+                        icon="check"
+                        onPress={handleDoneAfterPantry}
+                      >
+                        Done
+                      </GlassButton>
+                    </View>
+                  </>
+                ) : (
+                  <View style={styles.productActions}>
+                    {shoppingLists && shoppingLists.length > 0 && (
+                      <GlassButton
+                        variant="primary"
+                        size="md"
+                        icon="clipboard-plus"
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setShowProductListPicker(true);
+                        }}
+                      >
+                        Add to List
+                      </GlassButton>
+                    )}
                     <GlassButton
-                      variant="primary"
+                      variant="secondary"
                       size="md"
-                      icon="clipboard-plus"
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setShowProductListPicker(true);
-                      }}
+                      icon="fridge-outline"
+                      onPress={handleAddProductsToPantry}
                     >
-                      Add to List
+                      Add to Pantry
                     </GlassButton>
-                  )}
-                  <GlassButton
-                    variant="secondary"
-                    size="md"
-                    icon="fridge-outline"
-                    onPress={handleAddProductsToPantry}
-                  >
-                    Add to Pantry
-                  </GlassButton>
-                </View>
+                  </View>
+                )}
 
                 {/* Product list picker */}
                 {showProductListPicker && shoppingLists && (
@@ -1411,5 +1455,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     marginTop: spacing.sm,
+  },
+  pantrySuccessBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: `${colors.semantic.success}15`,
+    marginTop: spacing.sm,
+  },
+  pantrySuccessText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.semantic.success,
   },
 });
