@@ -33,7 +33,7 @@ import {
 import { GlassToast } from "@/components/ui/glass/GlassToast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
-import { useProductScanner } from "@/hooks/useProductScanner";
+import { useProductScanner, type ScannedProduct } from "@/hooks/useProductScanner";
 
 type ScanMode = "receipt" | "product";
 
@@ -55,6 +55,10 @@ export default function ScanScreen() {
   const [showScanActionsModal, setShowScanActionsModal] = useState(false);
   const [addedToPantry, setAddedToPantry] = useState(false);
   const [addedToList, setAddedToList] = useState(false);
+  // The product that triggered the current actions modal
+  const [activeProduct, setActiveProduct] = useState<ScannedProduct | null>(null);
+  // Product preview state
+  const [viewingProduct, setViewingProduct] = useState<{ product: ScannedProduct; index: number } | null>(null);
   // Duplicate toast state
   const [dupToast, setDupToast] = useState({ visible: false, name: "" });
   const dismissDupToast = useCallback(() => setDupToast((prev) => ({ ...prev, visible: false })), []);
@@ -300,42 +304,39 @@ export default function ScanScreen() {
   // ── Product mode handlers ──────────────────────────────────────────────────
 
   async function handleAddProductsToList(listId: Id<"shoppingLists">) {
-    const readyProducts = productScanner.scannedProducts.filter((p) => p.status !== "pending");
-    if (readyProducts.length === 0) return;
+    if (!activeProduct) return;
+    const item = activeProduct;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const result = await addBatchToList({
         listId,
-        items: readyProducts.map((p) => ({
-          name: p.name,
-          category: p.category,
-          size: p.size,
-          unit: p.unit,
-          estimatedPrice: p.estimatedPrice,
-          brand: p.brand,
-          confidence: p.confidence,
-          imageStorageId: p.imageStorageId,
-        })),
+        items: [{
+          name: item.name,
+          category: item.category,
+          size: item.size,
+          unit: item.unit,
+          estimatedPrice: item.estimatedPrice,
+          brand: item.brand,
+          confidence: item.confidence,
+          imageStorageId: item.imageStorageId,
+        }],
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowProductListPicker(false);
 
-      // Build feedback message including skipped duplicates
       const skipped = result.skippedDuplicates ?? [];
       const listMsg =
-        result.count > 0 && skipped.length === 0
-          ? `${result.count} item${result.count !== 1 ? "s" : ""} added to your list.`
-          : result.count > 0 && skipped.length > 0
-            ? `${result.count} added. ${skipped.length} already on list (skipped).`
-            : skipped.length > 0
-              ? "All scanned items are already on your list."
-              : null;
+        result.count > 0
+          ? "Added to your list."
+          : skipped.length > 0
+            ? "Already on your list."
+            : null;
 
       if (addedToPantry) {
-        // Both done — clear queue and close modal
-        productScanner.clearAll();
+        // Both done — close modal
         setAddedToPantry(false);
         setAddedToList(false);
+        setActiveProduct(null);
         setShowScanActionsModal(false);
         if (listMsg) alert("Added to List", listMsg);
       } else {
@@ -351,51 +352,47 @@ export default function ScanScreen() {
   }
 
   async function handleAddProductsToPantry() {
-    const readyProducts = productScanner.scannedProducts.filter((p) => p.status !== "pending");
-    if (readyProducts.length === 0) return;
+    if (!activeProduct) return;
+    const item = activeProduct;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const products = readyProducts;
       const result = await addBatchToPantry({
-        items: products.map((p) => ({
-          name: p.name,
-          category: p.category,
-          size: p.size,
-          unit: p.unit,
-          estimatedPrice: p.estimatedPrice,
-          brand: p.brand,
-          confidence: p.confidence,
-          imageStorageId: p.imageStorageId,
-        })),
+        items: [{
+          name: item.name,
+          category: item.category,
+          size: item.size,
+          unit: item.unit,
+          estimatedPrice: item.estimatedPrice,
+          brand: item.brand,
+          confidence: item.confidence,
+          imageStorageId: item.imageStorageId,
+        }],
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       const skipped = result.skippedDuplicates ?? [];
 
       if (skipped.length > 0) {
-        // Server only returns items where scanned data is genuinely different
         const match = skipped[0];
-        const scannedProduct = products.find((p) => p.name === match.scannedName);
         alert(
           "Similar Item Found",
-          `"${match.existingName}" in your pantry is similar to "${match.scannedName}". Update it?`,
+          `"${match.existingName}" in your pantry is similar to "${item.name}". Update it?`,
           [
             { text: "Skip", style: "cancel" },
             {
               text: "Update",
               onPress: async () => {
-                if (!scannedProduct) return;
                 try {
                   await replacePantryMutation({
                     pantryItemId: match.existingId as Id<"pantryItems">,
                     scannedData: {
-                      name: scannedProduct.name,
-                      category: scannedProduct.category,
-                      size: scannedProduct.size,
-                      unit: scannedProduct.unit,
-                      estimatedPrice: scannedProduct.estimatedPrice,
-                      confidence: scannedProduct.confidence,
-                      imageStorageId: scannedProduct.imageStorageId,
+                      name: item.name,
+                      category: item.category,
+                      size: item.size,
+                      unit: item.unit,
+                      estimatedPrice: item.estimatedPrice,
+                      confidence: item.confidence,
+                      imageStorageId: item.imageStorageId,
                     },
                   });
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -412,10 +409,10 @@ export default function ScanScreen() {
 
       if (result.added > 0) {
         if (addedToList) {
-          // Both done — clear queue and close modal
-          productScanner.clearAll();
+          // Both done — close modal
           setAddedToPantry(false);
           setAddedToList(false);
+          setActiveProduct(null);
           setShowScanActionsModal(false);
         } else {
           // Pantry done first — stay open for list
@@ -424,10 +421,10 @@ export default function ScanScreen() {
       } else {
         // All duplicates — nothing new added to pantry
         if (addedToList) {
-          // Both tried — clear queue and close modal
-          productScanner.clearAll();
+          // Both tried — close modal
           setAddedToPantry(false);
           setAddedToList(false);
+          setActiveProduct(null);
           setShowScanActionsModal(false);
         }
         alert("Already in Pantry", "This item is already in your pantry.");
@@ -440,9 +437,9 @@ export default function ScanScreen() {
   }
 
   function handleDismissScan() {
-    productScanner.clearAll();
     setAddedToPantry(false);
     setAddedToList(false);
+    setActiveProduct(null);
     setShowProductListPicker(false);
     setShowScanActionsModal(false);
   }
@@ -764,7 +761,7 @@ export default function ScanScreen() {
                 icon="shopping-outline"
                 onPress={async () => {
                   const result = await productScanner.captureProduct();
-                  if (result) setShowScanActionsModal(true);
+                  if (result) { setActiveProduct(result); setShowScanActionsModal(true); }
                 }}
                 loading={productScanner.isProcessing}
                 disabled={productScanner.isProcessing}
@@ -778,7 +775,7 @@ export default function ScanScreen() {
                 icon="image-multiple"
                 onPress={async () => {
                   const result = await productScanner.pickFromLibrary();
-                  if (result) setShowScanActionsModal(true);
+                  if (result) { setActiveProduct(result); setShowScanActionsModal(true); }
                 }}
                 loading={productScanner.isProcessing}
                 disabled={productScanner.isProcessing}
@@ -835,7 +832,16 @@ export default function ScanScreen() {
                       ? product.localImageUri
                       : storageUrls?.[product.imageStorageId];
                     return (
-                      <View key={`${product.localImageUri ?? product.name}-${index}`} style={styles.gridTile}>
+                      <Pressable
+                        key={`${product.localImageUri ?? product.name}-${index}`}
+                        style={styles.gridTile}
+                        onPress={() => {
+                          if (!isPending) {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setViewingProduct({ product, index });
+                          }
+                        }}
+                      >
                         {imageUri ? (
                           <Image source={{ uri: imageUri }} style={styles.gridImage} />
                         ) : (
@@ -855,7 +861,10 @@ export default function ScanScreen() {
                         {!isPending && (
                           <Pressable
                             style={styles.gridRemove}
-                            onPress={() => productScanner.removeProduct(index)}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              productScanner.removeProduct(index);
+                            }}
                             hitSlop={4}
                           >
                             <MaterialCommunityIcons
@@ -865,10 +874,11 @@ export default function ScanScreen() {
                             />
                           </Pressable>
                         )}
-                      </View>
+                      </Pressable>
                     );
                   })}
                 </View>
+
                 </>
               )}
             </View>
@@ -966,15 +976,21 @@ export default function ScanScreen() {
       {/* Scan actions modal — Add to List / Add to Pantry */}
       <GlassModal
         visible={showScanActionsModal}
-        onClose={handleDismissScan}
+        onClose={() => {
+          setShowScanActionsModal(false);
+          setShowProductListPicker(false);
+          setAddedToPantry(false);
+          setAddedToList(false);
+          setActiveProduct(null);
+        }}
         position="bottom"
       >
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>
-            {`Add ${productScanner.scannedProducts.filter((p) => p.status !== "pending").length} Scanned Item${productScanner.scannedProducts.filter((p) => p.status !== "pending").length !== 1 ? "s" : ""}`}
+            {activeProduct?.name ?? "Scanned Item"}
           </Text>
           <Text style={styles.modalSubtitle}>
-            Where would you like to add them?
+            Where would you like to add it?
           </Text>
         </View>
 
@@ -1066,6 +1082,72 @@ export default function ScanScreen() {
             Done
           </GlassButton>
         )}
+      </GlassModal>
+
+      {/* Product preview modal — tap a grid tile to view */}
+      <GlassModal
+        visible={!!viewingProduct}
+        onClose={() => setViewingProduct(null)}
+        position="bottom"
+      >
+        {viewingProduct && (() => {
+          const { product, index } = viewingProduct;
+          const imageUri =
+            product.status === "pending"
+              ? product.localImageUri
+              : storageUrls?.[product.imageStorageId];
+          return (
+            <>
+              {imageUri ? (
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.previewModalImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.previewModalPlaceholder}>
+                  <MaterialCommunityIcons
+                    name="package-variant-closed"
+                    size={48}
+                    color={colors.text.tertiary}
+                  />
+                </View>
+              )}
+
+              <Text style={styles.previewModalName}>{product.name}</Text>
+
+              {(product.brand || product.category) && (
+                <Text style={styles.previewModalMeta}>
+                  {[product.brand, product.category].filter(Boolean).join(" · ")}
+                </Text>
+              )}
+
+              {product.size && (
+                <Text style={styles.previewModalSize}>
+                  {product.size}{product.unit ? ` ${product.unit}` : ""}
+                </Text>
+              )}
+
+              {product.estimatedPrice != null && (
+                <Text style={styles.previewModalPrice}>
+                  £{product.estimatedPrice.toFixed(2)}
+                </Text>
+              )}
+
+              <GlassButton
+                variant="secondary"
+                size="md"
+                icon="delete-outline"
+                onPress={() => {
+                  productScanner.removeProduct(index);
+                  setViewingProduct(null);
+                }}
+              >
+                Remove from Queue
+              </GlassButton>
+            </>
+          );
+        })()}
       </GlassModal>
 
     </GlassScreen>
@@ -1511,7 +1593,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   gridTile: {
-    width: "15%",
+    width: "18.5%",
     aspectRatio: 1,
     borderRadius: borderRadius.sm,
     overflow: "hidden",
@@ -1562,5 +1644,48 @@ const styles = StyleSheet.create({
   modalListPicker: {
     marginTop: spacing.md,
     padding: 0,
+  },
+
+  // Product preview modal
+  previewModalImage: {
+    width: "100%",
+    height: 220,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    backgroundColor: colors.glass.backgroundStrong,
+  },
+  previewModalPlaceholder: {
+    width: "100%",
+    height: 220,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    backgroundColor: colors.glass.backgroundStrong,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewModalName: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    textAlign: "center",
+    marginBottom: spacing.xs,
+  },
+  previewModalMeta: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    textAlign: "center",
+    marginBottom: spacing.xs,
+  },
+  previewModalSize: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    marginBottom: spacing.xs,
+  },
+  previewModalPrice: {
+    ...typography.headlineSmall,
+    color: colors.accent.primary,
+    textAlign: "center",
+    fontWeight: "700",
+    marginBottom: spacing.md,
   },
 });

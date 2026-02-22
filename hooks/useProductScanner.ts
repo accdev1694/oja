@@ -39,60 +39,18 @@ export interface UseProductScannerOptions {
 // Client-side dedup helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const DUPLICATE_THRESHOLD = 85;
-const TOKEN_OVERLAP_THRESHOLD = 0.75;
+const QUEUE_DEDUP_THRESHOLD = 92;
 
-/**
- * Tokenize a normalized name for overlap comparison.
- * Normalizes pack formats so "12pk", "12 pack", "12x" all become "12".
- */
-function tokenize(normalizedName: string): string[] {
-  const s = normalizedName
-    .replace(/(\d+)\s*pk\b/g, "$1")
-    .replace(/(\d+)\s*pack\b/g, "$1")
-    .replace(/(\d+)\s*x\b/g, "$1")
-    .replace(/\bpack\s*of\s*(\d+)/g, "$1");
-
-  const stopWords = new Set(["of", "the", "a", "an", "and", "in", "with", "for"]);
-  return s.split(/\s+/).filter((w) => w.length > 0 && !stopWords.has(w));
-}
-
-/**
- * Token-overlap similarity using smaller set as denominator.
- * "12 medium free range egg" vs "12pk free range egg"
- * → tokens {12, free, range, egg} overlap = 4/4 = 1.0
- */
-function tokenOverlapSimilarity(norm1: string, norm2: string): number {
-  const tokens1 = tokenize(norm1);
-  const tokens2 = tokenize(norm2);
-  if (tokens1.length === 0 || tokens2.length === 0) return 0;
-
-  const set1 = new Set(tokens1);
-  const set2 = new Set(tokens2);
-
-  let overlap = 0;
-  for (const t of set1) {
-    if (set2.has(t)) overlap++;
-  }
-
-  return overlap / Math.min(set1.size, set2.size);
-}
-
-function isSameProduct(a: ScannedProduct, b: ScannedProduct): boolean {
+/** Two products match if normalised names are exact or ≥92% similar, and sizes agree. */
+function isSameQueueProduct(a: ScannedProduct, b: ScannedProduct): boolean {
   const normA = normalizeItemName(a.name);
   const normB = normalizeItemName(b.name);
   if (!normA || !normB) return false;
 
-  // Exact normalized match
   if (normA === normB) return sizesMatch(a.size, b.size);
 
-  // Fuzzy similarity (Levenshtein)
   const sim = calculateSimilarity(normA, normB);
-  if (sim >= DUPLICATE_THRESHOLD) return sizesMatch(a.size, b.size);
-
-  // Token-overlap: catches different descriptions of the same product
-  const tokenSim = tokenOverlapSimilarity(normA, normB);
-  if (tokenSim >= TOKEN_OVERLAP_THRESHOLD) return sizesMatch(a.size, b.size);
+  if (sim >= QUEUE_DEDUP_THRESHOLD) return sizesMatch(a.size, b.size);
 
   return false;
 }
@@ -239,9 +197,9 @@ export function useProductScanner(options?: UseProductScannerOptions) {
           status: "ready",
         };
 
-        // Client-side dedup (only against ready items, skip pending)
+        // Client-side dedup: same normalised name (or ≥92% similar) + matching size
         const existingMatch = productsRef.current.find(
-          (p) => p.status !== "pending" && isSameProduct(p, product)
+          (p) => p.status !== "pending" && isSameQueueProduct(p, product)
         );
         if (existingMatch) {
           haptic("warning");
@@ -368,7 +326,7 @@ export function useProductScanner(options?: UseProductScannerOptions) {
   /** Manually add a product (e.g. from pantry browser) with dedup check */
   const addProduct = useCallback((product: ScannedProduct): boolean => {
     const existingMatch = productsRef.current.find(
-      (p) => p.status !== "pending" && isSameProduct(p, product)
+      (p) => p.status !== "pending" && isSameQueueProduct(p, product)
     );
     if (existingMatch) {
       onDuplicateRef.current?.(existingMatch, product);
