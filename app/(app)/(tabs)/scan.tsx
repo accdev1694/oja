@@ -803,14 +803,16 @@ export default function ScanScreen() {
                   </GlassButton>
                 </View>
                 {(addedToPantry || addedToList) && (
-                  <GlassButton
-                    variant="secondary"
-                    size="sm"
-                    icon="check"
-                    onPress={handleDismissScan}
-                  >
-                    Done
-                  </GlassButton>
+                  <View style={{ marginTop: spacing.sm }}>
+                    <GlassButton
+                      variant="secondary"
+                      size="sm"
+                      icon="check"
+                      onPress={handleDismissScan}
+                    >
+                      Done
+                    </GlassButton>
+                  </View>
                 )}
 
                 {/* Product list picker */}
