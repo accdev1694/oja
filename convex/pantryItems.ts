@@ -4,7 +4,7 @@ import type { MutationCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
-import { calculateSimilarity, isDuplicateItemName, isDuplicateItem } from "./lib/fuzzyMatch";
+import { calculateSimilarity, isDuplicateItemName, isDuplicateItem, normalizeItemName } from "./lib/fuzzyMatch";
 import { enrichGlobalFromProductScan } from "./lib/globalEnrichment";
 
 const ACTIVE_PANTRY_CAP = 150;
@@ -1268,28 +1268,23 @@ export const addBatchFromScan = mutation({
       .collect();
 
     let added = 0;
-    let updated = 0;
+    const skippedDuplicates: { scannedName: string; existingName: string; existingId: string }[] = [];
 
     for (const item of args.items) {
       const existingItem = existing.find((p) => isDuplicateItem(item.name, item.size, p.name, p.defaultSize));
 
       if (existingItem) {
-        // Update existing item with new info
-        const patchData: Record<string, unknown> = {
-          stockLevel: "low",
-          ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "ai_estimate" as const } : {}),
-          ...(item.size ? { defaultSize: item.size } : {}),
-          ...(item.unit ? { defaultUnit: item.unit } : {}),
-          updatedAt: now,
-        };
-        // Improve name only if user hasn't customized it
-        if (existingItem.nameSource !== "user" && item.name !== existingItem.name) {
-          patchData.name = item.name;
-          patchData.icon = getIconForItem(item.name, item.category);
-          patchData.nameSource = "system";
+        // Only prompt for replace if the scanned data is meaningfully different
+        const namesDiffer = normalizeItemName(item.name) !== normalizeItemName(existingItem.name);
+        const sizeIsNew = !!item.size && item.size !== existingItem.defaultSize;
+        if (namesDiffer || sizeIsNew) {
+          skippedDuplicates.push({
+            scannedName: item.name,
+            existingName: existingItem.name,
+            existingId: existingItem._id,
+          });
         }
-        await ctx.db.patch(existingItem._id, patchData);
-        updated++;
+        // Otherwise silently skip — nothing to improve
       } else {
         // Check pantry limit
         const access = await canAddPantryItem(ctx, user._id);
@@ -1320,7 +1315,61 @@ export const addBatchFromScan = mutation({
       await enrichGlobalFromProductScan(ctx, item, user._id);
     }
 
-    return { added, updated };
+    return { added, skippedDuplicates };
+  },
+});
+
+/**
+ * Replace a pantry item's data with scanned product info.
+ * Overwrites name, category, icon, size, unit, price — and tracks that a scan occurred.
+ */
+export const replaceWithScan = mutation({
+  args: {
+    pantryItemId: v.id("pantryItems"),
+    scannedData: v.object({
+      name: v.string(),
+      category: v.string(),
+      size: v.optional(v.string()),
+      unit: v.optional(v.string()),
+      estimatedPrice: v.optional(v.number()),
+      confidence: v.optional(v.number()),
+      imageStorageId: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const item = await ctx.db.get(args.pantryItemId);
+    if (!item) throw new Error("Item not found");
+    if (item.userId !== user._id) throw new Error("Unauthorized");
+
+    const now = Date.now();
+    const { scannedData } = args;
+
+    await ctx.db.patch(args.pantryItemId, {
+      name: scannedData.name,
+      category: scannedData.category,
+      icon: getIconForItem(scannedData.name, scannedData.category),
+      ...(scannedData.size ? { defaultSize: scannedData.size } : {}),
+      ...(scannedData.unit ? { defaultUnit: scannedData.unit } : {}),
+      ...(scannedData.estimatedPrice != null
+        ? { lastPrice: scannedData.estimatedPrice, priceSource: "ai_estimate" as const }
+        : {}),
+      nameSource: "scan" as const,
+      lastScannedAt: now,
+      updatedAt: now,
+    });
+
+    await enrichGlobalFromProductScan(ctx, scannedData, user._id);
+
+    return { success: true, pantryItemId: args.pantryItemId };
   },
 });
 
@@ -1367,6 +1416,170 @@ export const archiveStaleItems = internalMutation({
     if (archived > 0) {
       console.log(`Archived ${archived} stale pantry items`);
     }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Duplicate Detection & Merging
+// ---------------------------------------------------------------------------
+
+/**
+ * Find groups of duplicate active pantry items for the current user.
+ * Uses the same isDuplicateItem logic (fuzzy name + size matching) that
+ * prevents new duplicates at scan time, but applied retroactively.
+ *
+ * Returns an array of duplicate groups, each with 2+ items.
+ */
+export const findDuplicates = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) return [];
+
+    const items = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    const active = items.filter((item) => item.status !== "archived");
+
+    // Group items that are duplicates of each other
+    const assigned = new Set<string>();
+    const groups: (typeof active)[] = [];
+
+    for (let i = 0; i < active.length; i++) {
+      if (assigned.has(active[i]._id)) continue;
+
+      const group = [active[i]];
+      for (let j = i + 1; j < active.length; j++) {
+        if (assigned.has(active[j]._id)) continue;
+
+        if (isDuplicateItem(
+          active[i].name,
+          active[i].defaultSize,
+          active[j].name,
+          active[j].defaultSize,
+        )) {
+          group.push(active[j]);
+          assigned.add(active[j]._id);
+        }
+      }
+
+      if (group.length > 1) {
+        assigned.add(active[i]._id);
+        groups.push(group);
+      }
+    }
+
+    return groups.map((group) =>
+      group.map((item) => ({
+        _id: item._id,
+        name: item.name,
+        category: item.category,
+        stockLevel: item.stockLevel,
+        defaultSize: item.defaultSize,
+        defaultUnit: item.defaultUnit,
+        lastPrice: item.lastPrice,
+        priceSource: item.priceSource,
+        pinned: item.pinned,
+        purchaseCount: item.purchaseCount,
+        lastPurchasedAt: item.lastPurchasedAt,
+      }))
+    );
+  },
+});
+
+/**
+ * Merge a group of duplicate pantry items into one.
+ * Keeps the "best" item (receipt price > AI price, most purchases, pinned)
+ * and deletes the rest. Preserves the best available data from all items.
+ */
+export const mergeDuplicates = mutation({
+  args: {
+    keepId: v.id("pantryItems"),
+    deleteIds: v.array(v.id("pantryItems")),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const keepItem = await ctx.db.get(args.keepId);
+    if (!keepItem || keepItem.userId !== user._id) {
+      throw new Error("Item to keep not found or not owned by user");
+    }
+
+    // Collect best data from all items being deleted
+    let bestPrice = keepItem.lastPrice;
+    let bestPriceSource = keepItem.priceSource;
+    let bestSize = keepItem.defaultSize;
+    let bestUnit = keepItem.defaultUnit;
+    let totalPurchaseCount = keepItem.purchaseCount ?? 0;
+    let shouldPin = keepItem.pinned ?? false;
+
+    // Receipt prices take priority over AI estimates
+    const priceRank = (source?: string) =>
+      source === "receipt" ? 3 : source === "user" ? 2 : source === "ai_estimate" ? 1 : 0;
+
+    for (const deleteId of args.deleteIds) {
+      const item = await ctx.db.get(deleteId);
+      if (!item || item.userId !== user._id) continue;
+
+      // Take the higher-ranked price
+      if (item.lastPrice != null) {
+        if (bestPrice == null || priceRank(item.priceSource) > priceRank(bestPriceSource)) {
+          bestPrice = item.lastPrice;
+          bestPriceSource = item.priceSource;
+        }
+      }
+
+      // Take size if the kept item doesn't have one
+      if (!bestSize && item.defaultSize) {
+        bestSize = item.defaultSize;
+        bestUnit = item.defaultUnit;
+      }
+
+      // Sum purchase counts
+      totalPurchaseCount += item.purchaseCount ?? 0;
+
+      // Keep pinned status if any item was pinned
+      if (item.pinned) shouldPin = true;
+
+      // Re-point any listItems referencing the deleted item to the kept item
+      const userListItems = await ctx.db
+        .query("listItems")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .collect();
+      const linkedListItems = userListItems.filter((li) => li.pantryItemId === deleteId);
+      for (const li of linkedListItems) {
+        await ctx.db.patch(li._id, { pantryItemId: args.keepId });
+      }
+
+      // Delete the duplicate
+      await ctx.db.delete(deleteId);
+    }
+
+    // Update the kept item with the best merged data
+    await ctx.db.patch(args.keepId, {
+      ...(bestPrice != null ? { lastPrice: bestPrice, priceSource: bestPriceSource } : {}),
+      ...(bestSize ? { defaultSize: bestSize, defaultUnit: bestUnit } : {}),
+      purchaseCount: totalPurchaseCount,
+      pinned: shouldPin,
+      updatedAt: Date.now(),
+    });
+
+    return { kept: args.keepId, deleted: args.deleteIds.length };
   },
 });
 

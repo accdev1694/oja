@@ -177,6 +177,11 @@ export default function PantryScreen() {
   const migrateIcons = useMutation(api.pantryItems.migrateIcons);
   const removePantryItem = useMutation(api.pantryItems.remove);
 
+  // Dedup sweep
+  const duplicateGroups = useQuery(api.pantryItems.findDuplicates);
+  const mergeDuplicatesMut = useMutation(api.pantryItems.mergeDuplicates);
+  const [dedupDismissed, setDedupDismissed] = useState(false);
+
   // Pantry lifecycle mutations
   const togglePin = useMutation(api.pantryItems.togglePin);
   const archiveItemMut = useMutation(api.pantryItems.archiveItem);
@@ -606,6 +611,54 @@ export default function PantryScreen() {
     setAddToListItem(null);
   }, []);
 
+  // ── Dedup sweep: merge all duplicate groups in one tap ────────────────
+
+  const handleMergeDuplicates = useCallback(async () => {
+    if (!duplicateGroups || duplicateGroups.length === 0) return;
+
+    const totalDupes = duplicateGroups.reduce((sum, g) => sum + g.length - 1, 0);
+    const groupCount = duplicateGroups.length;
+
+    alert(
+      "Merge Duplicates",
+      `Found ${groupCount} group${groupCount !== 1 ? "s" : ""} of duplicates (${totalDupes} extra item${totalDupes !== 1 ? "s" : ""}). The best data (receipt prices, purchase counts, pinned status) will be kept for each.`,
+      [
+        {
+          text: "Dismiss",
+          style: "cancel",
+          onPress: () => setDedupDismissed(true),
+        },
+        {
+          text: "Merge All",
+          onPress: async () => {
+            try {
+              for (const group of duplicateGroups) {
+                // Pick the best item to keep: receipt price > AI > none, then most purchases
+                const priceRank = (source?: string) =>
+                  source === "receipt" ? 3 : source === "user" ? 2 : source === "ai_estimate" ? 1 : 0;
+
+                const sorted = [...group].sort((a, b) => {
+                  const priceDiff = priceRank(b.priceSource) - priceRank(a.priceSource);
+                  if (priceDiff !== 0) return priceDiff;
+                  return (b.purchaseCount ?? 0) - (a.purchaseCount ?? 0);
+                });
+
+                const keepId = sorted[0]._id;
+                const deleteIds = sorted.slice(1).map((item) => item._id);
+
+                await mergeDuplicatesMut({ keepId, deleteIds });
+              }
+              haptic("success");
+            } catch (err) {
+              console.error("Merge duplicates failed:", err);
+              haptic("error");
+            }
+          },
+        },
+      ]
+    );
+  }, [duplicateGroups, alert, mergeDuplicatesMut]);
+
   // ── Pantry lifecycle: long-press context menu ─────────────────────────
 
   const handleItemLongPress = useCallback((itemId: Id<"pantryItems">) => {
@@ -823,8 +876,8 @@ export default function PantryScreen() {
           accentColor={colors.semantic.pantry}
           subtitle={
             viewMode === "attention"
-              ? `${attentionCount} item${attentionCount !== 1 ? "s" : ""} need restocking`
-              : `Your stock · ${filteredItems.length} of ${items.length} items`
+              ? `What you have in your pantry at home`
+              : `What's in your pantry · ${filteredItems.length} of ${items.length}`
           }
           rightElement={
             <View style={styles.headerButtons}>
@@ -855,6 +908,17 @@ export default function PantryScreen() {
 
         {/* Contextual Tips */}
         <TipBanner context="pantry" />
+
+        {/* Duplicate Detection Banner */}
+        {!dedupDismissed && duplicateGroups && duplicateGroups.length > 0 && (
+          <Pressable onPress={handleMergeDuplicates} style={styles.dedupBanner}>
+            <MaterialCommunityIcons name="content-duplicate" size={18} color={colors.accent.warning} />
+            <Text style={styles.dedupBannerText}>
+              {duplicateGroups.length} duplicate group{duplicateGroups.length !== 1 ? "s" : ""} found
+            </Text>
+            <Text style={styles.dedupBannerAction}>Tap to merge</Text>
+          </Pressable>
+        )}
 
         {/* View Mode Tabs — sliding pill animates between warning↔primary */}
         <GlassCapsuleSwitcher
@@ -1133,5 +1197,31 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.text.tertiary,
     fontSize: 13,
+  },
+  // Dedup banner
+  dedupBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: `${colors.accent.warning}15`,
+    borderWidth: 1,
+    borderColor: `${colors.accent.warning}30`,
+  },
+  dedupBannerText: {
+    ...typography.bodySmall,
+    color: colors.accent.warning,
+    fontWeight: "600",
+    flex: 1,
+  },
+  dedupBannerAction: {
+    ...typography.labelSmall,
+    color: colors.accent.warning,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 });
