@@ -73,7 +73,7 @@ export default function ScanScreen() {
     }
   }, [listIdParam]);
 
-  const shoppingLists = useQuery(api.shoppingLists.getCompletedWithStores, {});
+  const shoppingLists = useQuery(api.shoppingLists.getActive);
   const allReceipts = useQuery(api.receipts.getByUser, {});
   const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);
   const createReceipt = useMutation(api.receipts.create);
@@ -628,7 +628,7 @@ export default function ScanScreen() {
                     const created = new Date(list._creationTime);
                     const date = created.toLocaleDateString([], { day: "numeric", month: "short" });
                     const time = created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                    const storesText = list.storeNames?.join(" \u2022 ") || "";
+                    const storesText = list.storeName ?? "";
                     return (
                     <TouchableOpacity
                       key={list._id}
@@ -827,7 +827,7 @@ export default function ScanScreen() {
                         const created = new Date(list._creationTime);
                         const date = created.toLocaleDateString([], { day: "numeric", month: "short" });
                         const time = created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                        const storesText = list.storeNames?.join(" \u2022 ") || "";
+                        const storesText = list.storeName ?? "";
                         return (
                         <TouchableOpacity
                           key={list._id}
