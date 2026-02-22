@@ -373,7 +373,6 @@ export default function ConfirmReceiptScreen() {
       name: item.name,
       category: item.category ?? "Uncategorised",
       estimatedPrice: item.quantity > 1 ? item.unitPrice : item.totalPrice,
-      quantity: item.quantity,
     }));
   }
 
