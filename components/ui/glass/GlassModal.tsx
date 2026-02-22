@@ -17,6 +17,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   colors,
   spacing,
@@ -87,6 +88,7 @@ export function GlassModal({
   fillHeight = false,
   children,
 }: GlassModalProps) {
+  const insets = useSafeAreaInsets();
   const isBottom = position === "bottom";
   const isCustom = position === "custom";
   const isFull = maxWidth === "full";
@@ -130,6 +132,7 @@ export function GlassModal({
           borderTopRightRadius: radii.xl,
           borderBottomLeftRadius: 0,
           borderBottomRightRadius: 0,
+          paddingBottom: spacing.xl + insets.bottom,
         }
       : {
           borderRadius: 20,
