@@ -78,11 +78,9 @@ export default function ConfirmReceiptScreen() {
   const activeChallenge = useQuery(api.insights.getActiveChallenge);
   const updateChallengeProgress = useMutation(api.insights.updateChallengeProgress);
 
-  // Post-save: add to list / update pantry
-  const addBatchToList = useMutation(api.listItems.addBatchFromScan);
+  // Post-save: create list / update pantry
   const addBatchToPantry = useMutation(api.pantryItems.addBatchFromScan);
   const replacePantryMutation = useMutation(api.pantryItems.replaceWithScan);
-  const shoppingLists = useQuery(api.shoppingLists.getActive);
 
   // Local state for edited items
   const [editedItems, setEditedItems] = useState<ReceiptItem[]>([]);
@@ -109,9 +107,7 @@ export default function ConfirmReceiptScreen() {
 
   // Post-save CTA state
   const [receiptSaved, setReceiptSaved] = useState(false);
-  const [addedToList, setAddedToList] = useState(false);
   const [addedToPantry, setAddedToPantry] = useState(false);
-  const [showPostSaveListPicker, setShowPostSaveListPicker] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
 
   // All hooks must be above early returns to satisfy Rules of Hooks
@@ -381,35 +377,9 @@ export default function ConfirmReceiptScreen() {
     }));
   }
 
-  async function handlePostSaveAddToList(listId: Id<"shoppingLists">) {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const result = await addBatchToList({ listId, items: mapReceiptItemsForBatch() });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setShowPostSaveListPicker(false);
-
-      const skipped = result.skippedDuplicates ?? [];
-      const msg =
-        result.count > 0 && skipped.length === 0
-          ? `${result.count} item${result.count !== 1 ? "s" : ""} added to your list.`
-          : result.count > 0 && skipped.length > 0
-            ? `${result.count} added. ${skipped.length} already on list (skipped).`
-            : skipped.length > 0
-              ? "All items are already on your list."
-              : null;
-
-      if (addedToPantry) {
-        if (msg) alert("Added to List", msg);
-        handleDoneNavigation();
-      } else {
-        setAddedToList(true);
-        if (msg) alert("Added to List", msg);
-      }
-    } catch (error) {
-      console.error("Failed to add to list:", error);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      alert("Error", "Failed to add items to list");
-    }
+  function handleCreateListFromReceipt() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push(`/(app)/create-list-from-receipt?receiptId=${receiptId}` as never);
   }
 
   async function handlePostSaveUpdatePantry() {
@@ -452,11 +422,7 @@ export default function ConfirmReceiptScreen() {
         );
       }
 
-      if (addedToList) {
-        handleDoneNavigation();
-      } else {
-        setAddedToPantry(true);
-      }
+      setAddedToPantry(true);
     } catch (error) {
       console.error("Failed to update pantry:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -641,22 +607,16 @@ export default function ConfirmReceiptScreen() {
             </Text>
 
             <View style={styles.postSaveActions}>
-              {shoppingLists && shoppingLists.length > 0 && (
-                <View style={{ flex: 1 }}>
-                  <GlassButton
-                    variant="primary"
-                    size="md"
-                    icon={addedToList ? "check-circle" : "clipboard-plus"}
-                    disabled={addedToList}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setShowPostSaveListPicker(true);
-                    }}
-                  >
-                    {addedToList ? "Added to List" : "Add to List"}
-                  </GlassButton>
-                </View>
-              )}
+              <View style={{ flex: 1 }}>
+                <GlassButton
+                  variant="primary"
+                  size="md"
+                  icon="clipboard-plus"
+                  onPress={handleCreateListFromReceipt}
+                >
+                  Create List
+                </GlassButton>
+              </View>
               <View style={{ flex: 1 }}>
                 <GlassButton
                   variant="secondary"
@@ -669,53 +629,6 @@ export default function ConfirmReceiptScreen() {
                 </GlassButton>
               </View>
             </View>
-
-            {/* Inline list picker */}
-            {showPostSaveListPicker && shoppingLists && (
-              <GlassCard variant="standard" style={styles.postSaveListPicker}>
-                <ScrollView style={styles.postSaveListScroll} nestedScrollEnabled>
-                  {shoppingLists.map((list) => {
-                    const created = new Date(list._creationTime);
-                    const date = created.toLocaleDateString([], { day: "numeric", month: "short" });
-                    const time = created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                    const storesText = list.storeName ?? "";
-                    return (
-                      <TouchableOpacity
-                        key={list._id}
-                        style={styles.postSaveListOption}
-                        onPress={() => handlePostSaveAddToList(list._id)}
-                      >
-                        <MaterialCommunityIcons
-                          name="clipboard-text"
-                          size={18}
-                          color={colors.text.secondary}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                            <Text style={styles.postSaveListName} numberOfLines={1}>
-                              {list.name}
-                            </Text>
-                            {list.listNumber != null && (
-                              <Text style={styles.postSaveListMeta}>#{list.listNumber}</Text>
-                            )}
-                          </View>
-                          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                            <Text style={styles.postSaveListMeta}>
-                              {date} · {time}
-                            </Text>
-                            {storesText ? (
-                              <Text style={styles.postSaveListMeta} numberOfLines={1}>
-                                {storesText}
-                              </Text>
-                            ) : null}
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </GlassCard>
-            )}
 
             <GlassButton
               variant="secondary"
@@ -1186,32 +1099,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
   },
-  postSaveListPicker: {
-    marginTop: spacing.md,
-    padding: 0,
-  },
-  postSaveListScroll: {
-    maxHeight: 200,
-  },
-  postSaveListOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.glass.border,
-  },
-  postSaveListName: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-    flex: 1,
-  },
-  postSaveListMeta: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-
   // Modal
   modalTitle: {
     ...typography.headlineSmall,
