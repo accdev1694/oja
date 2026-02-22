@@ -779,28 +779,32 @@ export default function ScanScreen() {
                 {/* Action buttons — completed actions get disabled, second action clears all */}
                 <View style={styles.productActions}>
                   {shoppingLists && shoppingLists.length > 0 && (
-                    <GlassButton
-                      variant="primary"
-                      size="md"
-                      icon={addedToList ? "check-circle" : "clipboard-plus"}
-                      disabled={addedToList}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setShowProductListPicker(true);
-                      }}
-                    >
-                      {addedToList ? "Added to List" : "Add to List"}
-                    </GlassButton>
+                    <View style={{ flex: 1 }}>
+                      <GlassButton
+                        variant="primary"
+                        size="md"
+                        icon={addedToList ? "check-circle" : "clipboard-plus"}
+                        disabled={addedToList}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setShowProductListPicker(true);
+                        }}
+                      >
+                        {addedToList ? "Added to List" : "Add to List"}
+                      </GlassButton>
+                    </View>
                   )}
-                  <GlassButton
-                    variant="secondary"
-                    size="md"
-                    icon={addedToPantry ? "check-circle" : "fridge-outline"}
-                    disabled={addedToPantry}
-                    onPress={handleAddProductsToPantry}
-                  >
-                    {addedToPantry ? "In Pantry" : "Add to Pantry"}
-                  </GlassButton>
+                  <View style={{ flex: 1 }}>
+                    <GlassButton
+                      variant="secondary"
+                      size="md"
+                      icon={addedToPantry ? "check-circle" : "fridge-outline"}
+                      disabled={addedToPantry}
+                      onPress={handleAddProductsToPantry}
+                    >
+                      {addedToPantry ? "In Pantry" : "Add to Pantry"}
+                    </GlassButton>
+                  </View>
                 </View>
                 {(addedToPantry || addedToList) && (
                   <View style={{ marginTop: spacing.sm }}>
