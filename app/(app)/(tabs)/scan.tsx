@@ -797,17 +797,16 @@ export default function ScanScreen() {
             {/* Your Scanned Products — always visible */}
             <View style={styles.scannedSection}>
               <View style={styles.scannedSectionHeader}>
-                <View style={styles.scannedSectionLeft}>
-                  <MaterialCommunityIcons
-                    name="barcode-scan"
-                    size={18}
-                    color={colors.text.secondary}
-                  />
-                  <Text style={styles.scannedSectionTitle}>Your Scanned Products</Text>
-                </View>
+                <Text style={styles.scannedSectionTitle}>
+                  Your Scanned Products, <Text style={{ color: colors.accent.primary }}>tap to view</Text>
+                </Text>
                 {productScanner.scannedProducts.length > 0 && (
-                  <Pressable onPress={productScanner.clearAll}>
-                    <Text style={styles.scannedClear}>Clear All</Text>
+                  <Pressable onPress={productScanner.clearAll} hitSlop={8}>
+                    <MaterialCommunityIcons
+                      name="delete-outline"
+                      size={24}
+                      color={colors.semantic.danger}
+                    />
                   </Pressable>
                 )}
               </View>
@@ -1567,9 +1566,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   scannedSectionTitle: {
-    ...typography.labelLarge,
-    color: colors.text.primary,
-    fontWeight: "600",
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
   },
   scannedClear: {
     ...typography.labelSmall,
