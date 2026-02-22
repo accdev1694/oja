@@ -85,6 +85,8 @@ function arePropsEqual(prev: PantryItemRowProps, next: PantryItemRowProps): bool
     prev.item.name === next.item.name &&
     prev.item.defaultSize === next.item.defaultSize &&
     prev.item.defaultUnit === next.item.defaultUnit &&
+    prev.item.lastPrice === next.item.lastPrice &&
+    prev.item.priceSource === next.item.priceSource &&
     prev.item.pinned === next.item.pinned &&
     prev.item.purchaseCount === next.item.purchaseCount &&
     prev.item.status === next.item.status &&
@@ -162,9 +164,17 @@ export const PantryItemRow = React.memo(function PantryItemRow({
         ? "Running low"
         : "Out of stock";
 
-  // Format display name with size if available
+  // Format display name with size if available — but skip if the name already
+  // contains the size (e.g. AI returns "12pk Free Range Eggs" with size "12 pack")
   const sizeDisplay = formatSize(item.defaultSize, item.defaultUnit);
-  const displayName = sizeDisplay ? `${item.name} (${sizeDisplay})` : item.name;
+  const nameAlreadyHasSize = sizeDisplay
+    ? item.name.toLowerCase().includes(sizeDisplay.toLowerCase()) ||
+      // Also check raw numeric portion — "12pk" in name covers size "12pack"/"12 pack"
+      (/^\d+/.test(sizeDisplay) &&
+        item.name.match(new RegExp(`\\b${sizeDisplay.match(/^\d+/)?.[0]}\\s*(?:pk|pack|x)?\\b`, "i")) !== null)
+    : false;
+  const displayName =
+    sizeDisplay && !nameAlreadyHasSize ? `${item.name} (${sizeDisplay})` : item.name;
 
   return (
     <Animated.View
@@ -198,6 +208,12 @@ export const PantryItemRow = React.memo(function PantryItemRow({
                   <Text style={[styles.stockLevelText, isArchived && styles.archivedSubText]}>
                     {isArchived ? "Archived" : stockLabel}
                   </Text>
+                  {!isArchived && item.lastPrice != null && (
+                    <Text style={styles.priceEstimate}>
+                      £{item.lastPrice.toFixed(2)}
+                      {item.priceSource !== "receipt" && " est."}
+                    </Text>
+                  )}
                   {isArchived && (
                     <View style={styles.archivedBadge}>
                       <MaterialCommunityIcons
@@ -213,15 +229,14 @@ export const PantryItemRow = React.memo(function PantryItemRow({
                       <Text style={styles.frequentBadgeText}>Frequent</Text>
                     </View>
                   )}
+                  {!isArchived && (
+                    <View style={styles.actionButtons}>
+                      <AddToListButton onPress={handleAddToList} size="sm" />
+                      <RemoveButton onPress={handleRemove} size="sm" />
+                    </View>
+                  )}
                 </View>
               </View>
-
-              {!isArchived && (
-                <>
-                  <AddToListButton onPress={handleAddToList} size="sm" />
-                  <RemoveButton onPress={handleRemove} size="sm" />
-                </>
-              )}
             </GlassCard>
           </View>
         </Animated.View>
@@ -240,7 +255,7 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     padding: spacing.md,
     gap: spacing.lg,
   },
@@ -269,6 +284,11 @@ const styles = StyleSheet.create({
   pinIcon: {
     marginLeft: 2,
   },
+  priceEstimate: {
+    fontSize: 12,
+    fontStyle: "italic",
+    color: colors.accent.primary,
+  },
   stockLevelText: {
     fontSize: 18,
     fontWeight: "500",
@@ -283,6 +303,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    marginTop: 2,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginLeft: "auto",
   },
   archivedBadge: {
     flexDirection: "row",
