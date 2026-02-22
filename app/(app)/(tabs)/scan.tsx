@@ -1175,6 +1175,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   listPickerCard: {
+    marginTop: spacing.md,
     marginBottom: spacing.md,
     padding: 0,
   },
