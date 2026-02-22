@@ -49,8 +49,6 @@ export default function ScanScreen() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
-  const [selectedListId, setSelectedListId] = useState<Id<"shoppingLists"> | null>(null);
-  const [showListPicker, setShowListPicker] = useState(false);
   const [showProductListPicker, setShowProductListPicker] = useState(false);
   const [showScanActionsModal, setShowScanActionsModal] = useState(false);
   const [addedToPantry, setAddedToPantry] = useState(false);
@@ -63,6 +61,13 @@ export default function ScanScreen() {
   const [dupToast, setDupToast] = useState({ visible: false, name: "" });
   const dismissDupToast = useCallback(() => setDupToast((prev) => ({ ...prev, visible: false })), []);
 
+  // ── Receipt state ─────────────────────────────────────────────────────
+  type ReceiptItem = { _id: Id<"receipts">; storeName: string; normalizedStoreId?: string; total: number; purchaseDate: number; imageStorageId?: string; items: { name: string; quantity: number; unitPrice: number; totalPrice: number; category?: string; size?: string; unit?: string; confidence?: number }[] };
+  const [viewingReceipt, setViewingReceipt] = useState<ReceiptItem | null>(null);
+  const [activeReceipt, setActiveReceipt] = useState<ReceiptItem | null>(null);
+  const [showReceiptActionsModal, setShowReceiptActionsModal] = useState(false);
+  const [receiptAddedToPantry, setReceiptAddedToPantry] = useState(false);
+
   // Product scanner with client-side dedup
   const productScanner = useProductScanner({
     onDuplicate: (existing) => {
@@ -70,27 +75,23 @@ export default function ScanScreen() {
     },
   });
 
-  // Auto-select list when navigated from complete shopping flow
-  useEffect(() => {
-    if (listIdParam) {
-      setSelectedListId(listIdParam as Id<"shoppingLists">);
-    }
-  }, [listIdParam]);
-
-  // Resolve scanned product image URLs
-  const scannedStorageIds = useMemo(
-    () => productScanner.scannedProducts
-      .map((p) => p.imageStorageId)
-      .filter((id) => id.length > 0),
-    [productScanner.scannedProducts]
-  );
-  const storageUrls = useQuery(
-    api.receipts.getStorageUrls,
-    scannedStorageIds.length > 0 ? { storageIds: scannedStorageIds } : "skip"
-  );
-
   const shoppingLists = useQuery(api.shoppingLists.getActive);
   const allReceipts = useQuery(api.receipts.getByUser, {});
+
+  // Resolve all image URLs (products + receipts) in a single query
+  const allStorageIds = useMemo(() => {
+    const productIds = productScanner.scannedProducts
+      .map((p) => p.imageStorageId)
+      .filter((id) => id.length > 0);
+    const receiptIds = (allReceipts ?? [])
+      .filter((r) => r.processingStatus === "completed" && r.imageStorageId)
+      .map((r) => r.imageStorageId as string);
+    return [...new Set([...productIds, ...receiptIds])];
+  }, [productScanner.scannedProducts, allReceipts]);
+  const storageUrls = useQuery(
+    api.receipts.getStorageUrls,
+    allStorageIds.length > 0 ? { storageIds: allStorageIds } : "skip"
+  );
   const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);
   const createReceipt = useMutation(api.receipts.create);
   const parseReceipt = useAction(api.ai.parseReceipt);
@@ -102,8 +103,6 @@ export default function ScanScreen() {
   // Replace pantry item with scanned data
   const replacePantryMutation = useMutation(api.pantryItems.replaceWithScan);
   const [parseReceiptId, setParseReceiptId] = useState<Id<"receipts"> | null>(null);
-
-  const selectedList = shoppingLists?.find((l) => l._id === selectedListId);
 
   // Filter to completed receipts with items for the history section
   const completedReceipts = useMemo(() => {
@@ -197,10 +196,9 @@ export default function ScanScreen() {
 
       const { storageId } = await uploadResponse.json();
 
-      // Step 2: Create receipt record (with optional list link)
+      // Step 2: Create receipt record
       const receiptId = await createReceipt({
         imageStorageId: storageId,
-        listId: selectedListId ?? undefined,
       });
 
       setIsUploading(false);
@@ -299,6 +297,62 @@ export default function ScanScreen() {
   function handleRetake() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedImage(null);
+  }
+
+  // ── Receipt mode handlers ─────────────────────────────────────────────────
+
+  function handleCreateListFromReceipt() {
+    if (!activeReceipt) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const receiptId = activeReceipt._id;
+    // Close modals before navigating
+    setShowReceiptActionsModal(false);
+    setReceiptAddedToPantry(false);
+    setActiveReceipt(null);
+    router.push(`/(app)/create-list-from-receipt?receiptId=${receiptId}` as never);
+  }
+
+  async function handleAddReceiptToPantry() {
+    if (!activeReceipt) return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const result = await addBatchToPantry({
+        items: activeReceipt.items.map((item) => ({
+          name: item.name,
+          category: item.category ?? "Other",
+          size: item.size,
+          unit: item.unit,
+          estimatedPrice: item.totalPrice,
+          confidence: item.confidence,
+        })),
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      const skipped = result.skippedDuplicates ?? [];
+
+      if (skipped.length > 0 && skipped.length < activeReceipt.items.length) {
+        alert(
+          "Some Items Already in Pantry",
+          `${result.added} new item${result.added !== 1 ? "s" : ""} added. ${skipped.length} already in your pantry.`,
+        );
+      }
+
+      if (result.added > 0) {
+        setReceiptAddedToPantry(true);
+      } else {
+        alert("Already in Pantry", "All receipt items are already in your pantry.");
+      }
+    } catch (error) {
+      console.error("Failed to add receipt items to pantry:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert("Error", "Failed to add items to pantry");
+    }
+  }
+
+  function handleDismissReceiptActions() {
+    setReceiptAddedToPantry(false);
+    setActiveReceipt(null);
+    setShowReceiptActionsModal(false);
   }
 
   // ── Product mode handlers ──────────────────────────────────────────────────
@@ -588,133 +642,6 @@ export default function ScanScreen() {
               </View>
             </GlassCard>
 
-            {/* Link to List (optional) */}
-            {shoppingLists && shoppingLists.length > 0 && (
-              <TouchableOpacity
-                style={styles.listSelector}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setShowListPicker(!showListPicker);
-                }}
-                activeOpacity={0.7}
-              >
-                <MaterialCommunityIcons
-                  name={selectedList ? "clipboard-check" : "clipboard-text-outline"}
-                  size={20}
-                  color={selectedList ? colors.accent.primary : colors.text.secondary}
-                />
-                <Text
-                  style={[
-                    styles.listSelectorText,
-                    selectedList && styles.listSelectorTextActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {selectedList
-                    ? `Linked to: ${selectedList.name}`
-                    : "Link to shopping list (optional)"}
-                </Text>
-                <MaterialCommunityIcons
-                  name={showListPicker ? "chevron-up" : "chevron-down"}
-                  size={20}
-                  color={colors.text.secondary}
-                />
-              </TouchableOpacity>
-            )}
-
-            {showListPicker && shoppingLists && (
-              <GlassCard variant="standard" style={styles.listPickerCard}>
-                <ScrollView style={styles.listPickerScroll} nestedScrollEnabled>
-                  {/* None option */}
-                  <TouchableOpacity
-                    style={[
-                      styles.listOption,
-                      !selectedListId && styles.listOptionActive,
-                    ]}
-                    onPress={() => {
-                      setSelectedListId(null);
-                      setShowListPicker(false);
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }}
-                  >
-                    <MaterialCommunityIcons
-                      name="close-circle-outline"
-                      size={18}
-                      color={colors.text.secondary}
-                    />
-                    <Text style={styles.listOptionText}>No list (standalone receipt)</Text>
-                  </TouchableOpacity>
-
-                  {shoppingLists.map((list) => {
-                    const created = new Date(list._creationTime);
-                    const date = created.toLocaleDateString([], { day: "numeric", month: "short" });
-                    const time = created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                    const storesText = list.storeName ?? "";
-                    return (
-                    <TouchableOpacity
-                      key={list._id}
-                      style={[
-                        styles.listOption,
-                        selectedListId === list._id && styles.listOptionActive,
-                      ]}
-                      onPress={() => {
-                        setSelectedListId(list._id);
-                        setShowListPicker(false);
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      }}
-                    >
-                      <MaterialCommunityIcons
-                        name="clipboard-text"
-                        size={18}
-                        color={
-                          selectedListId === list._id
-                            ? colors.accent.primary
-                            : colors.text.secondary
-                        }
-                      />
-                      <View style={styles.listOptionInfo}>
-                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                          <Text
-                            style={[
-                              styles.listOptionText,
-                              selectedListId === list._id && styles.listOptionTextActive,
-                              { flex: 1 },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {list.name}
-                          </Text>
-                          {list.listNumber != null && (
-                            <Text style={[styles.listOptionBudget, { marginLeft: spacing.sm }]}>
-                              #{list.listNumber}
-                            </Text>
-                          )}
-                        </View>
-                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                          <Text style={styles.listOptionBudget}>
-                            {date} · {time}
-                          </Text>
-                          {storesText ? (
-                            <Text style={[styles.listOptionBudget, { marginLeft: spacing.sm }]} numberOfLines={1}>
-                              {storesText}
-                            </Text>
-                          ) : null}
-                        </View>
-                      </View>
-                      {selectedListId === list._id && (
-                        <MaterialCommunityIcons
-                          name="check"
-                          size={18}
-                          color={colors.accent.primary}
-                        />
-                      )}
-                    </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </GlassCard>
-            )}
-
             {/* Action Buttons */}
             <View style={styles.buttons}>
               <GlassButton
@@ -734,6 +661,127 @@ export default function ScanScreen() {
               >
                 Choose from Library
               </GlassButton>
+            </View>
+
+            {/* Your Scanned Receipts — grid */}
+            <View style={styles.scannedSection}>
+              <View style={styles.scannedSectionHeader}>
+                <Text style={styles.scannedSectionTitle}>
+                  Your Scanned Receipts, <Text style={{ color: colors.accent.primary }}>tap to view</Text>
+                </Text>
+                {completedReceipts.length > 0 && (
+                  <Pressable
+                    onPress={() => {
+                      alert(
+                        "Clear All Receipts",
+                        "Remove all receipts from your history? Price data will be kept.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Clear All",
+                            style: "destructive",
+                            onPress: async () => {
+                              try {
+                                await Promise.all(completedReceipts.map((r) => deleteReceipt({ id: r._id })));
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                              } catch (e) {
+                                console.error("Failed to clear receipts:", e);
+                                alert("Error", "Failed to clear receipts");
+                              }
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                    hitSlop={8}
+                  >
+                    <MaterialCommunityIcons
+                      name="delete-outline"
+                      size={24}
+                      color={colors.semantic.danger}
+                    />
+                  </Pressable>
+                )}
+              </View>
+
+              {completedReceipts.length === 0 ? (
+                <View style={styles.scannedEmpty}>
+                  <MaterialCommunityIcons
+                    name="receipt"
+                    size={36}
+                    color={colors.text.tertiary}
+                  />
+                  <Text style={styles.scannedEmptyText}>
+                    Scan your first receipt to start building your history
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.scannedGrid}>
+                  {completedReceipts.map((receipt) => {
+                    const imageUri = receipt.imageStorageId
+                      ? storageUrls?.[receipt.imageStorageId]
+                      : null;
+                    const storeInfo = receipt.normalizedStoreId
+                      ? getStoreInfoSafe(receipt.normalizedStoreId)
+                      : null;
+                    return (
+                      <Pressable
+                        key={receipt._id}
+                        style={styles.gridTile}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setViewingReceipt(receipt as ReceiptItem);
+                        }}
+                      >
+                        {imageUri ? (
+                          <Image source={{ uri: imageUri }} style={styles.gridImage} />
+                        ) : (
+                          <View style={[styles.gridPlaceholder, storeInfo?.color ? { backgroundColor: `${storeInfo.color}30` } : undefined]}>
+                            <MaterialCommunityIcons
+                              name="receipt"
+                              size={16}
+                              color={storeInfo?.color ?? colors.text.tertiary}
+                            />
+                          </View>
+                        )}
+                        <Pressable
+                          style={styles.gridRemove}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                            alert(
+                              "Remove Receipt",
+                              `Remove this ${receipt.storeName} receipt?`,
+                              [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                  text: "Remove",
+                                  style: "destructive",
+                                  onPress: async () => {
+                                    try {
+                                      await deleteReceipt({ id: receipt._id });
+                                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                    } catch (err) {
+                                      console.error("Failed to remove receipt:", err);
+                                    }
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                          hitSlop={4}
+                        >
+                          <MaterialCommunityIcons
+                            name="close-circle"
+                            size={14}
+                            color={colors.semantic.danger}
+                          />
+                        </Pressable>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           </>
         ) : (
@@ -884,79 +932,6 @@ export default function ScanScreen() {
           </>
         )}
 
-        {/* Receipt History — only in receipt mode */}
-        {scanMode === "receipt" && (
-          <View style={styles.historySection}>
-            <View style={styles.historySectionHeader}>
-              <View style={styles.historySectionLeft}>
-                <MaterialCommunityIcons
-                  name="receipt"
-                  size={18}
-                  color={colors.text.secondary}
-                />
-                <Text style={styles.historySectionTitle}>Your Receipts</Text>
-              </View>
-              {completedReceipts.length > 0 && (
-                <View style={styles.historyBadge}>
-                  <Text style={styles.historyBadgeText}>
-                    {completedReceipts.length}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {completedReceipts.length === 0 ? (
-              <View style={styles.historyEmpty}>
-                <MaterialCommunityIcons
-                  name="receipt"
-                  size={36}
-                  color={colors.text.tertiary}
-                />
-                <Text style={styles.historyEmptyText}>
-                  Scan your first receipt to start building your history
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.historyList}>
-                {completedReceipts.map((receipt) => (
-                  <ReceiptHistoryCard
-                    key={receipt._id}
-                    receipt={receipt}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      router.push(
-                        `/(app)/create-list-from-receipt?receiptId=${receipt._id}` as never
-                      );
-                    }}
-                    onDelete={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      alert(
-                        "Remove Receipt",
-                        `Remove this ${receipt.storeName} receipt from your history? Price data will be kept.`,
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Remove",
-                            style: "destructive",
-                            onPress: async () => {
-                              try {
-                                await deleteReceipt({ id: receipt._id });
-                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                              } catch (e) {
-                                console.error("Failed to remove receipt:", e);
-                                alert("Error", "Failed to remove receipt");
-                              }
-                            },
-                          },
-                        ]
-                      );
-                    }}
-                  />
-                ))}
-              </View>
-            )}
-          </View>
-        )}
 
         {/* Bottom spacing */}
         <View style={styles.bottomSpacer} />
@@ -1149,6 +1124,153 @@ export default function ScanScreen() {
         })()}
       </GlassModal>
 
+      {/* Receipt preview modal — tap a grid tile to view */}
+      <GlassModal
+        visible={!!viewingReceipt}
+        onClose={() => setViewingReceipt(null)}
+        position="bottom"
+      >
+        {viewingReceipt && (() => {
+          const receipt = viewingReceipt;
+          const imageUri = receipt.imageStorageId
+            ? storageUrls?.[receipt.imageStorageId]
+            : null;
+          const storeInfo = receipt.normalizedStoreId
+            ? getStoreInfoSafe(receipt.normalizedStoreId)
+            : null;
+          const d = new Date(receipt.purchaseDate);
+          const dateStr = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
+          return (
+            <>
+              {imageUri ? (
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.previewModalImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.previewModalPlaceholder, storeInfo?.color ? { backgroundColor: `${storeInfo.color}20` } : undefined]}>
+                  <MaterialCommunityIcons
+                    name="receipt"
+                    size={48}
+                    color={storeInfo?.color ?? colors.text.tertiary}
+                  />
+                </View>
+              )}
+
+              <Text style={styles.previewModalName}>{receipt.storeName}</Text>
+
+              <Text style={styles.previewModalMeta}>
+                {dateStr} · {receipt.items.length} item{receipt.items.length !== 1 ? "s" : ""}
+              </Text>
+
+              <Text style={styles.previewModalPrice}>
+                £{receipt.total.toFixed(2)}
+              </Text>
+
+              <View style={{ gap: spacing.sm }}>
+                <GlassButton
+                  variant="primary"
+                  size="md"
+                  icon="clipboard-plus"
+                  onPress={() => {
+                    setViewingReceipt(null);
+                    setActiveReceipt(receipt);
+                    setShowReceiptActionsModal(true);
+                  }}
+                >
+                  Add to List / Pantry
+                </GlassButton>
+
+                <GlassButton
+                  variant="secondary"
+                  size="md"
+                  icon="delete-outline"
+                  onPress={() => {
+                    setViewingReceipt(null);
+                    alert(
+                      "Remove Receipt",
+                      `Remove this ${receipt.storeName} receipt? Price data will be kept.`,
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Remove",
+                          style: "destructive",
+                          onPress: async () => {
+                            try {
+                              await deleteReceipt({ id: receipt._id });
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            } catch (err) {
+                              console.error("Failed to remove receipt:", err);
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                >
+                  Remove Receipt
+                </GlassButton>
+              </View>
+            </>
+          );
+        })()}
+      </GlassModal>
+
+      {/* Receipt actions modal — Add to List / Update Pantry */}
+      <GlassModal
+        visible={showReceiptActionsModal}
+        onClose={() => {
+          setShowReceiptActionsModal(false);
+          setReceiptAddedToPantry(false);
+          setActiveReceipt(null);
+        }}
+        position="bottom"
+      >
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>
+            {activeReceipt?.storeName ?? "Receipt Items"}
+          </Text>
+          <Text style={styles.modalSubtitle}>
+            {activeReceipt ? `${activeReceipt.items.length} item${activeReceipt.items.length !== 1 ? "s" : ""} · £${activeReceipt.total.toFixed(2)}` : "Where would you like to add them?"}
+          </Text>
+        </View>
+
+        <View style={styles.modalActions}>
+          <GlassButton
+            variant="primary"
+            size="lg"
+            icon="clipboard-plus"
+            onPress={handleCreateListFromReceipt}
+          >
+            Create List
+          </GlassButton>
+
+          <GlassButton
+            variant="secondary"
+            size="lg"
+            icon={receiptAddedToPantry ? "check-circle" : "fridge-outline"}
+            disabled={receiptAddedToPantry}
+            onPress={handleAddReceiptToPantry}
+          >
+            {receiptAddedToPantry ? "In Pantry" : "Update Pantry"}
+          </GlassButton>
+        </View>
+
+        {/* Done button — appears after pantry update */}
+        {receiptAddedToPantry && (
+          <GlassButton
+            variant="secondary"
+            size="md"
+            icon="check"
+            onPress={handleDismissReceiptActions}
+            style={{ marginTop: spacing.sm }}
+          >
+            Done
+          </GlassButton>
+        )}
+      </GlassModal>
+
     </GlassScreen>
   );
 }
@@ -1170,72 +1292,6 @@ function InstructionItem({ number, text }: InstructionItemProps) {
       </View>
       <Text style={styles.instructionText}>{text}</Text>
     </View>
-  );
-}
-
-// =============================================================================
-// RECEIPT HISTORY CARD COMPONENT
-// =============================================================================
-
-interface ReceiptHistoryCardProps {
-  receipt: {
-    _id: Id<"receipts">;
-    storeName: string;
-    normalizedStoreId?: string;
-    total: number;
-    purchaseDate: number;
-    items: { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
-  };
-  onPress: () => void;
-  onDelete: () => void;
-}
-
-function ReceiptHistoryCard({ receipt, onPress, onDelete }: ReceiptHistoryCardProps) {
-  const storeColor = receipt.normalizedStoreId
-    ? getStoreInfoSafe(receipt.normalizedStoreId)?.color ?? colors.text.tertiary
-    : colors.text.tertiary;
-
-  const d = new Date(receipt.purchaseDate);
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = String(d.getFullYear()).slice(-2);
-  const dateStr = `${day}/${month}/${year}`;
-
-  return (
-    <Pressable style={styles.receiptCard} onPress={onPress}>
-      <View style={[styles.receiptStoreDot, { backgroundColor: storeColor }]} />
-      <View style={styles.receiptCardInfo}>
-        <Text style={styles.receiptCardStore} numberOfLines={1}>
-          {receipt.storeName}
-        </Text>
-        <Text style={styles.receiptCardMeta}>
-          {dateStr} · {receipt.items.length} item
-          {receipt.items.length !== 1 ? "s" : ""}
-        </Text>
-      </View>
-      <Text style={styles.receiptCardTotal}>
-        £{receipt.total.toFixed(2)}
-      </Text>
-      <Pressable
-        onPress={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        hitSlop={8}
-        style={styles.receiptDeleteBtn}
-      >
-        <MaterialCommunityIcons
-          name="close-circle-outline"
-          size={18}
-          color={colors.text.tertiary}
-        />
-      </Pressable>
-      <MaterialCommunityIcons
-        name="clipboard-plus-outline"
-        size={20}
-        color={colors.accent.primary}
-      />
-    </Pressable>
   );
 }
 
@@ -1307,33 +1363,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // List Selector
-  listSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.glass.background,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  listSelectorText: {
-    ...typography.bodyMedium,
-    color: colors.text.secondary,
-    flex: 1,
-  },
-  listSelectorTextActive: {
-    color: colors.accent.primary,
-    fontWeight: "600",
-  },
-  listPickerCard: {
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
-    padding: 0,
-  },
   listPickerScroll: {
     maxHeight: 200,
   },
@@ -1346,19 +1375,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.glass.border,
   },
-  listOptionActive: {
-    backgroundColor: `${colors.accent.primary}10`,
-  },
   listOptionInfo: {
     flex: 1,
   },
   listOptionText: {
     ...typography.bodyMedium,
     color: colors.text.primary,
-  },
-  listOptionTextActive: {
-    color: colors.accent.primary,
-    fontWeight: "600",
   },
   listOptionBudget: {
     ...typography.bodySmall,
@@ -1438,97 +1460,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // Receipt History Section
-  historySection: {
-    marginTop: spacing["2xl"],
-    borderTopWidth: 1,
-    borderTopColor: colors.glass.border,
-    paddingTop: spacing.lg,
-  },
-  historySectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.md,
-  },
-  historySectionLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  historySectionTitle: {
-    ...typography.labelLarge,
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-  historyBadge: {
-    backgroundColor: colors.glass.backgroundStrong,
-    borderRadius: borderRadius.sm,
-    minWidth: 24,
-    height: 24,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: spacing.sm,
-  },
-  historyBadgeText: {
-    ...typography.labelSmall,
-    color: colors.text.secondary,
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  historyEmpty: {
-    alignItems: "center",
-    paddingVertical: spacing["2xl"],
-    gap: spacing.sm,
-  },
-  historyEmptyText: {
-    ...typography.bodyMedium,
-    color: colors.text.tertiary,
-    textAlign: "center",
-    maxWidth: 240,
-  },
-  historyList: {
-    gap: spacing.sm,
-  },
-
-  // Receipt Card
-  receiptCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  receiptStoreDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  receiptCardInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  receiptCardStore: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-  receiptCardMeta: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-  receiptCardTotal: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-    fontWeight: "700",
-  },
-  receiptDeleteBtn: {
-    padding: spacing.xs,
-  },
-
   // Mode Toggle
   modeToggle: {
     marginBottom: spacing.md,
@@ -1560,18 +1491,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: spacing.md,
   },
-  scannedSectionLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
   scannedSectionTitle: {
     ...typography.bodyMedium,
     color: colors.text.secondary,
-  },
-  scannedClear: {
-    ...typography.labelSmall,
-    color: colors.semantic.danger,
   },
   scannedEmpty: {
     alignItems: "center",
