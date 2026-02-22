@@ -1170,19 +1170,6 @@ export default function ScanScreen() {
 
               <View style={{ gap: spacing.sm }}>
                 <GlassButton
-                  variant="primary"
-                  size="md"
-                  icon="clipboard-plus"
-                  onPress={() => {
-                    setViewingReceipt(null);
-                    setActiveReceipt(receipt);
-                    setShowReceiptActionsModal(true);
-                  }}
-                >
-                  Add to List / Pantry
-                </GlassButton>
-
-                <GlassButton
                   variant="secondary"
                   size="md"
                   icon="delete-outline"
