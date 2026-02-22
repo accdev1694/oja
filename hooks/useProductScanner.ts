@@ -121,6 +121,69 @@ export function useProductScanner(options?: UseProductScannerOptions) {
   const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);
   const scanProduct = useAction(api.ai.scanProduct);
 
+  /** Shared: upload image URI, AI-scan, dedup, and add to list */
+  const processImageUri = useCallback(
+    async (uri: string, errorHint: string): Promise<ScannedProduct | null> => {
+      setIsProcessing(true);
+      haptic("medium");
+
+      // Upload image to Convex storage
+      const uploadUrl = await generateUploadUrl();
+      const imageResponse = await fetch(uri);
+      const blob = await imageResponse.blob();
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": blob.type },
+        body: blob,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const { storageId } = await uploadResponse.json();
+
+      // Call AI to identify product
+      const parsed = await scanProduct({ storageId });
+
+      if (!parsed.success) {
+        haptic("error");
+        setLastError(parsed.rejection || errorHint);
+        setIsProcessing(false);
+        return null;
+      }
+
+      const product: ScannedProduct = {
+        name: parsed.name as string,
+        category: parsed.category as string,
+        size: parsed.size as string | undefined,
+        unit: parsed.unit as string | undefined,
+        brand: parsed.brand as string | undefined,
+        estimatedPrice: parsed.estimatedPrice as number | undefined,
+        confidence: parsed.confidence as number,
+        imageStorageId: storageId,
+      };
+
+      // Client-side dedup
+      const existingMatch = productsRef.current.find((p) =>
+        isSameProduct(p, product)
+      );
+      if (existingMatch) {
+        haptic("warning");
+        setIsProcessing(false);
+        onDuplicateRef.current?.(existingMatch, product);
+        return null;
+      }
+
+      setScannedProducts((prev) => [...prev, product]);
+      haptic("success");
+      setIsProcessing(false);
+      return product;
+    },
+    [generateUploadUrl, scanProduct]
+  );
+
   /**
    * Open camera, take photo, upload, and scan with AI.
    * Returns the scanned product if successful, or null if cancelled/failed/duplicate.
@@ -146,60 +209,10 @@ export function useProductScanner(options?: UseProductScannerOptions) {
         return null;
       }
 
-      setIsProcessing(true);
-      haptic("medium");
-
-      // Upload image to Convex storage
-      const uploadUrl = await generateUploadUrl();
-      const imageResponse = await fetch(result.assets[0].uri);
-      const blob = await imageResponse.blob();
-
-      const uploadResponse = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": blob.type },
-        body: blob,
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error("Upload failed");
-      }
-
-      const { storageId } = await uploadResponse.json();
-
-      // Call AI to identify product
-      const parsed = await scanProduct({ storageId });
-
-      if (!parsed.success) {
-        haptic("error");
-        setLastError(parsed.rejection || "Product not recognised. Snap the label showing name and size.");
-        setIsProcessing(false);
-        return null;
-      }
-
-      const product: ScannedProduct = {
-        name: parsed.name as string,
-        category: parsed.category as string,
-        size: parsed.size as string | undefined,
-        unit: parsed.unit as string | undefined,
-        brand: parsed.brand as string | undefined,
-        estimatedPrice: parsed.estimatedPrice as number | undefined,
-        confidence: parsed.confidence as number,
-        imageStorageId: storageId,
-      };
-
-      // Client-side dedup: check against already-scanned products in this session
-      const existingMatch = productsRef.current.find((p) => isSameProduct(p, product));
-      if (existingMatch) {
-        haptic("warning");
-        setIsProcessing(false);
-        onDuplicateRef.current?.(existingMatch, product);
-        return null;
-      }
-
-      setScannedProducts((prev) => [...prev, product]);
-      haptic("success");
-      setIsProcessing(false);
-      return product;
+      return await processImageUri(
+        result.assets[0].uri,
+        "Product not recognised. Snap the label showing name and size."
+      );
     } catch (error) {
       console.error("Product scan error:", error);
       haptic("error");
@@ -209,7 +222,47 @@ export function useProductScanner(options?: UseProductScannerOptions) {
       setIsProcessing(false);
       return null;
     }
-  }, [generateUploadUrl, scanProduct]);
+  }, [processImageUri]);
+
+  /**
+   * Pick a photo from the device library, upload, and scan with AI.
+   * The AI validates that the image is actually a product photo.
+   */
+  const pickFromLibrary = useCallback(async (): Promise<ScannedProduct | null> => {
+    setLastError(null);
+
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        setLastError("Photo library permission required");
+        return null;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: "images" as ImagePicker.MediaType,
+        allowsEditing: true,
+        quality: 0.8,
+        aspect: [1, 1],
+      });
+
+      if (result.canceled || !result.assets[0]) {
+        return null;
+      }
+
+      return await processImageUri(
+        result.assets[0].uri,
+        "This doesn't look like a product photo. Pick a clear image of a product label."
+      );
+    } catch (error) {
+      console.error("Library scan error:", error);
+      haptic("error");
+      setLastError(
+        error instanceof Error ? error.message : "Failed to scan image"
+      );
+      setIsProcessing(false);
+      return null;
+    }
+  }, [processImageUri]);
 
   /** Remove a scanned product by index */
   const removeProduct = useCallback((index: number) => {
@@ -227,6 +280,18 @@ export function useProductScanner(options?: UseProductScannerOptions) {
     []
   );
 
+  /** Manually add a product (e.g. from pantry browser) with dedup check */
+  const addProduct = useCallback((product: ScannedProduct): boolean => {
+    const existingMatch = productsRef.current.find((p) => isSameProduct(p, product));
+    if (existingMatch) {
+      onDuplicateRef.current?.(existingMatch, product);
+      return false;
+    }
+    setScannedProducts((prev) => [...prev, product]);
+    haptic("success");
+    return true;
+  }, []);
+
   /** Clear all scanned products */
   const clearAll = useCallback(() => {
     setScannedProducts([]);
@@ -238,6 +303,8 @@ export function useProductScanner(options?: UseProductScannerOptions) {
     isProcessing,
     lastError,
     captureProduct,
+    pickFromLibrary,
+    addProduct,
     removeProduct,
     updateProduct,
     clearAll,

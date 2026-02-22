@@ -420,3 +420,24 @@ export const generateUploadUrl = mutation(async (ctx) => {
 
   return await ctx.storage.generateUploadUrl();
 });
+
+/**
+ * Resolve a list of storage IDs to their public URLs.
+ * Returns a record of { storageId → url | null }.
+ */
+export const getStorageUrls = query({
+  args: { storageIds: v.array(v.string()) },
+  handler: async (ctx, args) => {
+    const result: Record<string, string | null> = {};
+    await Promise.all(
+      args.storageIds.map(async (id) => {
+        try {
+          result[id] = await ctx.storage.getUrl(id as never);
+        } catch {
+          result[id] = null;
+        }
+      })
+    );
+    return result;
+  },
+});

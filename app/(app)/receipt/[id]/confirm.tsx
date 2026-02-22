@@ -78,6 +78,12 @@ export default function ConfirmReceiptScreen() {
   const activeChallenge = useQuery(api.insights.getActiveChallenge);
   const updateChallengeProgress = useMutation(api.insights.updateChallengeProgress);
 
+  // Post-save: add to list / update pantry
+  const addBatchToList = useMutation(api.listItems.addBatchFromScan);
+  const addBatchToPantry = useMutation(api.pantryItems.addBatchFromScan);
+  const replacePantryMutation = useMutation(api.pantryItems.replaceWithScan);
+  const shoppingLists = useQuery(api.shoppingLists.getActive);
+
   // Local state for edited items
   const [editedItems, setEditedItems] = useState<ReceiptItem[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -100,6 +106,13 @@ export default function ConfirmReceiptScreen() {
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemQuantity, setNewItemQuantity] = useState("1");
+
+  // Post-save CTA state
+  const [receiptSaved, setReceiptSaved] = useState(false);
+  const [addedToList, setAddedToList] = useState(false);
+  const [addedToPantry, setAddedToPantry] = useState(false);
+  const [showPostSaveListPicker, setShowPostSaveListPicker] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
 
   // All hooks must be above early returns to satisfy Rules of Hooks
   const lowConfidenceItems = useMemo(
@@ -308,54 +321,146 @@ export default function ConfirmReceiptScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // Determine navigation destination
-      const navigateAfterSave = () => {
-        if (returnTo === "create-list-from-receipt") {
-          // Return to receipt picker with newly scanned receipt pre-selected
-          router.replace(`/(app)/create-list-from-receipt?receiptId=${receiptId}` as never);
-        } else if (receipt?.listId) {
-          router.push(`/receipt/${receiptId}/reconciliation?listId=${receipt.listId}` as any);
-        } else {
-          router.push("/(app)/(tabs)/scan" as any);
+      // Build reward message
+      let suffix = "";
+      if (scanResult?.success) {
+        const parts: string[] = [];
+        if (creditEarned > 0) parts.push(`+£${creditEarned.toFixed(2)} credit`);
+        if (scanResult.tierUpgrade) {
+          const tierLabel = scanResult.tier.charAt(0).toUpperCase() + scanResult.tier.slice(1);
+          parts.push(`${tierLabel} tier!`);
+        } else if (scanResult.lifetimeScans) {
+          const tierConfig = getTierProgress(scanResult.lifetimeScans, scanResult.tier);
+          if (tierConfig) parts.push(tierConfig);
         }
-      };
+        if (parts.length > 0) suffix = parts.join(", ");
+      }
+      setSaveMessage(suffix);
 
-      // Show alerts if any, then navigate
+      // Show price alerts if any, then transition to saved state
       if (alerts && alerts.length > 0) {
-        const alertMessages = alerts.map((alert: any) => {
-          if (alert.type === "decrease") {
-            return `Great deal! ${alert.itemName} is ${alert.percentChange.toFixed(0)}% cheaper than usual`;
+        const alertMessages = alerts.map((a: { type: string; itemName: string; percentChange: number }) => {
+          if (a.type === "decrease") {
+            return `Great deal! ${a.itemName} is ${a.percentChange.toFixed(0)}% cheaper than usual`;
           } else {
-            return `${alert.itemName} price went up ${alert.percentChange.toFixed(0)}% since last purchase`;
+            return `${a.itemName} price went up ${a.percentChange.toFixed(0)}% since last purchase`;
           }
         });
 
         alert("Price Alerts", alertMessages.join("\n\n"), [
-          { text: "OK", onPress: navigateAfterSave },
+          { text: "OK", onPress: () => setReceiptSaved(true) },
         ]);
       } else {
-        // Build reward message from unified scan result
-        let suffix = "";
-        if (scanResult?.success) {
-          const parts: string[] = [];
-          if (creditEarned > 0) parts.push(`+£${creditEarned.toFixed(2)} credit`);
-          if (scanResult.tierUpgrade) {
-            const tierLabel = scanResult.tier.charAt(0).toUpperCase() + scanResult.tier.slice(1);
-            parts.push(`${tierLabel} tier!`);
-          } else if (scanResult.lifetimeScans) {
-            const tierConfig = getTierProgress(scanResult.lifetimeScans, scanResult.tier);
-            if (tierConfig) parts.push(tierConfig);
-          }
-          if (parts.length > 0) suffix = ` (${parts.join(", ")})`;
-        }
-        alert("Receipt Saved", `Your receipt has been saved successfully${suffix}`, [
-          { text: "OK", onPress: navigateAfterSave },
-        ]);
+        setReceiptSaved(true);
       }
     } catch (error) {
       console.error("Save error:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert("Error", "Failed to save receipt");
+    }
+  }
+
+  // ── Post-save handlers ──────────────────────────────────────────────
+
+  function handleDoneNavigation() {
+    if (returnTo === "create-list-from-receipt") {
+      router.replace(`/(app)/create-list-from-receipt?receiptId=${receiptId}` as never);
+    } else if (receipt?.listId) {
+      router.push(`/receipt/${receiptId}/reconciliation?listId=${receipt.listId}` as never);
+    } else {
+      router.push("/(app)/(tabs)/scan" as never);
+    }
+  }
+
+  function mapReceiptItemsForBatch() {
+    return editedItems.map((item) => ({
+      name: item.name,
+      category: item.category ?? "Uncategorised",
+      estimatedPrice: item.quantity > 1 ? item.unitPrice : item.totalPrice,
+      quantity: item.quantity,
+    }));
+  }
+
+  async function handlePostSaveAddToList(listId: Id<"shoppingLists">) {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const result = await addBatchToList({ listId, items: mapReceiptItemsForBatch() });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowPostSaveListPicker(false);
+
+      const skipped = result.skippedDuplicates ?? [];
+      const msg =
+        result.count > 0 && skipped.length === 0
+          ? `${result.count} item${result.count !== 1 ? "s" : ""} added to your list.`
+          : result.count > 0 && skipped.length > 0
+            ? `${result.count} added. ${skipped.length} already on list (skipped).`
+            : skipped.length > 0
+              ? "All items are already on your list."
+              : null;
+
+      if (addedToPantry) {
+        if (msg) alert("Added to List", msg);
+        handleDoneNavigation();
+      } else {
+        setAddedToList(true);
+        if (msg) alert("Added to List", msg);
+      }
+    } catch (error) {
+      console.error("Failed to add to list:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert("Error", "Failed to add items to list");
+    }
+  }
+
+  async function handlePostSaveUpdatePantry() {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const result = await addBatchToPantry({ items: mapReceiptItemsForBatch() });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      const skipped = result.skippedDuplicates ?? [];
+      if (skipped.length > 0) {
+        const match = skipped[0];
+        const receiptItem = editedItems.find(
+          (item) => item.name.toLowerCase() === (match.scannedName as string).toLowerCase()
+        );
+        alert(
+          "Similar Item Found",
+          `"${match.existingName}" in your pantry is similar to "${match.scannedName}". Update it?`,
+          [
+            { text: "Skip", style: "cancel" },
+            {
+              text: "Update",
+              onPress: async () => {
+                if (!receiptItem) return;
+                try {
+                  await replacePantryMutation({
+                    pantryItemId: match.existingId as Id<"pantryItems">,
+                    scannedData: {
+                      name: receiptItem.name,
+                      category: receiptItem.category ?? "Uncategorised",
+                      estimatedPrice: receiptItem.quantity > 1 ? receiptItem.unitPrice : receiptItem.totalPrice,
+                    },
+                  });
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                } catch (err) {
+                  console.error("Failed to update item:", err);
+                }
+              },
+            },
+          ]
+        );
+      }
+
+      if (addedToList) {
+        handleDoneNavigation();
+      } else {
+        setAddedToPantry(true);
+      }
+    } catch (error) {
+      console.error("Failed to update pantry:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert("Error", "Failed to update pantry");
     }
   }
 
@@ -518,23 +623,131 @@ export default function ConfirmReceiptScreen() {
           </View>
         </GlassCard>
 
-        {/* Community contribution nudge */}
-        <View style={styles.contributionRow}>
-          <MaterialCommunityIcons name="heart-outline" size={14} color={colors.text.tertiary} />
-          <Text style={styles.contributionText}>
-            Your prices help build better data for shoppers everywhere.
-          </Text>
-        </View>
+        {receiptSaved ? (
+          /* ── Post-save CTAs ────────────────────────────────── */
+          <GlassCard variant="bordered" accentColor={colors.accent.primary} style={styles.postSaveCard}>
+            <View style={styles.postSaveHeader}>
+              <MaterialCommunityIcons name="check-circle" size={28} color={colors.accent.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.postSaveTitle}>Receipt Saved!</Text>
+                {saveMessage ? (
+                  <Text style={styles.postSaveSubtitle}>{saveMessage}</Text>
+                ) : null}
+              </View>
+            </View>
 
-        {/* Save Button */}
-        <GlassButton
-          variant="primary"
-          size="lg"
-          icon="content-save"
-          onPress={handleSaveReceipt}
-        >
-          Save Receipt
-        </GlassButton>
+            <Text style={styles.postSavePrompt}>
+              What would you like to do with these items?
+            </Text>
+
+            <View style={styles.postSaveActions}>
+              {shoppingLists && shoppingLists.length > 0 && (
+                <View style={{ flex: 1 }}>
+                  <GlassButton
+                    variant="primary"
+                    size="md"
+                    icon={addedToList ? "check-circle" : "clipboard-plus"}
+                    disabled={addedToList}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setShowPostSaveListPicker(true);
+                    }}
+                  >
+                    {addedToList ? "Added to List" : "Add to List"}
+                  </GlassButton>
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <GlassButton
+                  variant="secondary"
+                  size="md"
+                  icon={addedToPantry ? "check-circle" : "fridge-outline"}
+                  disabled={addedToPantry}
+                  onPress={handlePostSaveUpdatePantry}
+                >
+                  {addedToPantry ? "In Pantry" : "Update Pantry"}
+                </GlassButton>
+              </View>
+            </View>
+
+            {/* Inline list picker */}
+            {showPostSaveListPicker && shoppingLists && (
+              <GlassCard variant="standard" style={styles.postSaveListPicker}>
+                <ScrollView style={styles.postSaveListScroll} nestedScrollEnabled>
+                  {shoppingLists.map((list) => {
+                    const created = new Date(list._creationTime);
+                    const date = created.toLocaleDateString([], { day: "numeric", month: "short" });
+                    const time = created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                    const storesText = list.storeName ?? "";
+                    return (
+                      <TouchableOpacity
+                        key={list._id}
+                        style={styles.postSaveListOption}
+                        onPress={() => handlePostSaveAddToList(list._id)}
+                      >
+                        <MaterialCommunityIcons
+                          name="clipboard-text"
+                          size={18}
+                          color={colors.text.secondary}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                            <Text style={styles.postSaveListName} numberOfLines={1}>
+                              {list.name}
+                            </Text>
+                            {list.listNumber != null && (
+                              <Text style={styles.postSaveListMeta}>#{list.listNumber}</Text>
+                            )}
+                          </View>
+                          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                            <Text style={styles.postSaveListMeta}>
+                              {date} · {time}
+                            </Text>
+                            {storesText ? (
+                              <Text style={styles.postSaveListMeta} numberOfLines={1}>
+                                {storesText}
+                              </Text>
+                            ) : null}
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </GlassCard>
+            )}
+
+            <GlassButton
+              variant="secondary"
+              size="sm"
+              icon="check"
+              onPress={handleDoneNavigation}
+              style={{ marginTop: spacing.sm }}
+            >
+              Done
+            </GlassButton>
+          </GlassCard>
+        ) : (
+          <>
+            {/* Community contribution nudge */}
+            <View style={styles.contributionRow}>
+              <MaterialCommunityIcons name="heart-outline" size={14} color={colors.text.tertiary} />
+              <Text style={styles.contributionText}>
+                Your prices help build better data for shoppers everywhere.
+              </Text>
+            </View>
+
+            {/* Save Button */}
+            <GlassButton
+              variant="primary"
+              size="lg"
+              icon="content-save"
+              onPress={handleSaveReceipt}
+            >
+              Save Receipt
+            </GlassButton>
+          </>
+        )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -943,6 +1156,60 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 140,
+  },
+
+  // Post-save CTAs
+  postSaveCard: {
+    marginTop: spacing.lg,
+  },
+  postSaveHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  postSaveTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+  },
+  postSaveSubtitle: {
+    ...typography.bodySmall,
+    color: colors.accent.primary,
+    marginTop: 2,
+  },
+  postSavePrompt: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+  postSaveActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  postSaveListPicker: {
+    marginTop: spacing.md,
+    padding: 0,
+  },
+  postSaveListScroll: {
+    maxHeight: 200,
+  },
+  postSaveListOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+  },
+  postSaveListName: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  postSaveListMeta: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
   },
 
   // Modal
