@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import * as ImagePicker from "expo-image-picker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { haptic } from "@/lib/haptics/safeHaptics";
@@ -7,6 +8,8 @@ import {
   normalizeItemName,
   calculateSimilarity,
 } from "@/lib/text/fuzzyMatch";
+
+const STORAGE_KEY = "oja:scannedProducts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -21,6 +24,10 @@ export interface ScannedProduct {
   estimatedPrice?: number;
   confidence: number;
   imageStorageId: string;
+  /** Local file URI for immediate display before upload completes */
+  localImageUri?: string;
+  /** Processing status — undefined or 'ready' means complete */
+  status?: "pending" | "ready";
 }
 
 export interface UseProductScannerOptions {
@@ -110,6 +117,46 @@ export function useProductScanner(options?: UseProductScannerOptions) {
   const [scannedProducts, setScannedProducts] = useState<ScannedProduct[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const hydratedRef = useRef(false);
+
+  // Hydrate from AsyncStorage on mount.
+  // Uses functional updater to MERGE with any items that may have been
+  // added before hydration completed (e.g. Android activity recreation
+  // during image picker — the picker callback can fire before the async
+  // AsyncStorage read resolves).
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
+      hydratedRef.current = true;
+      if (raw) {
+        try {
+          const parsed: ScannedProduct[] = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setScannedProducts((prev) => {
+              if (prev.length === 0) return parsed;
+              // Merge: keep items added before hydration, append stored items that aren't dupes
+              const existingIds = new Set(prev.map((p) => p.imageStorageId));
+              const newFromStorage = parsed.filter((p) => !existingIds.has(p.imageStorageId));
+              return [...prev, ...newFromStorage];
+            });
+          }
+        } catch {
+          // corrupted — ignore
+        }
+      }
+    });
+  }, []);
+
+  // Persist to AsyncStorage on every change (skip initial empty state before hydration).
+  // Only persist ready items — pending items have local URIs that won't survive restart.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    const readyProducts = scannedProducts.filter((p) => p.status !== "pending");
+    if (readyProducts.length === 0) {
+      AsyncStorage.removeItem(STORAGE_KEY);
+    } else {
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(readyProducts));
+    }
+  }, [scannedProducts]);
 
   // Keep a ref so the capture callback always sees the latest products
   const productsRef = useRef<ScannedProduct[]>([]);
@@ -121,67 +168,105 @@ export function useProductScanner(options?: UseProductScannerOptions) {
   const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);
   const scanProduct = useAction(api.ai.scanProduct);
 
-  /** Shared: upload image URI, AI-scan, dedup, and add to list */
+  /** Helper: remove a pending item by its localImageUri */
+  const removePending = useCallback((uri: string) => {
+    setScannedProducts((prev) =>
+      prev.filter((p) => !(p.localImageUri === uri && p.status === "pending"))
+    );
+  }, []);
+
+  /**
+   * Shared: add pending tile immediately, upload, AI-scan, dedup, then
+   * promote to ready or remove on failure.
+   */
   const processImageUri = useCallback(
     async (uri: string, errorHint: string): Promise<ScannedProduct | null> => {
       setIsProcessing(true);
       haptic("medium");
 
-      // Upload image to Convex storage
-      const uploadUrl = await generateUploadUrl();
-      const imageResponse = await fetch(uri);
-      const blob = await imageResponse.blob();
+      // Add pending item to queue immediately for visual feedback
+      setScannedProducts((prev) => [
+        ...prev,
+        {
+          name: "",
+          category: "",
+          confidence: 0,
+          imageStorageId: "",
+          localImageUri: uri,
+          status: "pending",
+        },
+      ]);
 
-      const uploadResponse = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": blob.type },
-        body: blob,
-      });
+      try {
+        // Upload image to Convex storage
+        const uploadUrl = await generateUploadUrl();
+        const imageResponse = await fetch(uri);
+        const blob = await imageResponse.blob();
 
-      if (!uploadResponse.ok) {
-        throw new Error("Upload failed");
-      }
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": blob.type },
+          body: blob,
+        });
 
-      const { storageId } = await uploadResponse.json();
+        if (!uploadResponse.ok) {
+          throw new Error("Upload failed");
+        }
 
-      // Call AI to identify product
-      const parsed = await scanProduct({ storageId });
+        const { storageId } = await uploadResponse.json();
 
-      if (!parsed.success) {
-        haptic("error");
-        setLastError(parsed.rejection || errorHint);
+        // Call AI to identify product
+        const parsed = await scanProduct({ storageId });
+
+        if (!parsed.success) {
+          haptic("error");
+          setLastError(parsed.rejection || errorHint);
+          removePending(uri);
+          setIsProcessing(false);
+          return null;
+        }
+
+        const product: ScannedProduct = {
+          name: parsed.name as string,
+          category: parsed.category as string,
+          size: parsed.size as string | undefined,
+          unit: parsed.unit as string | undefined,
+          brand: parsed.brand as string | undefined,
+          estimatedPrice: parsed.estimatedPrice as number | undefined,
+          confidence: parsed.confidence as number,
+          imageStorageId: storageId,
+          localImageUri: uri,
+          status: "ready",
+        };
+
+        // Client-side dedup (only against ready items, skip pending)
+        const existingMatch = productsRef.current.find(
+          (p) => p.status !== "pending" && isSameProduct(p, product)
+        );
+        if (existingMatch) {
+          haptic("warning");
+          removePending(uri);
+          setIsProcessing(false);
+          onDuplicateRef.current?.(existingMatch, product);
+          return null;
+        }
+
+        // Replace pending item with ready product
+        setScannedProducts((prev) =>
+          prev.map((p) =>
+            p.localImageUri === uri && p.status === "pending" ? product : p
+          )
+        );
+        haptic("success");
         setIsProcessing(false);
-        return null;
+        return product;
+      } catch (error) {
+        // Remove pending item on any error — let caller handle the rest
+        removePending(uri);
+        throw error;
       }
-
-      const product: ScannedProduct = {
-        name: parsed.name as string,
-        category: parsed.category as string,
-        size: parsed.size as string | undefined,
-        unit: parsed.unit as string | undefined,
-        brand: parsed.brand as string | undefined,
-        estimatedPrice: parsed.estimatedPrice as number | undefined,
-        confidence: parsed.confidence as number,
-        imageStorageId: storageId,
-      };
-
-      // Client-side dedup
-      const existingMatch = productsRef.current.find((p) =>
-        isSameProduct(p, product)
-      );
-      if (existingMatch) {
-        haptic("warning");
-        setIsProcessing(false);
-        onDuplicateRef.current?.(existingMatch, product);
-        return null;
-      }
-
-      setScannedProducts((prev) => [...prev, product]);
-      haptic("success");
-      setIsProcessing(false);
-      return product;
     },
-    [generateUploadUrl, scanProduct]
+    [generateUploadUrl, scanProduct, removePending]
   );
 
   /**
@@ -282,7 +367,9 @@ export function useProductScanner(options?: UseProductScannerOptions) {
 
   /** Manually add a product (e.g. from pantry browser) with dedup check */
   const addProduct = useCallback((product: ScannedProduct): boolean => {
-    const existingMatch = productsRef.current.find((p) => isSameProduct(p, product));
+    const existingMatch = productsRef.current.find(
+      (p) => p.status !== "pending" && isSameProduct(p, product)
+    );
     if (existingMatch) {
       onDuplicateRef.current?.(existingMatch, product);
       return false;
@@ -292,10 +379,11 @@ export function useProductScanner(options?: UseProductScannerOptions) {
     return true;
   }, []);
 
-  /** Clear all scanned products */
+  /** Clear all scanned products and storage */
   const clearAll = useCallback(() => {
     setScannedProducts([]);
     setLastError(null);
+    AsyncStorage.removeItem(STORAGE_KEY);
   }, []);
 
   return {
