@@ -251,6 +251,11 @@ export default function ScanScreen() {
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+        // Reset scan state so the tab is clean when user returns
+        setIsParsing(false);
+        setParseReceiptId(null);
+        setSelectedImage(null);
+
         // Navigate to confirmation screen (forward returnTo if present)
         const confirmUrl = returnTo
           ? `/receipt/${receiptId}/confirm?returnTo=${returnTo}`
@@ -283,6 +288,7 @@ export default function ScanScreen() {
       alert("Error", "Failed to upload receipt");
       setIsUploading(false);
       setIsParsing(false);
+      setSelectedImage(null);
     }
   }
 
@@ -294,12 +300,13 @@ export default function ScanScreen() {
   // ── Product mode handlers ──────────────────────────────────────────────────
 
   async function handleAddProductsToList(listId: Id<"shoppingLists">) {
-    if (productScanner.scannedProducts.length === 0) return;
+    const readyProducts = productScanner.scannedProducts.filter((p) => p.status !== "pending");
+    if (readyProducts.length === 0) return;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const result = await addBatchToList({
         listId,
-        items: productScanner.scannedProducts.map((p) => ({
+        items: readyProducts.map((p) => ({
           name: p.name,
           category: p.category,
           size: p.size,
@@ -325,7 +332,7 @@ export default function ScanScreen() {
               : null;
 
       if (addedToPantry) {
-        // Both done — clear everything and close modal
+        // Both done — clear queue and close modal
         productScanner.clearAll();
         setAddedToPantry(false);
         setAddedToList(false);
@@ -344,10 +351,11 @@ export default function ScanScreen() {
   }
 
   async function handleAddProductsToPantry() {
-    if (productScanner.scannedProducts.length === 0) return;
+    const readyProducts = productScanner.scannedProducts.filter((p) => p.status !== "pending");
+    if (readyProducts.length === 0) return;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const products = productScanner.scannedProducts;
+      const products = readyProducts;
       const result = await addBatchToPantry({
         items: products.map((p) => ({
           name: p.name,
@@ -404,7 +412,7 @@ export default function ScanScreen() {
 
       if (result.added > 0) {
         if (addedToList) {
-          // Both done — clear everything and close modal
+          // Both done — clear queue and close modal
           productScanner.clearAll();
           setAddedToPantry(false);
           setAddedToList(false);
@@ -414,9 +422,9 @@ export default function ScanScreen() {
           setAddedToPantry(true);
         }
       } else {
-        // All duplicates — nothing new added
+        // All duplicates — nothing new added to pantry
         if (addedToList) {
-          // List was already done, just clear and close modal
+          // Both tried — clear queue and close modal
           productScanner.clearAll();
           setAddedToPantry(false);
           setAddedToList(false);
@@ -822,11 +830,14 @@ export default function ScanScreen() {
                 <>
                 <View style={styles.scannedGrid}>
                   {productScanner.scannedProducts.map((product, index) => {
-                    const url = storageUrls?.[product.imageStorageId];
+                    const isPending = product.status === "pending";
+                    const imageUri = isPending
+                      ? product.localImageUri
+                      : storageUrls?.[product.imageStorageId];
                     return (
-                      <View key={`${product.name}-${index}`} style={styles.gridTile}>
-                        {url ? (
-                          <Image source={{ uri: url }} style={styles.gridImage} />
+                      <View key={`${product.localImageUri ?? product.name}-${index}`} style={styles.gridTile}>
+                        {imageUri ? (
+                          <Image source={{ uri: imageUri }} style={styles.gridImage} />
                         ) : (
                           <View style={styles.gridPlaceholder}>
                             <MaterialCommunityIcons
@@ -836,34 +847,28 @@ export default function ScanScreen() {
                             />
                           </View>
                         )}
-                        <Pressable
-                          style={styles.gridRemove}
-                          onPress={() => productScanner.removeProduct(index)}
-                          hitSlop={4}
-                        >
-                          <MaterialCommunityIcons
-                            name="close-circle"
-                            size={14}
-                            color={colors.semantic.danger}
-                          />
-                        </Pressable>
+                        {isPending && (
+                          <View style={styles.gridPendingOverlay}>
+                            <ActivityIndicator size="small" color="#fff" />
+                          </View>
+                        )}
+                        {!isPending && (
+                          <Pressable
+                            style={styles.gridRemove}
+                            onPress={() => productScanner.removeProduct(index)}
+                            hitSlop={4}
+                          >
+                            <MaterialCommunityIcons
+                              name="close-circle"
+                              size={14}
+                              color={colors.semantic.danger}
+                            />
+                          </Pressable>
+                        )}
                       </View>
                     );
                   })}
                 </View>
-
-                {/* Re-open actions modal if needed */}
-                <GlassButton
-                  variant="primary"
-                  size="md"
-                  icon="plus-circle-outline"
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowScanActionsModal(true);
-                  }}
-                >
-                  {`Add ${productScanner.scannedProducts.length} Item${productScanner.scannedProducts.length !== 1 ? "s" : ""}`}
-                </GlassButton>
                 </>
               )}
             </View>
@@ -961,15 +966,12 @@ export default function ScanScreen() {
       {/* Scan actions modal — Add to List / Add to Pantry */}
       <GlassModal
         visible={showScanActionsModal}
-        onClose={() => {
-          setShowScanActionsModal(false);
-          setShowProductListPicker(false);
-        }}
+        onClose={handleDismissScan}
         position="bottom"
       >
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>
-            {`Add ${productScanner.scannedProducts.length} Scanned Item${productScanner.scannedProducts.length !== 1 ? "s" : ""}`}
+            {`Add ${productScanner.scannedProducts.filter((p) => p.status !== "pending").length} Scanned Item${productScanner.scannedProducts.filter((p) => p.status !== "pending").length !== 1 ? "s" : ""}`}
           </Text>
           <Text style={styles.modalSubtitle}>
             Where would you like to add them?
@@ -1526,6 +1528,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.glass.backgroundStrong,
+  },
+  gridPendingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   gridRemove: {
     position: "absolute",
