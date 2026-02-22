@@ -32,6 +32,18 @@ async function getNextListNumber(
 }
 
 /**
+ * Throw if a list is completed or archived — these are read-only.
+ * Call this at the top of any mutation that modifies a list or its items.
+ */
+function requireEditableList(list: { status: string; name?: string }): void {
+  if (list.status === "completed" || list.status === "archived") {
+    throw new Error(
+      `Cannot edit a ${list.status} list. ${list.status === "completed" ? "Completed" : "Archived"} lists are read-only.`
+    );
+  }
+}
+
+/**
  * Get all shopping lists for the current user
  */
 export const getByUser = query({
@@ -546,6 +558,7 @@ export const update = mutation({
     if (!list) {
       throw new Error("List not found");
     }
+    requireEditableList(list);
 
     // Verify ownership
     const user = await ctx.db
@@ -629,6 +642,7 @@ export const startShopping = mutation({
     if (!list) {
       throw new Error("List not found");
     }
+    requireEditableList(list);
 
     // Verify ownership
     const user = await ctx.db
@@ -744,6 +758,7 @@ export const pauseShopping = mutation({
     if (!list) {
       throw new Error("List not found");
     }
+    requireEditableList(list);
 
     // Verify ownership
     const user = await ctx.db
@@ -780,6 +795,7 @@ export const resumeShopping = mutation({
     if (!list) {
       throw new Error("List not found");
     }
+    requireEditableList(list);
 
     // Verify ownership
     const user = await ctx.db
@@ -831,6 +847,7 @@ export const switchStoreMidShop = mutation({
 
     const list = await ctx.db.get(args.listId);
     if (!list) throw new Error("List not found");
+    requireEditableList(list);
     if (list.userId !== user._id) throw new Error("Unauthorized");
     if (list.status !== "shopping") {
       throw new Error("Can only switch stores while actively shopping");
@@ -1231,6 +1248,7 @@ export const setStore = mutation({
     if (!list) {
       throw new Error("List not found");
     }
+    requireEditableList(list);
 
     // Verify ownership
     if (list.userId !== user._id) {
@@ -1596,6 +1614,7 @@ export const switchStore = mutation({
     if (!list) {
       throw new Error("List not found");
     }
+    requireEditableList(list);
 
     // Only the list owner can switch stores
     if (list.userId !== user._id) {

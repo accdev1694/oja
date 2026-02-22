@@ -48,9 +48,12 @@ export async function getUserListPermissions(
     return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false };
   }
 
+  // Completed and archived lists are read-only — no edits from any angle
+  const isLocked = list.status === "completed" || list.status === "archived";
+
   const isOwner = list.userId === userId;
   if (isOwner) {
-    return { isOwner: true, isPartner: false, role: null, canView: true, canEdit: true };
+    return { isOwner: true, isPartner: false, role: null, canView: true, canEdit: !isLocked };
   }
 
   // Check partner record
