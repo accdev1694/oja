@@ -43,6 +43,8 @@ export const searchItems = query({
       size?: string;
       unit?: string;
       category?: string;
+      /** True if candidate matched via word-boundary check (should bypass similarity floor) */
+      wordMatch?: boolean;
     }
 
     const candidates: Candidate[] = [];
@@ -76,8 +78,8 @@ export const searchItems = query({
           const similarEnough =
             calculateSimilarity(normalizedTerm, normalized) >= 60;
 
-          const isMaybeRelevant =
-            startsWithTerm || termStartsWithWord || similarEnough;
+          const isWordMatch = startsWithTerm || termStartsWithWord;
+          const isMaybeRelevant = isWordMatch || similarEnough;
 
           if (!isMaybeRelevant) continue;
 
@@ -93,6 +95,7 @@ export const searchItems = query({
             size: item.defaultSize,
             unit: item.defaultUnit,
             category: item.category,
+            wordMatch: isWordMatch,
           });
         }
       }
@@ -262,9 +265,10 @@ export const searchItems = query({
 
     // Filter: remove candidates below minimum similarity
     // Use a lower floor for short terms (they inherently score lower)
+    // Word-matched candidates (passed word-boundary check) bypass the floor
     const minFloor = normalizedTerm.length < 4 ? 40 : 50;
     const filtered = scored.filter(
-      (c) => c.isExactMatch || c.similarity >= minFloor
+      (c) => c.isExactMatch || c.wordMatch || c.similarity >= minFloor
     );
 
     // Sort: exact matches first, then by source priority, then by similarity

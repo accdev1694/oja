@@ -516,11 +516,12 @@ export function AddItemsModal({
     [activeView, scannedCategory, searchItems, triggerPrefetch]
   );
 
-  const handleSelectAltSuggestion = useCallback(
+  const handleSelectSuggestion = useCallback(
     (suggestion: ItemSuggestion) => {
       haptic("light");
       setSelectedSuggestion(suggestion);
       setSelectedVariantName(undefined);
+      setItemName(suggestion.name);
       if (suggestion.estimatedPrice != null) {
         setManualPrice(suggestion.estimatedPrice.toFixed(2));
       } else {
@@ -1215,14 +1216,22 @@ export function AddItemsModal({
             ) : (
               <>
                 {/* Matched item label + variant chips (single line header) */}
-                <View style={styles.matchedItemRow}>
+                <Pressable
+                  style={styles.matchedItemRow}
+                  onPress={() => handleSelectSuggestion(selectedSuggestion)}
+                >
                   <Text style={styles.matchedItemLabel}>
                     {selectedSuggestion.name}
                     {selectedSuggestion.source === "pantry" && (
                       <Text style={styles.matchedItemBadge}> · in pantry</Text>
                     )}
                   </Text>
-                </View>
+                  <MaterialCommunityIcons
+                    name="arrow-up-left"
+                    size={18}
+                    color={colors.text.tertiary}
+                  />
+                </Pressable>
 
                 {/* Variant chips */}
                 {isVariantsLoading ? (
@@ -1262,7 +1271,7 @@ export function AddItemsModal({
                         <Pressable
                           key={s.name}
                           style={styles.altSuggestionChip}
-                          onPress={() => handleSelectAltSuggestion(s)}
+                          onPress={() => handleSelectSuggestion(s)}
                         >
                           <Text style={styles.altSuggestionText} numberOfLines={1}>
                             {s.name}
@@ -1517,11 +1526,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: spacing.xl,
     marginBottom: spacing.sm,
+    gap: spacing.sm,
   },
   matchedItemLabel: {
     ...typography.labelLarge,
     color: colors.text.primary,
     fontWeight: "600",
+    flex: 1,
   },
   matchedItemBadge: {
     ...typography.labelSmall,
