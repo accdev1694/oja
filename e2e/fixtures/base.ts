@@ -132,8 +132,8 @@ export async function navigateToTab(
 ) {
   // Map tabs to their URL routes for direct navigation
   const tabRoutes: Record<string, string> = {
-    Pantry: "/",
-    Lists: "/lists",
+    Pantry: "/stock",
+    Lists: "/",
     Scan: "/scan",
     Profile: "/profile",
   };

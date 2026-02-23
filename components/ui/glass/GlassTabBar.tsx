@@ -50,15 +50,15 @@ export interface TabConfig {
 export const TAB_BAR_HEIGHT = 80;
 
 export const TAB_CONFIG: Record<string, TabConfig> = {
-  index: {
-    name: "index",
+  stock: {
+    name: "stock",
     title: "Stock",
     icon: "home-outline",
     iconFocused: "home",
     color: colors.semantic.pantry,
   },
-  lists: {
-    name: "lists",
+  index: {
+    name: "index",
     title: "Lists",
     icon: "clipboard-list-outline",
     iconFocused: "clipboard-list",

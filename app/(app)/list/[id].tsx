@@ -617,7 +617,7 @@ export default function ListDetailScreen() {
   // Called from ScanReceiptNudgeModal "Maybe Later" button
   function handleDismissNudge() {
     setShowScanNudge(false);
-    router.replace("/(app)/(tabs)/lists");
+    router.replace("/(app)/(tabs)/" as any);
   }
 
   // Called from TripSummaryModal "Remove unchecked item"

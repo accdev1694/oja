@@ -220,7 +220,7 @@ export default function ReconciliationScreen() {
       const fullMessage = messageParts.join("\n\n");
 
       // Navigate to history tab after completion
-      const navigateToHistory = () => router.push("/(app)/(tabs)/lists" as any);
+      const navigateToHistory = () => router.push("/(app)/(tabs)/" as any);
 
       // Handle fuzzy matches and items to add
       if (result.fuzzyMatches.length > 0 || result.itemsToAdd.length > 0) {

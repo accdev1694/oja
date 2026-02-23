@@ -50,14 +50,13 @@ function shouldShowTabBar(pathname: string): boolean {
 function getActiveTab(pathname: string): string {
   // Direct tab routes
   if (pathname === "/(app)/(tabs)" || pathname === "/(app)/(tabs)/index" || pathname === "/") return "index";
-  if (pathname.includes("/(tabs)/lists") || pathname.includes("/lists")) return "lists";
+  if (pathname.includes("/(tabs)/stock") || pathname.includes("/stock")) return "stock";
   if (pathname.includes("/(tabs)/scan") || pathname.includes("/scan")) return "scan";
   if (pathname.includes("/(tabs)/profile") || pathname.includes("/profile")) return "profile";
-  if (pathname.includes("/(tabs)/index") || pathname.includes("/(tabs)")) return "index";
 
   // Nested routes → map to parent tab
-  if (pathname.includes("/list/") || pathname.includes("/partners") || pathname.includes("/notifications")) return "lists";
-  if (pathname.includes("/price-history")) return "index";
+  if (pathname.includes("/list/") || pathname.includes("/partners") || pathname.includes("/notifications")) return "index";
+  if (pathname.includes("/price-history")) return "stock";
   if (pathname.includes("/insights") || pathname.includes("/subscription") || pathname.includes("/admin") || pathname.includes("/edit-profile")) return "profile";
 
   return "index";
@@ -142,13 +141,13 @@ const TabItem = React.memo(function TabItem({ config, isFocused, tabName, onPres
 // =============================================================================
 
 const TAB_ROUTES: Record<string, string> = {
+  stock: "/(app)/(tabs)/stock",
   index: "/(app)/(tabs)/",
-  lists: "/(app)/(tabs)/lists",
   scan: "/(app)/(tabs)/scan",
   profile: "/(app)/(tabs)/profile",
 };
 
-const TABS = ["index", "lists", "scan", "profile"] as const;
+const TABS = ["index", "stock", "scan", "profile"] as const;
 
 const PersistentTabBar = React.memo(function PersistentTabBar() {
   const pathname = usePathname();
@@ -185,7 +184,7 @@ const PersistentTabBar = React.memo(function PersistentTabBar() {
     <View style={[tabStyles.tabBarInner, { paddingBottom: bottomPadding }]}>
       {TABS.map((tabName) => {
         const config = TAB_CONFIG[tabName];
-        const badge = tabName === "index" ? stockBadge : undefined;
+        const badge = tabName === "stock" ? stockBadge : undefined;
         return (
           <TabItem
             key={tabName}
