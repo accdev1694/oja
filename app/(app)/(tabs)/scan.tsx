@@ -679,56 +679,60 @@ export default function ScanScreen() {
                     return (
                       <Pressable
                         key={receipt._id}
-                        style={styles.gridTile}
+                        style={styles.gridTileWithLabel}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           setViewingReceipt(receipt as ReceiptItem);
                         }}
                       >
-                        {imageUri ? (
-                          <Image source={{ uri: imageUri }} style={styles.gridImage} />
-                        ) : (
-                          <View style={[styles.gridPlaceholder, storeInfo?.color ? { backgroundColor: `${storeInfo.color}30` } : undefined]}>
-                            <MaterialCommunityIcons
-                              name="receipt"
-                              size={16}
-                              color={storeInfo?.color ?? colors.text.tertiary}
-                            />
-                          </View>
-                        )}
-                        <Pressable
-                          style={styles.gridRemove}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                            alert(
-                              "Remove Receipt",
-                              `Remove this ${receipt.storeName} receipt?`,
-                              [
-                                { text: "Cancel", style: "cancel" },
-                                {
-                                  text: "Remove",
-                                  style: "destructive",
-                                  onPress: async () => {
-                                    try {
-                                      await deleteReceipt({ id: receipt._id });
-                                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                    } catch (err) {
-                                      console.error("Failed to remove receipt:", err);
-                                    }
+                        <View style={styles.gridTileImageWrap}>
+                          {imageUri ? (
+                            <Image source={{ uri: imageUri }} style={styles.gridImage} />
+                          ) : (
+                            <View style={[styles.gridPlaceholder, storeInfo?.color ? { backgroundColor: `${storeInfo.color}30` } : undefined]}>
+                              <MaterialCommunityIcons
+                                name="receipt"
+                                size={16}
+                                color={storeInfo?.color ?? colors.text.tertiary}
+                              />
+                            </View>
+                          )}
+                          <Pressable
+                            style={styles.gridRemove}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                              alert(
+                                "Remove Receipt",
+                                `Remove this ${receipt.storeName} receipt?`,
+                                [
+                                  { text: "Cancel", style: "cancel" },
+                                  {
+                                    text: "Remove",
+                                    style: "destructive",
+                                    onPress: async () => {
+                                      try {
+                                        await deleteReceipt({ id: receipt._id });
+                                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                      } catch (err) {
+                                        console.error("Failed to remove receipt:", err);
+                                      }
+                                    },
                                   },
-                                },
-                              ]
-                            );
-                          }}
-                          hitSlop={4}
-                        >
-                          <MaterialCommunityIcons
-                            name="close-circle"
-                            size={14}
-                            color={colors.semantic.danger}
-                          />
-                        </Pressable>
+                                ]
+                              );
+                            }}
+                            hitSlop={4}
+                          >
+                            <MaterialCommunityIcons
+                              name="close-circle"
+                              size={14}
+                              color={colors.semantic.danger}
+                            />
+                          </Pressable>
+                        </View>
+                        <Text style={styles.gridTileLabel} numberOfLines={1}>{receipt.storeName}</Text>
+                        <Text style={styles.gridTileSubLabel} numberOfLines={1}>£{receipt.total.toFixed(2)}</Text>
                       </Pressable>
                     );
                   })}
@@ -833,7 +837,7 @@ export default function ScanScreen() {
                     return (
                       <Pressable
                         key={`${product.localImageUri ?? product.name}-${index}`}
-                        style={styles.gridTile}
+                        style={styles.gridTileWithLabel}
                         onPress={() => {
                           if (!isPending) {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -841,37 +845,43 @@ export default function ScanScreen() {
                           }
                         }}
                       >
-                        {imageUri ? (
-                          <Image source={{ uri: imageUri }} style={styles.gridImage} />
-                        ) : (
-                          <View style={styles.gridPlaceholder}>
-                            <MaterialCommunityIcons
-                              name="package-variant-closed"
-                              size={16}
-                              color={colors.text.tertiary}
-                            />
-                          </View>
-                        )}
-                        {isPending && (
-                          <View style={styles.gridPendingOverlay}>
-                            <ActivityIndicator size="small" color="#fff" />
-                          </View>
-                        )}
-                        {!isPending && (
-                          <Pressable
-                            style={styles.gridRemove}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              productScanner.removeProduct(index);
-                            }}
-                            hitSlop={4}
-                          >
-                            <MaterialCommunityIcons
-                              name="close-circle"
-                              size={14}
-                              color={colors.semantic.danger}
-                            />
-                          </Pressable>
+                        <View style={styles.gridTileImageWrap}>
+                          {imageUri ? (
+                            <Image source={{ uri: imageUri }} style={styles.gridImage} />
+                          ) : (
+                            <View style={styles.gridPlaceholder}>
+                              <MaterialCommunityIcons
+                                name="package-variant-closed"
+                                size={16}
+                                color={colors.text.tertiary}
+                              />
+                            </View>
+                          )}
+                          {isPending && (
+                            <View style={styles.gridPendingOverlay}>
+                              <ActivityIndicator size="small" color="#fff" />
+                            </View>
+                          )}
+                          {!isPending && (
+                            <Pressable
+                              style={styles.gridRemove}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                productScanner.removeProduct(index);
+                              }}
+                              hitSlop={4}
+                            >
+                              <MaterialCommunityIcons
+                                name="close-circle"
+                                size={14}
+                                color={colors.semantic.danger}
+                              />
+                            </Pressable>
+                          )}
+                        </View>
+                        <Text style={styles.gridTileLabel} numberOfLines={1}>{isPending ? "Scanning…" : product.name}</Text>
+                        {!isPending && product.estimatedPrice != null && (
+                          <Text style={styles.gridTileSubLabel} numberOfLines={1}>£{product.estimatedPrice.toFixed(2)}</Text>
                         )}
                       </Pressable>
                     );
@@ -1459,6 +1469,28 @@ const styles = StyleSheet.create({
     backgroundColor: colors.glass.background,
     borderWidth: 1,
     borderColor: colors.glass.border,
+  },
+  gridTileWithLabel: {
+    width: "18.5%",
+  },
+  gridTileImageWrap: {
+    aspectRatio: 1,
+    borderRadius: borderRadius.sm,
+    overflow: "hidden",
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  gridTileLabel: {
+    fontSize: 8,
+    lineHeight: 10,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  gridTileSubLabel: {
+    fontSize: 8,
+    lineHeight: 10,
+    color: colors.text.tertiary,
   },
   gridImage: {
     width: "100%",
