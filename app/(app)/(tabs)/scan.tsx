@@ -805,7 +805,26 @@ export default function ScanScreen() {
                   Your Scanned Products, <Text style={{ color: colors.accent.primary }}>tap to view</Text>
                 </Text>
                 {productScanner.scannedProducts.length > 0 && (
-                  <Pressable onPress={productScanner.clearAll} hitSlop={8}>
+                  <Pressable
+                    onPress={() => {
+                      alert(
+                        "Clear All Products",
+                        `Remove all ${productScanner.scannedProducts.length} scanned product${productScanner.scannedProducts.length === 1 ? "" : "s"} from the queue?`,
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Clear All",
+                            style: "destructive",
+                            onPress: () => {
+                              productScanner.clearAll();
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                    hitSlop={8}
+                  >
                     <MaterialCommunityIcons
                       name="delete-outline"
                       size={24}

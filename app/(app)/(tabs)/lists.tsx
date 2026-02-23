@@ -210,8 +210,8 @@ export default function ListsScreen() {
             label: "Active",
             activeColor: colors.accent.primary,
             icon: "clipboard-list",
-            badge: (displayList.length + activeShared.length) > 0
-              ? displayList.length + activeShared.length
+            badge: ((lists?.length ?? 0) + activeShared.length) > 0
+              ? (lists?.length ?? 0) + activeShared.length
               : undefined,
           },
           {
