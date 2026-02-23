@@ -296,6 +296,28 @@ export default function ListsScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* Inline create-list card — always visible as first item */}
+          <Pressable
+            onPress={handleCreateList}
+            disabled={isCreating}
+            style={({ pressed }) => [
+              styles.createCard,
+              isCreating && { opacity: 0.5 },
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <View style={styles.createCardInner}>
+              <View style={styles.createCardIcon}>
+                <MaterialCommunityIcons name="plus" size={24} color={colors.accent.primary} />
+              </View>
+              <View style={styles.createCardText}>
+                <Text style={styles.createCardTitle}>Create a new list</Text>
+                <Text style={styles.createCardSubtitle}>Set a budget and start adding items</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text.tertiary} />
+            </View>
+          </Pressable>
+
           {displayList.map((list) => (
             <ListCard
               key={list._id}
@@ -433,6 +455,43 @@ const styles = StyleSheet.create({
   joinCardEmpty: {
     alignItems: "center",
     marginTop: spacing.lg,
+  },
+
+  // Inline create-list card
+  createCard: {
+    marginBottom: spacing.md,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: `${colors.accent.primary}50`,
+    borderRadius: borderRadius.lg,
+    backgroundColor: `${colors.accent.primary}08`,
+    padding: spacing.md,
+  },
+  createCardInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  createCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    backgroundColor: `${colors.accent.primary}20`,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  createCardText: {
+    flex: 1,
+  },
+  createCardTitle: {
+    ...typography.bodyLarge,
+    color: colors.accent.primary,
+    fontWeight: "600",
+  },
+  createCardSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginTop: 2,
   },
 
   // Tab toggle
