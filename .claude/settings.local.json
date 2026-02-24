@@ -137,7 +137,11 @@
       "Bash(git merge:*)",
       "Bash(git branch:*)",
       "Bash(powershell:*)",
-      "Bash(adb reverse:*)"
+      "Bash(adb reverse:*)",
+      "Bash(dir:*)",
+      "mcp__playwright__browser_navigate_back",
+      "Bash(git log:*)",
+      "Bash(git mv:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
