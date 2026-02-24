@@ -53,3 +53,7 @@ test-results/
 playwright-report/
 e2e/.auth/
 .env.e2e
+
+# Development artifacts
+.playwright-mcp/
+screenshots/
