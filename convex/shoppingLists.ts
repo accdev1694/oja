@@ -7,6 +7,7 @@ import { parseSize } from "./lib/sizeUtils";
 import { getReceiptIds, pushReceiptId } from "./lib/receiptHelpers";
 import { getIconForItem } from "./iconMapping";
 import { isDuplicateItemName } from "./lib/fuzzyMatch";
+import { toGroceryTitleCase } from "./lib/titleCase";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -220,7 +221,7 @@ export const create = mutation({
 
     const listId = await ctx.db.insert("shoppingLists", {
       userId: user._id,
-      name: args.name,
+      name: toGroceryTitleCase(args.name),
       status: "active",
       budget: args.budget ?? 50,
       storeName: args.storeName,
@@ -291,7 +292,7 @@ export const createFromReceipt = mutation({
     const smartBudget = args.budget ?? Math.ceil(receipt.total / 5) * 5;
 
     // List name: user-provided or "{StoreName} Re-shop"
-    const listName = args.name?.trim() || `${receipt.storeName} Re-shop`;
+    const listName = toGroceryTitleCase(args.name?.trim() || `${receipt.storeName} Re-shop`);
 
     // ── 1. Create the shopping list ──
     const listId = await ctx.db.insert("shoppingLists", {
@@ -323,7 +324,7 @@ export const createFromReceipt = mutation({
       await ctx.db.insert("listItems", {
         listId,
         userId: user._id,
-        name: item.name,
+        name: toGroceryTitleCase(item.name),
         category: item.category,
         quantity: item.quantity,
         ...(size && { size }),
@@ -405,9 +406,9 @@ export const createFromReceipt = mutation({
         if (pantryAccess.allowed) {
           await ctx.db.insert("pantryItems", {
             userId: user._id,
-            name: item.name,
+            name: toGroceryTitleCase(item.name),
             category: item.category || "other",
-            icon: getIconForItem(item.name, item.category || "other"),
+            icon: getIconForItem(toGroceryTitleCase(item.name), item.category || "other"),
             stockLevel: "stocked",
             status: "active" as const,
             nameSource: "system" as const,
@@ -574,7 +575,7 @@ export const update = mutation({
       updatedAt: Date.now(),
     };
 
-    if (args.name !== undefined) updates.name = args.name;
+    if (args.name !== undefined) updates.name = toGroceryTitleCase(args.name);
     if (args.status !== undefined) updates.status = args.status;
     if (args.budget !== undefined) updates.budget = args.budget;
     if (args.storeName !== undefined) updates.storeName = args.storeName;

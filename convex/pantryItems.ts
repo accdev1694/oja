@@ -6,6 +6,7 @@ import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
 import { calculateSimilarity, isDuplicateItemName, isDuplicateItem, normalizeItemName } from "./lib/fuzzyMatch";
 import { enrichGlobalFromProductScan } from "./lib/globalEnrichment";
+import { toGroceryTitleCase } from "./lib/titleCase";
 
 const ACTIVE_PANTRY_CAP = 150;
 
@@ -133,9 +134,9 @@ export const bulkCreate = mutation({
     const promises = newItems.map((item) =>
       ctx.db.insert("pantryItems", {
         userId: user._id,
-        name: item.name,
+        name: toGroceryTitleCase(item.name),
         category: item.category,
-        icon: getIconForItem(item.name, item.category),
+        icon: getIconForItem(toGroceryTitleCase(item.name), item.category),
         stockLevel: item.stockLevel,
         status: "active" as const,
         nameSource: "system" as const,
@@ -323,9 +324,9 @@ export const create = mutation({
 
     const itemId = await ctx.db.insert("pantryItems", {
       userId: user._id,
-      name: args.name,
+      name: toGroceryTitleCase(args.name),
       category: args.category,
-      icon: getIconForItem(args.name, args.category),
+      icon: getIconForItem(toGroceryTitleCase(args.name), args.category),
       stockLevel: args.stockLevel,
       status: "active" as const,
       nameSource: "system" as const,
@@ -404,7 +405,7 @@ export const update = mutation({
     };
 
     if (args.name !== undefined) {
-      updates.name = args.name;
+      updates.name = toGroceryTitleCase(args.name);
       // User manually edited the name — protect it from auto-improvement
       if (args.name !== item.name) {
         updates.nameSource = "user";
@@ -813,8 +814,8 @@ export const autoRestockFromReceipt = mutation({
           ...(receiptItem.unit && { defaultUnit: receiptItem.unit }),
           // Improve name from receipt if user hasn't customized it
           ...(exactMatch.nameSource !== "user" && receiptItem.name !== exactMatch.name && {
-            name: receiptItem.name,
-            icon: getIconForItem(receiptItem.name, exactMatch.category),
+            name: toGroceryTitleCase(receiptItem.name),
+            icon: getIconForItem(toGroceryTitleCase(receiptItem.name), exactMatch.category),
             nameSource: "system" as const,
           }),
           // Pantry lifecycle: track purchase activity + auto-resurface archived items
@@ -1125,9 +1126,9 @@ export const addFromReceipt = mutation({
 
     const pantryItemId = await ctx.db.insert("pantryItems", {
       userId: user._id,
-      name: args.name,
+      name: toGroceryTitleCase(args.name),
       category: args.category || "other",
-      icon: getIconForItem(args.name, args.category || "other"),
+      icon: getIconForItem(toGroceryTitleCase(args.name), args.category || "other"),
       stockLevel: "stocked",
       status: "active" as const,
       nameSource: "system" as const,
@@ -1298,9 +1299,9 @@ export const addBatchFromScan = mutation({
 
         await ctx.db.insert("pantryItems", {
           userId: user._id,
-          name: item.name,
+          name: toGroceryTitleCase(item.name),
           category: item.category,
-          icon: getIconForItem(item.name, item.category),
+          icon: getIconForItem(toGroceryTitleCase(item.name), item.category),
           stockLevel: "stocked",
           status: "active" as const,
           nameSource: "system" as const,
@@ -1359,9 +1360,9 @@ export const replaceWithScan = mutation({
     const { scannedData } = args;
 
     await ctx.db.patch(args.pantryItemId, {
-      name: scannedData.name,
+      name: toGroceryTitleCase(scannedData.name),
       category: scannedData.category,
-      icon: getIconForItem(scannedData.name, scannedData.category),
+      icon: getIconForItem(toGroceryTitleCase(scannedData.name), scannedData.category),
       ...(scannedData.size ? { defaultSize: scannedData.size } : {}),
       ...(scannedData.unit ? { defaultUnit: scannedData.unit } : {}),
       ...(scannedData.estimatedPrice != null

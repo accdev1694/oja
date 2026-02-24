@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalQuery } from "./_generated/server";
 import { normalizeStoreName } from "./lib/storeNormalizer";
 import { isValidProductName } from "./lib/communityHelpers";
+import { toGroceryTitleCase } from "./lib/titleCase";
 
 /** Confidence score: higher reportCount + more recent = higher confidence (0-1) */
 function computeConfidence(reportCount: number, daysSinceLastSeen: number): number {
@@ -85,7 +86,7 @@ export const upsertFromReceipt = mutation({
 
           await ctx.db.patch(existing._id, {
             unitPrice: item.unitPrice,
-            itemName: item.name,
+            itemName: toGroceryTitleCase(item.name),
             // Pass through size/unit from receipt when available
             ...(item.size && { size: item.size }),
             ...(item.unit && { unit: item.unit }),
@@ -115,7 +116,7 @@ export const upsertFromReceipt = mutation({
 
         await ctx.db.insert("currentPrices", {
           normalizedName,
-          itemName: item.name,
+          itemName: toGroceryTitleCase(item.name),
           storeName: receipt.storeName,
           // Include normalized store ID if available
           ...(normalizedStoreId && { normalizedStoreId }),
@@ -236,7 +237,7 @@ export const upsertFromReceipt = mutation({
 
           await ctx.db.insert("itemVariants", {
             baseItem: baseItem || normalizedName,
-            variantName: item.name,
+            variantName: toGroceryTitleCase(item.name),
             size: item.size,
             unit: item.unit,
             category: item.category || "Other",
@@ -313,7 +314,7 @@ export const upsertAIEstimate = mutation({
 
     return await ctx.db.insert("currentPrices", {
       normalizedName: args.normalizedName,
-      itemName: args.itemName,
+      itemName: toGroceryTitleCase(args.itemName),
       storeName,
       unitPrice: args.unitPrice,
       averagePrice: args.unitPrice,

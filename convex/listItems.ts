@@ -9,6 +9,7 @@ import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
 import { isDuplicateItem } from "./lib/fuzzyMatch";
 import { enrichGlobalFromProductScan } from "./lib/globalEnrichment";
+import { toGroceryTitleCase } from "./lib/titleCase";
 
 /**
  * Helper to get price estimate from currentPrices table
@@ -162,8 +163,11 @@ export const create = mutation({
       throw new Error("You don't have permission to add items to this list");
     }
 
+    // Normalize item name to title case
+    const name = toGroceryTitleCase(args.name);
+
     // Duplicate check: if a fuzzy match exists on this list, ask for confirmation or bump
-    const existingItem = await findDuplicateListItem(ctx, args.listId, args.name, args.size);
+    const existingItem = await findDuplicateListItem(ctx, args.listId, name, args.size);
     if (existingItem) {
       if (!args.force) {
         // Return duplicate info without modifying DB — let the UI confirm
@@ -210,7 +214,7 @@ export const create = mutation({
 
     // Price cascade: provided → pantry (above) → currentPrices
     if (estimatedPrice === undefined) {
-      estimatedPrice = await getPriceFromCurrentPrices(ctx, args.name);
+      estimatedPrice = await getPriceFromCurrentPrices(ctx, name);
       if (estimatedPrice !== undefined) {
         priceSource = priceSource ?? "crowdsourced";
         priceConfidence = priceConfidence ?? 0.6;
@@ -220,7 +224,7 @@ export const create = mutation({
     // Seed pantry: if no pantryItemId provided, find or create one
     let pantryItemId = args.pantryItemId;
     if (!pantryItemId) {
-      const existingPantry = await findDuplicatePantryItem(ctx, user._id, args.name, size);
+      const existingPantry = await findDuplicatePantryItem(ctx, user._id, name, size);
       if (existingPantry) {
         pantryItemId = existingPantry._id;
         // Pull size/price from existing pantry item if still missing
@@ -236,10 +240,10 @@ export const create = mutation({
       } else {
         const pantryAccess = await canAddPantryItem(ctx, user._id);
         if (pantryAccess.allowed) {
-          const icon = getIconForItem(args.name, args.category || "Other");
+          const icon = getIconForItem(name, args.category || "Other");
           pantryItemId = await ctx.db.insert("pantryItems", {
             userId: user._id,
-            name: args.name,
+            name,
             category: args.category || "Other",
             icon,
             stockLevel: "low",
@@ -263,7 +267,7 @@ export const create = mutation({
       listId: args.listId,
       userId: user._id,
       pantryItemId,
-      name: args.name,
+      name,
       category: args.category,
       quantity: args.quantity,
       size,
@@ -285,7 +289,7 @@ export const create = mutation({
     // Schedule AI price estimation if still no price after cascade
     if (estimatedPrice === undefined) {
       await ctx.scheduler.runAfter(0, api.ai.estimateItemPrice, {
-        itemName: args.name,
+        itemName: name,
         userId: user._id,
       });
     }
@@ -367,7 +371,7 @@ export const update = mutation({
       updatedAt: Date.now(),
     };
 
-    if (args.name !== undefined) updates.name = args.name;
+    if (args.name !== undefined) updates.name = toGroceryTitleCase(args.name);
     if (args.quantity !== undefined) updates.quantity = args.quantity;
     if (args.priority !== undefined) updates.priority = args.priority;
     if (args.notes !== undefined) updates.notes = args.notes;
@@ -632,11 +636,12 @@ export const addFromPantryOut = mutation({
         }
       }
 
+      const normalizedPantryName = toGroceryTitleCase(pantryItem.name);
       const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
         pantryItemId: pantryItem._id,
-        name: pantryItem.name,
+        name: normalizedPantryName,
         category: pantryItem.category,
         quantity: 1,
         size,
@@ -774,11 +779,12 @@ export const addFromPantrySelected = mutation({
         }
       }
 
+      const normalizedPantryName = toGroceryTitleCase(pantryItem.name);
       const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
         pantryItemId: pantryItem._id,
-        name: pantryItem.name,
+        name: normalizedPantryName,
         category: pantryItem.category,
         quantity: 1,
         size,
@@ -863,10 +869,11 @@ export const addItemMidShop = mutation({
 
     const now = Date.now();
     const quantity = args.quantity ?? 1;
+    const name = toGroceryTitleCase(args.name);
 
     if (args.source === "add") {
       // Duplicate check: if a fuzzy match exists on this list, ask for confirmation or bump
-      const existingItem = await findDuplicateListItem(ctx, args.listId, args.name, args.size);
+      const existingItem = await findDuplicateListItem(ctx, args.listId, name, args.size);
       if (existingItem) {
         if (!args.force) {
           return {
@@ -888,7 +895,7 @@ export const addItemMidShop = mutation({
       const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
-        name: args.name,
+        name,
         category: args.category,
         quantity,
         size: args.size,
@@ -909,7 +916,7 @@ export const addItemMidShop = mutation({
 
     } else if (args.source === "next_trip") {
       // Fuzzy dedup: check if item already exists in pantry
-      const existingPantry = await findDuplicatePantryItem(ctx, user._id, args.name, args.size);
+      const existingPantry = await findDuplicatePantryItem(ctx, user._id, name, args.size);
 
       if (existingPantry) {
         // Mark existing item as out + auto-add to next list
@@ -930,7 +937,7 @@ export const addItemMidShop = mutation({
       // Add to pantry as "Out" - will auto-add to next list
       const pantryItemId = await ctx.db.insert("pantryItems", {
         userId: user._id,
-        name: args.name,
+        name,
         category: args.category || "Uncategorized",
         stockLevel: "out",
         status: "active" as const,
@@ -1057,11 +1064,12 @@ export const addFromPantryBulk = mutation({
         }
       }
 
+      const normalizedPantryName = toGroceryTitleCase(pantryItem.name);
       const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
         pantryItemId,
-        name: pantryItem.name,
+        name: normalizedPantryName,
         category: pantryItem.category,
         quantity: 1,
         size,
@@ -1148,9 +1156,10 @@ export const addAndSeedPantry = mutation({
 
     const now = Date.now();
     const quantity = args.quantity ?? 1;
+    const name = toGroceryTitleCase(args.name);
 
     // Duplicate check: if a fuzzy match exists on this list, ask for confirmation or bump
-    const existingListItem = await findDuplicateListItem(ctx, args.listId, args.name, args.size);
+    const existingListItem = await findDuplicateListItem(ctx, args.listId, name, args.size);
     if (existingListItem) {
       if (!args.force) {
         // Return duplicate info without modifying DB — let the UI confirm
@@ -1170,14 +1179,14 @@ export const addAndSeedPantry = mutation({
       // Resolve pantryItemId — must always return a valid ID to match normal return type
       let pantryId = existingListItem.pantryItemId;
       if (!pantryId) {
-        const existingPantry = await findDuplicatePantryItem(ctx, user._id, args.name, args.size);
+        const existingPantry = await findDuplicatePantryItem(ctx, user._id, name, args.size);
         if (existingPantry) {
           pantryId = existingPantry._id;
         } else {
-          const icon = getIconForItem(args.name, args.category);
+          const icon = getIconForItem(name, args.category);
           pantryId = await ctx.db.insert("pantryItems", {
             userId: user._id,
-            name: args.name,
+            name,
             category: args.category,
             icon,
             stockLevel: "low",
@@ -1199,16 +1208,16 @@ export const addAndSeedPantry = mutation({
     }
 
     // 1. Find or create pantry item (fuzzy dedup by name)
-    const existingPantry = await findDuplicatePantryItem(ctx, user._id, args.name, args.size);
+    const existingPantry = await findDuplicatePantryItem(ctx, user._id, name, args.size);
 
     let pantryItemId: Id<"pantryItems">;
     if (existingPantry) {
       pantryItemId = existingPantry._id;
     } else {
-      const icon = getIconForItem(args.name, args.category);
+      const icon = getIconForItem(name, args.category);
       pantryItemId = await ctx.db.insert("pantryItems", {
         userId: user._id,
-        name: args.name,
+        name,
         category: args.category,
         icon,
         stockLevel: "low",
@@ -1231,7 +1240,7 @@ export const addAndSeedPantry = mutation({
       listId: args.listId,
       userId: user._id,
       pantryItemId,
-      name: args.name,
+      name,
       category: args.category,
       quantity,
       size: args.size,
@@ -1308,8 +1317,10 @@ export const addBatchFromScan = mutation({
     const knownPantryNames: string[] = existingPantryItems.map((p) => p.name);
 
     for (const item of args.items) {
+      const name = toGroceryTitleCase(item.name);
+
       // Fuzzy duplicate check — skip if already on this list (or matches a name we just added)
-      const matchedListItem = knownListItems.find((known) => isDuplicateItem(item.name, item.size, known.name, known.size));
+      const matchedListItem = knownListItems.find((known) => isDuplicateItem(name, item.size, known.name, known.size));
       if (matchedListItem) {
         skippedDuplicates.push({ name: item.name, existingName: matchedListItem.name });
         continue;
@@ -1329,7 +1340,7 @@ export const addBatchFromScan = mutation({
         if (access.allowed) {
           pantryItemId = await ctx.db.insert("pantryItems", {
             userId: user._id,
-            name: item.name,
+            name,
             category: item.category,
             icon: getIconForItem(item.name, item.category),
             stockLevel: "low",
@@ -1355,7 +1366,7 @@ export const addBatchFromScan = mutation({
         listId: args.listId,
         userId: user._id,
         ...(pantryItemId ? { pantryItemId } : {}),
-        name: item.name,
+        name,
         category: item.category,
         quantity: item.quantity ?? 1,
         size: item.size,

@@ -12,6 +12,7 @@ import {
   isValidProductName,
   variantKey,
 } from "./lib/communityHelpers";
+import { toGroceryTitleCase } from "./lib/titleCase";
 
 /**
  * Get all variants for a base item (e.g., "milk" → [1pt, 2pt, 4pt]).
@@ -350,7 +351,7 @@ export const upsert = mutation({
 
     return await ctx.db.insert("itemVariants", {
       baseItem: normalizedBase,
-      variantName: args.variantName,
+      variantName: toGroceryTitleCase(args.variantName),
       size: args.size,
       unit: args.unit,
       category: args.category,
@@ -467,7 +468,7 @@ export const enrichFromScan = mutation({
 
     return await ctx.db.insert("itemVariants", {
       baseItem: targetBase,
-      variantName: newVariantName,
+      variantName: toGroceryTitleCase(newVariantName),
       size: args.size,
       unit: args.unit,
       category: args.category,
@@ -536,7 +537,7 @@ export const bulkUpsert = mutation({
       } else {
         await ctx.db.insert("itemVariants", {
           baseItem: normalizedBase,
-          variantName: variant.variantName,
+          variantName: toGroceryTitleCase(variant.variantName),
           size: variant.size,
           unit: variant.unit,
           category: variant.category,

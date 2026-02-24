@@ -8,6 +8,7 @@ import {
   buildSystemPrompt,
   executeVoiceTool,
 } from "./lib/voiceTools";
+import { toGroceryTitleCase } from "./lib/titleCase";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
@@ -591,6 +592,13 @@ IMPORTANT RULES:
         }
       }
 
+      // Normalize item names to grocery title case
+      for (const item of items) {
+        if (typeof item.name === "string") {
+          item.name = toGroceryTitleCase(item.name);
+        }
+      }
+
       // GATE 2: If AI ignored the prompt and parsed anyway, check average confidence.
       // If most items are low-confidence guesses, reject the scan server-side.
       if (items.length > 0) {
@@ -740,7 +748,7 @@ Return ONLY valid JSON, no markdown code blocks.`;
 
       return {
         success: true,
-        name: typeof parsed.name === "string" ? parsed.name.slice(0, 30) : "Unknown Product",
+        name: typeof parsed.name === "string" ? toGroceryTitleCase(parsed.name.slice(0, 30)) : "Unknown Product",
         category: typeof parsed.category === "string" ? parsed.category : "Other",
         size: typeof parsed.size === "string" ? parsed.size : undefined,
         unit: typeof parsed.unit === "string" ? parsed.unit : undefined,
@@ -959,7 +967,7 @@ RULES:
       // Write to currentPrices as AI Estimate with reportCount: 0
       await ctx.runMutation(api.currentPrices.upsertAIEstimate, {
         normalizedName: result.normalizedName || normalizedName,
-        itemName: result.name || args.itemName,
+        itemName: toGroceryTitleCase(result.name || args.itemName),
         unitPrice: result.estimatedPrice,
         userId: args.userId,
         ...(result.defaultSize ? { size: result.defaultSize } : {}),

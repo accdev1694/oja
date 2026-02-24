@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { normalizeStoreName } from "./lib/storeNormalizer";
 import { pushReceiptId } from "./lib/receiptHelpers";
+import { toGroceryTitleCase } from "./lib/titleCase";
 
 /**
  * Generate a fingerprint for duplicate detection.
@@ -191,7 +192,10 @@ export const update = mutation({
     if (args.tax !== undefined) updates.tax = args.tax;
     if (args.total !== undefined) updates.total = args.total;
     if (args.processingStatus !== undefined) updates.processingStatus = args.processingStatus;
-    if (args.items !== undefined) updates.items = args.items;
+    if (args.items !== undefined) updates.items = args.items.map((item) => ({
+      ...item,
+      name: toGroceryTitleCase(item.name),
+    }));
     if (args.imageQuality !== undefined) updates.imageQuality = args.imageQuality;
 
     await ctx.db.patch(args.id, updates);
