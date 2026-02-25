@@ -54,11 +54,21 @@ async function measureQueryPerformance<T>(
 async function requireAdmin(ctx: any) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
+  
+  // Handle Clerk IDs that might come with a prefix (e.g. "https://clerk.oja.app|user_...")
+  const clerkId = identity.subject.includes("|") 
+    ? identity.subject.split("|").pop()! 
+    : identity.subject;
+
   const user = await ctx.db
     .query("users")
-    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
     .unique();
-  if (!user) throw new Error("User not found");
+    
+  if (!user) {
+    console.error(`Admin Lookup Failed: No user found for clerkId: ${clerkId} (Subject: ${identity.subject})`);
+    throw new Error("User not found");
+  }
   if (!user.isAdmin) throw new Error("Admin access required");
   return user;
 }
@@ -205,9 +215,14 @@ export const getMyPermissions = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
+    // Handle Clerk IDs that might come with a prefix
+    const clerkId = identity.subject.includes("|") 
+      ? identity.subject.split("|").pop()! 
+      : identity.subject;
+
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
       .unique();
 
     if (!user || !user.isAdmin) return null;
