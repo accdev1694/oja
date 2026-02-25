@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,9 +9,10 @@ import {
   Modal,
   Switch,
   RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, usePaginatedQuery, useStorageUrl } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -26,6 +27,8 @@ import {
   typography,
   spacing,
   useGlassAlert,
+  GlassDateRangePicker,
+  type DateRange,
 } from "@/components/ui/glass";
 
 type AdminTab = "overview" | "users" | "receipts" | "catalog" | "settings";
@@ -110,13 +113,73 @@ export default function AdminScreen() {
 // ============================================================================
 
 function OverviewTab() {
-  const analytics = useQuery(api.admin.getAnalytics);
-  const revenue = useQuery(api.admin.getRevenueReport);
-  const health = useQuery(api.admin.getSystemHealth);
-  const auditLogs = useQuery(api.admin.getAuditLogs, { limit: 10 });
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(Date.now().toString());
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [dateRange, setDateRange] = useState<DateRange>({ startDate: null, endDate: null });
+
+  const queryArgs = { 
+    refreshKey, 
+    dateFrom: dateRange.startDate || undefined, 
+    dateTo: dateRange.endDate || undefined 
+  };
+
+  const analytics = useQuery(api.admin.getAnalytics, queryArgs);
+  const revenue = useQuery(api.admin.getRevenueReport, queryArgs);
+  const health = useQuery(api.admin.getSystemHealth, { refreshKey });
+  const { results: auditLogs, status: auditStatus, loadMore: loadMoreLogs } = usePaginatedQuery(
+    api.admin.getAuditLogs, 
+    { 
+      refreshKey,
+      dateFrom: dateRange.startDate || undefined,
+      dateTo: dateRange.endDate || undefined
+    },
+    { initialNumItems: 10 }
+  );
+
+  useEffect(() => {
+    let interval: any;
+    if (autoRefreshEnabled) {
+      interval = setInterval(() => {
+        setRefreshKey(Date.now().toString());
+        setLastUpdated(new Date());
+      }, 30000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [autoRefreshEnabled]);
 
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      {/* Date Range Picker */}
+      <GlassDateRangePicker 
+        value={dateRange} 
+        onChange={setDateRange} 
+        onClear={() => setDateRange({ startDate: null, endDate: null })}
+      />
+
+      {/* Auto-Refresh Toggle */}
+      <GlassCard style={[styles.section, styles.refreshCard]}>
+        <View style={styles.refreshHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Dashboard Status</Text>
+            <Text style={styles.lastUpdatedText}>
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </Text>
+          </View>
+          <View style={styles.refreshToggle}>
+            <Text style={styles.toggleLabel}>Auto-refresh</Text>
+            <Switch
+              value={autoRefreshEnabled}
+              onValueChange={setAutoRefreshEnabled}
+              trackColor={{ false: colors.glass.border, true: `${colors.accent.primary}60` }}
+              thumbColor={autoRefreshEnabled ? colors.accent.primary : colors.text.tertiary}
+            />
+          </View>
+        </View>
+      </GlassCard>
+
       {/* System Health */}
       {health && (
         <Animated.View entering={FadeInDown.duration(400)}>
@@ -198,6 +261,17 @@ function OverviewTab() {
                 </Text>
               </View>
             ))}
+            {auditStatus === "CanLoadMore" && (
+              <GlassButton 
+                onPress={() => loadMoreLogs(20)} 
+                variant="ghost" 
+                size="sm" 
+                style={{ marginTop: spacing.sm }}
+              >Load More Logs</GlassButton>
+            )}
+            {auditStatus === "LoadingMore" && (
+              <ActivityIndicator color={colors.accent.primary} style={{ marginTop: spacing.sm }} />
+            )}
           </GlassCard>
         </Animated.View>
       )}
@@ -216,7 +290,12 @@ function UsersTab() {
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
 
-  const users = useQuery(api.admin.getUsers, { limit: 50 });
+  const { results: users, status, loadMore } = usePaginatedQuery(
+    api.admin.getUsers,
+    {},
+    { initialNumItems: 50 }
+  );
+
   const searchResults = useQuery(
     api.admin.searchUsers,
     search.length >= 2 ? { searchTerm: search } : "skip"
@@ -231,6 +310,8 @@ function UsersTab() {
   const grantAccess = useMutation(api.admin.grantComplimentaryAccess);
   const toggleSuspension = useMutation(api.admin.toggleSuspension);
 
+  const isLoadingMore = status === "LoadingMore";
+  const isDone = status === "CanLoadMore";
   const displayUsers = search.length >= 2 ? searchResults : users;
 
   const handleToggleAdmin = async (userId: string) => {
@@ -403,13 +484,32 @@ function UsersTab() {
 
 function ReceiptsTab() {
   const { alert: showAlert } = useGlassAlert();
-  const recentReceipts = useQuery(api.admin.getRecentReceipts, { limit: 20 });
+  const [dateRange, setDateRange] = useState<DateRange>({ startDate: null, endDate: null });
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  const recentReceipts = useQuery(api.admin.getRecentReceipts, { 
+    limit: 50,
+    dateFrom: dateRange.startDate || undefined,
+    dateTo: dateRange.endDate || undefined,
+    searchTerm: search.length >= 2 ? search : undefined,
+    status: statusFilter || undefined,
+  });
   const flaggedReceipts = useQuery(api.admin.getFlaggedReceipts);
   const priceAnomalies = useQuery(api.admin.getPriceAnomalies);
 
   const deleteReceipt = useMutation(api.admin.deleteReceipt);
   const bulkAction = useMutation(api.admin.bulkReceiptAction);
   const overridePrice = useMutation(api.admin.overridePrice);
+
+  const statusOptions = [
+    { label: "All", value: null },
+    { label: "Pending", value: "pending" },
+    { label: "Processing", value: "processing" },
+    { label: "Completed", value: "completed" },
+    { label: "Failed", value: "failed" },
+  ];
 
   const handleDeleteReceipt = async (receiptId: string) => {
     showAlert("Delete Receipt", "Are you sure?", [
@@ -451,6 +551,68 @@ function ReceiptsTab() {
 
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      {/* Image Modal */}
+      <Modal
+        visible={!!selectedImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedImage(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setSelectedImage(null)}>
+          <View style={styles.imageModalContent}>
+            <View style={styles.imageModalHeader}>
+              <Text style={styles.imageModalTitle}>Receipt Image</Text>
+              <Pressable onPress={() => setSelectedImage(null)}>
+                <MaterialCommunityIcons name="close" size={24} color={colors.text.primary} />
+              </Pressable>
+            </View>
+            {selectedImage && <ReceiptImage storageId={selectedImage} />}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Search & Filters */}
+      <GlassCard style={styles.section}>
+        <View style={styles.searchRow}>
+          <MaterialCommunityIcons name="magnify" size={20} color={colors.text.tertiary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search store, user..."
+            placeholderTextColor={colors.text.tertiary}
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch("")} hitSlop={8}>
+              <MaterialCommunityIcons name="close-circle" size={18} color={colors.text.tertiary} />
+            </Pressable>
+          )}
+        </View>
+        <View style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+            {statusOptions.map((opt) => (
+              <Pressable
+                key={opt.value || "all"}
+                style={[styles.filterChip, statusFilter === opt.value && styles.filterChipActive]}
+                onPress={() => { setStatusFilter(opt.value); Haptics.selectionAsync(); }}
+              >
+                <Text style={[styles.filterChipText, statusFilter === opt.value && styles.filterChipTextActive]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </GlassCard>
+
+      {/* Date Range Picker */}
+      <GlassDateRangePicker 
+        value={dateRange} 
+        onChange={setDateRange} 
+        onClear={() => setDateRange({ startDate: null, endDate: null })}
+        title="Filter Receipts"
+      />
+
       {/* Flagged Receipts */}
       {flaggedReceipts && flaggedReceipts.length > 0 && (
         <Animated.View entering={FadeInDown.duration(400)}>
@@ -467,9 +629,16 @@ function ReceiptsTab() {
                     £{r.total} • {r.userName} • {r.processingStatus}
                   </Text>
                 </View>
-                <Pressable onPress={() => handleDeleteReceipt(r._id)} hitSlop={8}>
-                  <MaterialCommunityIcons name="delete-outline" size={20} color={colors.semantic.danger} />
-                </Pressable>
+                <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center" }}>
+                  {r.imageStorageId && (
+                    <Pressable onPress={() => setSelectedImage(r.imageStorageId)} hitSlop={8}>
+                      <MaterialCommunityIcons name="eye-outline" size={20} color={colors.accent.primary} />
+                    </Pressable>
+                  )}
+                  <Pressable onPress={() => handleDeleteReceipt(r._id)} hitSlop={8}>
+                    <MaterialCommunityIcons name="delete-outline" size={20} color={colors.semantic.danger} />
+                  </Pressable>
+                </View>
               </View>
             ))}
             <GlassButton
@@ -520,8 +689,15 @@ function ReceiptsTab() {
                     £{r.total.toFixed(2)} • {r.userName} • {new Date(r.purchaseDate).toLocaleDateString()}
                   </Text>
                 </View>
-                <View style={[styles.statusBadge, r.processingStatus === "completed" ? styles.successBadge : styles.warningBadge]}>
-                  <Text style={styles.statusBadgeText}>{r.processingStatus}</Text>
+                <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center" }}>
+                  {r.imageStorageId && (
+                    <Pressable onPress={() => setSelectedImage(r.imageStorageId)} hitSlop={8}>
+                      <MaterialCommunityIcons name="eye-outline" size={20} color={colors.accent.primary} />
+                    </Pressable>
+                  )}
+                  <View style={[styles.statusBadge, r.processingStatus === "completed" ? styles.successBadge : styles.warningBadge]}>
+                    <Text style={styles.statusBadgeText}>{r.processingStatus}</Text>
+                  </View>
                 </View>
               </View>
             ))}
@@ -619,17 +795,32 @@ function SettingsTab() {
   const { alert: showAlert } = useGlassAlert();
   const featureFlags = useQuery(api.admin.getFeatureFlags);
   const announcements = useQuery(api.admin.getAnnouncements);
+  const pricingConfig = useQuery(api.admin.getPricingConfig);
 
   const toggleFlag = useMutation(api.admin.toggleFeatureFlag);
   const createAnnouncement = useMutation(api.admin.createAnnouncement);
+  const updateAnnouncement = useMutation(api.admin.updateAnnouncement);
   const toggleAnnouncement = useMutation(api.admin.toggleAnnouncement);
+  const updatePricing = useMutation(api.admin.updatePricing);
 
   const [showNewAnnouncement, setShowNewAnnouncement] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null);
   const [annTitle, setAnnTitle] = useState("");
   const [annBody, setAnnBody] = useState("");
   const [annType, setAnnType] = useState<"info" | "warning" | "promo">("info");
 
   const [newFlagKey, setNewFlagKey] = useState("");
+
+  const handleUpdatePrice = async (id: string, amount: string) => {
+    const price = parseFloat(amount);
+    if (isNaN(price)) return;
+    try {
+      await updatePricing({ id: id as any, priceAmount: price });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      showAlert("Error", "Failed to update price");
+    }
+  };
 
   const handleToggleFlag = async (key: string, currentValue: boolean) => {
     try {
@@ -651,17 +842,36 @@ function SettingsTab() {
     }
   };
 
-  const handleCreateAnnouncement = async () => {
+  const handleSaveAnnouncement = async () => {
     if (!annTitle.trim() || !annBody.trim()) return;
     try {
-      await createAnnouncement({ title: annTitle, body: annBody, type: annType });
+      if (editingAnnouncement) {
+        await updateAnnouncement({
+          announcementId: editingAnnouncement._id,
+          title: annTitle,
+          body: annBody,
+          type: annType,
+        });
+      } else {
+        await createAnnouncement({ title: annTitle, body: annBody, type: annType });
+      }
       setShowNewAnnouncement(false);
+      setEditingAnnouncement(null);
       setAnnTitle("");
       setAnnBody("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      showAlert("Error", "Failed to create announcement");
+      showAlert("Error", `Failed to ${editingAnnouncement ? "update" : "create"} announcement`);
     }
+  };
+
+  const startEdit = (ann: any) => {
+    setEditingAnnouncement(ann);
+    setAnnTitle(ann.title);
+    setAnnBody(ann.body);
+    setAnnType(ann.type);
+    setShowNewAnnouncement(true);
+    Haptics.selectionAsync();
   };
 
   const handleToggleAnnouncement = async (id: string) => {
@@ -675,6 +885,32 @@ function SettingsTab() {
 
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      {/* Platform Pricing */}
+      <Animated.View entering={FadeInDown.duration(400)}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="currency-gbp" size={24} color={colors.semantic.success} />
+            <Text style={styles.sectionTitle}>Platform Pricing</Text>
+          </View>
+          {pricingConfig?.map((p: any) => (
+            <View key={p._id} style={styles.flagRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.userName}>{p.displayName}</Text>
+                <Text style={styles.userEmail}>{p.planId}</Text>
+              </View>
+              <View style={{ width: 80 }}>
+                <TextInput
+                  style={styles.flagInput}
+                  keyboardType="numeric"
+                  defaultValue={p.priceAmount.toString()}
+                  onEndEditing={(e) => handleUpdatePrice(p._id, e.nativeEvent.text)}
+                />
+              </View>
+            </View>
+          ))}
+        </GlassCard>
+      </Animated.View>
+
       {/* Feature Flags */}
       <Animated.View entering={FadeInDown.duration(400)}>
         <GlassCard style={styles.section}>
@@ -687,6 +923,9 @@ function SettingsTab() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.userName}>{f.key}</Text>
                 {f.description && <Text style={styles.userEmail}>{f.description}</Text>}
+                <Text style={styles.lastUpdatedText}>
+                  Modified by {f.updatedByName} on {new Date(f.updatedAt).toLocaleDateString()}
+                </Text>
               </View>
               <Switch
                 value={f.value}
@@ -728,6 +967,7 @@ function SettingsTab() {
             >New Announcement</GlassButton>
           ) : (
             <View style={styles.newAnnForm}>
+              <Text style={styles.userName}>{editingAnnouncement ? "Edit Announcement" : "New Announcement"}</Text>
               <TextInput
                 style={styles.annInput}
                 placeholder="Title"
@@ -757,8 +997,8 @@ function SettingsTab() {
                 ))}
               </View>
               <View style={styles.formActions}>
-                <GlassButton onPress={() => setShowNewAnnouncement(false)} variant="ghost" size="sm">Cancel</GlassButton>
-                <GlassButton onPress={handleCreateAnnouncement} size="sm">Create</GlassButton>
+                <GlassButton onPress={() => { setShowNewAnnouncement(false); setEditingAnnouncement(null); }} variant="ghost" size="sm">Cancel</GlassButton>
+                <GlassButton onPress={handleSaveAnnouncement} size="sm">{editingAnnouncement ? "Update" : "Create"}</GlassButton>
               </View>
             </View>
           )}
@@ -774,19 +1014,53 @@ function SettingsTab() {
                 </View>
                 <Text style={[styles.userEmail, !a.active && { opacity: 0.5 }]}>{a.body}</Text>
               </View>
-              <Switch
-                value={a.active}
-                onValueChange={() => handleToggleAnnouncement(a._id)}
-                trackColor={{ false: colors.glass.border, true: `${colors.accent.primary}60` }}
-                thumbColor={a.active ? colors.accent.primary : colors.text.tertiary}
-              />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                <Pressable onPress={() => startEdit(a)} hitSlop={8}>
+                  <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.accent.primary} />
+                </Pressable>
+                <Switch
+                  value={a.active}
+                  onValueChange={() => handleToggleAnnouncement(a._id)}
+                  trackColor={{ false: colors.glass.border, true: `${colors.accent.primary}60` }}
+                  thumbColor={a.active ? colors.accent.primary : colors.text.tertiary}
+                />
+              </View>
             </View>
           ))}
         </GlassCard>
+
+        {!search && (
+          <View style={styles.loadMoreContainer}>
+            {status === "CanLoadMore" ? (
+              <GlassButton onPress={() => loadMore(50)} variant="secondary" size="sm">
+                Load More
+              </GlassButton>
+            ) : status === "LoadingMore" ? (
+              <ActivityIndicator color={colors.accent.primary} />
+            ) : (
+              <Text style={styles.doneText}>No more users</Text>
+            )}
+          </View>
+        )}
       </Animated.View>
 
       <View style={{ height: 140 }} />
     </ScrollView>
+  );
+}
+
+function ReceiptImage({ storageId }: { storageId: string }) {
+  const url = useStorageUrl(storageId);
+  if (!url) return <ActivityIndicator color={colors.accent.primary} style={{ margin: 40 }} />;
+  return (
+    <View style={styles.imageContainer}>
+      <Animated.Image
+        source={{ uri: url }}
+        style={styles.receiptImage}
+        resizeMode="contain"
+        entering={FadeInDown}
+      />
+    </View>
   );
 }
 
@@ -1029,4 +1303,59 @@ const styles = StyleSheet.create({
   logAction: { ...typography.bodyMedium, color: colors.text.primary, fontWeight: "600" },
   logDetails: { ...typography.bodySmall, color: colors.text.secondary },
   logTime: { ...typography.bodySmall, color: colors.text.tertiary, marginTop: 2 },
+
+  // Refresh controls
+  refreshCard: { marginBottom: spacing.md, paddingVertical: spacing.sm },
+  refreshHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  refreshToggle: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  toggleLabel: { ...typography.bodySmall, color: colors.text.tertiary },
+  lastUpdatedText: { ...typography.bodySmall, color: colors.text.tertiary, fontSize: 10 },
+
+  // Pagination
+  loadMoreContainer: { alignItems: "center", marginVertical: spacing.md },
+  doneText: { ...typography.bodySmall, color: colors.text.tertiary, fontStyle: "italic" },
+
+  // Filters
+  filterRow: { flexDirection: "row", marginTop: spacing.md, alignItems: "center" },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  filterChipActive: {
+    backgroundColor: `${colors.accent.primary}20`,
+    borderColor: colors.accent.primary,
+  },
+  filterChipText: { ...typography.labelSmall, color: colors.text.tertiary },
+  filterChipTextActive: { color: colors.accent.primary, fontWeight: "600" },
+
+  // Image Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  imageModalContent: {
+    width: "100%",
+    maxHeight: "90%",
+    backgroundColor: colors.background.default,
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  imageModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+  },
+  imageModalTitle: { ...typography.headlineSmall, color: colors.text.primary },
+  imageContainer: { width: "100%", height: 500, backgroundColor: "#000" },
+  receiptImage: { width: "100%", height: "100%" },
 });

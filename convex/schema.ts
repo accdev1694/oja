@@ -285,7 +285,9 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_date", ["userId", "purchaseDate"])
     .index("by_list", ["listId"])
-    .index("by_user_fingerprint", ["userId", "fingerprint"]),
+    .index("by_user_fingerprint", ["userId", "fingerprint"])
+    .index("by_processing_status", ["processingStatus"])
+    .index("by_created", ["createdAt"]),
 
   // Current best-known prices (freshest price per item per store)
   currentPrices: defineTable({
@@ -611,6 +613,19 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_active", ["active"]),
+
+  // Pricing configuration (dynamic subscription prices)
+  pricingConfig: defineTable({
+    planId: v.string(), // "premium_monthly" | "premium_annual"
+    displayName: v.string(), // "Premium Monthly"
+    priceAmount: v.number(), // 2.99
+    currency: v.string(), // "GBP"
+    stripePriceId: v.optional(v.string()), // From env: STRIPE_PRICE_MONTHLY
+    isActive: v.boolean(),
+    updatedAt: v.number(),
+  })
+    .index("by_plan", ["planId"])
+    .index("by_active", ["isActive"]),
 
   // ─── Nurture Sequence ────────────────────────────────────────────────────────
   // Tracks which nurture messages have been sent to each user

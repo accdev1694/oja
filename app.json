@@ -72,7 +72,8 @@
           "merchantIdentifier": "merchant.com.oja.app",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

@@ -15,6 +15,7 @@ import React from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useActivityTracking } from "@/hooks/useActivityTracking";
 import { VoiceFAB } from "@/components/voice/VoiceFAB";
@@ -155,11 +156,13 @@ const PersistentTabBar = React.memo(function PersistentTabBar() {
   const insets = useSafeAreaInsets();
   const bottomPadding = Math.max(insets.bottom, spacing.sm);
   const { user } = useCurrentUser();
+  const isSwitchingUsers = useIsSwitchingUsers();
 
   // Stock tab badge: count of Low + Out items
+  // Skip during user switching to prevent cache leakage
   const pantryItems = useQuery(
     api.pantryItems.getByUser,
-    user?._id ? {} : "skip"
+    user?._id && !isSwitchingUsers ? {} : "skip"
   );
   const stockBadge = React.useMemo(() => {
     if (!pantryItems) return 0;

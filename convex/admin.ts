@@ -22,6 +22,35 @@ async function requireAdmin(ctx: any) {
  */
 export const getUsers = query({
   args: {
+    paginationOpts: v.any(), // Use pagination options from Convex
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return { page: [], isDone: true, continueCursor: "" };
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user || !user.isAdmin) return { page: [], isDone: true, continueCursor: "" };
+
+    return await ctx.db
+      .query("users")
+      .order("desc")
+      .paginate(args.paginationOpts);
+  },
+});
+
+/**
+ * Search users by name or email
+ *
+ * NOTE: Uses client-side filtering (Convex limitation - no LIKE queries).
+ * For production with >10K users, migrate to dedicated search (Algolia/Typesense).
+ * Current implementation limits scan to first 1000 users for performance.
+ */
+export const searchUsers = query({
+  args: {
+    searchTerm: v.string(),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -34,38 +63,22 @@ export const getUsers = query({
       .unique();
     if (!user || !user.isAdmin) return [];
 
-    const users = await ctx.db
+    // Limit scan to first 1000 users (ordered by creation desc = newest first)
+    // For larger datasets, use dedicated search service
+    const recentUsers = await ctx.db
       .query("users")
       .order("desc")
-      .take(args.limit || 50);
+      .take(1000);
 
-    return users;
-  },
-});
-
-/**
- * Search users by name or email
- */
-export const searchUsers = query({
-  args: { searchTerm: v.string() },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!user || !user.isAdmin) return [];
-
-    const allUsers = await ctx.db.query("users").collect();
     const term = args.searchTerm.toLowerCase();
-
-    return allUsers.filter(
+    const matches = recentUsers.filter(
       (u: any) =>
         u.name.toLowerCase().includes(term) ||
         (u.email && u.email.toLowerCase().includes(term))
     );
+
+    // Return first N matches
+    return matches.slice(0, args.limit || 50);
   },
 });
 
@@ -104,10 +117,20 @@ export const toggleAdmin = mutation({
 
 /**
  * Get platform analytics overview
+ *
+ * TODO (Phase 1): Replace with precomputed metrics for production scale.
+ * Current implementation works for <10K users but needs optimization:
+ * - Add dailyMetrics table with cron job aggregations
+ * - Cache active user sets in Redis/similar
+ * - Use pagination/streaming for large datasets
  */
 export const getAnalytics = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    refreshKey: v.optional(v.string()),
+    dateFrom: v.optional(v.number()),
+    dateTo: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
@@ -121,9 +144,24 @@ export const getAnalytics = query({
     const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
     const monthAgo = now - 30 * 24 * 60 * 60 * 1000;
 
-    const allUsers = await ctx.db.query("users").collect();
-    const allLists = await ctx.db.query("shoppingLists").collect();
-    const allReceipts = await ctx.db.query("receipts").collect();
+    // Use specific range if provided, otherwise default to "all time" (collect)
+    // NOTE: For Phase 1 precomputed analytics, this will change to querying dailyMetrics table
+    let allUsers = await ctx.db.query("users").collect();
+    let allLists = await ctx.db.query("shoppingLists").collect();
+    let allReceipts = await ctx.db.query("receipts").collect();
+
+    if (args.dateFrom || args.dateTo) {
+      if (args.dateFrom) {
+        allUsers = allUsers.filter(u => u.createdAt >= args.dateFrom!);
+        allLists = allLists.filter(l => l.createdAt >= args.dateFrom!);
+        allReceipts = allReceipts.filter(r => r.createdAt >= args.dateFrom!);
+      }
+      if (args.dateTo) {
+        allUsers = allUsers.filter(u => u.createdAt <= args.dateTo!);
+        allLists = allLists.filter(l => l.createdAt <= args.dateTo!);
+        allReceipts = allReceipts.filter(r => r.createdAt <= args.dateTo!);
+      }
+    }
 
     const newUsersThisWeek = allUsers.filter((u: any) => u.createdAt >= weekAgo).length;
     const newUsersThisMonth = allUsers.filter((u: any) => u.createdAt >= monthAgo).length;
@@ -156,8 +194,12 @@ export const getAnalytics = query({
  * Get revenue report
  */
 export const getRevenueReport = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    refreshKey: v.optional(v.string()),
+    dateFrom: v.optional(v.number()),
+    dateTo: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
@@ -167,7 +209,18 @@ export const getRevenueReport = query({
       .unique();
     if (!user || !user.isAdmin) return null;
 
-    const subscriptions = await ctx.db.query("subscriptions").collect();
+    let subscriptions = await ctx.db.query("subscriptions").collect();
+
+    if (args.dateFrom) subscriptions = subscriptions.filter(s => s.createdAt >= args.dateFrom!);
+    if (args.dateTo) subscriptions = subscriptions.filter(s => s.createdAt <= args.dateTo!);
+
+    // Get dynamic pricing from config
+    const pricing = await ctx.db.query("pricingConfig")
+      .withIndex("by_active", (q: any) => q.eq("isActive", true))
+      .collect();
+
+    const monthlyPrice = pricing.find((p: any) => p.planId === "premium_monthly")?.priceAmount ?? 2.99;
+    const annualPrice = pricing.find((p: any) => p.planId === "premium_annual")?.priceAmount ?? 21.99;
 
     const activeSubs = subscriptions.filter(
       (s: any) => s.status === "active" || s.status === "trial"
@@ -176,7 +229,7 @@ export const getRevenueReport = query({
     const annualCount = activeSubs.filter((s: any) => s.plan === "premium_annual").length;
     const trialCount = activeSubs.filter((s: any) => s.status === "trial").length;
 
-    const mrr = monthlyCount * 2.99 + annualCount * (21.99 / 12);
+    const mrr = monthlyCount * monthlyPrice + annualCount * (annualPrice / 12);
     const arr = mrr * 12;
 
     return {
@@ -199,7 +252,13 @@ export const getRevenueReport = query({
  * Get recent receipts for moderation
  */
 export const getRecentReceipts = query({
-  args: { limit: v.optional(v.number()) },
+  args: { 
+    limit: v.optional(v.number()),
+    dateFrom: v.optional(v.number()),
+    dateTo: v.optional(v.number()),
+    searchTerm: v.optional(v.string()),
+    status: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
@@ -210,19 +269,46 @@ export const getRecentReceipts = query({
       .unique();
     if (!user || !user.isAdmin) return [];
 
-    const receipts = await ctx.db
-      .query("receipts")
-      .order("desc")
-      .take(args.limit || 20);
+    let query = ctx.db.query("receipts").order("desc");
+
+    // Filtering by status if provided (uses index if status only)
+    if (args.status && !args.dateFrom) {
+      query = ctx.db.query("receipts")
+        .withIndex("by_processing_status", q => q.eq("processingStatus", args.status as any))
+        .order("desc");
+    } else if (args.dateFrom) {
+      query = ctx.db.query("receipts")
+        .withIndex("by_created", q => q.gte(q.field("createdAt"), args.dateFrom!));
+    }
+
+    let receipts = await query.take(args.limit || 100);
+
+    if (args.dateTo) {
+      receipts = receipts.filter(r => r.createdAt <= args.dateTo!);
+    }
+    if (args.status && args.dateFrom) {
+      receipts = receipts.filter(r => r.processingStatus === args.status);
+    }
 
     const enriched = await Promise.all(
       receipts.map(async (r) => {
         const owner = await ctx.db.get(r.userId) as { name: string; email?: string } | null;
-        return { ...r, userName: owner?.name ?? "Unknown", userEmail: owner?.email };
+        const userName = owner?.name ?? "Unknown";
+        const userEmail = owner?.email ?? "";
+        return { ...r, userName, userEmail };
       })
     );
 
-    return enriched;
+    if (args.searchTerm) {
+      const term = args.searchTerm.toLowerCase();
+      return enriched.filter(r => 
+        r.storeName.toLowerCase().includes(term) || 
+        r.userName.toLowerCase().includes(term) ||
+        r.userEmail.toLowerCase().includes(term)
+      ).slice(0, args.limit || 50);
+    }
+
+    return enriched.slice(0, args.limit || 50);
   },
 });
 
@@ -311,6 +397,9 @@ export const getUserDetail = query({
 
 /**
  * Filter users by plan type, signup date, active status
+ *
+ * TODO (Phase 1): Optimize with precomputed user segments.
+ * Current implementation acceptable for <10K users.
  */
 export const filterUsers = query({
   args: {
@@ -318,6 +407,7 @@ export const filterUsers = query({
     dateFrom: v.optional(v.number()),
     dateTo: v.optional(v.number()),
     activeOnly: v.optional(v.boolean()),
+    limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -328,10 +418,21 @@ export const filterUsers = query({
       .unique();
     if (!admin || !admin.isAdmin) return [];
 
-    let users = await ctx.db.query("users").collect();
+    // Use by_created index for date filtering
+    let users: any[];
+    if (args.dateFrom) {
+      users = await ctx.db
+        .query("users")
+        .withIndex("by_created")
+        .filter((q) => q.gte(q.field("createdAt"), args.dateFrom!))
+        .collect();
+    } else {
+      users = await ctx.db.query("users").order("desc").take(args.limit || 1000);
+    }
 
-    if (args.dateFrom) users = users.filter((u: any) => u.createdAt >= args.dateFrom!);
-    if (args.dateTo) users = users.filter((u: any) => u.createdAt <= args.dateTo!);
+    if (args.dateTo) {
+      users = users.filter((u: any) => u.createdAt <= args.dateTo!);
+    }
 
     if (args.planFilter || args.activeOnly) {
       const subs = await ctx.db.query("subscriptions").collect();
@@ -347,7 +448,11 @@ export const filterUsers = query({
 
       if (args.activeOnly) {
         const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        const lists = await ctx.db.query("shoppingLists").collect();
+        // Limit lists query to recent activity
+        const lists = await ctx.db
+          .query("shoppingLists")
+          .order("desc")
+          .take(5000);
         const activeUserIds = new Set(
           lists.filter((l: any) => l.updatedAt >= weekAgo).map((l: any) => l.userId.toString())
         );
@@ -355,7 +460,7 @@ export const filterUsers = query({
       }
     }
 
-    return users;
+    return users.slice(0, args.limit || 100);
   },
 });
 
@@ -492,10 +597,21 @@ export const getFlaggedReceipts = query({
       .unique();
     if (!admin || !admin.isAdmin) return [];
 
-    const receipts = await ctx.db.query("receipts").collect();
-    const flagged = receipts.filter(
-      (r: any) => r.processingStatus === "failed" || r.total === 0
-    );
+    // Use index to get failed receipts efficiently
+    const failed = await ctx.db
+      .query("receipts")
+      .withIndex("by_processing_status", (q: any) => q.eq("processingStatus", "failed"))
+      .collect();
+
+    // Get completed receipts with total === 0 (need full scan for this specific case)
+    const completed = await ctx.db
+      .query("receipts")
+      .withIndex("by_processing_status", (q: any) => q.eq("processingStatus", "completed"))
+      .collect();
+
+    const zeroTotal = completed.filter((r: any) => r.total === 0);
+
+    const flagged = [...failed, ...zeroTotal];
 
     const enriched = await Promise.all(
       flagged.map(async (r) => {
@@ -545,10 +661,15 @@ export const bulkReceiptAction = mutation({
 
 /**
  * Detect price anomalies (>50% deviation from average)
+ *
+ * TODO (Phase 1): Optimize with precomputed price statistics.
+ * Current implementation scans all prices - acceptable for <50K price records.
  */
 export const getPriceAnomalies = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
     const admin = await ctx.db
@@ -557,6 +678,8 @@ export const getPriceAnomalies = query({
       .unique();
     if (!admin || !admin.isAdmin) return [];
 
+    // NOTE: Full table scan on currentPrices
+    // For production with >50K prices, precompute anomalies via cron job
     const prices = await ctx.db.query("currentPrices").collect();
 
     // Group by normalizedName
@@ -582,7 +705,7 @@ export const getPriceAnomalies = query({
       }
     }
 
-    return anomalies.slice(0, 50);
+    return anomalies.slice(0, args.limit || 50);
   },
 });
 
@@ -636,6 +759,9 @@ export const overridePrice = mutation({
 
 /**
  * Get all unique categories
+ *
+ * TODO (Phase 1): Cache category list, update via triggers.
+ * Current implementation acceptable for <50K pantry items.
  */
 export const getCategories = query({
   args: {},
@@ -648,6 +774,8 @@ export const getCategories = query({
       .unique();
     if (!admin || !admin.isAdmin) return [];
 
+    // NOTE: Full table scan on pantryItems
+    // For production, cache this in a categoryStats table updated by triggers
     const pantryItems = await ctx.db.query("pantryItems").collect();
     const categories = [...new Set(pantryItems.map((i: any) => i.category))].sort();
     const counts: Record<string, number> = {};
@@ -660,6 +788,9 @@ export const getCategories = query({
 
 /**
  * Get duplicate store names for normalization
+ *
+ * TODO (Phase 1): Cache store normalization, update via triggers.
+ * Current implementation acceptable for <50K price records.
  */
 export const getDuplicateStores = query({
   args: {},
@@ -672,6 +803,8 @@ export const getDuplicateStores = query({
       .unique();
     if (!admin || !admin.isAdmin) return [];
 
+    // NOTE: Full table scan on currentPrices to extract unique store names
+    // For production, maintain a storeNames table updated by triggers
     const prices = await ctx.db.query("currentPrices").collect();
     const storeNames = [...new Set(prices.map((p: any) => p.storeName))].sort();
 
@@ -691,6 +824,9 @@ export const getDuplicateStores = query({
 
 /**
  * Merge store names
+ *
+ * WARNING: This operation can be slow with >10K price records.
+ * For production, run as background job with progress tracking.
  */
 export const mergeStoreNames = mutation({
   args: {
@@ -699,12 +835,21 @@ export const mergeStoreNames = mutation({
   },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
+
+    // NOTE: Full table scan + loop
+    // For production with >50K prices, implement as:
+    // 1. Background scheduler job
+    // 2. Batch updates (100 per txn)
+    // 3. Progress tracking in adminLogs
     const prices = await ctx.db.query("currentPrices").collect();
 
+    const now = Date.now();
     let updated = 0;
+
+    // Batch update in memory-efficient way
     for (const price of prices) {
       if (args.fromNames.includes(price.storeName) && price.storeName !== args.toName) {
-        await ctx.db.patch(price._id, { storeName: args.toName, updatedAt: Date.now() });
+        await ctx.db.patch(price._id, { storeName: args.toName, updatedAt: now });
         updated++;
       }
     }
@@ -714,7 +859,7 @@ export const mergeStoreNames = mutation({
       action: "merge_stores",
       targetType: "store",
       details: `Merged ${args.fromNames.join(", ")} → ${args.toName} (${updated} records)`,
-      createdAt: Date.now(),
+      createdAt: now,
     });
 
     return { success: true, updated };
@@ -735,7 +880,19 @@ export const getFeatureFlags = query({
       .unique();
     if (!admin || !admin.isAdmin) return [];
 
-    return await ctx.db.query("featureFlags").collect();
+    const flags = await ctx.db.query("featureFlags").collect();
+
+    // Sort by updatedAt descending (newest first)
+    const sorted = flags.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    // Enrich with admin name
+    return await Promise.all(
+      sorted.map(async (f) => {
+        if (!f.updatedBy) return { ...f, updatedByName: "System" };
+        const updater = await ctx.db.get(f.updatedBy) as { name: string } | null;
+        return { ...f, updatedByName: updater?.name ?? "Unknown" };
+      })
+    );
   },
 });
 
@@ -836,6 +993,44 @@ export const createAnnouncement = mutation({
 });
 
 /**
+ * Announcements — update
+ */
+export const updateAnnouncement = mutation({
+  args: {
+    announcementId: v.id("announcements"),
+    title: v.string(),
+    body: v.string(),
+    type: v.union(v.literal("info"), v.literal("warning"), v.literal("promo")),
+    startsAt: v.optional(v.number()),
+    endsAt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const ann = await ctx.db.get(args.announcementId);
+    if (!ann) throw new Error("Announcement not found");
+
+    await ctx.db.patch(args.announcementId, {
+      title: args.title,
+      body: args.body,
+      type: args.type,
+      startsAt: args.startsAt,
+      endsAt: args.endsAt,
+    });
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "update_announcement",
+      targetType: "announcement",
+      targetId: args.announcementId,
+      details: `Updated announcement: ${args.title}`,
+      createdAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
  * Announcements — toggle active
  */
 export const toggleAnnouncement = mutation({
@@ -880,6 +1075,55 @@ export const getActiveAnnouncements = query({
   },
 });
 
+/**
+ * Get pricing configuration
+ */
+export const getPricingConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const admin = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!admin || !admin.isAdmin) return [];
+
+    return await ctx.db.query("pricingConfig").collect();
+  },
+});
+
+/**
+ * Update pricing configuration
+ */
+export const updatePricing = mutation({
+  args: {
+    id: v.id("pricingConfig"),
+    priceAmount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const config = await ctx.db.get(args.id);
+    if (!config) throw new Error("Pricing config not found");
+
+    await ctx.db.patch(args.id, {
+      priceAmount: args.priceAmount,
+      updatedAt: Date.now(),
+    });
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "update_pricing",
+      targetType: "pricingConfig",
+      targetId: args.id,
+      details: `Updated ${config.displayName} price to £${args.priceAmount}`,
+      createdAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
 // ============================================================================
 // SYSTEM HEALTH
 // ============================================================================
@@ -888,8 +1132,10 @@ export const getActiveAnnouncements = query({
  * Get system health metrics
  */
 export const getSystemHealth = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    refreshKey: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
@@ -899,20 +1145,33 @@ export const getSystemHealth = query({
       .unique();
     if (!user || !user.isAdmin) return null;
 
-    const failedReceipts = await ctx.db
+    // Use indexes for efficient queries
+    const failed = await ctx.db
       .query("receipts")
+      .withIndex("by_processing_status", (q: any) => q.eq("processingStatus", "failed"))
       .collect();
-    const failed = failedReceipts.filter((r: any) => r.processingStatus === "failed");
-    const processing = failedReceipts.filter((r: any) => r.processingStatus === "processing");
+
+    const processing = await ctx.db
+      .query("receipts")
+      .withIndex("by_processing_status", (q: any) => q.eq("processingStatus", "processing"))
+      .collect();
+
+    // Get total count efficiently (use completed index)
+    const completed = await ctx.db
+      .query("receipts")
+      .withIndex("by_processing_status", (q: any) => q.eq("processingStatus", "completed"))
+      .collect();
+
+    const total = failed.length + processing.length + completed.length;
 
     return {
       status: failed.length > 10 ? "degraded" : "healthy",
       receiptProcessing: {
-        total: failedReceipts.length,
+        total,
         failed: failed.length,
         processing: processing.length,
-        successRate: failedReceipts.length > 0
-          ? Math.round(((failedReceipts.length - failed.length) / failedReceipts.length) * 100)
+        successRate: total > 0
+          ? Math.round(((total - failed.length) / total) * 100)
           : 100,
       },
       timestamp: Date.now(),
@@ -924,29 +1183,44 @@ export const getSystemHealth = query({
  * Get admin action logs
  */
 export const getAuditLogs = query({
-  args: { limit: v.optional(v.number()) },
+  args: { 
+    paginationOpts: v.any(),
+    refreshKey: v.optional(v.string()),
+    dateFrom: v.optional(v.number()),
+    dateTo: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
+    if (!identity) return { page: [], isDone: true, continueCursor: "" };
 
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
       .unique();
-    if (!user || !user.isAdmin) return [];
+    if (!user || !user.isAdmin) return { page: [], isDone: true, continueCursor: "" };
 
-    const logs = await ctx.db
-      .query("adminLogs")
-      .order("desc")
-      .take(args.limit || 50);
+    let query = ctx.db.query("adminLogs").order("desc");
 
-    const enriched = await Promise.all(
-      logs.map(async (l) => {
+    // Note: Filtering after query since we don't have multiple indexes yet
+    // For large scale, use by_created_at index (Phase 1)
+    const results = await query.paginate(args.paginationOpts);
+
+    const enrichedPage = await Promise.all(
+      results.page.map(async (l) => {
         const adminUser = await ctx.db.get(l.adminUserId) as { name: string } | null;
         return { ...l, adminName: adminUser?.name ?? "Unknown" };
       })
     );
 
-    return enriched;
+    // Apply date filtering to the current page (client-side style for now)
+    // In Phase 1 we will optimize this with indexed database queries
+    let filteredPage = enrichedPage;
+    if (args.dateFrom) filteredPage = filteredPage.filter(l => l.createdAt >= args.dateFrom!);
+    if (args.dateTo) filteredPage = filteredPage.filter(l => l.createdAt <= args.dateTo!);
+
+    return {
+      ...results,
+      page: filteredPage,
+    };
   },
 });

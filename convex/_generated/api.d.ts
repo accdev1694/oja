@@ -35,6 +35,7 @@ import type * as migrations_backfillListNumbers from "../migrations/backfillList
 import type * as migrations_backfillListStores from "../migrations/backfillListStores.js";
 import type * as migrations_grantAdminAccess from "../migrations/grantAdminAccess.js";
 import type * as migrations_rephraseItemNames from "../migrations/rephraseItemNames.js";
+import type * as migrations_seedPricingConfig from "../migrations/seedPricingConfig.js";
 import type * as migrations_simplifyPartnerRoles from "../migrations/simplifyPartnerRoles.js";
 import type * as migrations_titleCaseMigration from "../migrations/titleCaseMigration.js";
 import type * as notifications from "../notifications.js";
@@ -42,6 +43,7 @@ import type * as nurture from "../nurture.js";
 import type * as pantryItems from "../pantryItems.js";
 import type * as partners from "../partners.js";
 import type * as priceHistory from "../priceHistory.js";
+import type * as pricingConfig from "../pricingConfig.js";
 import type * as receipts from "../receipts.js";
 import type * as shoppingLists from "../shoppingLists.js";
 import type * as stores from "../stores.js";
@@ -84,6 +86,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/backfillListStores": typeof migrations_backfillListStores;
   "migrations/grantAdminAccess": typeof migrations_grantAdminAccess;
   "migrations/rephraseItemNames": typeof migrations_rephraseItemNames;
+  "migrations/seedPricingConfig": typeof migrations_seedPricingConfig;
   "migrations/simplifyPartnerRoles": typeof migrations_simplifyPartnerRoles;
   "migrations/titleCaseMigration": typeof migrations_titleCaseMigration;
   notifications: typeof notifications;
@@ -91,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   pantryItems: typeof pantryItems;
   partners: typeof partners;
   priceHistory: typeof priceHistory;
+  pricingConfig: typeof pricingConfig;
   receipts: typeof receipts;
   shoppingLists: typeof shoppingLists;
   stores: typeof stores;

@@ -20,6 +20,7 @@
     "@clerk/clerk-expo": "^2.19.20",
     "@google/generative-ai": "^0.24.1",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/datetimepicker": "8.4.4",
     "@shopify/flash-list": "2.0.2",
     "@stripe/stripe-react-native": "^0.50.3",
     "convex": "^1.31.6",

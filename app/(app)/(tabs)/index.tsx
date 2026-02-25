@@ -30,6 +30,7 @@ import {
 import { NotificationDropdown } from "@/components/partners";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
 import { useNotifications } from "@/hooks/useNotifications";
 import { ListCard } from "@/components/lists/ListCard";
 import { HistoryCard } from "@/components/lists/HistoryCard";
@@ -42,10 +43,22 @@ export default function ListsScreen() {
   const router = useRouter();
   const { alert } = useGlassAlert();
   const { firstName } = useCurrentUser();
+  const isSwitchingUsers = useIsSwitchingUsers();
   const [tabMode, setTabMode] = useState<TabMode>("active");
-  const lists = useQuery(api.shoppingLists.getActive);
-  const history = useQuery(api.shoppingLists.getHistory);
-  const sharedLists = useQuery(api.partners.getSharedLists);
+
+  // Skip queries during user switching to prevent cache leakage
+  const lists = useQuery(
+    api.shoppingLists.getActive,
+    !isSwitchingUsers ? {} : "skip"
+  );
+  const history = useQuery(
+    api.shoppingLists.getHistory,
+    !isSwitchingUsers ? {} : "skip"
+  );
+  const sharedLists = useQuery(
+    api.partners.getSharedLists,
+    !isSwitchingUsers ? {} : "skip"
+  );
   const createList = useMutation(api.shoppingLists.create);
   const deleteList = useMutation(api.shoppingLists.remove);
   const [isCreating, setIsCreating] = useState(false);

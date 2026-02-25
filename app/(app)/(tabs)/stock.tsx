@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/glass";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
 import { defaultListName } from "@/lib/list/helpers";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -169,8 +170,17 @@ export default function PantryScreen() {
   const insets = useSafeAreaInsets();
   const { alert } = useGlassAlert();
   const { firstName } = useCurrentUser();
-  const items = useQuery(api.pantryItems.getByUser);
-  const activeLists = useQuery(api.shoppingLists.getActive);
+  const isSwitchingUsers = useIsSwitchingUsers();
+
+  // Skip queries during user switching to prevent cache leakage
+  const items = useQuery(
+    api.pantryItems.getByUser,
+    !isSwitchingUsers ? {} : "skip"
+  );
+  const activeLists = useQuery(
+    api.shoppingLists.getActive,
+    !isSwitchingUsers ? {} : "skip"
+  );
   const updateStockLevel = useMutation(api.pantryItems.updateStockLevel);
   const createList = useMutation(api.shoppingLists.create);
   const addListItem = useMutation(api.listItems.create);
@@ -178,7 +188,10 @@ export default function PantryScreen() {
   const removePantryItem = useMutation(api.pantryItems.remove);
 
   // Dedup sweep
-  const duplicateGroups = useQuery(api.pantryItems.findDuplicates);
+  const duplicateGroups = useQuery(
+    api.pantryItems.findDuplicates,
+    !isSwitchingUsers ? {} : "skip"
+  );
   const mergeDuplicatesMut = useMutation(api.pantryItems.mergeDuplicates);
   const [dedupDismissed, setDedupDismissed] = useState(false);
 
@@ -186,7 +199,10 @@ export default function PantryScreen() {
   const togglePin = useMutation(api.pantryItems.togglePin);
   const archiveItemMut = useMutation(api.pantryItems.archiveItem);
   const unarchiveItemMut = useMutation(api.pantryItems.unarchiveItem);
-  const archivedItems = useQuery(api.pantryItems.getArchivedItems);
+  const archivedItems = useQuery(
+    api.pantryItems.getArchivedItems,
+    !isSwitchingUsers ? {} : "skip"
+  );
   const archivedCount = archivedItems?.length ?? 0;
 
   // Migrate icons for items that don't have them yet

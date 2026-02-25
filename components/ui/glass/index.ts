@@ -52,6 +52,11 @@ export {
   type GlassSearchInputProps,
 } from "./GlassInput";
 
+export {
+  GlassDateRangePicker,
+  type DateRange,
+} from "./GlassDateRangePicker";
+
 // =============================================================================
 // CAPSULE SWITCHER
 // =============================================================================

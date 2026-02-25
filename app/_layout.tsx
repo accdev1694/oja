@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeKeyboardProvider } from "@/lib/keyboard/safeKeyboardController";
 import { GlassAlertProvider } from "@/components/ui/glass";
 import { api } from "@/convex/_generated/api";
+import { UserSwitchContext } from "@/hooks/useIsSwitchingUsers";
 
 const convex = new ConvexReactClient(
   process.env.EXPO_PUBLIC_CONVEX_URL as string,
@@ -23,14 +24,61 @@ if (!publishableKey) {
 }
 
 function InitialLayout() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
+  // Track previous user ID to detect user switches (sign-out/sign-in or account switching)
+  const previousUserIdRef = useRef<string | null | undefined>(undefined);
+
+  // State to block stale queries when user changes
+  // This prevents User B from seeing User A's cached data during the transition
+  const [isSwitchingUsers, setIsSwitchingUsers] = useState(false);
+
+  // Detect user ID changes and trigger cache invalidation
+  useEffect(() => {
+    // Skip until Clerk is loaded
+    if (!isLoaded) return;
+
+    const currentUserId = userId ?? null; // normalize undefined to null for comparison
+    const previousUserId = previousUserIdRef.current;
+
+    // First load - just store the current userId
+    if (previousUserId === undefined) {
+      previousUserIdRef.current = currentUserId;
+      return;
+    }
+
+    // User changed (sign-out, sign-in, or account switch)
+    if (previousUserId !== currentUserId) {
+      console.log('[Convex Cache] User changed:', {
+        from: previousUserId,
+        to: currentUserId,
+        action: currentUserId ? 'signed in' : 'signed out'
+      });
+
+      // Block all queries temporarily to prevent showing stale cached data
+      setIsSwitchingUsers(true);
+
+      // Update the ref
+      previousUserIdRef.current = currentUserId;
+
+      // Allow queries to resume after a brief delay to ensure Convex
+      // has had a chance to re-authenticate with the new user's token
+      const timeoutId = setTimeout(() => {
+        console.log('[Convex Cache] Resuming queries for new user');
+        setIsSwitchingUsers(false);
+      }, 200); // 200ms for token refresh and query invalidation
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isLoaded, userId]);
+
   // Query current user to check onboarding status
+  // SKIP queries during user switching to prevent cache leakage
   const currentUser = useQuery(
     api.users.getCurrent,
-    isLoaded && isSignedIn ? {} : "skip"
+    isLoaded && isSignedIn && !isSwitchingUsers ? {} : "skip"
   );
   // Ensure user record exists in Convex when signed in
   const getOrCreate = useMutation(api.users.getOrCreate);
@@ -38,7 +86,7 @@ function InitialLayout() {
 
   // Ensure Convex user record exists whenever signed in but no record found
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
+    if (!isLoaded || !isSignedIn || isSwitchingUsers) return;
     // currentUser === undefined means query still loading; null means no record
     if (currentUser === null && !creatingUser.current) {
       creatingUser.current = true;
@@ -48,10 +96,10 @@ function InitialLayout() {
           creatingUser.current = false;
         });
     }
-  }, [isLoaded, isSignedIn, currentUser]);
+  }, [isLoaded, isSignedIn, isSwitchingUsers, currentUser]);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || isSwitchingUsers) return;
 
     const inAuthGroup = segments[0] === "(auth)";
     const inOnboarding = segments[0] === "onboarding";
@@ -77,9 +125,13 @@ function InitialLayout() {
         router.replace("/(app)/(tabs)");
       }
     }
-  }, [isLoaded, isSignedIn, segments, currentUser]);
+  }, [isLoaded, isSignedIn, isSwitchingUsers, segments, currentUser]);
 
-  return <Slot />;
+  return (
+    <UserSwitchContext.Provider value={isSwitchingUsers}>
+      <Slot />
+    </UserSwitchContext.Provider>
+  );
 }
 
 export default function RootLayout() {

@@ -26,6 +26,7 @@ import {
   useGlassAlert,
 } from "@/components/ui/glass";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
 import { haptic } from "@/lib/haptics/safeHaptics";
 
 export default function ProfileScreen() {
@@ -33,15 +34,38 @@ export default function ProfileScreen() {
   const { user } = useUser();
   const router = useRouter();
   const { alert } = useGlassAlert();
-  const { firstName } = useCurrentUser();
+  const { firstName, user: convexUser } = useCurrentUser();
+  const isSwitchingUsers = useIsSwitchingUsers();
 
-  const allLists = useQuery(api.shoppingLists.getByUser);
-  const pantryItems = useQuery(api.pantryItems.getByUser);
-  const scanCredits = useQuery(api.subscriptions.getScanCredits);
-  const subscription = useQuery(api.subscriptions.getCurrentSubscription);
-  const aiUsage = useQuery(api.aiUsage.getUsageSummary);
-  const receipts = useQuery(api.receipts.getByUser);
-  const activeChallenge = useQuery(api.insights.getActiveChallenge);
+  // Skip all queries during user switching to prevent cache leakage
+  const allLists = useQuery(
+    api.shoppingLists.getByUser,
+    !isSwitchingUsers ? {} : "skip"
+  );
+  const pantryItems = useQuery(
+    api.pantryItems.getByUser,
+    !isSwitchingUsers ? {} : "skip"
+  );
+  const scanCredits = useQuery(
+    api.subscriptions.getScanCredits,
+    !isSwitchingUsers ? {} : "skip"
+  );
+  const subscription = useQuery(
+    api.subscriptions.getCurrentSubscription,
+    !isSwitchingUsers ? {} : "skip"
+  );
+  const aiUsage = useQuery(
+    api.aiUsage.getUsageSummary,
+    !isSwitchingUsers ? {} : "skip"
+  );
+  const receipts = useQuery(
+    api.receipts.getByUser,
+    !isSwitchingUsers ? {} : "skip"
+  );
+  const activeChallenge = useQuery(
+    api.insights.getActiveChallenge,
+    !isSwitchingUsers ? {} : "skip"
+  );
   const generateChallenge = useMutation(api.insights.generateChallenge);
   const resetMyAccount = useMutation(api.users.resetMyAccount);
   const deleteMyAccount = useMutation(api.users.deleteMyAccount);
@@ -338,6 +362,29 @@ export default function ProfileScreen() {
               </View>
             </GlassCard>
           </Pressable>
+
+          {/* Admin Dashboard - Only visible to admins */}
+          {convexUser?.isAdmin && (
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/(app)/admin" as any);
+              }}
+            >
+              <GlassCard variant="standard" style={styles.navCard}>
+                <View style={styles.navRow}>
+                  <View style={[styles.navIcon, { backgroundColor: `${colors.semantic.danger}20` }]}>
+                    <MaterialCommunityIcons name="shield-crown" size={20} color={colors.semantic.danger} />
+                  </View>
+                  <View style={styles.navInfo}>
+                    <Text style={styles.navTitle}>Admin Dashboard</Text>
+                    <Text style={styles.navSubtitle}>Platform management</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.tertiary} />
+                </View>
+              </GlassCard>
+            </Pressable>
+          )}
 
           {outOfStockItems > 0 && (
             <Pressable

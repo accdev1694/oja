@@ -236,7 +236,20 @@ export const requirePremium = query({
  */
 export const getPlans = query({
   args: {},
-  handler: async () => {
+  handler: async (ctx) => {
+    // Get dynamic pricing from config
+    const pricing = await ctx.db.query("pricingConfig")
+      .withIndex("by_active", (q: any) => q.eq("isActive", true))
+      .collect();
+
+    const monthlyPrice = pricing.find((p: any) => p.planId === "premium_monthly")?.priceAmount ?? 2.99;
+    const annualPrice = pricing.find((p: any) => p.planId === "premium_annual")?.priceAmount ?? 21.99;
+
+    // Calculate savings
+    const yearlyIfMonthly = monthlyPrice * 12;
+    const savings = Math.round(((yearlyIfMonthly - annualPrice) / yearlyIfMonthly) * 100);
+    const savingsAmount = yearlyIfMonthly - annualPrice;
+
     return [
       {
         id: "free",
@@ -256,7 +269,7 @@ export const getPlans = query({
       {
         id: "premium_monthly",
         name: "Premium Monthly",
-        price: 2.99,
+        price: monthlyPrice,
         period: "month",
         features: [
           "Unlimited lists & pantry items",
@@ -267,12 +280,12 @@ export const getPlans = query({
       {
         id: "premium_annual",
         name: "Premium Annual",
-        price: 21.99,
+        price: annualPrice,
         period: "year",
-        savings: "39% off",
+        savings: `${savings}% off`,
         features: [
           "Everything in Monthly",
-          "Save £14.89/year",
+          `Save £${savingsAmount.toFixed(2)}/year`,
           "Early access to new features",
           "Earn up to £12.00–£21.48/yr back from scans",
         ],
@@ -324,12 +337,20 @@ export const getScanCredits = query({
     const tierConfig = getTierFromScans(lifetimeScans);
     const nextTier = getNextTierInfo(lifetimeScans);
 
+    // Get dynamic pricing from config
+    const pricing = await ctx.db.query("pricingConfig")
+      .withIndex("by_active", (q: any) => q.eq("isActive", true))
+      .collect();
+
+    const monthlyPrice = pricing.find((p: any) => p.planId === "premium_monthly")?.priceAmount ?? 2.99;
+    const annualPrice = pricing.find((p: any) => p.planId === "premium_annual")?.priceAmount ?? 21.99;
+
     // Tier-aware caps (scale for annual)
     const maxScans = isAnnual ? tierConfig.maxScans * 12 : tierConfig.maxScans;
     const maxCredits = isAnnual
       ? parseFloat((tierConfig.maxCredits * 12).toFixed(2))
       : tierConfig.maxCredits;
-    const basePrice = isAnnual ? 21.99 : 2.99;
+    const basePrice = isAnnual ? annualPrice : monthlyPrice;
 
     // Current period credit progress (premium only)
     const hasCreditRecord = credit && credit.periodStart <= now && credit.periodEnd > now;
