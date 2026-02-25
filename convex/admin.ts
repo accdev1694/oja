@@ -171,6 +171,27 @@ export const debugAuth = query({
   },
 });
 
+/**
+ * List all users with isAdmin: true (Dashboard only)
+ */
+export const listAllAdmins = query({
+  args: {},
+  handler: async (ctx) => {
+    const admins = await ctx.db
+      .query("users")
+      .withIndex("by_is_admin", (q) => q.eq("isAdmin", true))
+      .collect();
+    
+    return admins.map(a => ({
+      id: a._id,
+      name: a.name,
+      email: a.email,
+      clerkId: a.clerkId,
+      isAdmin: a.isAdmin
+    }));
+  },
+});
+
 // ============================================================================
 // RBAC QUERIES
 // ============================================================================
