@@ -213,19 +213,34 @@ export const getMyPermissions = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
+    if (!identity) {
+      console.log("getMyPermissions: No identity found");
+      return null;
+    }
 
     // Handle Clerk IDs that might come with a prefix
     const clerkId = identity.subject.includes("|") 
       ? identity.subject.split("|").pop()! 
       : identity.subject;
 
+    console.log(`getMyPermissions: Authenticated Subject: ${identity.subject} -> Resolved clerkId: ${clerkId}`);
+
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
       .unique();
 
-    if (!user || !user.isAdmin) return null;
+    if (!user) {
+      console.error(`getMyPermissions: No user record found for clerkId: ${clerkId}`);
+      return null;
+    }
+
+    if (!user.isAdmin) {
+      console.warn(`getMyPermissions: User ${user.email} found but isAdmin is FALSE`);
+      return null;
+    }
+
+    console.log(`getMyPermissions: Access GRANTED for ${user.email}`);
 
     const userRole = await ctx.db
       .query("userRoles")
