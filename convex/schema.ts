@@ -595,6 +595,50 @@ export default defineSchema({
     .index("by_action", ["action"])
     .index("by_created", ["createdAt"]),
 
+  // RBAC Roles (Phase 1.2)
+  adminRoles: defineTable({
+    name: v.string(), // "super_admin", "support", "analyst", "developer"
+    displayName: v.string(), // "Super Administrator"
+    description: v.string(),
+    createdAt: v.number(),
+  }).index("by_name", ["name"]),
+
+  // Role -> Permission Mapping
+  rolePermissions: defineTable({
+    roleId: v.id("adminRoles"),
+    permission: v.string(), // "view_users", "delete_receipts", "manage_flags", etc.
+    createdAt: v.number(),
+  }).index("by_role", ["roleId"])
+    .index("by_permission", ["permission"]),
+
+  // User -> Role Mapping
+  userRoles: defineTable({
+    userId: v.id("users"),
+    roleId: v.id("adminRoles"),
+    grantedBy: v.optional(v.id("users")),
+    grantedAt: v.number(),
+  }).index("by_user", ["userId"])
+    .index("by_role", ["roleId"]),
+
+  // Admin Sessions (Phase 1.3)
+  adminSessions: defineTable({
+    userId: v.id("users"),
+    ipAddress: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    loginAt: v.number(),
+    lastSeenAt: v.number(),
+    logoutAt: v.optional(v.number()),
+    status: v.union(v.literal("active"), v.literal("logged_out"), v.literal("expired")),
+  }).index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  adminRateLimits: defineTable({
+    userId: v.id("users"),
+    action: v.string(), // mutation name
+    count: v.number(),
+    windowStart: v.number(),
+  }).index("by_user_action", ["userId", "action"]),
+
   // Precomputed platform metrics (Phase 1 Performance Optimization)
   // Updated daily by cron job to avoid full table scans in getAnalytics
   platformMetrics: defineTable({

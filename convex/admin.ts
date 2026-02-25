@@ -63,6 +63,244 @@ async function requireAdmin(ctx: any) {
   return user;
 }
 
+/**
+ * RBAC Authorization Helper (Phase 1.2)
+ * Validates that the current user has the required permission
+ */
+async function requirePermission(ctx: any, permission: string) {
+  const user = await requireAdmin(ctx);
+
+  const userRole = await ctx.db
+    .query("userRoles")
+    .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+    .unique();
+
+  if (!userRole) throw new Error("No admin role assigned");
+
+  const hasPermission = await ctx.db
+    .query("rolePermissions")
+    .withIndex("by_role", (q: any) => q.eq("roleId", userRole.roleId))
+    .filter((q: any) => q.eq(q.field("permission"), permission))
+    .unique();
+
+  if (!hasPermission) throw new Error(`Missing permission: ${permission}`);
+
+  // Rate Limiting (Phase 1.4)
+  await checkRateLimit(ctx, user._id, permission);
+
+  return user;
+}
+
+/**
+ * Enforce rate limits for admin actions
+ */
+async function checkRateLimit(ctx: any, userId: any, action: string) {
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute window
+  const windowStart = now - (now % windowMs);
+
+  // Define limits per permission type
+  const SENSITIVE_PERMISSIONS = ["edit_users", "delete_receipts", "manage_pricing"];
+  const limit = SENSITIVE_PERMISSIONS.includes(action) ? 10 : 100;
+
+  const existing = await ctx.db
+    .query("adminRateLimits")
+    .withIndex("by_user_action", (q: any) => 
+      q.eq("userId", userId).eq("action", action)
+    )
+    .unique();
+
+  if (existing) {
+    if (existing.windowStart === windowStart) {
+      if (existing.count >= limit) {
+        throw new Error(`Rate limit exceeded for ${action}. Please wait a minute.`);
+      }
+      await ctx.db.patch(existing._id, { count: existing.count + 1 });
+    } else {
+      // New window
+      await ctx.db.patch(existing._id, { 
+        count: 1, 
+        windowStart: windowStart 
+      });
+    }
+  } else {
+    // First request
+    await ctx.db.insert("adminRateLimits", {
+      userId,
+      action,
+      count: 1,
+      windowStart,
+    });
+  }
+}
+
+// ============================================================================
+// RBAC QUERIES
+// ============================================================================
+
+/**
+ * Get permissions for the current admin user
+ */
+export const getMyPermissions = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user || !user.isAdmin) return null;
+
+    const userRole = await ctx.db
+      .query("userRoles")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .unique();
+
+    if (!userRole) return null;
+
+    const role = await ctx.db.get(userRole.roleId);
+    if (!role) return null;
+
+    const permissions = await ctx.db
+      .query("rolePermissions")
+      .withIndex("by_role", (q: any) => q.eq("roleId", userRole.roleId))
+      .collect();
+
+    return {
+      role: role.name,
+      displayName: role.displayName,
+      permissions: permissions.map((p) => p.permission),
+    };
+  },
+});
+
+/**
+ * Get all available roles
+ */
+export const getRoles = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    return await ctx.db.query("adminRoles").collect();
+  },
+});
+
+// ============================================================================
+// ADMIN SESSION TRACKING (Phase 1.3)
+// ============================================================================
+
+/**
+ * Start or update an admin session
+ */
+export const logAdminSession = mutation({
+  args: { 
+    ipAddress: v.optional(v.string()), 
+    userAgent: v.optional(v.string()) 
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAdmin(ctx);
+    const now = Date.now();
+
+    // Find any existing active session for this user from same device (rough check)
+    const existing = await ctx.db
+      .query("adminSessions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .order("desc")
+      .first();
+
+    if (existing && existing.userAgent === args.userAgent) {
+      // Refresh heartbeat
+      await ctx.db.patch(existing._id, { 
+        lastSeenAt: now,
+        ipAddress: args.ipAddress || existing.ipAddress 
+      });
+      return { sessionId: existing._id };
+    }
+
+    // Create new session
+    const sessionId = await ctx.db.insert("adminSessions", {
+      userId: user._id,
+      ipAddress: args.ipAddress,
+      userAgent: args.userAgent,
+      loginAt: now,
+      lastSeenAt: now,
+      status: "active",
+    });
+
+    return { sessionId };
+  },
+});
+
+/**
+ * End an admin session
+ */
+export const logoutAdmin = mutation({
+  args: { sessionId: v.id("adminSessions") },
+  handler: async (ctx, args) => {
+    const user = await requireAdmin(ctx);
+    const session = await ctx.db.get(args.sessionId);
+    
+    if (!session || session.userId !== user._id) {
+      throw new Error("Invalid session");
+    }
+
+    await ctx.db.patch(args.sessionId, {
+      status: "logged_out",
+      logoutAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Get active admin sessions
+ */
+export const getActiveSessions = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const activeSessions = await ctx.db
+      .query("adminSessions")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect();
+
+    // Enrich with user info
+    return await Promise.all(
+      activeSessions.map(async (s) => {
+        const user = await ctx.db.get(s.userId);
+        return {
+          ...s,
+          userName: user?.name || "Unknown",
+          userEmail: user?.email || "",
+        };
+      })
+    );
+  },
+});
+
+/**
+ * Force logout a session (Super Admin only)
+ */
+export const forceLogoutSession = mutation({
+  args: { sessionId: v.id("adminSessions") },
+  handler: async (ctx, args) => {
+    await requirePermission(ctx, "manage_flags"); // High level permission needed
+
+    await ctx.db.patch(args.sessionId, {
+      status: "expired",
+      logoutAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
 // ============================================================================
 // USER MANAGEMENT
 // ============================================================================
@@ -75,14 +313,11 @@ export const getUsers = query({
     paginationOpts: v.any(), // Use pagination options from Convex
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return { page: [], isDone: true, continueCursor: "" };
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!user || !user.isAdmin) return { page: [], isDone: true, continueCursor: "" };
+    try {
+      await requirePermission(ctx, "view_users");
+    } catch (e) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
 
     return await ctx.db
       .query("users")
@@ -104,14 +339,11 @@ export const searchUsers = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!user || !user.isAdmin) return [];
+    try {
+      await requirePermission(ctx, "view_users");
+    } catch (e) {
+      return [];
+    }
 
     // Limit scan to first 1000 users (ordered by creation desc = newest first)
     // For larger datasets, use dedicated search service
@@ -123,8 +355,11 @@ export const searchUsers = query({
     const term = args.searchTerm.toLowerCase();
     const matches = recentUsers.filter(
       (u: any) =>
-        u.name.toLowerCase().includes(term) ||
-        (u.email && u.email.toLowerCase().includes(term))
+        (u.name && u.name.toLowerCase().includes(term)) ||
+        (u.firstName && u.firstName.toLowerCase().includes(term)) ||
+        (u.lastName && u.lastName.toLowerCase().includes(term)) ||
+        (u.email && u.email.toLowerCase().includes(term)) ||
+        (u.username && u.username.toLowerCase().includes(term))
     );
 
     // Return first N matches
@@ -138,26 +373,61 @@ export const searchUsers = query({
 export const toggleAdmin = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, "edit_users");
     const targetUser = await ctx.db.get(args.userId);
     if (!targetUser) throw new Error("User not found");
 
+    const newAdminStatus = !targetUser.isAdmin;
+
     await ctx.db.patch(args.userId, {
-      isAdmin: !targetUser.isAdmin,
+      isAdmin: newAdminStatus,
       updatedAt: Date.now(),
     });
 
-    // Log admin action
+    // Also update RBAC if granting admin
+    if (newAdminStatus) {
+      const existingRole = await ctx.db
+        .query("userRoles")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .unique();
+
+      if (!existingRole) {
+        const superAdminRole = await ctx.db
+          .query("adminRoles")
+          .withIndex("by_name", (q) => q.eq("name", "super_admin"))
+          .unique();
+
+        if (superAdminRole) {
+          await ctx.db.insert("userRoles", {
+            userId: args.userId,
+            roleId: superAdminRole._id,
+            grantedBy: admin._id,
+            grantedAt: Date.now(),
+          });
+        }
+      }
+    } else {
+      // Remove RBAC role if demoting
+      const existingRole = await ctx.db
+        .query("userRoles")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .unique();
+
+      if (existingRole) {
+        await ctx.db.delete(existingRole._id);
+      }
+    }
+
     await ctx.db.insert("adminLogs", {
       adminUserId: admin._id,
-      action: targetUser.isAdmin ? "remove_admin" : "grant_admin",
+      action: newAdminStatus ? "grant_admin" : "revoke_admin",
       targetType: "user",
       targetId: args.userId,
-      details: `${targetUser.isAdmin ? "Removed" : "Granted"} admin access for ${targetUser.name}`,
+      details: `${newAdminStatus ? "Granted" : "Revoked"} admin privileges for user`,
       createdAt: Date.now(),
     });
 
-    return { success: true };
+    return { success: true, isAdmin: newAdminStatus };
   },
 });
 
@@ -180,14 +450,11 @@ export const getAnalytics = query({
     dateTo: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!user || !user.isAdmin) return null;
+    try {
+      await requirePermission(ctx, "view_analytics");
+    } catch (e) {
+      return null;
+    }
 
     // If date range is specified, fall back to live computation
     if (args.dateFrom || args.dateTo) {
@@ -290,14 +557,11 @@ export const getRevenueReport = query({
     dateTo: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!user || !user.isAdmin) return null;
+    try {
+      await requirePermission(ctx, "view_analytics");
+    } catch (e) {
+      return null;
+    }
 
     let subscriptions = await ctx.db.query("subscriptions").collect();
 
@@ -350,14 +614,11 @@ export const getRecentReceipts = query({
     status: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!user || !user.isAdmin) return [];
+    try {
+      await requirePermission(ctx, "view_receipts");
+    } catch (e) {
+      return [];
+    }
 
     let query = ctx.db.query("receipts").order("desc");
 
@@ -409,7 +670,7 @@ export const getRecentReceipts = query({
 export const deleteReceipt = mutation({
   args: { receiptId: v.id("receipts") },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, "delete_receipts");
     const receipt = await ctx.db.get(args.receiptId);
     if (!receipt) throw new Error("Receipt not found");
 
@@ -438,13 +699,11 @@ export const deleteReceipt = mutation({
 export const getUserDetail = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-    const admin = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!admin || !admin.isAdmin) return null;
+    try {
+      await requirePermission(ctx, "view_users");
+    } catch (e) {
+      return null;
+    }
 
     const user = await ctx.db.get(args.userId);
     if (!user) return null;
@@ -463,12 +722,12 @@ export const getUserDetail = query({
 
     const receipts = await ctx.db
       .query("receipts")
-      .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
       .collect();
 
     const lists = await ctx.db
       .query("shoppingLists")
-      .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
       .collect();
 
     return {
@@ -501,13 +760,11 @@ export const filterUsers = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const admin = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!admin || !admin.isAdmin) return [];
+    try {
+      await requirePermission(ctx, "view_users");
+    } catch (e) {
+      return [];
+    }
 
     // Use by_created index for date filtering
     let users: any[];
@@ -561,7 +818,7 @@ export const filterUsers = query({
 export const extendTrial = mutation({
   args: { userId: v.id("users"), days: v.number() },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, "edit_users");
     const now = Date.now();
 
     const sub = await ctx.db
@@ -599,7 +856,7 @@ export const extendTrial = mutation({
 export const grantComplimentaryAccess = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, "edit_users");
     const now = Date.now();
 
     const existing = await ctx.db
@@ -646,16 +903,16 @@ export const grantComplimentaryAccess = mutation({
 export const toggleSuspension = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, "edit_users");
     const targetUser = await ctx.db.get(args.userId);
     if (!targetUser) throw new Error("User not found");
 
     const isSuspended = (targetUser as any).suspended === true;
 
     await ctx.db.patch(args.userId, {
-      ...(isSuspended ? { suspended: false } : { suspended: true }),
+      suspended: !isSuspended,
       updatedAt: Date.now(),
-    } as any);
+    });
 
     await ctx.db.insert("adminLogs", {
       adminUserId: admin._id,
@@ -680,13 +937,11 @@ export const toggleSuspension = mutation({
 export const getFlaggedReceipts = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const admin = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!admin || !admin.isAdmin) return [];
+    try {
+      await requirePermission(ctx, "view_receipts");
+    } catch (e) {
+      return [];
+    }
 
     // Use index to get failed receipts efficiently
     const failed = await ctx.db
@@ -724,7 +979,7 @@ export const bulkReceiptAction = mutation({
     action: v.union(v.literal("approve"), v.literal("delete")),
   },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, args.action === "delete" ? "delete_receipts" : "edit_users");
     const now = Date.now();
 
     for (const receiptId of args.receiptIds) {
@@ -764,13 +1019,11 @@ export const getPriceAnomalies = query({
     paginationOpts: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return { anomalies: [], hasMore: false };
-    const admin = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!admin || !admin.isAdmin) return { anomalies: [], hasMore: false };
+    try {
+      await requirePermission(ctx, "view_receipts");
+    } catch (e) {
+      return { anomalies: [], hasMore: false };
+    }
 
     // Limit scan to most recent 5000 prices for performance
     // Use pagination if needed for larger datasets
@@ -820,7 +1073,7 @@ export const overridePrice = mutation({
     deleteEntry: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, args.deleteEntry ? "delete_receipts" : "edit_users");
     const entry = await ctx.db.get(args.priceId);
     if (!entry) throw new Error("Price entry not found");
 
@@ -867,13 +1120,11 @@ export const overridePrice = mutation({
 export const getCategories = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const admin = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!admin || !admin.isAdmin) return [];
+    try {
+      await requirePermission(ctx, "manage_catalog");
+    } catch (e) {
+      return [];
+    }
 
     // NOTE: Full table scan on pantryItems
     // For production, cache this in a categoryStats table updated by triggers
@@ -899,13 +1150,11 @@ export const getDuplicateStores = query({
     bustCache: v.optional(v.boolean()), // Force cache refresh
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const admin = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!admin || !admin.isAdmin) return [];
+    try {
+      await requirePermission(ctx, "manage_catalog");
+    } catch (e) {
+      return [];
+    }
 
     // Clear cache if requested
     if (args.bustCache) {
@@ -949,7 +1198,7 @@ export const mergeStoreNames = mutation({
     toName: v.string(),
   },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, "manage_catalog");
 
     // NOTE: Full table scan + loop
     // For production with >50K prices, implement as:
@@ -990,13 +1239,11 @@ export const mergeStoreNames = mutation({
 export const getFeatureFlags = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const admin = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!admin || !admin.isAdmin) return [];
+    try {
+      await requirePermission(ctx, "manage_flags");
+    } catch (e) {
+      return [];
+    }
 
     const flags = await ctx.db.query("featureFlags").collect();
 
@@ -1020,7 +1267,7 @@ export const getFeatureFlags = query({
 export const toggleFeatureFlag = mutation({
   args: { key: v.string(), value: v.boolean(), description: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, "manage_flags");
     const now = Date.now();
 
     const existing = await ctx.db
@@ -1059,13 +1306,11 @@ export const toggleFeatureFlag = mutation({
 export const getAnnouncements = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const admin = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!admin || !admin.isAdmin) return [];
+    try {
+      await requirePermission(ctx, "manage_announcements");
+    } catch (e) {
+      return [];
+    }
 
     return await ctx.db.query("announcements").order("desc").collect();
   },
@@ -1083,7 +1328,7 @@ export const createAnnouncement = mutation({
     endsAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, "manage_announcements");
     const now = Date.now();
 
     const id = await ctx.db.insert("announcements", {
@@ -1123,7 +1368,7 @@ export const updateAnnouncement = mutation({
     endsAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, "manage_announcements");
     const ann = await ctx.db.get(args.announcementId);
     if (!ann) throw new Error("Announcement not found");
 
@@ -1154,7 +1399,7 @@ export const updateAnnouncement = mutation({
 export const toggleAnnouncement = mutation({
   args: { announcementId: v.id("announcements") },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, "manage_announcements");
     const ann = await ctx.db.get(args.announcementId);
     if (!ann) throw new Error("Announcement not found");
 
@@ -1199,13 +1444,11 @@ export const getActiveAnnouncements = query({
 export const getPricingConfig = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const admin = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!admin || !admin.isAdmin) return [];
+    try {
+      await requirePermission(ctx, "manage_pricing");
+    } catch (e) {
+      return [];
+    }
 
     return await ctx.db.query("pricingConfig").collect();
   },
@@ -1220,7 +1463,7 @@ export const updatePricing = mutation({
     priceAmount: v.number(),
   },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermission(ctx, "manage_pricing");
     const config = await ctx.db.get(args.id);
     if (!config) throw new Error("Pricing config not found");
 
@@ -1254,14 +1497,11 @@ export const getSystemHealth = query({
     refreshKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!user || !user.isAdmin) return null;
+    try {
+      await requirePermission(ctx, "view_analytics");
+    } catch (e) {
+      return null;
+    }
 
     // Use indexes for efficient queries
     const failed = await ctx.db
@@ -1308,14 +1548,11 @@ export const getAuditLogs = query({
     dateTo: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return { page: [], isDone: true, continueCursor: "" };
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!user || !user.isAdmin) return { page: [], isDone: true, continueCursor: "" };
+    try {
+      await requirePermission(ctx, "view_audit_logs");
+    } catch (e) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
 
     let query = ctx.db.query("adminLogs").order("desc");
 
