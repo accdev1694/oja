@@ -75,7 +75,15 @@ async function requirePermission(ctx: any, permission: string) {
     .withIndex("by_user", (q: any) => q.eq("userId", user._id))
     .unique();
 
-  if (!userRole) throw new Error("No admin role assigned");
+  if (!userRole) {
+    // Legacy fallback: If user is marked as admin but has no RBAC role, 
+    // grant full access (super_admin behavior)
+    if (user.isAdmin) {
+      await checkRateLimit(ctx, user._id, permission);
+      return user;
+    }
+    throw new Error("No admin role assigned");
+  }
 
   const hasPermission = await ctx.db
     .query("rolePermissions")
