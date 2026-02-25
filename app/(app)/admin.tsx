@@ -10,6 +10,7 @@ import {
   Switch,
   RefreshControl,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
@@ -28,11 +29,13 @@ import {
   colors,
   typography,
   spacing,
+  borderRadius,
   useGlassAlert,
   GlassDateRangePicker,
   type DateRange,
 } from "@/components/ui/glass";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type AdminTab = "overview" | "users" | "receipts" | "catalog" | "settings";
 
@@ -42,9 +45,17 @@ export default function AdminScreen() {
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
 
   const analytics = useQuery(api.admin.getAnalytics, {});
-  const loading = analytics === undefined;
+  const myPerms = useQuery(api.admin.getMyPermissions, {});
+  
+  const loading = analytics === undefined || myPerms === undefined;
 
-  if (analytics === null) {
+  const hasPermission = useCallback((p: string) => {
+    if (!myPerms) return false;
+    if (myPerms.role === "super_admin") return true;
+    return myPerms.permissions.includes(p);
+  }, [myPerms]);
+
+  if (analytics === null || myPerms === null) {
     return (
       <GlassScreen>
         <SimpleHeader title="Admin" showBack onBack={() => router.back()} />
@@ -70,21 +81,48 @@ export default function AdminScreen() {
     );
   }
 
-  const tabs: { key: AdminTab; label: string; icon: string }[] = [
-    { key: "overview", label: "Overview", icon: "view-dashboard" },
-    { key: "users", label: "Users", icon: "account-group" },
-    { key: "receipts", label: "Receipts", icon: "receipt" },
-    { key: "catalog", label: "Catalog", icon: "tag-multiple" },
-    { key: "settings", label: "Settings", icon: "cog" },
+  const tabs: { key: AdminTab; label: string; icon: string; permission: string }[] = [
+    { key: "overview", label: "Overview", icon: "view-dashboard", permission: "view_analytics" },
+    { key: "users", label: "Users", icon: "account-group", permission: "view_users" },
+    { key: "receipts", label: "Receipts", icon: "receipt", permission: "view_receipts" },
+    { key: "catalog", label: "Catalog", icon: "tag-multiple", permission: "manage_catalog" },
+    { key: "settings", label: "Settings", icon: "cog", permission: "manage_flags" }, 
   ];
+
+  const visibleTabs = tabs.filter(tab => hasPermission(tab.permission));
+
+  const logSession = useMutation(api.admin.logAdminSession);
+
+  // Session Heartbeat
+  useEffect(() => {
+    if (analytics === null || myPerms === null) return;
+
+    const heartbeat = async () => {
+      try {
+        await logSession({
+          userAgent: `Mobile App (${Platform.OS})`,
+        });
+      } catch (e) {
+        console.error("Failed to log admin session:", e);
+      }
+    };
+
+    heartbeat();
+    const interval = setInterval(heartbeat, 5 * 60 * 1000); // every 5 mins
+    return () => clearInterval(interval);
+  }, [analytics === null, myPerms === null]);
 
   return (
     <GlassScreen>
-      <SimpleHeader title="Admin Dashboard" subtitle="Platform management" showBack onBack={() => router.back()} />
+      <SimpleHeader 
+        title="Admin Dashboard" 
+        subtitle={myPerms?.displayName || "Platform management"} 
+        showBack onBack={() => router.back()} 
+      />
 
       {/* Tab Bar */}
       <View style={styles.tabBar}>
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <Pressable
             key={tab.key}
             style={[styles.tab, activeTab === tab.key && styles.tabActive]}
@@ -102,11 +140,11 @@ export default function AdminScreen() {
         ))}
       </View>
 
-      {activeTab === "overview" && <OverviewTab />}
-      {activeTab === "users" && <UsersTab />}
-      {activeTab === "receipts" && <ReceiptsTab />}
-      {activeTab === "catalog" && <CatalogTab />}
-      {activeTab === "settings" && <SettingsTab />}
+      {activeTab === "overview" && <OverviewTab hasPermission={hasPermission} />}
+      {activeTab === "users" && <UsersTab hasPermission={hasPermission} />}
+      {activeTab === "receipts" && <ReceiptsTab hasPermission={hasPermission} />}
+      {activeTab === "catalog" && <CatalogTab hasPermission={hasPermission} />}
+      {activeTab === "settings" && <SettingsTab hasPermission={hasPermission} />}
     </GlassScreen>
   );
 }
@@ -115,11 +153,13 @@ export default function AdminScreen() {
 // OVERVIEW TAB
 // ============================================================================
 
-function OverviewTab() {
+function OverviewTab({ hasPermission }: { hasPermission: (p: string) => boolean }) {
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [refreshKey, setRefreshKey] = useState(Date.now().toString());
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [dateRange, setDateRange] = useState<DateRange>({ startDate: null, endDate: null });
+
+  const canViewLogs = hasPermission("view_audit_logs");
 
   const queryArgs = { 
     refreshKey, 
@@ -132,11 +172,11 @@ function OverviewTab() {
   const health = useQuery(api.admin.getSystemHealth, { refreshKey });
   const { results: auditLogs, status: auditStatus, loadMore: loadMoreLogs } = usePaginatedQuery(
     api.admin.getAuditLogs, 
-    { 
+    canViewLogs ? { 
       refreshKey,
       dateFrom: dateRange.startDate || undefined,
       dateTo: dateRange.endDate || undefined
-    },
+    } : "skip",
     { initialNumItems: 10 }
   );
 
@@ -254,7 +294,7 @@ function OverviewTab() {
       )}
 
       {/* Audit Logs */}
-      {auditLogs && auditLogs.length > 0 && (
+      {canViewLogs && auditLogs && auditLogs.length > 0 && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={300}>
           <GlassCard style={styles.section}>
             <Text style={styles.sectionTitle}>Recent Audit Logs</Text>
@@ -291,10 +331,12 @@ function OverviewTab() {
 // USERS TAB
 // ============================================================================
 
-function UsersTab() {
+function UsersTab({ hasPermission }: { hasPermission: (p: string) => boolean }) {
   const { alert: showAlert } = useGlassAlert();
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
+
+  const canEdit = hasPermission("edit_users");
 
   const { results: users, status, loadMore } = usePaginatedQuery(
     api.admin.getUsers,
@@ -324,8 +366,8 @@ function UsersTab() {
     try {
       await toggleAdmin({ userId: userId as any });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      showAlert("Error", "Failed to toggle admin status");
+    } catch (error: any) {
+      showAlert("Error", error.message || "Failed to toggle admin status");
     }
   };
 
@@ -338,8 +380,8 @@ function UsersTab() {
           try {
             await extendTrial({ userId: userId as any, days: 14 });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch {
-            showAlert("Error", "Failed to extend trial");
+          } catch (error: any) {
+            showAlert("Error", error.message || "Failed to extend trial");
           }
         },
       },
@@ -353,22 +395,22 @@ function UsersTab() {
         text: "Grant",
         onPress: async () => {
           try {
-            await grantAccess({ userId: userId as any });
+            await grantAccess({ userId: userId as any, months: 12 });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch {
-            showAlert("Error", "Failed to grant access");
+          } catch (error: any) {
+            showAlert("Error", error.message || "Failed to grant access");
           }
         },
       },
     ]);
   };
 
-  const handleSuspend = async (userId: string) => {
+  const handleToggleSuspension = async (userId: string) => {
     try {
       await toggleSuspension({ userId: userId as any });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    } catch {
-      showAlert("Error", "Failed to toggle suspension");
+    } catch (error: any) {
+      showAlert("Error", error.message || "Failed to toggle suspension");
     }
   };
 
@@ -424,20 +466,31 @@ function UsersTab() {
                 Plan: {userDetail.subscription.plan} • Status: {userDetail.subscription.status}
               </Text>
             )}
-            <View style={styles.actionRow}>
-              <Pressable style={styles.actionBtn} onPress={() => handleExtendTrial(selectedUser)}>
-                <MaterialCommunityIcons name="clock-plus-outline" size={16} color={colors.accent.primary} />
-                <Text style={styles.actionBtnText}>+14d Trial</Text>
-              </Pressable>
-              <Pressable style={styles.actionBtn} onPress={() => handleGrantAccess(selectedUser)}>
-                <MaterialCommunityIcons name="crown" size={16} color={colors.semantic.warning} />
-                <Text style={styles.actionBtnText}>Free Premium</Text>
-              </Pressable>
-              <Pressable style={[styles.actionBtn, styles.dangerBtn]} onPress={() => handleSuspend(selectedUser)}>
-                <MaterialCommunityIcons name="account-off" size={16} color={colors.semantic.danger} />
-                <Text style={[styles.actionBtnText, { color: colors.semantic.danger }]}>Suspend</Text>
-              </Pressable>
-            </View>
+            {canEdit && (
+              <View style={styles.actionRow}>
+                <Pressable style={styles.actionBtn} onPress={() => handleExtendTrial(selectedUser)}>
+                  <MaterialCommunityIcons name="clock-plus-outline" size={16} color={colors.accent.primary} />
+                  <Text style={styles.actionBtnText}>+14d Trial</Text>
+                </Pressable>
+                <Pressable style={styles.actionBtn} onPress={() => handleGrantAccess(selectedUser)}>
+                  <MaterialCommunityIcons name="crown" size={16} color={colors.semantic.warning} />
+                  <Text style={styles.actionBtnText}>Free Premium</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.actionBtn, styles.suspendBtn]}
+                  onPress={() => handleToggleSuspension(selectedUser)}
+                >
+                  <MaterialCommunityIcons
+                    name={userDetail.suspended ? "account-check-outline" : "account-off-outline"}
+                    size={16}
+                    color={colors.semantic.danger}
+                  />
+                  <Text style={[styles.actionBtnText, { color: colors.semantic.danger }]}>
+                    {userDetail.suspended ? "Unsuspend" : "Suspend"}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
           </GlassCard>
         </AnimatedSection>
       )}
@@ -465,16 +518,26 @@ function UsersTab() {
                       <Text style={styles.adminBadgeText}>Admin</Text>
                     </View>
                   )}
-                  <Pressable onPress={() => handleToggleAdmin(u._id)} hitSlop={8}>
-                    <MaterialCommunityIcons
-                      name={u.isAdmin ? "shield-check" : "shield-outline"}
-                      size={20}
-                      color={u.isAdmin ? colors.accent.primary : colors.text.tertiary}
-                    />
-                  </Pressable>
+                  {canEdit && (
+                    <Pressable onPress={() => handleToggleAdmin(u._id)} hitSlop={8}>
+                      <MaterialCommunityIcons
+                        name={u.isAdmin ? "shield-check" : "shield-outline"}
+                        size={20}
+                        color={u.isAdmin ? colors.accent.primary : colors.text.tertiary}
+                      />
+                    </Pressable>
+                  )}
                 </View>
               </Pressable>
             ))}
+            {status === "CanLoadMore" && (
+              <GlassButton
+                onPress={() => loadMore(50)}
+                variant="ghost"
+                size="sm"
+                style={{ marginTop: spacing.md }}
+              >Load More Users</GlassButton>
+            )}
           </GlassCard>
         </AnimatedSection>
       )}
@@ -488,12 +551,14 @@ function UsersTab() {
 // RECEIPTS TAB
 // ============================================================================
 
-function ReceiptsTab() {
+function ReceiptsTab({ hasPermission }: { hasPermission: (p: string) => boolean }) {
   const { alert: showAlert } = useGlassAlert();
   const [dateRange, setDateRange] = useState<DateRange>({ startDate: null, endDate: null });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  const canDelete = hasPermission("delete_receipts");
 
   const recentReceipts = useQuery(api.admin.getRecentReceipts, { 
     limit: 50,
@@ -528,8 +593,8 @@ function ReceiptsTab() {
           try {
             await deleteReceipt({ receiptId: receiptId as any });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch {
-            showAlert("Error", "Failed to delete receipt");
+          } catch (error: any) {
+            showAlert("Error", error.message || "Failed to delete receipt");
           }
         },
       },
@@ -538,21 +603,34 @@ function ReceiptsTab() {
 
   const handleBulkApprove = async () => {
     if (!flaggedReceipts || flaggedReceipts.length === 0) return;
-    const ids = flaggedReceipts.map((r: any) => r._id);
-    try {
-      await bulkAction({ receiptIds: ids, action: "approve" });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      showAlert("Error", "Failed to approve receipts");
-    }
+    
+    showAlert(
+      "Bulk Approve", 
+      `Are you sure you want to approve all ${flaggedReceipts.length} flagged receipts?`, 
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Approve All",
+          onPress: async () => {
+            const ids = flaggedReceipts.map((r: any) => r._id);
+            try {
+              await bulkAction({ receiptIds: ids, action: "approve" });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch (error: any) {
+              showAlert("Error", error.message || "Failed to approve receipts");
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleDeletePrice = async (priceId: string) => {
     try {
       await overridePrice({ priceId: priceId as any, deleteEntry: true });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      showAlert("Error", "Failed to delete price");
+    } catch (error: any) {
+      showAlert("Error", error.message || "Failed to delete price");
     }
   };
 
@@ -642,9 +720,11 @@ function ReceiptsTab() {
                       <MaterialCommunityIcons name="eye-outline" size={20} color={colors.accent.primary} />
                     </Pressable>
                   )}
-                  <Pressable onPress={() => handleDeleteReceipt(r._id)} hitSlop={8}>
-                    <MaterialCommunityIcons name="delete-outline" size={20} color={colors.semantic.danger} />
-                  </Pressable>
+                  {canDelete && (
+                    <Pressable onPress={() => handleDeleteReceipt(r._id)} hitSlop={8}>
+                      <MaterialCommunityIcons name="delete-outline" size={20} color={colors.semantic.danger} />
+                    </Pressable>
+                  )}
                 </View>
               </View>
             ))}
@@ -674,9 +754,11 @@ function ReceiptsTab() {
                     £{a.unitPrice.toFixed(2)} at {a.storeName} (avg: £{a.averagePrice}, {a.deviation}% off)
                   </Text>
                 </View>
-                <Pressable onPress={() => handleDeletePrice(a._id)} hitSlop={8}>
-                  <MaterialCommunityIcons name="close-circle" size={20} color={colors.semantic.danger} />
-                </Pressable>
+                {canDelete && (
+                  <Pressable onPress={() => handleDeletePrice(a._id)} hitSlop={8}>
+                    <MaterialCommunityIcons name="close-circle" size={20} color={colors.semantic.danger} />
+                  </Pressable>
+                )}
               </View>
             ))}
           </GlassCard>
@@ -721,11 +803,13 @@ function ReceiptsTab() {
 // CATALOG TAB
 // ============================================================================
 
-function CatalogTab() {
+function CatalogTab({ hasPermission }: { hasPermission: (p: string) => boolean }) {
   const { alert: showAlert } = useGlassAlert();
   const categories = useQuery(api.admin.getCategories, {});
   const duplicateStores = useQuery(api.admin.getDuplicateStores, {});
   const mergeStores = useMutation(api.admin.mergeStoreNames);
+
+  const canMerge = hasPermission("manage_catalog");
 
   const handleMerge = async (variants: string[], suggested: string) => {
     showAlert("Merge Stores", `Merge all variants to "${suggested}"?`, [
@@ -736,8 +820,8 @@ function CatalogTab() {
           try {
             await mergeStores({ fromNames: variants, toName: suggested });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch {
-            showAlert("Error", "Failed to merge stores");
+          } catch (error: any) {
+            showAlert("Error", error.message || "Failed to merge stores");
           }
         },
       },
@@ -760,12 +844,14 @@ function CatalogTab() {
                   <Text style={styles.userName}>{d.variants.join(" / ")}</Text>
                   <Text style={styles.userEmail}>Suggested: {d.suggested}</Text>
                 </View>
-                <Pressable
-                  style={styles.mergeBtn}
-                  onPress={() => handleMerge(d.variants, d.suggested)}
-                >
-                  <Text style={styles.mergeBtnText}>Merge</Text>
-                </Pressable>
+                {canMerge && (
+                  <Pressable
+                    style={styles.mergeBtn}
+                    onPress={() => handleMerge(d.variants, d.suggested)}
+                  >
+                    <Text style={styles.mergeBtnText}>Merge</Text>
+                  </Pressable>
+                )}
               </View>
             ))}
           </GlassCard>
@@ -798,17 +884,24 @@ function CatalogTab() {
 // SETTINGS TAB (Feature Flags + Announcements)
 // ============================================================================
 
-function SettingsTab() {
+function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean }) {
   const { alert: showAlert } = useGlassAlert();
+  
+  const canManageFlags = hasPermission("manage_flags");
+  const canManageAnnouncements = hasPermission("manage_announcements");
+  const canManagePricing = hasPermission("manage_pricing");
+
   const featureFlags = useQuery(api.admin.getFeatureFlags);
   const announcements = useQuery(api.admin.getAnnouncements);
   const pricingConfig = useQuery(api.admin.getPricingConfig);
+  const activeSessions = useQuery(api.admin.getActiveSessions);
 
   const toggleFlag = useMutation(api.admin.toggleFeatureFlag);
   const createAnnouncement = useMutation(api.admin.createAnnouncement);
   const updateAnnouncement = useMutation(api.admin.updateAnnouncement);
   const toggleAnnouncement = useMutation(api.admin.toggleAnnouncement);
   const updatePricing = useMutation(api.admin.updatePricing);
+  const forceLogout = useMutation(api.admin.forceLogoutSession);
 
   const [showNewAnnouncement, setShowNewAnnouncement] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null);
@@ -824,8 +917,8 @@ function SettingsTab() {
     try {
       await updatePricing({ id: id as any, priceAmount: price });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      showAlert("Error", "Failed to update price");
+    } catch (error: any) {
+      showAlert("Error", error.message || "Failed to update price");
     }
   };
 
@@ -833,8 +926,8 @@ function SettingsTab() {
     try {
       await toggleFlag({ key, value: !currentValue });
       Haptics.selectionAsync();
-    } catch {
-      showAlert("Error", "Failed to toggle flag");
+    } catch (error: any) {
+      showAlert("Error", error.message || "Failed to toggle flag");
     }
   };
 
@@ -844,8 +937,8 @@ function SettingsTab() {
       await toggleFlag({ key: newFlagKey.trim(), value: true, description: "New feature flag" });
       setNewFlagKey("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      showAlert("Error", "Failed to add flag");
+    } catch (error: any) {
+      showAlert("Error", error.message || "Failed to add flag");
     }
   };
 
@@ -867,8 +960,8 @@ function SettingsTab() {
       setAnnTitle("");
       setAnnBody("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      showAlert("Error", `Failed to ${editingAnnouncement ? "update" : "create"} announcement`);
+    } catch (error: any) {
+      showAlert("Error", error.message || `Failed to ${editingAnnouncement ? "update" : "create"} announcement`);
     }
   };
 
@@ -885,157 +978,213 @@ function SettingsTab() {
     try {
       await toggleAnnouncement({ announcementId: id as any });
       Haptics.selectionAsync();
-    } catch {
-      showAlert("Error", "Failed to toggle announcement");
+    } catch (error: any) {
+      showAlert("Error", error.message || "Failed to toggle announcement");
     }
+  };
+
+  const handleForceLogout = async (sessionId: string) => {
+    showAlert("Force Logout", "Force this admin session to expire?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await forceLogout({ sessionId: sessionId as any });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (error: any) {
+            showAlert("Error", error.message || "Failed to force logout");
+          }
+        },
+      },
+    ]);
   };
 
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-      {/* Platform Pricing */}
+      {/* Active Sessions */}
       <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
         <GlassCard style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="currency-gbp" size={24} color={colors.semantic.success} />
-            <Text style={styles.sectionTitle}>Platform Pricing</Text>
+            <MaterialCommunityIcons name="security" size={24} color={colors.accent.primary} />
+            <Text style={styles.sectionTitle}>Active Admin Sessions</Text>
           </View>
-          {pricingConfig?.map((p: any) => (
-            <View key={p._id} style={styles.flagRow}>
+          {activeSessions?.map((s: any) => (
+            <View key={s._id} style={styles.sessionRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.userName}>{p.displayName}</Text>
-                <Text style={styles.userEmail}>{p.planId}</Text>
-              </View>
-              <View style={{ width: 80 }}>
-                <TextInput
-                  style={styles.flagInput}
-                  keyboardType="numeric"
-                  defaultValue={p.priceAmount.toString()}
-                  onEndEditing={(e) => handleUpdatePrice(p._id, e.nativeEvent.text)}
-                />
-              </View>
-            </View>
-          ))}
-        </GlassCard>
-      </AnimatedSection>
-
-      {/* Feature Flags */}
-      <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
-        <GlassCard style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="toggle-switch" size={24} color={colors.accent.primary} />
-            <Text style={styles.sectionTitle}>Feature Flags</Text>
-          </View>
-          {featureFlags?.map((f: any) => (
-            <View key={f._id} style={styles.flagRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.userName}>{f.key}</Text>
-                {f.description && <Text style={styles.userEmail}>{f.description}</Text>}
+                <Text style={styles.userName}>{s.userName} {s.userId === s.currentUserId ? "(You)" : ""}</Text>
+                <Text style={styles.userEmail}>{s.userAgent || "Unknown Device"}</Text>
                 <Text style={styles.lastUpdatedText}>
-                  Modified by {f.updatedByName} on {new Date(f.updatedAt).toLocaleDateString()}
+                  Logged in: {new Date(s.loginAt).toLocaleString()}
+                </Text>
+                <Text style={styles.lastUpdatedText}>
+                  Last active: {new Date(s.lastSeenAt).toLocaleTimeString()}
                 </Text>
               </View>
-              <Switch
-                value={f.value}
-                onValueChange={() => handleToggleFlag(f.key, f.value)}
-                trackColor={{ false: colors.glass.border, true: `${colors.accent.primary}60` }}
-                thumbColor={f.value ? colors.accent.primary : colors.text.tertiary}
-              />
+              {hasPermission("manage_flags") && (
+                <Pressable onPress={() => handleForceLogout(s._id)} hitSlop={8}>
+                  <MaterialCommunityIcons name="logout-variant" size={20} color={colors.semantic.danger} />
+                </Pressable>
+              )}
             </View>
           ))}
-          <View style={styles.addFlagRow}>
-            <TextInput
-              style={styles.flagInput}
-              placeholder="new_flag_key"
-              placeholderTextColor={colors.text.tertiary}
-              value={newFlagKey}
-              onChangeText={setNewFlagKey}
-            />
-            <Pressable style={styles.addFlagBtn} onPress={handleAddFlag}>
-              <MaterialCommunityIcons name="plus" size={20} color={colors.accent.primary} />
-            </Pressable>
-          </View>
+          {!activeSessions || activeSessions.length === 0 && (
+            <Text style={styles.emptyText}>No active admin sessions found.</Text>
+          )}
         </GlassCard>
       </AnimatedSection>
 
-      {/* Announcements */}
-      <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
-        <GlassCard style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="bullhorn" size={24} color={colors.semantic.warning} />
-            <Text style={styles.sectionTitle}>Announcements</Text>
-          </View>
-
-          {!showNewAnnouncement ? (
-            <GlassButton
-              onPress={() => setShowNewAnnouncement(true)}
-              variant="secondary"
-              size="sm"
-              style={{ marginBottom: spacing.md }}
-            >New Announcement</GlassButton>
-          ) : (
-            <View style={styles.newAnnForm}>
-              <Text style={styles.userName}>{editingAnnouncement ? "Edit Announcement" : "New Announcement"}</Text>
-              <TextInput
-                style={styles.annInput}
-                placeholder="Title"
-                placeholderTextColor={colors.text.tertiary}
-                value={annTitle}
-                onChangeText={setAnnTitle}
-              />
-              <TextInput
-                style={[styles.annInput, { height: 80, textAlignVertical: "top" }]}
-                placeholder="Body"
-                placeholderTextColor={colors.text.tertiary}
-                value={annBody}
-                onChangeText={setAnnBody}
-                multiline
-              />
-              <View style={styles.typeRow}>
-                {(["info", "warning", "promo"] as const).map((t) => (
-                  <Pressable
-                    key={t}
-                    style={[styles.typeBtn, annType === t && styles.typeBtnActive]}
-                    onPress={() => setAnnType(t)}
-                  >
-                    <Text style={[styles.typeBtnText, annType === t && styles.typeBtnTextActive]}>
-                      {t}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              <View style={styles.formActions}>
-                <GlassButton onPress={() => { setShowNewAnnouncement(false); setEditingAnnouncement(null); }} variant="ghost" size="sm">Cancel</GlassButton>
-                <GlassButton onPress={handleSaveAnnouncement} size="sm">{editingAnnouncement ? "Update" : "Create"}</GlassButton>
-              </View>
+      {/* Platform Pricing */}
+      {canManagePricing && (
+        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+          <GlassCard style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons name="currency-gbp" size={24} color={colors.semantic.success} />
+              <Text style={styles.sectionTitle}>Platform Pricing</Text>
             </View>
-          )}
-
-          {announcements?.map((a: any) => (
-            <View key={a._id} style={styles.annRow}>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <View style={[styles.annTypeBadge, a.type === "warning" ? styles.warningBadge : a.type === "promo" ? styles.promoBadge : styles.infoBadge]}>
-                    <Text style={styles.statusBadgeText}>{a.type}</Text>
-                  </View>
-                  <Text style={[styles.userName, !a.active && { opacity: 0.5 }]}>{a.title}</Text>
+            {pricingConfig?.map((p: any) => (
+              <View key={p._id} style={styles.flagRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.userName}>{p.displayName}</Text>
+                  <Text style={styles.userEmail}>{p.planId}</Text>
                 </View>
-                <Text style={[styles.userEmail, !a.active && { opacity: 0.5 }]}>{a.body}</Text>
+                <View style={{ width: 80 }}>
+                  <TextInput
+                    style={styles.flagInput}
+                    keyboardType="numeric"
+                    defaultValue={p.priceAmount.toString()}
+                    onEndEditing={(e) => handleUpdatePrice(p._id, e.nativeEvent.text)}
+                  />
+                </View>
               </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                <Pressable onPress={() => startEdit(a)} hitSlop={8}>
-                  <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.accent.primary} />
-                </Pressable>
+            ))}
+          </GlassCard>
+        </AnimatedSection>
+      )}
+
+      {/* Feature Flags */}
+      {canManageFlags && (
+        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+          <GlassCard style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons name="toggle-switch" size={24} color={colors.accent.primary} />
+              <Text style={styles.sectionTitle}>Feature Flags</Text>
+            </View>
+            {featureFlags?.map((f: any) => (
+              <View key={f._id} style={styles.flagRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.userName}>{f.key}</Text>
+                  {f.description && <Text style={styles.userEmail}>{f.description}</Text>}
+                  <Text style={styles.lastUpdatedText}>
+                    Modified by {f.updatedByName} on {new Date(f.updatedAt).toLocaleDateString()}
+                  </Text>
+                </View>
                 <Switch
-                  value={a.active}
-                  onValueChange={() => handleToggleAnnouncement(a._id)}
+                  value={f.value}
+                  onValueChange={() => handleToggleFlag(f.key, f.value)}
                   trackColor={{ false: colors.glass.border, true: `${colors.accent.primary}60` }}
-                  thumbColor={a.active ? colors.accent.primary : colors.text.tertiary}
+                  thumbColor={f.value ? colors.accent.primary : colors.text.tertiary}
                 />
               </View>
+            ))}
+            <View style={styles.addFlagRow}>
+              <TextInput
+                style={styles.flagInput}
+                placeholder="new_flag_key"
+                placeholderTextColor={colors.text.tertiary}
+                value={newFlagKey}
+                onChangeText={setNewFlagKey}
+              />
+              <Pressable style={styles.addFlagBtn} onPress={handleAddFlag}>
+                <MaterialCommunityIcons name="plus" size={20} color={colors.accent.primary} />
+              </Pressable>
             </View>
-          ))}
-        </GlassCard>
-      </AnimatedSection>
+          </GlassCard>
+        </AnimatedSection>
+      )}
+
+      {/* Announcements */}
+      {canManageAnnouncements && (
+        <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
+          <GlassCard style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons name="bullhorn" size={24} color={colors.semantic.warning} />
+              <Text style={styles.sectionTitle}>Announcements</Text>
+            </View>
+
+            {!showNewAnnouncement ? (
+              <GlassButton
+                onPress={() => setShowNewAnnouncement(true)}
+                variant="secondary"
+                size="sm"
+                style={{ marginBottom: spacing.md }}
+              >New Announcement</GlassButton>
+            ) : (
+              <View style={styles.newAnnForm}>
+                <Text style={styles.userName}>{editingAnnouncement ? "Edit Announcement" : "New Announcement"}</Text>
+                <TextInput
+                  style={styles.annInput}
+                  placeholder="Title"
+                  placeholderTextColor={colors.text.tertiary}
+                  value={annTitle}
+                  onChangeText={setAnnTitle}
+                />
+                <TextInput
+                  style={[styles.annInput, { height: 80, textAlignVertical: "top" }]}
+                  placeholder="Body"
+                  placeholderTextColor={colors.text.tertiary}
+                  value={annBody}
+                  onChangeText={setAnnBody}
+                  multiline
+                />
+                <View style={styles.typeRow}>
+                  {(["info", "warning", "promo"] as const).map((t) => (
+                    <Pressable
+                      key={t}
+                      style={[styles.typeBtn, annType === t && styles.typeBtnActive]}
+                      onPress={() => setAnnType(t)}
+                    >
+                      <Text style={[styles.typeBtnText, annType === t && styles.typeBtnTextActive]}>
+                        {t}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={styles.formActions}>
+                  <GlassButton onPress={() => { setShowNewAnnouncement(false); setEditingAnnouncement(null); }} variant="ghost" size="sm">Cancel</GlassButton>
+                  <GlassButton onPress={handleSaveAnnouncement} size="sm">{editingAnnouncement ? "Update" : "Create"}</GlassButton>
+                </View>
+              </View>
+            )}
+
+            {announcements?.map((a: any) => (
+              <View key={a._id} style={styles.annRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View style={[styles.annTypeBadge, a.type === "warning" ? styles.warningBadge : a.type === "promo" ? styles.promoBadge : styles.infoBadge]}>
+                      <Text style={styles.statusBadgeText}>{a.type}</Text>
+                    </View>
+                    <Text style={[styles.userName, !a.active && { opacity: 0.5 }]}>{a.title}</Text>
+                  </View>
+                  <Text style={[styles.userEmail, !a.active && { opacity: 0.5 }]}>{a.body}</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                  <Pressable onPress={() => startEdit(a)} hitSlop={8}>
+                    <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.accent.primary} />
+                  </Pressable>
+                  <Switch
+                    value={a.active}
+                    onValueChange={() => handleToggleAnnouncement(a._id)}
+                    trackColor={{ false: colors.glass.border, true: `${colors.accent.primary}60` }}
+                    thumbColor={a.active ? colors.accent.primary : colors.text.tertiary}
+                  />
+                </View>
+              </View>
+            ))}
+          </GlassCard>
+        </AnimatedSection>
+      )}
 
       <View style={{ height: 140 }} />
     </ScrollView>
@@ -1171,6 +1320,7 @@ const styles = StyleSheet.create({
     borderColor: colors.glass.border,
   },
   actionBtnText: { ...typography.labelSmall, color: colors.accent.primary },
+  suspendBtn: { borderColor: `${colors.semantic.danger}40` },
   dangerBtn: { borderColor: `${colors.semantic.danger}40` },
 
   // Receipts
@@ -1185,6 +1335,8 @@ const styles = StyleSheet.create({
   statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   successBadge: { backgroundColor: `${colors.semantic.success}20` },
   warningBadge: { backgroundColor: `${colors.semantic.warning}20` },
+  promoBadge: { backgroundColor: `${colors.semantic.success}20` },
+  infoBadge: { backgroundColor: `${colors.accent.primary}20` },
   statusBadgeText: { ...typography.labelSmall, color: colors.text.secondary, fontSize: 10 },
 
   // Catalog
@@ -1260,9 +1412,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.glass.border,
   },
+  sessionRow: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+    flexDirection: "row",
+    alignItems: "center",
+  },
   annTypeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  infoBadge: { backgroundColor: `${colors.accent.primary}20` },
-  promoBadge: { backgroundColor: `${colors.semantic.success}20` },
   newAnnForm: { gap: spacing.sm, marginBottom: spacing.md },
   annInput: {
     ...typography.bodyMedium,

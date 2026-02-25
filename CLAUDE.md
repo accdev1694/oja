@@ -119,6 +119,15 @@ Import from `@/components/ui/glass/`. Tokens in `@/lib/design/glassTokens.ts`.
 
 **Key components:** GlassCard, GlassButton, GlassInput, CircularBudgetDial, GlassAnimations
 
+**UI/UX Guidelines:**
+- **Mandatory Page Load Animation:** All pages must implement the "Oja Smooth Load" pattern:
+  - Use `pageAnimationKey` (incremented on focus) for the initial staggered entrance of static elements.
+  - Use `animationKey` (incremented on mode/tab/filter switches) for dynamic content sections to ensure smooth data transitions without full-page reloads.
+  - Wrap elements in `AnimatedSection` with staggered delays (e.g., 0ms, 50ms, 100ms, 150ms...).
+- **Haptics:** Always provide haptic feedback for primary actions (`Light` for taps, `Medium` for success/deletions).
+- **Consistency:** Maintain standard 16px horizontal margins (`spacing.lg`) for all main container elements, headers, and switchers.
+- **Loading States:** Use early returns with `SkeletonCard` or `SkeletonPantryItem` while data is `undefined`.
+
 ### Voice Assistant (Tobi)
 
 **30 function tools** for full CRUD via Gemini 2.0 Flash.
