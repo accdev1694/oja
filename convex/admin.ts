@@ -143,6 +143,35 @@ async function checkRateLimit(ctx: any, userId: any, action: string) {
 }
 
 // ============================================================================
+// DEBUG & VERIFICATION
+// ============================================================================
+
+/**
+ * Debug query to verify auth identity and user record link
+ */
+export const debugAuth = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return { error: "No Convex identity found (not authenticated)" };
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    return {
+      authenticatedSubject: identity.subject,
+      authenticatedEmail: identity.email,
+      userRecordFound: !!user,
+      userId: user?._id,
+      userIsAdminFlag: user?.isAdmin ?? false,
+      userRoleName: user?.isAdmin ? "Admin" : "User",
+    };
+  },
+});
+
+// ============================================================================
 // RBAC QUERIES
 // ============================================================================
 
