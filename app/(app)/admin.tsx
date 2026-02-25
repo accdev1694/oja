@@ -36,7 +36,6 @@ import {
   type DateRange,
 } from "@/components/ui/glass";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type AdminTab = "overview" | "users" | "receipts" | "catalog" | "settings";
 
@@ -51,10 +50,15 @@ export default function AdminScreen() {
   
   const loading = analytics === undefined || myPerms === undefined;
 
+  // Debug Logging
+  useEffect(() => {
+    console.log(`[AdminScreen] render: loading=${loading}, hasAnalytics=${!!analytics}, hasPerms=${!!myPerms}`);
+  }, [loading, !!analytics, !!myPerms]);
+
   const hasPermission = useCallback((p: string) => {
     if (!myPerms) return false;
     if (myPerms.role === "super_admin") return true;
-    return myPerms.permissions.includes(p);
+    return Array.isArray(myPerms.permissions) && myPerms.permissions.includes(p);
   }, [myPerms]);
 
   // Session Heartbeat
@@ -76,7 +80,7 @@ export default function AdminScreen() {
     return () => clearInterval(interval);
   }, [analytics === null, myPerms === null, loading]);
 
-  if (analytics === null || myPerms === null) {
+  if (!loading && (analytics === null || myPerms === null)) {
     return (
       <GlassScreen>
         <SimpleHeader title="Admin" showBack onBack={() => router.back()} />
@@ -95,8 +99,8 @@ export default function AdminScreen() {
         <SimpleHeader title="Admin Dashboard" showBack onBack={() => router.back()} />
         <View style={styles.loading}>
           <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
+          <SkeletonCard style={{ marginTop: spacing.md }} />
+          <SkeletonCard style={{ marginTop: spacing.md }} />
         </View>
       </GlassScreen>
     );
@@ -140,11 +144,13 @@ export default function AdminScreen() {
         ))}
       </View>
 
-      {activeTab === "overview" && <OverviewTab hasPermission={hasPermission} />}
-      {activeTab === "users" && <UsersTab hasPermission={hasPermission} />}
-      {activeTab === "receipts" && <ReceiptsTab hasPermission={hasPermission} />}
-      {activeTab === "catalog" && <CatalogTab hasPermission={hasPermission} />}
-      {activeTab === "settings" && <SettingsTab hasPermission={hasPermission} />}
+      <View style={{ flex: 1 }}>
+        {activeTab === "overview" && <OverviewTab hasPermission={hasPermission} />}
+        {activeTab === "users" && <UsersTab hasPermission={hasPermission} />}
+        {activeTab === "receipts" && <ReceiptsTab hasPermission={hasPermission} />}
+        {activeTab === "catalog" && <CatalogTab hasPermission={hasPermission} />}
+        {activeTab === "settings" && <SettingsTab hasPermission={hasPermission} />}
+      </View>
     </GlassScreen>
   );
 }
@@ -170,6 +176,7 @@ function OverviewTab({ hasPermission }: { hasPermission: (p: string) => boolean 
   const analytics = useQuery(api.admin.getAnalytics, queryArgs);
   const revenue = useQuery(api.admin.getRevenueReport, queryArgs);
   const health = useQuery(api.admin.getSystemHealth, { refreshKey });
+  
   const { results: auditLogs, status: auditStatus, loadMore: loadMoreLogs } = usePaginatedQuery(
     api.admin.getAuditLogs, 
     canViewLogs ? { 
@@ -235,10 +242,10 @@ function OverviewTab({ hasPermission }: { hasPermission: (p: string) => boolean 
               <Text style={styles.sectionTitle}>System: {health.status.toUpperCase()}</Text>
             </View>
             <Text style={styles.metricText}>
-              Receipt success rate: {health.receiptProcessing.successRate}%
+              Receipt success rate: {health.receiptProcessing?.successRate ?? 0}%
             </Text>
             <Text style={styles.metricText}>
-              Failed: {health.receiptProcessing.failed} | Processing: {health.receiptProcessing.processing}
+              Failed: {health.receiptProcessing?.failed ?? 0} | Processing: {health.receiptProcessing?.processing ?? 0}
             </Text>
           </GlassCard>
         </AnimatedSection>
@@ -253,16 +260,16 @@ function OverviewTab({ hasPermission }: { hasPermission: (p: string) => boolean 
               <Text style={styles.sectionTitle}>Analytics</Text>
             </View>
             <View style={styles.metricsGrid}>
-              <MetricCard label="Total Users" value={analytics.totalUsers} icon="account-group" />
-              <MetricCard label="New (Week)" value={analytics.newUsersThisWeek} icon="account-plus" />
-              <MetricCard label="Active (Week)" value={analytics.activeUsersThisWeek} icon="account-check" />
-              <MetricCard label="Total Lists" value={analytics.totalLists} icon="clipboard-list" />
-              <MetricCard label="Completed" value={analytics.completedLists} icon="check-circle" />
-              <MetricCard label="Receipts" value={analytics.totalReceipts} icon="receipt" />
+              <MetricCard label="Total Users" value={analytics.totalUsers ?? 0} icon="account-group" />
+              <MetricCard label="New (Week)" value={analytics.newUsersThisWeek ?? 0} icon="account-plus" />
+              <MetricCard label="Active (Week)" value={analytics.activeUsersThisWeek ?? 0} icon="account-check" />
+              <MetricCard label="Total Lists" value={analytics.totalLists ?? 0} icon="clipboard-list" />
+              <MetricCard label="Completed" value={analytics.completedLists ?? 0} icon="check-circle" />
+              <MetricCard label="Receipts" value={analytics.totalReceipts ?? 0} icon="receipt" />
             </View>
             <View style={styles.gmvRow}>
               <Text style={styles.gmvLabel}>Total GMV</Text>
-              <Text style={styles.gmvValue}>£{analytics.totalGMV.toLocaleString()}</Text>
+              <Text style={styles.gmvValue}>£{(analytics.totalGMV ?? 0).toLocaleString()}</Text>
             </View>
           </GlassCard>
         </AnimatedSection>
@@ -278,23 +285,23 @@ function OverviewTab({ hasPermission }: { hasPermission: (p: string) => boolean 
             </View>
             <View style={styles.revenueGrid}>
               <View style={styles.revenueItem}>
-                <Text style={styles.revenueValue}>£{revenue.mrr.toFixed(2)}</Text>
+                <Text style={styles.revenueValue}>£{(revenue.mrr ?? 0).toFixed(2)}</Text>
                 <Text style={styles.revenueLabel}>MRR</Text>
               </View>
               <View style={styles.revenueItem}>
-                <Text style={styles.revenueValue}>£{revenue.arr.toFixed(2)}</Text>
+                <Text style={styles.revenueValue}>£{(revenue.arr ?? 0).toFixed(2)}</Text>
                 <Text style={styles.revenueLabel}>ARR</Text>
               </View>
             </View>
             <Text style={styles.metricText}>
-              {revenue.monthlySubscribers} monthly • {revenue.annualSubscribers} annual • {revenue.trialsActive} trials
+              {revenue.monthlySubscribers ?? 0} monthly • {revenue.annualSubscribers ?? 0} annual • {revenue.trialsActive ?? 0} trials
             </Text>
           </GlassCard>
         </AnimatedSection>
       )}
 
       {/* Audit Logs */}
-      {canViewLogs && auditLogs && auditLogs.length > 0 && (
+      {canViewLogs && Array.isArray(auditLogs) && auditLogs.length > 0 && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={300}>
           <GlassCard style={styles.section}>
             <Text style={styles.sectionTitle}>Recent Audit Logs</Text>
@@ -358,8 +365,6 @@ function UsersTab({ hasPermission }: { hasPermission: (p: string) => boolean }) 
   const grantAccess = useMutation(api.admin.grantComplimentaryAccess);
   const toggleSuspension = useMutation(api.admin.toggleSuspension);
 
-  const isLoadingMore = status === "LoadingMore";
-  const isDone = status === "CanLoadMore";
   const displayUsers = search.length >= 2 ? searchResults : users;
 
   const handleToggleAdmin = async (userId: string) => {
@@ -445,15 +450,15 @@ function UsersTab({ hasPermission }: { hasPermission: (p: string) => boolean }) 
             <Text style={styles.metricText}>{userDetail.email || "No email"}</Text>
             <View style={styles.detailGrid}>
               <View style={styles.detailItem}>
-                <Text style={styles.detailValue}>{userDetail.receiptCount}</Text>
+                <Text style={styles.detailValue}>{userDetail.receiptCount ?? 0}</Text>
                 <Text style={styles.detailLabel}>Receipts</Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={styles.detailValue}>{userDetail.listCount}</Text>
+                <Text style={styles.detailValue}>{userDetail.listCount ?? 0}</Text>
                 <Text style={styles.detailLabel}>Lists</Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={styles.detailValue}>£{userDetail.totalSpent}</Text>
+                <Text style={styles.detailValue}>£{userDetail.totalSpent ?? 0}</Text>
                 <Text style={styles.detailLabel}>Spent</Text>
               </View>
               <View style={styles.detailItem}>
@@ -496,7 +501,7 @@ function UsersTab({ hasPermission }: { hasPermission: (p: string) => boolean }) 
       )}
 
       {/* User List */}
-      {displayUsers && displayUsers.length > 0 && (
+      {Array.isArray(displayUsers) && displayUsers.length > 0 && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
           <GlassCard style={styles.section}>
             <Text style={styles.sectionTitle}>
@@ -699,7 +704,7 @@ function ReceiptsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
       />
 
       {/* Flagged Receipts */}
-      {flaggedReceipts && flaggedReceipts.length > 0 && (
+      {Array.isArray(flaggedReceipts) && flaggedReceipts.length > 0 && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -739,7 +744,7 @@ function ReceiptsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
       )}
 
       {/* Price Anomalies */}
-      {priceAnomalies && priceAnomalies.length > 0 && (
+      {Array.isArray(priceAnomalies) && priceAnomalies.length > 0 && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -751,7 +756,7 @@ function ReceiptsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
                 <View style={{ flex: 1 }}>
                   <Text style={styles.userName}>{a.itemName}</Text>
                   <Text style={styles.userEmail}>
-                    £{a.unitPrice.toFixed(2)} at {a.storeName} (avg: £{a.averagePrice}, {a.deviation}% off)
+                    £{(a.unitPrice ?? 0).toFixed(2)} at {a.storeName} (avg: £{a.averagePrice ?? 0}, {a.deviation ?? 0}% off)
                   </Text>
                 </View>
                 {canDelete && (
@@ -766,7 +771,7 @@ function ReceiptsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
       )}
 
       {/* Recent Receipts */}
-      {recentReceipts && recentReceipts.length > 0 && (
+      {Array.isArray(recentReceipts) && recentReceipts.length > 0 && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
           <GlassCard style={styles.section}>
             <Text style={styles.sectionTitle}>Recent Receipts</Text>
@@ -775,7 +780,7 @@ function ReceiptsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
                 <View style={{ flex: 1 }}>
                   <Text style={styles.userName}>{r.storeName}</Text>
                   <Text style={styles.userEmail}>
-                    £{r.total.toFixed(2)} • {r.userName} • {new Date(r.purchaseDate).toLocaleDateString()}
+                    £{(r.total ?? 0).toFixed(2)} • {r.userName} • {new Date(r.purchaseDate || Date.now()).toLocaleDateString()}
                   </Text>
                 </View>
                 <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center" }}>
@@ -831,7 +836,7 @@ function CatalogTab({ hasPermission }: { hasPermission: (p: string) => boolean }
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       {/* Duplicate Stores */}
-      {duplicateStores && duplicateStores.length > 0 && (
+      {Array.isArray(duplicateStores) && duplicateStores.length > 0 && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -841,7 +846,7 @@ function CatalogTab({ hasPermission }: { hasPermission: (p: string) => boolean }
             {duplicateStores.map((d: any, i: number) => (
               <View key={i} style={styles.storeRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.userName}>{d.variants.join(" / ")}</Text>
+                  <Text style={styles.userName}>{(d.variants || []).join(" / ")}</Text>
                   <Text style={styles.userEmail}>Suggested: {d.suggested}</Text>
                 </View>
                 {canMerge && (
@@ -859,7 +864,7 @@ function CatalogTab({ hasPermission }: { hasPermission: (p: string) => boolean }
       )}
 
       {/* Categories */}
-      {categories && categories.length > 0 && (
+      {Array.isArray(categories) && categories.length > 0 && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
           <GlassCard style={styles.section}>
             <Text style={styles.sectionTitle}>Categories ({categories.length})</Text>
@@ -934,7 +939,7 @@ function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
   const handleAddFlag = async () => {
     if (!newFlagKey.trim()) return;
     try {
-      await toggleFlag({ key: newFlagKey.trim(), value: true, description: "New feature flag" });
+      await toggleFlag({ key: newFlagKey.trim(), value: true });
       setNewFlagKey("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
@@ -988,7 +993,6 @@ function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
       { text: "Cancel", style: "cancel" },
       {
         text: "Logout",
-        style: "destructive",
         onPress: async () => {
           try {
             await forceLogout({ sessionId: sessionId as any });
@@ -1010,16 +1014,16 @@ function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
             <MaterialCommunityIcons name="security" size={24} color={colors.accent.primary} />
             <Text style={styles.sectionTitle}>Active Admin Sessions</Text>
           </View>
-          {activeSessions?.map((s: any) => (
+          {Array.isArray(activeSessions) && activeSessions.map((s: any) => (
             <View key={s._id} style={styles.sessionRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.userName}>{s.userName} {s.userId === s.currentUserId ? "(You)" : ""}</Text>
+                <Text style={styles.userName}>{s.userName}</Text>
                 <Text style={styles.userEmail}>{s.userAgent || "Unknown Device"}</Text>
                 <Text style={styles.lastUpdatedText}>
-                  Logged in: {new Date(s.loginAt).toLocaleString()}
+                  Logged in: {new Date(s.loginAt || Date.now()).toLocaleString()}
                 </Text>
                 <Text style={styles.lastUpdatedText}>
-                  Last active: {new Date(s.lastSeenAt).toLocaleTimeString()}
+                  Last active: {new Date(s.lastSeenAt || Date.now()).toLocaleTimeString()}
                 </Text>
               </View>
               {hasPermission("manage_flags") && (
@@ -1029,21 +1033,21 @@ function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
               )}
             </View>
           ))}
-          {!activeSessions || activeSessions.length === 0 && (
+          {(!activeSessions || activeSessions.length === 0) && (
             <Text style={styles.emptyText}>No active admin sessions found.</Text>
           )}
         </GlassCard>
       </AnimatedSection>
 
       {/* Platform Pricing */}
-      {canManagePricing && (
+      {canManagePricing && Array.isArray(pricingConfig) && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="currency-gbp" size={24} color={colors.semantic.success} />
               <Text style={styles.sectionTitle}>Platform Pricing</Text>
             </View>
-            {pricingConfig?.map((p: any) => (
+            {pricingConfig.map((p: any) => (
               <View key={p._id} style={styles.flagRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.userName}>{p.displayName}</Text>
@@ -1053,7 +1057,7 @@ function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
                   <TextInput
                     style={styles.flagInput}
                     keyboardType="numeric"
-                    defaultValue={p.priceAmount.toString()}
+                    defaultValue={(p.priceAmount ?? 0).toString()}
                     onEndEditing={(e) => handleUpdatePrice(p._id, e.nativeEvent.text)}
                   />
                 </View>
@@ -1064,27 +1068,27 @@ function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
       )}
 
       {/* Feature Flags */}
-      {canManageFlags && (
+      {canManageFlags && Array.isArray(featureFlags) && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="toggle-switch" size={24} color={colors.accent.primary} />
               <Text style={styles.sectionTitle}>Feature Flags</Text>
             </View>
-            {featureFlags?.map((f: any) => (
+            {featureFlags.map((f: any) => (
               <View key={f._id} style={styles.flagRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.userName}>{f.key}</Text>
                   {f.description && <Text style={styles.userEmail}>{f.description}</Text>}
                   <Text style={styles.lastUpdatedText}>
-                    Modified by {f.updatedByName} on {new Date(f.updatedAt).toLocaleDateString()}
+                    Modified by {f.updatedByName ?? "System"}
                   </Text>
                 </View>
                 <Switch
-                  value={f.value}
-                  onValueChange={() => handleToggleFlag(f.key, f.value)}
+                  value={!!f.value}
+                  onValueChange={() => handleToggleFlag(f.key, !!f.value)}
                   trackColor={{ false: colors.glass.border, true: `${colors.accent.primary}60` }}
-                  thumbColor={f.value ? colors.accent.primary : colors.text.tertiary}
+                  thumbColor={!!f.value ? colors.accent.primary : colors.text.tertiary}
                 />
               </View>
             ))}
@@ -1158,7 +1162,7 @@ function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
               </View>
             )}
 
-            {announcements?.map((a: any) => (
+            {Array.isArray(announcements) && announcements.map((a: any) => (
               <View key={a._id} style={styles.annRow}>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -1174,10 +1178,10 @@ function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
                     <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.accent.primary} />
                   </Pressable>
                   <Switch
-                    value={a.active}
+                    value={!!a.active}
                     onValueChange={() => handleToggleAnnouncement(a._id)}
                     trackColor={{ false: colors.glass.border, true: `${colors.accent.primary}60` }}
-                    thumbColor={a.active ? colors.accent.primary : colors.text.tertiary}
+                    thumbColor={!!a.active ? colors.accent.primary : colors.text.tertiary}
                   />
                 </View>
               </View>
@@ -1211,10 +1215,11 @@ function ReceiptImage({ storageId }: { storageId: string }) {
 // ============================================================================
 
 function MetricCard({ label, value, icon }: { label: string; value: number; icon: string }) {
+  const safeValue = typeof value === "number" ? value : 0;
   return (
     <View style={styles.metricCard}>
       <MaterialCommunityIcons name={icon as any} size={20} color={colors.accent.primary} />
-      <Text style={styles.metricValue}>{value.toLocaleString()}</Text>
+      <Text style={styles.metricValue}>{safeValue.toLocaleString()}</Text>
       <Text style={styles.metricLabel}>{label}</Text>
     </View>
   );
@@ -1411,13 +1416,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.glass.border,
-  },
-  sessionRow: {
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.glass.border,
-    flexDirection: "row",
-    alignItems: "center",
   },
   annTypeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   newAnnForm: { gap: spacing.sm, marginBottom: spacing.md },
