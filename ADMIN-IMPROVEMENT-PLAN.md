@@ -246,11 +246,11 @@ platformMetrics: defineTable({
 
 ---
 
-#### IP Address Tracking
-- [ ] Capture IP address on admin login (use HTTP endpoint)
+#### IP Address Tracking (DEFERRED)
+- [x] ~~Capture IP address on admin login~~ (deferred - requires HTTP endpoint)
 - [x] Store IP in `adminSessions` table (prepared field)
-- [ ] Add IP whitelisting feature (optional, Phase 2)
-- [ ] Alert on login from new IP (email notification)
+- [x] ~~Add IP whitelisting feature~~ (deferred to Phase 2)
+- [x] ~~Alert on login from new IP~~ (deferred - requires email service)
 
 **Files:** `convex/admin.ts`
 
@@ -263,7 +263,7 @@ platformMetrics: defineTable({
 - [x] Add middleware: Check rate limit before mutation execution (implemented in `requirePermission`)
 - [x] Limit: 100 requests/minute per admin (10 for sensitive actions)
 - [x] Return 429 error if exceeded (throws error in Convex)
-- [ ] Add rate limit status to admin header (e.g., "95/100 requests")
+- [x] ~~Add rate limit status to admin header~~ (deferred - nice-to-have UI)
 - [x] Reset counter every minute
 
 **Files:** `convex/schema.ts`, `convex/admin.ts`
@@ -274,7 +274,7 @@ platformMetrics: defineTable({
 - [x] Add confirmation modal for bulk operations (>10 items)
 - [x] Show preview: "This will affect X items"
 - [x] Add "Are you sure?" checkbox (implemented as confirmation modal)
-- [ ] Require admin to type "CONFIRM" for destructive bulk actions
+- [x] ~~Require admin to type "CONFIRM"~~ (deferred - confirmation modal sufficient)
 - [x] Add rate limit: Max 1 bulk operation per minute (covered by 10/min sensitive limit)
 
 **Files:** `app/(app)/admin.tsx` (ReceiptsTab)
