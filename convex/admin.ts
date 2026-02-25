@@ -212,18 +212,24 @@ export const listAllAdmins = query({
 export const getMyPermissions = query({
   args: {},
   handler: async (ctx) => {
+    console.log("getMyPermissions: FUNCTION STARTED");
     const identity = await ctx.auth.getUserIdentity();
+    
     if (!identity) {
-      console.log("getMyPermissions: No identity found");
+      console.warn("getMyPermissions: NO IDENTITY OBJECT FOUND");
+      // Even without identity, let's see if we can find any users marked as admin
+      // This is for extreme debug only
       return null;
     }
+
+    console.log(`getMyPermissions: SUBJECT: "${identity.subject}" EMAIL: "${identity.email}"`);
 
     // Handle Clerk IDs that might come with a prefix
     const clerkId = identity.subject.includes("|") 
       ? identity.subject.split("|").pop()! 
       : identity.subject;
 
-    console.log(`getMyPermissions: Authenticated Subject: ${identity.subject} -> Resolved clerkId: ${clerkId}`);
+    console.log(`getMyPermissions: RESOLVED CLERK_ID: "${clerkId}"`);
 
     const user = await ctx.db
       .query("users")
@@ -231,16 +237,15 @@ export const getMyPermissions = query({
       .unique();
 
     if (!user) {
-      console.error(`getMyPermissions: No user record found for clerkId: ${clerkId}`);
+      console.error(`getMyPermissions: NO USER RECORD FOUND IN DB FOR "${clerkId}"`);
       return null;
     }
+
+    console.log(`getMyPermissions: USER FOUND: ${user.email}, isAdmin flag: ${user.isAdmin}`);
 
     if (!user.isAdmin) {
-      console.warn(`getMyPermissions: User ${user.email} found but isAdmin is FALSE`);
       return null;
     }
-
-    console.log(`getMyPermissions: Access GRANTED for ${user.email}`);
 
     const userRole = await ctx.db
       .query("userRoles")
@@ -248,8 +253,7 @@ export const getMyPermissions = query({
       .unique();
 
     if (!userRole) {
-      // Legacy admin fallback: If they have isAdmin: true but no RBAC role yet,
-      // grant them virtual super_admin permissions so they aren't locked out.
+      console.log("getMyPermissions: GRANTING LEGACY FALLBACK PERMISSIONS");
       return {
         role: "super_admin",
         displayName: "Administrator (Legacy)",
@@ -261,6 +265,7 @@ export const getMyPermissions = query({
       };
     }
 
+    console.log(`getMyPermissions: FOUND USER ROLE ID: ${userRole.roleId}`);
     const role = await ctx.db.get(userRole.roleId);
     if (!role) return null;
 
