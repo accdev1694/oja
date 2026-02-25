@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -39,7 +39,48 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 
 type AdminTab = "overview" | "users" | "receipts" | "catalog" | "settings";
 
-export default function AdminScreen() {
+// Error Boundary wrapper for crash protection
+class AdminErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("[AdminScreen] Error:", error.message);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#0D1528", padding: 20 }}>
+          <Text style={{ color: "#FF6B6B", fontSize: 20, fontWeight: "bold", marginBottom: 10 }}>
+            Admin Screen Error
+          </Text>
+          <Text style={{ color: "#FFFFFF", fontSize: 14, textAlign: "center", marginBottom: 20 }}>
+            {this.state.error?.message || "Unknown error"}
+          </Text>
+          <Pressable
+            onPress={() => this.setState({ hasError: false, error: null })}
+            style={{ backgroundColor: "#00D4AA", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
+          >
+            <Text style={{ color: "#000", fontWeight: "bold" }}>Try Again</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function AdminScreenInner() {
   const router = useRouter();
   const { alert: showAlert } = useGlassAlert();
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
@@ -47,13 +88,8 @@ export default function AdminScreen() {
   const analytics = useQuery(api.admin.getAnalytics, {});
   const myPerms = useQuery(api.admin.getMyPermissions, {});
   const logSession = useMutation(api.admin.logAdminSession);
-  
-  const loading = analytics === undefined || myPerms === undefined;
 
-  // Debug Logging
-  useEffect(() => {
-    console.log(`[AdminScreen] render: loading=${loading}, hasAnalytics=${!!analytics}, hasPerms=${!!myPerms}`);
-  }, [loading, !!analytics, !!myPerms]);
+  const loading = analytics === undefined || myPerms === undefined;
 
   const hasPermission = useCallback((p: string) => {
     if (!myPerms) return false;
@@ -152,6 +188,15 @@ export default function AdminScreen() {
         {activeTab === "settings" && <SettingsTab hasPermission={hasPermission} />}
       </View>
     </GlassScreen>
+  );
+}
+
+// Wrap with Error Boundary for crash protection
+export default function AdminScreen() {
+  return (
+    <AdminErrorBoundary>
+      <AdminScreenInner />
+    </AdminErrorBoundary>
   );
 }
 

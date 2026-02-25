@@ -43,25 +43,264 @@ async function measureQueryPerformance<T>(
 }
 
 /**
- * Validates that the user is an admin
- * AUTHORIZATION BYPASS (Debug Mode)
+ * Normalizes Clerk ID by stripping any OAuth prefix (e.g., "oauth_google|abc123" -> "abc123")
+ * Some Clerk IDs have prefixes, some don't - this handles both cases
  */
-async function requireAdmin(ctx: any) {
-  const user = await ctx.db
+function normalizeClerkId(clerkId: string): string {
+  if (clerkId.includes("|")) {
+    return clerkId.split("|").pop() || clerkId;
+  }
+  return clerkId;
+}
+
+/**
+ * Gets the current authenticated user from the database
+ * Returns null if not authenticated or user not found
+ */
+async function getCurrentUser(ctx: any) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) return null;
+
+  // Try to find user by exact clerkId first
+  let user = await ctx.db
     .query("users")
-    .withIndex("by_is_admin", (q: any) => q.eq("isAdmin", true))
+    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
     .first();
-  
-  if (!user) throw new Error("No user with isAdmin: true found in database");
+
+  // If not found, try normalized ID (handle OAuth prefixes)
+  if (!user) {
+    const normalizedId = normalizeClerkId(identity.subject);
+    if (normalizedId !== identity.subject) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", normalizedId))
+        .first();
+    }
+  }
+
+  // If still not found, try finding by tokenIdentifier (fallback)
+  if (!user && identity.tokenIdentifier) {
+    const tokenParts = identity.tokenIdentifier.split("|");
+    const possibleId = tokenParts.pop();
+    if (possibleId) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", possibleId))
+        .first();
+    }
+  }
+
   return user;
 }
 
 /**
- * RBAC Authorization Helper
- * RBAC Authorization Helper (Bypassed for Debug)
+ * Validates that the current user is an admin
+ * Checks both legacy isAdmin flag and RBAC userRoles table
  */
-async function requirePermission(ctx: any, permission: string) {
-  return await requireAdmin(ctx);
+async function requireAdmin(ctx: any) {
+  const user = await getCurrentUser(ctx);
+
+  if (!user) {
+    throw new Error("Not authenticated");
+  }
+
+  // Check legacy isAdmin flag
+  if (user.isAdmin) {
+    return user;
+  }
+
+  // Check RBAC userRoles table
+  const userRole = await ctx.db
+    .query("userRoles")
+    .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+    .first();
+
+  if (userRole) {
+    return user;
+  }
+
+  throw new Error("Admin access required");
+}
+
+// ============================================================================
+// RATE LIMITING
+// ============================================================================
+
+/**
+ * Sensitive actions that have a lower rate limit (10/min instead of 100/min)
+ * These are destructive or high-impact operations
+ */
+const SENSITIVE_ACTIONS = new Set([
+  "delete_receipts",      // Deleting data
+  "edit_users",           // Modifying user accounts (suspend, grant access)
+  "manage_catalog",       // Merging stores (affects many records)
+  "bulk_operation",       // Any bulk operation
+]);
+
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
+const GENERAL_RATE_LIMIT = 100;         // 100 requests per minute
+const SENSITIVE_RATE_LIMIT = 10;        // 10 requests per minute for sensitive actions
+
+/**
+ * Checks and enforces rate limits for admin actions
+ * @param ctx - Convex context (must be mutation context for writes)
+ * @param userId - The admin user's ID
+ * @param action - The action/permission being performed
+ * @returns true if within limits, throws error if exceeded
+ */
+async function checkRateLimit(ctx: any, userId: any, action: string): Promise<void> {
+  const now = Date.now();
+  const isSensitive = SENSITIVE_ACTIONS.has(action);
+  const limit = isSensitive ? SENSITIVE_RATE_LIMIT : GENERAL_RATE_LIMIT;
+
+  // Find existing rate limit record for this user+action
+  const existing = await ctx.db
+    .query("adminRateLimits")
+    .withIndex("by_user_action", (q: any) =>
+      q.eq("userId", userId).eq("action", action)
+    )
+    .first();
+
+  if (!existing) {
+    // First request for this action - create new record
+    await ctx.db.insert("adminRateLimits", {
+      userId,
+      action,
+      count: 1,
+      windowStart: now,
+    });
+    return;
+  }
+
+  // Check if window has expired (1 minute has passed)
+  const windowExpired = (now - existing.windowStart) >= RATE_LIMIT_WINDOW_MS;
+
+  if (windowExpired) {
+    // Reset the window
+    await ctx.db.patch(existing._id, {
+      count: 1,
+      windowStart: now,
+    });
+    return;
+  }
+
+  // Window is still active - check if limit exceeded
+  if (existing.count >= limit) {
+    const resetInSeconds = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - existing.windowStart)) / 1000);
+    throw new Error(
+      `Rate limit exceeded: ${existing.count}/${limit} requests for ${action}. ` +
+      `Try again in ${resetInSeconds} seconds.`
+    );
+  }
+
+  // Increment counter
+  await ctx.db.patch(existing._id, {
+    count: existing.count + 1,
+  });
+}
+
+/**
+ * Query-safe rate limit check (read-only, doesn't enforce)
+ * For queries that want to check limit status without modifying
+ */
+async function getRateLimitStatus(ctx: any, userId: any, action: string): Promise<{
+  count: number;
+  limit: number;
+  remaining: number;
+  resetInSeconds: number;
+}> {
+  const now = Date.now();
+  const isSensitive = SENSITIVE_ACTIONS.has(action);
+  const limit = isSensitive ? SENSITIVE_RATE_LIMIT : GENERAL_RATE_LIMIT;
+
+  const existing = await ctx.db
+    .query("adminRateLimits")
+    .withIndex("by_user_action", (q: any) =>
+      q.eq("userId", userId).eq("action", action)
+    )
+    .first();
+
+  if (!existing) {
+    return { count: 0, limit, remaining: limit, resetInSeconds: 0 };
+  }
+
+  const windowExpired = (now - existing.windowStart) >= RATE_LIMIT_WINDOW_MS;
+  if (windowExpired) {
+    return { count: 0, limit, remaining: limit, resetInSeconds: 0 };
+  }
+
+  const resetInSeconds = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - existing.windowStart)) / 1000);
+  return {
+    count: existing.count,
+    limit,
+    remaining: Math.max(0, limit - existing.count),
+    resetInSeconds,
+  };
+}
+
+// ============================================================================
+// RBAC AUTHORIZATION
+// ============================================================================
+
+/**
+ * RBAC Authorization Helper
+ * Checks if user has a specific permission via their assigned role
+ * Also enforces rate limiting on mutations
+ */
+async function requirePermission(ctx: any, permission: string, options?: { skipRateLimit?: boolean }) {
+  const user = await requireAdmin(ctx);
+
+  // Enforce rate limiting (only for mutations - ctx.db.insert exists)
+  // Skip for queries or if explicitly disabled
+  if (!options?.skipRateLimit && typeof ctx.db.insert === 'function') {
+    await checkRateLimit(ctx, user._id, permission);
+  }
+
+  // Super admins (via legacy isAdmin) get all permissions
+  if (user.isAdmin) {
+    return user;
+  }
+
+  // Get user's role
+  const userRole = await ctx.db
+    .query("userRoles")
+    .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+    .first();
+
+  if (!userRole) {
+    throw new Error(`Permission denied: ${permission}`);
+  }
+
+  // Get role details
+  const role = await ctx.db.get(userRole.roleId);
+  if (!role) {
+    throw new Error(`Permission denied: ${permission}`);
+  }
+
+  // Super admin role gets all permissions
+  if (role.name === "super_admin") {
+    return user;
+  }
+
+  // Check if role has the required permission
+  const hasPermission = await ctx.db
+    .query("rolePermissions")
+    .withIndex("by_role", (q: any) => q.eq("roleId", userRole.roleId))
+    .filter((q: any) => q.eq(q.field("permission"), permission))
+    .first();
+
+  if (!hasPermission) {
+    throw new Error(`Permission denied: ${permission}`);
+  }
+
+  return user;
+}
+
+/**
+ * Permission check for queries (no rate limiting, read-only)
+ */
+async function requirePermissionQuery(ctx: any, permission: string) {
+  return requirePermission(ctx, permission, { skipRateLimit: true });
 }
 
 // ============================================================================
@@ -69,19 +308,57 @@ async function requirePermission(ctx: any, permission: string) {
 // ============================================================================
 
 /**
- * Get permissions for the current admin user (Bypassed)
+ * Get permissions for the current admin user
+ * Returns null if user is not an admin (triggers Access Denied in UI)
  */
 export const getMyPermissions = query({
   args: {},
   handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+
+    if (!user) {
+      return null; // Not authenticated
+    }
+
+    // Check if user is admin via legacy flag
+    if (user.isAdmin) {
+      return {
+        role: "super_admin",
+        displayName: "Super Administrator",
+        permissions: [
+          "view_analytics", "view_users", "edit_users",
+          "view_receipts", "delete_receipts", "manage_catalog",
+          "manage_flags", "manage_announcements", "manage_pricing", "view_audit_logs"
+        ],
+      };
+    }
+
+    // Check RBAC userRoles table
+    const userRole = await ctx.db
+      .query("userRoles")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .first();
+
+    if (!userRole) {
+      return null; // Not an admin
+    }
+
+    // Get role details
+    const role = await ctx.db.get(userRole.roleId);
+    if (!role) {
+      return null;
+    }
+
+    // Get all permissions for this role
+    const rolePerms = await ctx.db
+      .query("rolePermissions")
+      .withIndex("by_role", (q: any) => q.eq("roleId", userRole.roleId))
+      .collect();
+
     return {
-      role: "super_admin",
-      displayName: "Administrator (Bypass Mode)",
-      permissions: [
-        "view_analytics", "view_users", "edit_users", 
-        "view_receipts", "delete_receipts", "manage_catalog", 
-        "manage_flags", "manage_announcements", "manage_pricing", "view_audit_logs"
-      ],
+      role: role.name,
+      displayName: role.displayName,
+      permissions: rolePerms.map((p: any) => p.permission),
     };
   },
 });
@@ -167,7 +444,7 @@ export const forceLogoutSession = mutation({
 export const getUsers = query({
   args: { paginationOpts: v.any() },
   handler: async (ctx, args) => {
-    await requirePermission(ctx, "view_users");
+    await requirePermissionQuery(ctx, "view_users");
     return await ctx.db.query("users").order("desc").paginate(args.paginationOpts);
   },
 });
@@ -175,11 +452,11 @@ export const getUsers = query({
 export const searchUsers = query({
   args: { searchTerm: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    await requirePermission(ctx, "view_users");
+    await requirePermissionQuery(ctx, "view_users");
     const term = args.searchTerm.toLowerCase();
     const recent = await ctx.db.query("users").order("desc").take(1000);
-    return recent.filter(u => 
-      (u.name && u.name.toLowerCase().includes(term)) || 
+    return recent.filter(u =>
+      (u.name && u.name.toLowerCase().includes(term)) ||
       (u.email && u.email.toLowerCase().includes(term))
     ).slice(0, args.limit || 50);
   },
@@ -282,9 +559,9 @@ export const toggleSuspension = mutation({
 export const getAnalytics = query({
   args: { refreshKey: v.optional(v.string()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    await requirePermission(ctx, "view_analytics");
+    await requirePermissionQuery(ctx, "view_analytics");
     if (args.dateFrom || args.dateTo) return getLiveAnalytics(ctx, args.dateFrom, args.dateTo);
-    
+
     const today = new Date().toISOString().split("T")[0];
     const metrics = await ctx.db.query("platformMetrics").withIndex("by_date", q => q.eq("date", today)).unique();
     if (!metrics) return getLiveAnalytics(ctx);
@@ -348,7 +625,7 @@ async function getLiveAnalytics(ctx: any, dateFrom?: number, dateTo?: number) {
 export const getRevenueReport = query({
   args: { refreshKey: v.optional(v.string()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    await requirePermission(ctx, "view_analytics");
+    await requirePermissionQuery(ctx, "view_analytics");
     let subs = await ctx.db.query("subscriptions").collect();
     if (args.dateFrom) subs = subs.filter(s => s.createdAt >= args.dateFrom!);
     if (args.dateTo) subs = subs.filter(s => s.createdAt <= args.dateTo!);
@@ -363,7 +640,7 @@ export const getRevenueReport = query({
 export const getRecentReceipts = query({
   args: { limit: v.optional(v.number()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()), searchTerm: v.optional(v.string()), status: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await requirePermission(ctx, "view_receipts");
+    await requirePermissionQuery(ctx, "view_receipts");
     const r = await ctx.db.query("receipts").order("desc").take(args.limit || 100);
     return await Promise.all(r.map(async receipt => {
       const u = await ctx.db.get(receipt.userId);
@@ -375,7 +652,7 @@ export const getRecentReceipts = query({
 export const getFlaggedReceipts = query({
   args: {},
   handler: async (ctx) => {
-    await requirePermission(ctx, "view_receipts");
+    await requirePermissionQuery(ctx, "view_receipts");
     const failed = await ctx.db.query("receipts").withIndex("by_processing_status", q => q.eq("processingStatus", "failed")).collect();
     return await Promise.all(failed.map(async r => {
       const u = await ctx.db.get(r.userId);
@@ -387,7 +664,7 @@ export const getFlaggedReceipts = query({
 export const getPriceAnomalies = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    await requirePermission(ctx, "view_receipts");
+    await requirePermissionQuery(ctx, "view_receipts");
     return { anomalies: [], hasMore: false };
   },
 });
@@ -405,11 +682,19 @@ export const deleteReceipt = mutation({
 export const bulkReceiptAction = mutation({
   args: { receiptIds: v.array(v.id("receipts")), action: v.union(v.literal("approve"), v.literal("delete")) },
   handler: async (ctx, args) => {
-    const admin = await requirePermission(ctx, "edit_users");
+    // Use bulk_operation permission - triggers sensitive rate limit (10/min)
+    const admin = await requirePermission(ctx, "bulk_operation");
     for (const id of args.receiptIds) {
       if (args.action === "delete") await ctx.db.delete(id);
       else await ctx.db.patch(id, { processingStatus: "completed" } as any);
     }
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: `bulk_${args.action}`,
+      targetType: "receipt",
+      details: `Bulk ${args.action} on ${args.receiptIds.length} receipts`,
+      createdAt: Date.now()
+    });
     return { success: true, count: args.receiptIds.length };
   },
 });
@@ -427,7 +712,7 @@ export const overridePrice = mutation({
 export const getUserDetail = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    await requirePermission(ctx, "view_users");
+    await requirePermissionQuery(ctx, "view_users");
     const u = await ctx.db.get(args.userId);
     if (!u) return null;
     const [r, l] = await Promise.all([
@@ -445,7 +730,7 @@ export const getUserDetail = query({
 export const getSystemHealth = query({
   args: { refreshKey: v.optional(v.string()) },
   handler: async (ctx) => {
-    await requirePermission(ctx, "view_analytics");
+    await requirePermissionQuery(ctx, "view_analytics");
     return { status: "healthy", receiptProcessing: { total: 0, failed: 0, processing: 0, successRate: 100 }, timestamp: Date.now() };
   },
 });
@@ -453,7 +738,7 @@ export const getSystemHealth = query({
 export const getAuditLogs = query({
   args: { paginationOpts: v.any(), refreshKey: v.optional(v.string()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    await requirePermission(ctx, "view_audit_logs");
+    await requirePermissionQuery(ctx, "view_audit_logs");
     const logs = await ctx.db.query("adminLogs").order("desc").paginate(args.paginationOpts);
     const enriched = await Promise.all(logs.page.map(async l => {
       const u = await ctx.db.get(l.adminUserId);
@@ -463,11 +748,11 @@ export const getAuditLogs = query({
   },
 });
 
-export const getFeatureFlags = query({ args: {}, handler: async (ctx) => { await requirePermission(ctx, "manage_flags"); return []; } });
-export const getAnnouncements = query({ args: {}, handler: async (ctx) => { await requirePermission(ctx, "manage_announcements"); return []; } });
-export const getPricingConfig = query({ args: {}, handler: async (ctx) => { await requirePermission(ctx, "manage_pricing"); return []; } });
-export const getCategories = query({ args: {}, handler: async (ctx) => { await requirePermission(ctx, "manage_catalog"); return []; } });
-export const getDuplicateStores = query({ args: { bustCache: v.optional(v.boolean()) }, handler: async (ctx) => { await requirePermission(ctx, "manage_catalog"); return []; } });
+export const getFeatureFlags = query({ args: {}, handler: async (ctx) => { await requirePermissionQuery(ctx, "manage_flags"); return []; } });
+export const getAnnouncements = query({ args: {}, handler: async (ctx) => { await requirePermissionQuery(ctx, "manage_announcements"); return []; } });
+export const getPricingConfig = query({ args: {}, handler: async (ctx) => { await requirePermissionQuery(ctx, "manage_pricing"); return []; } });
+export const getCategories = query({ args: {}, handler: async (ctx) => { await requirePermissionQuery(ctx, "manage_catalog"); return []; } });
+export const getDuplicateStores = query({ args: { bustCache: v.optional(v.boolean()) }, handler: async (ctx) => { await requirePermissionQuery(ctx, "manage_catalog"); return []; } });
 export const toggleFeatureFlag = mutation({ args: { key: v.string(), value: v.boolean() }, handler: async (ctx) => { await requirePermission(ctx, "manage_flags"); return { success: true }; } });
 export const createAnnouncement = mutation({ args: { title: v.string(), body: v.string(), type: v.string() }, handler: async (ctx) => { await requirePermission(ctx, "manage_announcements"); return { success: true }; } });
 export const updateAnnouncement = mutation({ args: { announcementId: v.id("announcements"), title: v.string(), body: v.string(), type: v.string() }, handler: async (ctx) => { await requirePermission(ctx, "manage_announcements"); return { success: true }; } });
