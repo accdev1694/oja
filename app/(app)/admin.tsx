@@ -83,13 +83,7 @@ export default function AdminScreen() {
         <View style={styles.accessDenied}>
           <MaterialCommunityIcons name="shield-lock-outline" size={64} color={colors.semantic.danger} />
           <Text style={styles.accessTitle}>Access Denied</Text>
-          <Text style={styles.accessSubtext}>
-            {analytics === null ? "Analytics is NULL. " : ""}
-            {myPerms === null ? "Permissions is NULL. " : ""}
-          </Text>
-          <Text style={[styles.accessSubtext, { fontSize: 10, marginTop: 20 }]}>
-            Debug Version: 1.0.5 (Emergency Bypass)
-          </Text>
+          <Text style={styles.accessSubtext}>Admin privileges required</Text>
         </View>
       </GlassScreen>
     );
