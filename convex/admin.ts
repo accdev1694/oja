@@ -159,7 +159,19 @@ export const getMyPermissions = query({
       .withIndex("by_user", (q: any) => q.eq("userId", user._id))
       .unique();
 
-    if (!userRole) return null;
+    if (!userRole) {
+      // Legacy admin fallback: If they have isAdmin: true but no RBAC role yet,
+      // grant them virtual super_admin permissions so they aren't locked out.
+      return {
+        role: "super_admin",
+        displayName: "Administrator (Legacy)",
+        permissions: [
+          "view_analytics", "view_users", "edit_users", 
+          "view_receipts", "delete_receipts", "manage_catalog", 
+          "manage_flags", "manage_announcements", "manage_pricing", "view_audit_logs"
+        ],
+      };
+    }
 
     const role = await ctx.db.get(userRole.roleId);
     if (!role) return null;
