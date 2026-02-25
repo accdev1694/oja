@@ -3,39 +3,41 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  FlatList,
   Pressable,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useState, useCallback } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+
 import {
   GlassScreen,
   GlassCard,
   SimpleHeader,
-  SkeletonCard,
-  EmptyLists,
-  TrialNudgeBanner,
   GlassCapsuleSwitcher,
+  TrialNudgeBanner,
+  AnimatedSection,
+  SkeletonCard,
   colors,
   typography,
   spacing,
   borderRadius,
   useGlassAlert,
 } from "@/components/ui/glass";
-import { NotificationDropdown } from "@/components/partners";
-import { TipBanner } from "@/components/ui/TipBanner";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
-import { useNotifications } from "@/hooks/useNotifications";
+import { EmptyLists } from "@/components/ui/glass/GlassErrorState";
 import { ListCard } from "@/components/lists/ListCard";
-import { HistoryCard } from "@/components/lists/HistoryCard";
 import { SharedListCard } from "@/components/lists/SharedListCard";
+import { HistoryCard } from "@/components/lists/HistoryCard";
 import { defaultListName } from "@/lib/list/helpers";
+import { TipBanner } from "@/components/ui/TipBanner";
+import { useNotifications } from "@/hooks/useNotifications";
+import { NotificationDropdown } from "@/components/partners/NotificationDropdown";
 
 type TabMode = "active" | "history";
 
@@ -46,30 +48,32 @@ export default function ListsScreen() {
   const isSwitchingUsers = useIsSwitchingUsers();
   const [tabMode, setTabMode] = useState<TabMode>("active");
 
-  // Skip queries during user switching to prevent cache leakage
-  const lists = useQuery(
-    api.shoppingLists.getActive,
-    !isSwitchingUsers ? {} : "skip"
-  );
-  const history = useQuery(
-    api.shoppingLists.getHistory,
-    !isSwitchingUsers ? {} : "skip"
-  );
-  const sharedLists = useQuery(
-    api.partners.getSharedLists,
-    !isSwitchingUsers ? {} : "skip"
-  );
+  // Data Hooks
+  const lists = useQuery(api.shoppingLists.getActive, !isSwitchingUsers ? {} : "skip");
+  const history = useQuery(api.shoppingLists.getHistory, !isSwitchingUsers ? {} : "skip");
+  const sharedLists = useQuery(api.partners.getSharedLists, !isSwitchingUsers ? {} : "skip");
   const createList = useMutation(api.shoppingLists.create);
   const deleteList = useMutation(api.shoppingLists.remove);
+
   const [isCreating, setIsCreating] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const { unreadCount } = useNotifications();
+  const [animationKey, setAnimationKey] = useState(0);
+  const [pageAnimationKey, setPageAnimationKey] = useState(0);
 
+  // Trigger animations every time this tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      setAnimationKey((prev) => prev + 1);
+      setPageAnimationKey((prev) => prev + 1);
+    }, [])
+  );
 
   const handleTabSwitch = useCallback((index: number) => {
     const mode: TabMode = index === 0 ? "active" : "history";
     if (mode === tabMode) return;
     setTabMode(mode);
+    setAnimationKey((prev) => prev + 1);
   }, [tabMode]);
 
   const handleDeleteList = useCallback((listId: Id<"shoppingLists">, listName: string) => {
@@ -109,8 +113,6 @@ export default function ListsScreen() {
     router.push(`/list/${id}`);
   }, [router]);
 
-  const historyKeyExtractor = useCallback((item: { _id: string }) => item._id, []);
-
   const stableFormatDateTime = useCallback((timestamp: number) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString("en-GB", {
@@ -118,14 +120,6 @@ export default function ListsScreen() {
       minute: "2-digit",
     });
   }, []);
-
-  const renderHistoryCard = useCallback(({ item }: { item: typeof displayList[number] }) => (
-    <HistoryCard
-      list={item}
-      onPress={handleHistoryPress}
-      formatDateTime={stableFormatDateTime}
-    />
-  ), [handleHistoryPress, stableFormatDateTime]);
 
   async function handleCreateList() {
     if (isCreating) return;
@@ -162,8 +156,26 @@ export default function ListsScreen() {
   const currentData = tabMode === "active" ? lists : history;
   const isLoaded = currentData !== undefined;
   const displayList = currentData ?? [];
-  const activeShared = sharedLists?.filter((l) => l && l.status !== "archived" && l.status !== "completed") ?? [];
+  const activeShared = sharedLists?.filter((l: any) => l && l.status !== "archived" && l.status !== "completed") ?? [];
   const hasAnyActiveLists = displayList.length > 0 || activeShared.length > 0;
+
+  // Loading state with skeletons (Smooth transition pattern)
+  if (!isLoaded) {
+    return (
+      <GlassScreen>
+        <SimpleHeader
+          title={firstName ? `${firstName}'s Lists` : "Shopping Lists"}
+          accentColor={colors.semantic.lists}
+          subtitle="Loading your lists..."
+        />
+        <View style={styles.skeletonContainer}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      </GlassScreen>
+    );
+  }
 
   return (
     <GlassScreen>
@@ -173,12 +185,8 @@ export default function ListsScreen() {
         accentColor={colors.semantic.lists}
         subtitle={
           tabMode === "active"
-            ? lists !== undefined
-              ? `${lists.length} active list${lists.length !== 1 ? "s" : ""}`
-              : undefined
-            : history !== undefined
-              ? `${history.length} archived list${history.length !== 1 ? "s" : ""}`
-              : undefined
+            ? `${lists?.length ?? 0} active list${(lists?.length ?? 0) !== 1 ? "s" : ""}`
+            : `${history?.length ?? 0} archived list${(history?.length ?? 0) !== 1 ? "s" : ""}`
         }
         rightElement={
           <View style={styles.headerActions}>
@@ -216,193 +224,212 @@ export default function ListsScreen() {
         }
       />
 
-      {/* Tab Toggle */}
-      <GlassCapsuleSwitcher
-        tabs={[
-          {
-            label: "Active",
-            activeColor: colors.accent.primary,
-            icon: "clipboard-list",
-            badge: ((lists?.length ?? 0) + activeShared.length) > 0
-              ? (lists?.length ?? 0) + activeShared.length
-              : undefined,
-          },
-          {
-            label: "History",
-            activeColor: colors.accent.primary,
-            icon: "history",
-            badge: history && history.length > 0 ? history.length : undefined,
-          },
-        ]}
-        activeIndex={tabMode === "active" ? 0 : 1}
-        onTabChange={handleTabSwitch}
-        style={styles.tabContainer}
-      />
-
-      {/* Trial Nudge Banner */}
-      <TrialNudgeBanner />
-
-      {/* Contextual Tips */}
-      <TipBanner context="lists" />
-
-      {/* Content */}
-      {!isLoaded ? (
-        <View style={styles.skeletonContainer}>
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </View>
-      ) : tabMode === "active" && !hasAnyActiveLists ? (
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.emptyScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <EmptyLists
-            onAction={handleCreateList}
-            actionText="Create a New List"
-          />
-          {/* Join a shared list — always visible even with no lists */}
-          <View style={styles.joinCardEmpty}>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push("/join-list");
-              }}
-            >
-              <GlassCard variant="bordered" style={styles.joinCard}>
-                <View style={styles.joinCardContent}>
-                  <MaterialCommunityIcons
-                    name="link-variant"
-                    size={18}
-                    color={colors.text.tertiary}
-                  />
-                  <Text style={styles.joinCardText}>Accept Invite</Text>
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={18}
-                    color={colors.text.tertiary}
-                  />
-                </View>
-              </GlassCard>
-            </Pressable>
-          </View>
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
-      ) : tabMode === "history" && displayList.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <View style={styles.emptyHistoryContainer}>
-            <MaterialCommunityIcons
-              name="clipboard-check-outline"
-              size={64}
-              color={colors.text.tertiary}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View key={pageAnimationKey}>
+          {/* Tab Toggle */}
+          <AnimatedSection key={`toggle-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={0}>
+            <GlassCapsuleSwitcher
+              tabs={[
+                {
+                  label: "Active",
+                  activeColor: colors.accent.primary,
+                  icon: "clipboard-list",
+                  badge: ((lists?.length ?? 0) + activeShared.length) > 0
+                    ? (lists?.length ?? 0) + activeShared.length
+                    : undefined,
+                },
+                {
+                  label: "History",
+                  activeColor: colors.accent.primary,
+                  icon: "history",
+                  badge: history && history.length > 0 ? history.length : undefined,
+                },
+              ]}
+              activeIndex={tabMode === "active" ? 0 : 1}
+              onTabChange={handleTabSwitch}
+              style={styles.tabContainer}
             />
-            <Text style={styles.emptyHistoryTitle}>No trips yet</Text>
-            <Text style={styles.emptyHistorySubtitle}>
-              Complete a shopping trip and it&apos;ll show up here — great for tracking your spending over time.
-            </Text>
+          </AnimatedSection>
+
+          {/* Trial Nudge Banner */}
+          <AnimatedSection key={`nudge-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={50}>
+            <TrialNudgeBanner />
+          </AnimatedSection>
+
+          {/* Contextual Tips */}
+          <AnimatedSection key={`tip-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={100}>
+            <TipBanner context="lists" />
+          </AnimatedSection>
+
+          {/* Content */}
+          <View key={animationKey}>
+            {tabMode === "active" && !hasAnyActiveLists ? (
+              <AnimatedSection key={`empty-${animationKey}`} animation="fadeInDown" duration={400} delay={150}>
+                <View style={styles.emptyScrollContentInner}>
+                  <EmptyLists
+                    onAction={handleCreateList}
+                    actionText="Create a New List"
+                  />
+                  {/* Join a shared list — always visible even with no lists */}
+                  <View style={styles.joinCardEmpty}>
+                    <Pressable
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        router.push("/join-list");
+                      }}
+                    >
+                      <GlassCard variant="bordered" style={styles.joinCard}>
+                        <View style={styles.joinCardContent}>
+                          <MaterialCommunityIcons
+                            name="link-variant"
+                            size={18}
+                            color={colors.text.tertiary}
+                          />
+                          <Text style={styles.joinCardText}>Accept Invite</Text>
+                          <MaterialCommunityIcons
+                            name="chevron-right"
+                            size={18}
+                            color={colors.text.tertiary}
+                          />
+                        </View>
+                      </GlassCard>
+                    </Pressable>
+                  </View>
+                </View>
+              </AnimatedSection>
+            ) : tabMode === "history" && displayList.length === 0 ? (
+              <AnimatedSection key={`empty-history-${animationKey}`} animation="fadeInDown" duration={400} delay={150}>
+                <View style={styles.emptyHistoryContainer}>
+                  <MaterialCommunityIcons
+                    name="clipboard-check-outline"
+                    size={64}
+                    color={colors.text.tertiary}
+                  />
+                  <Text style={styles.emptyHistoryTitle}>No trips yet</Text>
+                  <Text style={styles.emptyHistorySubtitle}>
+                    Complete a shopping trip and it&apos;ll show up here — great for tracking your spending over time.
+                  </Text>
+                </View>
+              </AnimatedSection>
+            ) : tabMode === "active" ? (
+              <View>
+                {/* Inline create-list card — always visible as first item */}
+                <AnimatedSection key={`create-${animationKey}`} animation="fadeInDown" duration={400} delay={150}>
+                  <Pressable
+                    onPress={handleCreateList}
+                    disabled={isCreating}
+                    style={({ pressed }) => [
+                      styles.createCard,
+                      isCreating && { opacity: 0.5 },
+                      pressed && { opacity: 0.7 },
+                    ]}
+                  >
+                    <View style={styles.createCardInner}>
+                      <View style={styles.createCardIcon}>
+                        <MaterialCommunityIcons name="plus" size={24} color={colors.accent.primary} />
+                      </View>
+                      <View style={styles.createCardText}>
+                        <Text style={styles.createCardTitle}>Create a new list</Text>
+                        <Text style={styles.createCardSubtitle}>Set a budget and start adding items</Text>
+                      </View>
+                      <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text.tertiary} />
+                    </View>
+                  </Pressable>
+                </AnimatedSection>
+
+                {displayList.map((list, index) => (
+                  <AnimatedSection key={`${list._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={200 + (index * 50)}>
+                    <View style={styles.cardWrapper}>
+                      <ListCard
+                        list={list}
+                        onPress={handleListPress}
+                        onDelete={handleDeletePress}
+                      />
+                    </View>
+                  </AnimatedSection>
+                ))}
+
+                {/* Shared With Me section */}
+                {activeShared.length > 0 && (
+                  <View>
+                    <AnimatedSection key={`shared-title-${animationKey}`} animation="fadeInDown" duration={400} delay={200 + (displayList.length * 50)}>
+                      <View style={styles.sharedSectionHeader}>
+                        <MaterialCommunityIcons
+                          name="account-group"
+                          size={18}
+                          color={colors.text.secondary}
+                        />
+                        <Text style={styles.sharedSectionTitle}>Shared With Me</Text>
+                      </View>
+                    </AnimatedSection>
+                    {activeShared.map((list: any, index: number) =>
+                      list ? (
+                        <AnimatedSection key={`${list._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={250 + (displayList.length * 50) + (index * 50)}>
+                          <View style={styles.cardWrapper}>
+                            <SharedListCard
+                              list={list}
+                              onPress={handleSharedPress}
+                              formatDateTime={stableFormatDateTime}
+                            />
+                          </View>
+                        </AnimatedSection>
+                      ) : null
+                    )}
+                  </View>
+                )}
+
+                {/* Join a shared list — inline card */}
+                <AnimatedSection key={`join-${animationKey}`} animation="fadeInDown" duration={400} delay={200 + ((displayList.length + activeShared.length) * 50)}>
+                  <View style={styles.joinCardWrapper}>
+                    <Pressable
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        router.push("/join-list");
+                      }}
+                    >
+                      <GlassCard variant="bordered" style={styles.joinCard}>
+                        <View style={styles.joinCardContent}>
+                          <MaterialCommunityIcons
+                            name="link-variant"
+                            size={18}
+                            color={colors.text.tertiary}
+                          />
+                          <Text style={styles.joinCardText}>Accept Invite</Text>
+                          <MaterialCommunityIcons
+                            name="chevron-right"
+                            size={18}
+                            color={colors.text.tertiary}
+                          />
+                        </View>
+                      </GlassCard>
+                    </Pressable>
+                  </View>
+                </AnimatedSection>
+              </View>
+            ) : (
+              <View>
+                {displayList.map((list, index) => (
+                  <AnimatedSection key={`${list._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={150 + (index * 50)}>
+                    <View style={styles.cardWrapper}>
+                      <HistoryCard
+                        list={list}
+                        onPress={handleHistoryPress}
+                        formatDateTime={stableFormatDateTime}
+                      />
+                    </View>
+                  </AnimatedSection>
+                ))}
+              </View>
+            )}
           </View>
         </View>
-      ) : tabMode === "active" ? (
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Inline create-list card — always visible as first item */}
-          <Pressable
-            onPress={handleCreateList}
-            disabled={isCreating}
-            style={({ pressed }) => [
-              styles.createCard,
-              isCreating && { opacity: 0.5 },
-              pressed && { opacity: 0.7 },
-            ]}
-          >
-            <View style={styles.createCardInner}>
-              <View style={styles.createCardIcon}>
-                <MaterialCommunityIcons name="plus" size={24} color={colors.accent.primary} />
-              </View>
-              <View style={styles.createCardText}>
-                <Text style={styles.createCardTitle}>Create a new list</Text>
-                <Text style={styles.createCardSubtitle}>Set a budget and start adding items</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text.tertiary} />
-            </View>
-          </Pressable>
 
-          {displayList.map((list) => (
-            <ListCard
-              key={list._id}
-              list={list}
-              onPress={handleListPress}
-              onDelete={handleDeletePress}
-            />
-          ))}
-
-          {/* Shared With Me section */}
-          {activeShared.length > 0 && (
-            <>
-              <View style={styles.sharedSectionHeader}>
-                <MaterialCommunityIcons
-                  name="account-group"
-                  size={18}
-                  color={colors.text.secondary}
-                />
-                <Text style={styles.sharedSectionTitle}>Shared With Me</Text>
-              </View>
-              {activeShared.map((list) =>
-                list ? (
-                  <SharedListCard
-                    key={list._id}
-                    list={list}
-                    onPress={handleSharedPress}
-                    formatDateTime={stableFormatDateTime}
-                  />
-                ) : null
-              )}
-            </>
-          )}
-
-          {/* Join a shared list — inline card */}
-          <View style={styles.joinCardWrapper}>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push("/join-list");
-              }}
-            >
-              <GlassCard variant="bordered" style={styles.joinCard}>
-                <View style={styles.joinCardContent}>
-                  <MaterialCommunityIcons
-                    name="link-variant"
-                    size={18}
-                    color={colors.text.tertiary}
-                  />
-                  <Text style={styles.joinCardText}>Accept Invite</Text>
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={18}
-                    color={colors.text.tertiary}
-                  />
-                </View>
-              </GlassCard>
-            </Pressable>
-          </View>
-
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
-      ) : (
-        <FlatList
-          data={displayList}
-          keyExtractor={historyKeyExtractor}
-          renderItem={renderHistoryCard}
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          ListFooterComponent={<View style={styles.bottomSpacer} />}
-        />
-      )}
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
 
       {/* Notifications Dropdown */}
       <NotificationDropdown
@@ -413,10 +440,6 @@ export default function ListsScreen() {
     </GlassScreen>
   );
 }
-
-// =============================================================================
-// STYLES
-// =============================================================================
 
 const styles = StyleSheet.create({
   skeletonContainer: {
@@ -433,17 +456,22 @@ const styles = StyleSheet.create({
   },
   emptyScrollContent: {
     flexGrow: 1,
+    paddingTop: spacing.xl,
+  },
+  emptyScrollContentInner: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
+  },
+  cardWrapper: {
+    marginHorizontal: spacing.lg,
   },
   bottomSpacer: {
     height: 140,
@@ -472,6 +500,7 @@ const styles = StyleSheet.create({
 
   // Inline create-list card
   createCard: {
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1.5,
     borderStyle: "dashed",
@@ -531,6 +560,7 @@ const styles = StyleSheet.create({
 
   // Shared lists section
   sharedSectionHeader: {
+    marginHorizontal: spacing.lg,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
@@ -575,7 +605,7 @@ const styles = StyleSheet.create({
     top: -2,
     right: -2,
     backgroundColor: colors.accent.error,
-    borderRadius: borderRadius.sm,
+    borderRadius: 18,
     minWidth: 18,
     height: 18,
     alignItems: "center",

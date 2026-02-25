@@ -203,8 +203,8 @@ const styles = StyleSheet.create({
   dropdown: {
     position: "absolute",
     top: 100,
-    right: spacing.md,
-    left: spacing.md,
+    right: spacing.lg,
+    left: spacing.lg,
     maxHeight: 420,
     backgroundColor: colors.background.primary,
     borderRadius: 16,

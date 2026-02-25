@@ -52,10 +52,11 @@ export {
   type GlassSearchInputProps,
 } from "./GlassInput";
 
+// Use safe wrapper until dev build is rebuilt with native date picker module
 export {
-  GlassDateRangePicker,
+  SafeDateRangePicker as GlassDateRangePicker,
   type DateRange,
-} from "./GlassDateRangePicker";
+} from "./SafeDateRangePicker";
 
 // =============================================================================
 // CAPSULE SWITCHER
@@ -178,6 +179,7 @@ export {
 export {
   AnimatedPressable,
   AnimatedListItem,
+  AnimatedSection,
   AnimatedBadge,
   ShimmerEffect,
   PulseAnimation,
@@ -185,6 +187,7 @@ export {
   animationPresets,
   type AnimatedPressableProps,
   type AnimatedListItemProps,
+  type AnimatedSectionProps,
   type AnimatedBadgeProps,
   type ShimmerEffectProps,
   type PulseAnimationProps,

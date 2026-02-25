@@ -8,13 +8,14 @@ import {
   ScrollView,
   Pressable,
 } from "react-native";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { useMutation, useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import {
@@ -24,6 +25,8 @@ import {
   GlassModal,
   SimpleHeader,
   GlassCapsuleSwitcher,
+  AnimatedSection,
+  SkeletonCard,
   colors,
   typography,
   spacing,
@@ -39,12 +42,13 @@ type ScanMode = "receipt" | "product";
 
 export default function ScanScreen() {
   const router = useRouter();
-  const { listId: listIdParam, returnTo } = useLocalSearchParams<{ listId?: string; returnTo?: string }>();
+  const { returnTo } = useLocalSearchParams<{ listId?: string; returnTo?: string }>();
   const { alert } = useGlassAlert();
   const { firstName } = useCurrentUser();
   const [scanMode, setScanMode] = useState<ScanMode>("receipt");
   const handleScanModeSwitch = useCallback((index: number) => {
     setScanMode(index === 0 ? "receipt" : "product");
+    setAnimationKey((prev) => prev + 1);
   }, []);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -67,6 +71,17 @@ export default function ScanScreen() {
   const [activeReceipt, setActiveReceipt] = useState<ReceiptItem | null>(null);
   const [showReceiptActionsModal, setShowReceiptActionsModal] = useState(false);
   const [receiptAddedToPantry, setReceiptAddedToPantry] = useState(false);
+
+  const [animationKey, setAnimationKey] = useState(0);
+  const [pageAnimationKey, setPageAnimationKey] = useState(0);
+
+  // Trigger animations every time this tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      setAnimationKey((prev) => prev + 1);
+      setPageAnimationKey((prev) => prev + 1);
+    }, [])
+  );
 
   // Product scanner with client-side dedup
   const productScanner = useProductScanner({
@@ -100,8 +115,6 @@ export default function ScanScreen() {
   const addBatchToList = useMutation(api.listItems.addBatchFromScan);
   const addBatchToPantry = useMutation(api.pantryItems.addBatchFromScan);
 
-  // Replace pantry item with scanned data
-  const replacePantryMutation = useMutation(api.pantryItems.replaceWithScan);
   const [parseReceiptId, setParseReceiptId] = useState<Id<"receipts"> | null>(null);
 
   // Filter to completed receipts with items for the history section
@@ -111,6 +124,32 @@ export default function ScanScreen() {
       (r) => r.processingStatus === "completed" && r.items && r.items.length > 0
     );
   }, [allReceipts]);
+
+  // Loading state with skeletons
+  const isLoaded = allReceipts !== undefined;
+  if (!isLoaded && !isParsing && !selectedImage) {
+    return (
+      <GlassScreen>
+        <SimpleHeader
+          title={scanMode === "receipt" ? "Scan Receipt" : "Scan Product"}
+          accentColor={colors.semantic.scan}
+          subtitle="Loading history..."
+        />
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentScroll}>
+          <SkeletonCard />
+          <View style={{ height: spacing.lg }} />
+          <SkeletonCard />
+          <View style={styles.scannedSection}>
+            <View style={styles.scannedGrid}>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <View key={i} style={[styles.gridTile, { backgroundColor: colors.glass.backgroundStrong }]} />
+              ))}
+            </View>
+          </View>
+        </ScrollView>
+      </GlassScreen>
+    );
+  }
 
   async function handleTakePhoto() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -456,44 +495,46 @@ export default function ScanScreen() {
       <GlassScreen>
         <SimpleHeader title="Processing Receipt" subtitle="Please wait" />
 
-        <View style={styles.parsingContainer}>
-          <View style={styles.parsingIcon}>
-            <ActivityIndicator size="large" color={colors.accent.primary} />
-          </View>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+          <View style={styles.parsingContainer}>
+            <View style={styles.parsingIcon}>
+              <ActivityIndicator size="large" color={colors.accent.primary} />
+            </View>
 
-          <Text style={styles.parsingTitle}>Reading your receipt...</Text>
-          <Text style={styles.parsingSubtitle}>
-            This may take 10-15 seconds
-          </Text>
-
-          <GlassCard variant="standard" style={styles.parsingInfo}>
-            <Text style={styles.parsingInfoText}>
-              Our AI is extracting items, prices, and totals from your receipt.
-              You'll be able to review and correct any mistakes in the next step.
+            <Text style={styles.parsingTitle}>Reading your receipt...</Text>
+            <Text style={styles.parsingSubtitle}>
+              This may take 10-15 seconds
             </Text>
-          </GlassCard>
 
-          <GlassButton
-            variant="secondary"
-            size="md"
-            icon="close"
-            onPress={async () => {
-              // Clean up the pending receipt
-              if (parseReceiptId) {
-                try {
-                  await deleteReceipt({ id: parseReceiptId });
-                } catch (e) {
-                  console.warn("Failed to clean up receipt:", e);
+            <GlassCard variant="standard" style={styles.parsingInfo}>
+              <Text style={styles.parsingInfoText}>
+                Our AI is extracting items, prices, and totals from your receipt.
+                You&apos;ll be able to review and correct any mistakes in the next step.
+              </Text>
+            </GlassCard>
+
+            <GlassButton
+              variant="secondary"
+              size="md"
+              icon="close"
+              onPress={async () => {
+                // Clean up the pending receipt
+                if (parseReceiptId) {
+                  try {
+                    await deleteReceipt({ id: parseReceiptId });
+                  } catch (e) {
+                    console.warn("Failed to clean up receipt:", e);
+                  }
                 }
-              }
-              setIsParsing(false);
-              setParseReceiptId(null);
-              setSelectedImage(null);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-            style={{ marginTop: spacing.xl }}
-          />
-        </View>
+                setIsParsing(false);
+                setParseReceiptId(null);
+                setSelectedImage(null);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              style={{ marginTop: spacing.xl }}
+            />
+          </View>
+        </AnimatedSection>
       </GlassScreen>
     );
   }
@@ -504,38 +545,40 @@ export default function ScanScreen() {
       <GlassScreen>
         <SimpleHeader title="Review Receipt" subtitle="Make sure the receipt is clear" />
 
-        <View style={styles.previewContent}>
-          <GlassCard variant="bordered" accentColor={colors.semantic.scan} style={styles.imageCard}>
-            <Image
-              source={{ uri: selectedImage }}
-              style={styles.previewImage}
-              resizeMode="contain"
-            />
-          </GlassCard>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+          <View style={styles.previewContent}>
+            <GlassCard variant="bordered" accentColor={colors.semantic.scan} style={styles.imageCard}>
+              <Image
+                source={{ uri: selectedImage }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            </GlassCard>
 
-          <View style={styles.previewActions}>
-            <GlassButton
-              variant="secondary"
-              size="lg"
-              icon="camera-retake"
-              onPress={handleRetake}
-              disabled={isUploading}
-              style={styles.actionButton}
-            />
+            <View style={styles.previewActions}>
+              <GlassButton
+                variant="secondary"
+                size="lg"
+                icon="camera-retake"
+                onPress={handleRetake}
+                disabled={isUploading}
+                style={styles.actionButton}
+              />
 
-            <GlassButton
-              variant="primary"
-              size="lg"
-              icon="check"
-              onPress={handleUploadReceipt}
-              loading={isUploading}
-              disabled={isUploading}
-              style={styles.actionButton}
-            >
-              Use Photo
-            </GlassButton>
+              <GlassButton
+                variant="primary"
+                size="lg"
+                icon="check"
+                onPress={handleUploadReceipt}
+                loading={isUploading}
+                disabled={isUploading}
+                style={styles.actionButton}
+              >
+                Use Photo
+              </GlassButton>
+            </View>
           </View>
-        </View>
+        </AnimatedSection>
       </GlassScreen>
     );
   }
@@ -554,365 +597,383 @@ export default function ScanScreen() {
         contentContainerStyle={styles.contentScroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Mode Toggle */}
-        <GlassCapsuleSwitcher
-          tabs={[
-            {
-              label: "Receipt",
-              activeColor: colors.accent.primary,
-              icon: "receipt",
-            },
-            {
-              label: "Product",
-              activeColor: colors.accent.primary,
-              icon: "barcode-scan",
-            },
-          ]}
-          activeIndex={scanMode === "receipt" ? 0 : 1}
-          onTabChange={handleScanModeSwitch}
-          style={styles.modeToggle}
-        />
+        <View key={pageAnimationKey}>
+          {/* Mode Toggle */}
+          <AnimatedSection key={`toggle-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={0}>
+            <GlassCapsuleSwitcher
+              tabs={[
+                {
+                  label: "Receipt",
+                  activeColor: colors.accent.primary,
+                  icon: "receipt",
+                },
+                {
+                  label: "Product",
+                  activeColor: colors.accent.primary,
+                  icon: "barcode-scan",
+                },
+              ]}
+              activeIndex={scanMode === "receipt" ? 0 : 1}
+              onTabChange={handleScanModeSwitch}
+              style={styles.modeToggle}
+            />
+          </AnimatedSection>
 
-        {scanMode === "receipt" ? (
-          <>
-            {/* Instructions Card */}
-            <GlassCard variant="standard" style={styles.instructionsCard}>
-              <View style={styles.instructionsHeader}>
-                <MaterialCommunityIcons
-                  name="lightbulb-outline"
-                  size={20}
-                  color={colors.accent.primary}
-                />
-                <Text style={styles.instructionsTitle}>Tips for best results</Text>
-              </View>
+          <View key={animationKey}>
+            {scanMode === "receipt" ? (
+              <>
+                {/* Instructions Card */}
+                <AnimatedSection key={`inst-receipt-${animationKey}`} animation="fadeInDown" duration={400} delay={100}>
+                  <GlassCard variant="standard" style={styles.instructionsCard}>
+                    <View style={styles.instructionsHeader}>
+                      <MaterialCommunityIcons
+                        name="lightbulb-outline"
+                        size={20}
+                        color={colors.accent.primary}
+                      />
+                      <Text style={styles.instructionsTitle}>Tips for best results</Text>
+                    </View>
 
-              <View style={styles.instructionsList}>
-                <InstructionItem number={1} text="Lay receipt on a flat surface" />
-                <InstructionItem number={2} text="Ensure good lighting" />
-                <InstructionItem number={3} text="Capture the entire receipt" />
-                <InstructionItem number={4} text="Keep the image sharp and clear" />
-              </View>
-            </GlassCard>
+                    <View style={styles.instructionsList}>
+                      <InstructionItem number={1} text="Lay receipt on a flat surface" />
+                      <InstructionItem number={2} text="Ensure good lighting" />
+                      <InstructionItem number={3} text="Capture the entire receipt" />
+                      <InstructionItem number={4} text="Keep the image sharp and clear" />
+                    </View>
+                  </GlassCard>
+                </AnimatedSection>
 
-            {/* Action Buttons */}
-            <View style={styles.buttons}>
-              <GlassButton
-                variant="primary"
-                size="lg"
-                icon="receipt"
-                onPress={handleTakePhoto}
-              >
-                Take Photo
-              </GlassButton>
+                {/* Action Buttons */}
+                <AnimatedSection key={`btns-receipt-${animationKey}`} animation="fadeInDown" duration={400} delay={200}>
+                  <View style={styles.buttons}>
+                    <GlassButton
+                      variant="primary"
+                      size="lg"
+                      icon="receipt"
+                      onPress={handleTakePhoto}
+                    >
+                      Take Photo
+                    </GlassButton>
 
-              <GlassButton
-                variant="secondary"
-                size="lg"
-                icon="image-multiple"
-                onPress={handlePickImage}
-              >
-                Choose from Library
-              </GlassButton>
-            </View>
+                    <GlassButton
+                      variant="secondary"
+                      size="lg"
+                      icon="image-multiple"
+                      onPress={handlePickImage}
+                    >
+                      Choose from Library
+                    </GlassButton>
+                  </View>
+                </AnimatedSection>
 
-            {/* Your Scanned Receipts — grid */}
-            <View style={styles.scannedSection}>
-              <View style={styles.scannedSectionHeader}>
-                <Text style={styles.scannedSectionTitle}>
-                  Your Scanned Receipts, <Text style={{ color: colors.accent.primary }}>tap to view</Text>
-                </Text>
-                {completedReceipts.length > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      alert(
-                        "Clear All Receipts",
-                        "Remove all receipts from your history? Price data will be kept.",
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Clear All",
-                            style: "destructive",
-                            onPress: async () => {
-                              try {
-                                await Promise.all(completedReceipts.map((r) => deleteReceipt({ id: r._id })));
-                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                              } catch (e) {
-                                console.error("Failed to clear receipts:", e);
-                                alert("Error", "Failed to clear receipts");
-                              }
-                            },
-                          },
-                        ]
-                      );
-                    }}
-                    hitSlop={8}
-                  >
-                    <MaterialCommunityIcons
-                      name="delete-outline"
-                      size={24}
-                      color={colors.semantic.danger}
-                    />
-                  </Pressable>
-                )}
-              </View>
-
-              {completedReceipts.length === 0 ? (
-                <View style={styles.scannedEmpty}>
-                  <MaterialCommunityIcons
-                    name="receipt"
-                    size={36}
-                    color={colors.text.tertiary}
-                  />
-                  <Text style={styles.scannedEmptyText}>
-                    Scan your first receipt to start building your history
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.scannedGrid}>
-                  {completedReceipts.map((receipt) => {
-                    const imageUri = receipt.imageStorageId
-                      ? storageUrls?.[receipt.imageStorageId]
-                      : null;
-                    const storeInfo = receipt.normalizedStoreId
-                      ? getStoreInfoSafe(receipt.normalizedStoreId)
-                      : null;
-                    return (
-                      <Pressable
-                        key={receipt._id}
-                        style={styles.gridTileWithLabel}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setViewingReceipt(receipt as ReceiptItem);
-                        }}
-                      >
-                        <View style={styles.gridTileImageWrap}>
-                          {imageUri ? (
-                            <Image source={{ uri: imageUri }} style={styles.gridImage} />
-                          ) : (
-                            <View style={[styles.gridPlaceholder, storeInfo?.color ? { backgroundColor: `${storeInfo.color}30` } : undefined]}>
-                              <MaterialCommunityIcons
-                                name="receipt"
-                                size={16}
-                                color={storeInfo?.color ?? colors.text.tertiary}
-                              />
-                            </View>
-                          )}
-                          <Pressable
-                            style={styles.gridRemove}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                              alert(
-                                "Remove Receipt",
-                                `Remove this ${receipt.storeName} receipt?`,
-                                [
-                                  { text: "Cancel", style: "cancel" },
-                                  {
-                                    text: "Remove",
-                                    style: "destructive",
-                                    onPress: async () => {
-                                      try {
-                                        await deleteReceipt({ id: receipt._id });
-                                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                      } catch (err) {
-                                        console.error("Failed to remove receipt:", err);
-                                      }
-                                    },
+                {/* Your Scanned Receipts — grid */}
+                <AnimatedSection key={`grid-receipt-${animationKey}`} animation="fadeInDown" duration={400} delay={300}>
+                  <View style={styles.scannedSection}>
+                    <View style={styles.scannedSectionHeader}>
+                      <Text style={styles.scannedSectionTitle}>
+                        Your Scanned Receipts, <Text style={{ color: colors.accent.primary }}>tap to view</Text>
+                      </Text>
+                      {completedReceipts.length > 0 && (
+                        <Pressable
+                          onPress={() => {
+                            alert(
+                              "Clear All Receipts",
+                              "Remove all receipts from your history? Price data will be kept.",
+                              [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                  text: "Clear All",
+                                  style: "destructive",
+                                  onPress: async () => {
+                                    try {
+                                      await Promise.all(completedReceipts.map((r) => deleteReceipt({ id: r._id })));
+                                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                    } catch (e) {
+                                      console.error("Failed to clear receipts:", e);
+                                      alert("Error", "Failed to clear receipts");
+                                    }
                                   },
-                                ]
-                              );
-                            }}
-                            hitSlop={4}
-                          >
-                            <MaterialCommunityIcons
-                              name="close-circle"
-                              size={14}
-                              color={colors.semantic.danger}
-                            />
-                          </Pressable>
-                        </View>
-                        <Text style={styles.gridTileLabel} numberOfLines={1}>{receipt.storeName}</Text>
-                        <Text style={styles.gridTileSubLabel} numberOfLines={1}>£{receipt.total.toFixed(2)}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-          </>
-        ) : (
-          /* ────────────── Product Scanning Mode ────────────── */
-          <>
-            {/* Instructions Card */}
-            <GlassCard variant="standard" style={styles.instructionsCard}>
-              <View style={styles.instructionsHeader}>
-                <MaterialCommunityIcons name="lightbulb-outline" size={20} color={colors.accent.primary} />
-                <Text style={styles.instructionsTitle}>How it works</Text>
-              </View>
-              <View style={styles.instructionsList}>
-                <InstructionItem number={1} text="Point camera at a product" />
-                <InstructionItem number={2} text="AI reads the label text" />
-                <InstructionItem number={3} text="Scan multiple products in a row" />
-                <InstructionItem number={4} text="Add all to a list or your pantry" />
-              </View>
-            </GlassCard>
+                                },
+                              ]
+                            );
+                          }}
+                          hitSlop={8}
+                        >
+                          <MaterialCommunityIcons
+                            name="delete-outline"
+                            size={24}
+                            color={colors.semantic.danger}
+                          />
+                        </Pressable>
+                      )}
+                    </View>
 
-            {/* CTA */}
-            <View style={styles.buttons}>
-              <GlassButton
-                variant="primary"
-                size="lg"
-                icon="shopping-outline"
-                onPress={async () => {
-                  const result = await productScanner.captureProduct();
-                  if (result) { setActiveProduct(result); setShowScanActionsModal(true); }
-                }}
-                loading={productScanner.isProcessing}
-                disabled={productScanner.isProcessing}
-              >
-                {productScanner.isProcessing ? "Identifying..." : "Scan Product"}
-              </GlassButton>
-
-              <GlassButton
-                variant="secondary"
-                size="lg"
-                icon="image-multiple"
-                onPress={async () => {
-                  const result = await productScanner.pickFromLibrary();
-                  if (result) { setActiveProduct(result); setShowScanActionsModal(true); }
-                }}
-                loading={productScanner.isProcessing}
-                disabled={productScanner.isProcessing}
-              >
-                Choose from Library
-              </GlassButton>
-            </View>
-
-            {/* Error message */}
-            {productScanner.lastError && (
-              <GlassCard variant="standard" style={styles.productErrorCard}>
-                <View style={styles.productErrorRow}>
-                  <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.semantic.danger} />
-                  <Text style={styles.productErrorText}>{productScanner.lastError}</Text>
-                </View>
-              </GlassCard>
-            )}
-
-            {/* Your Scanned Products — always visible */}
-            <View style={styles.scannedSection}>
-              <View style={styles.scannedSectionHeader}>
-                <Text style={styles.scannedSectionTitle}>
-                  Your Scanned Products, <Text style={{ color: colors.accent.primary }}>tap to view</Text>
-                </Text>
-                {productScanner.scannedProducts.length > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      alert(
-                        "Clear All Products",
-                        `Remove all ${productScanner.scannedProducts.length} scanned product${productScanner.scannedProducts.length === 1 ? "" : "s"} from the queue?`,
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Clear All",
-                            style: "destructive",
-                            onPress: () => {
-                              productScanner.clearAll();
-                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                            },
-                          },
-                        ]
-                      );
-                    }}
-                    hitSlop={8}
-                  >
-                    <MaterialCommunityIcons
-                      name="delete-outline"
-                      size={24}
-                      color={colors.semantic.danger}
-                    />
-                  </Pressable>
-                )}
-              </View>
-
-              {productScanner.scannedProducts.length === 0 ? (
-                <View style={styles.scannedEmpty}>
-                  <MaterialCommunityIcons
-                    name="barcode-scan"
-                    size={36}
-                    color={colors.text.tertiary}
-                  />
-                  <Text style={styles.scannedEmptyText}>
-                    Scan your first product to start building your list
-                  </Text>
-                </View>
-              ) : (
-                <>
-                <View style={styles.scannedGrid}>
-                  {productScanner.scannedProducts.map((product, index) => {
-                    const isPending = product.status === "pending";
-                    const imageUri = isPending
-                      ? product.localImageUri
-                      : storageUrls?.[product.imageStorageId];
-                    return (
-                      <Pressable
-                        key={`${product.localImageUri ?? product.name}-${index}`}
-                        style={styles.gridTileWithLabel}
-                        onPress={() => {
-                          if (!isPending) {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            setViewingProduct({ product, index });
-                          }
-                        }}
-                      >
-                        <View style={styles.gridTileImageWrap}>
-                          {imageUri ? (
-                            <Image source={{ uri: imageUri }} style={styles.gridImage} />
-                          ) : (
-                            <View style={styles.gridPlaceholder}>
-                              <MaterialCommunityIcons
-                                name="package-variant-closed"
-                                size={16}
-                                color={colors.text.tertiary}
-                              />
-                            </View>
-                          )}
-                          {isPending && (
-                            <View style={styles.gridPendingOverlay}>
-                              <ActivityIndicator size="small" color="#fff" />
-                            </View>
-                          )}
-                          {!isPending && (
+                    {completedReceipts.length === 0 ? (
+                      <View style={styles.scannedEmpty}>
+                        <MaterialCommunityIcons
+                          name="receipt"
+                          size={36}
+                          color={colors.text.tertiary}
+                        />
+                        <Text style={styles.scannedEmptyText}>
+                          Scan your first receipt to start building your history
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.scannedGrid}>
+                        {completedReceipts.map((receipt) => {
+                          const imageUri = receipt.imageStorageId
+                            ? storageUrls?.[receipt.imageStorageId]
+                            : null;
+                          const storeInfo = receipt.normalizedStoreId
+                            ? getStoreInfoSafe(receipt.normalizedStoreId)
+                            : null;
+                          return (
                             <Pressable
-                              style={styles.gridRemove}
-                              onPress={(e) => {
-                                e.stopPropagation();
-                                productScanner.removeProduct(index);
+                              key={receipt._id}
+                              style={styles.gridTileWithLabel}
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setViewingReceipt(receipt as ReceiptItem);
                               }}
-                              hitSlop={4}
                             >
-                              <MaterialCommunityIcons
-                                name="close-circle"
-                                size={14}
-                                color={colors.semantic.danger}
-                              />
+                              <View style={styles.gridTileImageWrap}>
+                                {imageUri ? (
+                                  <Image source={{ uri: imageUri }} style={styles.gridImage} />
+                                ) : (
+                                  <View style={[styles.gridPlaceholder, storeInfo?.color ? { backgroundColor: `${storeInfo.color}30` } : undefined]}>
+                                    <MaterialCommunityIcons
+                                      name="receipt"
+                                      size={16}
+                                      color={storeInfo?.color ?? colors.text.tertiary}
+                                    />
+                                  </View>
+                                )}
+                                <Pressable
+                                  style={styles.gridRemove}
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                    alert(
+                                      "Remove Receipt",
+                                      `Remove this ${receipt.storeName} receipt?`,
+                                      [
+                                        { text: "Cancel", style: "cancel" },
+                                        {
+                                          text: "Remove",
+                                          style: "destructive",
+                                          onPress: async () => {
+                                            try {
+                                              await deleteReceipt({ id: receipt._id });
+                                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                            } catch (err) {
+                                              console.error("Failed to remove receipt:", err);
+                                            }
+                                          },
+                                        },
+                                      ]
+                                    );
+                                  }}
+                                  hitSlop={4}
+                                >
+                                  <MaterialCommunityIcons
+                                    name="close-circle"
+                                    size={14}
+                                    color={colors.semantic.danger}
+                                  />
+                                </Pressable>
+                              </View>
+                              <Text style={styles.gridTileLabel} numberOfLines={1}>{receipt.storeName}</Text>
+                              <Text style={styles.gridTileSubLabel} numberOfLines={1}>£{receipt.total.toFixed(2)}</Text>
                             </Pressable>
-                          )}
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
+                </AnimatedSection>
+              </>
+            ) : (
+              /* ────────────── Product Scanning Mode ────────────── */
+              <>
+                {/* Instructions Card */}
+                <AnimatedSection key={`inst-prod-${animationKey}`} animation="fadeInDown" duration={400} delay={100}>
+                  <GlassCard variant="standard" style={styles.instructionsCard}>
+                    <View style={styles.instructionsHeader}>
+                      <MaterialCommunityIcons name="lightbulb-outline" size={20} color={colors.accent.primary} />
+                      <Text style={styles.instructionsTitle}>How it works</Text>
+                    </View>
+                    <View style={styles.instructionsList}>
+                      <InstructionItem number={1} text="Point camera at a product" />
+                      <InstructionItem number={2} text="AI reads the label text" />
+                      <InstructionItem number={3} text="Scan multiple products in a row" />
+                      <InstructionItem number={4} text="Add all to a list or your pantry" />
+                    </View>
+                  </GlassCard>
+                </AnimatedSection>
+
+                {/* CTA */}
+                <AnimatedSection key={`btns-prod-${animationKey}`} animation="fadeInDown" duration={400} delay={200}>
+                  <View style={styles.buttons}>
+                    <GlassButton
+                      variant="primary"
+                      size="lg"
+                      icon="shopping-outline"
+                      onPress={async () => {
+                        const result = await productScanner.captureProduct();
+                        if (result) { setActiveProduct(result); setShowScanActionsModal(true); }
+                      }}
+                      loading={productScanner.isProcessing}
+                      disabled={productScanner.isProcessing}
+                    >
+                      {productScanner.isProcessing ? "Identifying..." : "Scan Product"}
+                    </GlassButton>
+
+                    <GlassButton
+                      variant="secondary"
+                      size="lg"
+                      icon="image-multiple"
+                      onPress={async () => {
+                        const result = await productScanner.pickFromLibrary();
+                        if (result) { setActiveProduct(result); setShowScanActionsModal(true); }
+                      }}
+                      loading={productScanner.isProcessing}
+                      disabled={productScanner.isProcessing}
+                    >
+                      Choose from Library
+                    </GlassButton>
+                  </View>
+                </AnimatedSection>
+
+                {/* Error message */}
+                {productScanner.lastError && (
+                  <AnimatedSection key={`err-prod-${animationKey}`} animation="fadeInDown" duration={400} delay={250}>
+                    <GlassCard variant="standard" style={styles.productErrorCard}>
+                      <View style={styles.productErrorRow}>
+                        <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.semantic.danger} />
+                        <Text style={styles.productErrorText}>{productScanner.lastError}</Text>
+                      </View>
+                    </GlassCard>
+                  </AnimatedSection>
+                )}
+
+                {/* Your Scanned Products — always visible */}
+                <AnimatedSection key={`grid-prod-${animationKey}`} animation="fadeInDown" duration={400} delay={300}>
+                  <View style={styles.scannedSection}>
+                    <View style={styles.scannedSectionHeader}>
+                      <Text style={styles.scannedSectionTitle}>
+                        Your Scanned Products, <Text style={{ color: colors.accent.primary }}>tap to view</Text>
+                      </Text>
+                      {productScanner.scannedProducts.length > 0 && (
+                        <Pressable
+                          onPress={() => {
+                            alert(
+                              "Clear All Products",
+                              `Remove all ${productScanner.scannedProducts.length} scanned product${productScanner.scannedProducts.length === 1 ? "" : "s"} from the queue?`,
+                              [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                  text: "Clear All",
+                                  style: "destructive",
+                                  onPress: () => {
+                                    productScanner.clearAll();
+                                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                          hitSlop={8}
+                        >
+                          <MaterialCommunityIcons
+                            name="delete-outline"
+                            size={24}
+                            color={colors.semantic.danger}
+                          />
+                        </Pressable>
+                      )}
+                    </View>
+
+                    {productScanner.scannedProducts.length === 0 ? (
+                      <View style={styles.scannedEmpty}>
+                        <MaterialCommunityIcons
+                          name="barcode-scan"
+                          size={36}
+                          color={colors.text.tertiary}
+                        />
+                        <Text style={styles.scannedEmptyText}>
+                          Scan your first product to start building your list
+                        </Text>
+                      </View>
+                    ) : (
+                      <>
+                        <View style={styles.scannedGrid}>
+                          {productScanner.scannedProducts.map((product, index) => {
+                            const isPending = product.status === "pending";
+                            const imageUri = isPending
+                              ? product.localImageUri
+                              : storageUrls?.[product.imageStorageId];
+                            return (
+                              <Pressable
+                                key={`${product.localImageUri ?? product.name}-${index}`}
+                                style={styles.gridTileWithLabel}
+                                onPress={() => {
+                                  if (!isPending) {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    setViewingProduct({ product, index });
+                                  }
+                                }}
+                              >
+                                <View style={styles.gridTileImageWrap}>
+                                  {imageUri ? (
+                                    <Image source={{ uri: imageUri }} style={styles.gridImage} />
+                                  ) : (
+                                    <View style={styles.gridPlaceholder}>
+                                      <MaterialCommunityIcons
+                                        name="package-variant-closed"
+                                        size={16}
+                                        color={colors.text.tertiary}
+                                      />
+                                    </View>
+                                  )}
+                                  {isPending && (
+                                    <View style={styles.gridPendingOverlay}>
+                                      <ActivityIndicator size="small" color="#fff" />
+                                    </View>
+                                  )}
+                                  {!isPending && (
+                                    <Pressable
+                                      style={styles.gridRemove}
+                                      onPress={(e) => {
+                                        e.stopPropagation();
+                                        productScanner.removeProduct(index);
+                                      }}
+                                      hitSlop={4}
+                                    >
+                                      <MaterialCommunityIcons
+                                        name="close-circle"
+                                        size={14}
+                                        color={colors.semantic.danger}
+                                      />
+                                    </Pressable>
+                                  )}
+                                </View>
+                                <Text style={styles.gridTileLabel} numberOfLines={1}>{isPending ? "Scanning…" : product.name}</Text>
+                                {!isPending && product.estimatedPrice != null && (
+                                  <Text style={styles.gridTileSubLabel} numberOfLines={1}>£{product.estimatedPrice.toFixed(2)}</Text>
+                                )}
+                              </Pressable>
+                            );
+                          })}
                         </View>
-                        <Text style={styles.gridTileLabel} numberOfLines={1}>{isPending ? "Scanning…" : product.name}</Text>
-                        {!isPending && product.estimatedPrice != null && (
-                          <Text style={styles.gridTileSubLabel} numberOfLines={1}>£{product.estimatedPrice.toFixed(2)}</Text>
-                        )}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                </>
-              )}
-            </View>
-          </>
-        )}
-
+                      </>
+                    )}
+                  </View>
+                </AnimatedSection>
+              </>
+            )}
+          </View>
+        </View>
 
         {/* Bottom spacing */}
         <View style={styles.bottomSpacer} />

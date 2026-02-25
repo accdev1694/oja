@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
@@ -19,6 +20,7 @@ import {
   GlassButton,
   SimpleHeader,
   SkeletonCard,
+  AnimatedSection,
   colors,
   typography,
   spacing,
@@ -71,6 +73,14 @@ export default function ProfileScreen() {
   const deleteMyAccount = useMutation(api.users.deleteMyAccount);
   const [isResetting, setIsResetting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [animationKey, setAnimationKey] = useState(0);
+
+  // Trigger animations every time this tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      setAnimationKey((prev) => prev + 1);
+    }, [])
+  );
 
   // Auto-generate a weekly challenge if none active
   const challengeSeeded = useRef(false);
@@ -193,29 +203,32 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        <View key={animationKey}>
         {/* User Account Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <GlassCard variant="bordered" accentColor={colors.semantic.profile}>
-            <View style={styles.accountRow}>
-              <View style={styles.avatarContainer}>
-                <MaterialCommunityIcons
-                  name="account-circle"
-                  size={48}
-                  color={colors.semantic.profile}
-                />
+        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Account</Text>
+            <GlassCard variant="bordered" accentColor={colors.semantic.profile}>
+              <View style={styles.accountRow}>
+                <View style={styles.avatarContainer}>
+                  <MaterialCommunityIcons
+                    name="account-circle"
+                    size={48}
+                    color={colors.semantic.profile}
+                  />
+                </View>
+                <View style={styles.accountInfo}>
+                  <Text style={styles.accountName}>
+                    {user?.firstName || user?.username || "User"}
+                  </Text>
+                  <Text style={styles.accountEmail}>
+                    {user?.primaryEmailAddress?.emailAddress || "Not set"}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.accountInfo}>
-                <Text style={styles.accountName}>
-                  {user?.firstName || user?.username || "User"}
-                </Text>
-                <Text style={styles.accountEmail}>
-                  {user?.primaryEmailAddress?.emailAddress || "Not set"}
-                </Text>
-              </View>
-            </View>
-          </GlassCard>
-        </View>
+            </GlassCard>
+          </View>
+        </AnimatedSection>
 
         {/* New user milestone path — hide once all steps are done */}
         {(() => {
@@ -228,33 +241,36 @@ export default function ProfileScreen() {
           const allDone = milestones.every((m) => m.done);
           if (allDone) return null;
           return (
-            <View style={styles.section}>
-              <GlassCard variant="standard" style={styles.milestonePath}>
-                <Text style={styles.milestoneTitle}>Your journey starts here</Text>
-                <Text style={styles.milestoneSubtitle}>
-                  Most shoppers save £30+ in their first month. Here's how to get there:
-                </Text>
-                <View style={styles.milestoneSteps}>
-                  {milestones.map((step, i) => (
-                    <View key={i} style={styles.milestoneStep}>
-                      <MaterialCommunityIcons
-                        name={step.done ? "check-circle" : step.icon}
-                        size={18}
-                        color={step.done ? colors.accent.primary : colors.text.tertiary}
-                      />
-                      <Text style={[styles.milestoneStepText, step.done && styles.milestoneStepDone]}>
-                        {step.text}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </GlassCard>
-            </View>
+            <AnimatedSection animation="fadeInDown" duration={400} delay={50}>
+              <View style={styles.section}>
+                <GlassCard variant="standard" style={styles.milestonePath}>
+                  <Text style={styles.milestoneTitle}>Your journey starts here</Text>
+                  <Text style={styles.milestoneSubtitle}>
+                    Most shoppers save £30+ in their first month. Here's how to get there:
+                  </Text>
+                  <View style={styles.milestoneSteps}>
+                    {milestones.map((step, i) => (
+                      <View key={i} style={styles.milestoneStep}>
+                        <MaterialCommunityIcons
+                          name={step.done ? "check-circle" : step.icon}
+                          size={18}
+                          color={step.done ? colors.accent.primary : colors.text.tertiary}
+                        />
+                        <Text style={[styles.milestoneStepText, step.done && styles.milestoneStepDone]}>
+                          {step.text}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </GlassCard>
+              </View>
+            </AnimatedSection>
           );
         })()}
 
         {/* Quick Stats — single condensed row */}
-        <GlassCard variant="standard" style={styles.quickStatsCard}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
+          <GlassCard variant="standard" style={styles.quickStatsCard}>
           <View style={styles.quickStatsRow}>
             <View style={styles.quickStat}>
               <Text style={styles.quickStatValue}>{completedLists.length}</Text>
@@ -279,9 +295,11 @@ export default function ProfileScreen() {
             </View>
           </View>
         </GlassCard>
+        </AnimatedSection>
 
         {/* Navigation Links */}
-        <View style={styles.section}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={150}>
+          <View style={styles.section}>
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -410,21 +428,25 @@ export default function ProfileScreen() {
             </Pressable>
           )}
         </View>
+        </AnimatedSection>
 
         {/* Sign Out */}
-        <View style={styles.signOutSection}>
-          <GlassButton
-            variant="danger"
-            size="lg"
-            icon="logout"
-            onPress={handleSignOut}
-          >
-            Sign Out
-          </GlassButton>
-        </View>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
+          <View style={styles.signOutSection}>
+            <GlassButton
+              variant="danger"
+              size="lg"
+              icon="logout"
+              onPress={handleSignOut}
+            >
+              Sign Out
+            </GlassButton>
+          </View>
+        </AnimatedSection>
 
         {/* Dev Tools — Reset & Delete */}
-        <View style={styles.devToolsSection}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={250}>
+          <View style={styles.devToolsSection}>
           <Text style={styles.devToolsLabel}>Dev Tools</Text>
           <GlassButton
             variant="secondary"
@@ -445,6 +467,8 @@ export default function ProfileScreen() {
           >
             {isDeleting ? "Deleting..." : "Delete Account"}
           </GlassButton>
+        </View>
+        </AnimatedSection>
         </View>
 
         {/* Bottom spacing */}

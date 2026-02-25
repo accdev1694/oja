@@ -31,8 +31,11 @@ import Animated, {
   Extrapolate,
   runOnJS,
   FadeIn,
+  FadeInDown,
+  FadeInUp,
   FadeOut,
   SlideInRight,
+  SlideInLeft,
   SlideOutLeft,
   Layout,
 } from "react-native-reanimated";
@@ -200,6 +203,78 @@ export function AnimatedListItem({
       layout={animateLayout ? Layout.springify() : undefined}
       style={style}
     >
+      {children}
+    </Animated.View>
+  );
+}
+
+// =============================================================================
+// ANIMATED SECTION COMPONENT (Page Enter Animations)
+// =============================================================================
+
+export interface AnimatedSectionProps {
+  /** Children content */
+  children: React.ReactNode;
+  /** Animation type */
+  animation?: "fadeInDown" | "fadeInUp" | "fadeIn" | "slideInRight" | "slideInLeft";
+  /** Animation duration in ms */
+  duration?: number;
+  /** Delay before animation starts in ms */
+  delay?: number;
+  /** Container style */
+  style?: ViewStyle;
+}
+
+/**
+ * AnimatedSection - Reusable page enter animation wrapper
+ *
+ * Perfect for creating polished page loading experiences with cascading effects.
+ * Use with staggered delays for sequential sections.
+ *
+ * @example
+ * // Single section
+ * <AnimatedSection animation="fadeInDown" duration={400}>
+ *   <GlassCard>...</GlassCard>
+ * </AnimatedSection>
+ *
+ * @example
+ * // Staggered sections
+ * <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+ *   <GlassCard>Section 1</GlassCard>
+ * </AnimatedSection>
+ * <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
+ *   <GlassCard>Section 2</GlassCard>
+ * </AnimatedSection>
+ */
+export function AnimatedSection({
+  children,
+  animation = "fadeInDown",
+  duration = 400,
+  delay = 0,
+  style,
+}: AnimatedSectionProps) {
+  const getEnteringAnimation = () => {
+    const baseDuration = duration;
+    const baseDelay = delay;
+
+    switch (animation) {
+      case "fadeInDown":
+        return FadeInDown.duration(baseDuration).delay(baseDelay);
+      case "fadeInUp":
+        return FadeInUp.duration(baseDuration).delay(baseDelay);
+      case "fadeIn":
+        return FadeIn.duration(baseDuration).delay(baseDelay);
+      case "slideInRight":
+        return SlideInRight.duration(baseDuration).delay(baseDelay);
+      case "slideInLeft":
+        return SlideInLeft.duration(baseDuration).delay(baseDelay);
+      default:
+        return FadeInDown.duration(baseDuration).delay(baseDelay);
+    }
+  };
+
+  return (
+    <Animated.View entering={getEnteringAnimation()} style={style}>
       {children}
     </Animated.View>
   );

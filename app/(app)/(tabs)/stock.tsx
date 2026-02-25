@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import React, { useState, useMemo, useCallback, useRef, useEffect, startTransition } from "react";
 import {
   View,
@@ -38,13 +39,13 @@ import {
 
 import {
   GlassScreen,
-  GlassCard,
   GlassSearchInput,
   GlassCapsuleSwitcher,
   SimpleHeader,
   SkeletonPantryItem,
   EmptyPantry,
   TrialNudgeBanner,
+  AnimatedSection,
   colors,
   typography,
   spacing,
@@ -166,7 +167,6 @@ const CategoryHeader = React.memo(function CategoryHeader({
 // =============================================================================
 
 export default function PantryScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { alert } = useGlassAlert();
   const { firstName } = useCurrentUser();
@@ -232,6 +232,18 @@ export default function PantryScreen() {
 
   // Add item modal
   const [addModalVisible, setAddModalVisible] = useState(false);
+
+  // Animation keys for focus and switching
+  const [animationKey, setAnimationKey] = useState(0);
+  const [pageAnimationKey, setPageAnimationKey] = useState(0);
+
+  // Trigger animations every time this tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      setAnimationKey((prev) => prev + 1);
+      setPageAnimationKey((prev) => prev + 1);
+    }, [])
+  );
 
   // Gesture onboarding
   const [showGestureOnboarding, setShowGestureOnboarding] = useState(false);
@@ -600,6 +612,7 @@ export default function PantryScreen() {
     startTransition(() => {
       setViewMode(mode);
       setSearchQuery("");
+      setAnimationKey((prev) => prev + 1);
       if (mode === "all" && categories.length > 0) {
         setCollapsedCategories(new Set(categories));
       }
@@ -749,48 +762,6 @@ export default function PantryScreen() {
     toggleCategory(ESSENTIALS_SECTION_TITLE);
   }, [toggleCategory]);
 
-  const renderSectionHeader = useCallback(({ section }: { section: { title: string; data: (typeof filteredItems) } }) => {
-    if (section.title === ESSENTIALS_SECTION_TITLE) {
-      return (
-        <EssentialsSectionHeader
-          count={section.data.length}
-          isCollapsed={collapsedCategories.has(ESSENTIALS_SECTION_TITLE)}
-          onToggle={toggleEssentials}
-        />
-      );
-    }
-    return (
-      <CategoryHeader
-        category={section.title}
-        count={section.data.length}
-        isCollapsed={collapsedCategories.has(section.title)}
-        onToggle={toggleCategory}
-      />
-    );
-  }, [collapsedCategories, toggleCategory, toggleEssentials]);
-
-  const renderItem = useCallback(({ item, section }: {
-    item: (typeof filteredItems)[number];
-    section: { title: string };
-  }) => {
-    // If category is collapsed, render nothing
-    if (collapsedCategories.has(section.title)) return null;
-
-    const isArchivedResult = item.status === "archived";
-
-    return (
-      <PantryItemRow
-        item={item}
-        onSwipeDecrease={handleSwipeDecrease}
-        onSwipeIncrease={handleSwipeIncrease}
-        onRemove={handleRemoveItem}
-        onAddToList={handleAddToList}
-        onLongPress={handleItemLongPress}
-        isArchivedResult={isArchivedResult}
-      />
-    );
-  }, [collapsedCategories, handleSwipeDecrease, handleSwipeIncrease, handleRemoveItem, handleAddToList, handleItemLongPress]);
-
   const keyExtractor = useCallback((item: any) => item._id, []);
 
   const ListHeader = useMemo(() => {
@@ -806,7 +777,7 @@ export default function PantryScreen() {
             />
             <Text style={styles.attentionEmptyTitle}>No items found</Text>
             <Text style={styles.attentionEmptySubtitle}>
-              Nothing matches "{searchQuery.trim()}". Try a different search or check the other tab.
+              Nothing matches &quot;{searchQuery.trim()}&quot;. Try a different search or check the other tab.
             </Text>
           </View>
         );
@@ -823,7 +794,7 @@ export default function PantryScreen() {
             />
             <Text style={styles.attentionEmptyTitle}>All stocked up!</Text>
             <Text style={styles.attentionEmptySubtitle}>
-              Nothing needs restocking right now. Tap "All Items" to browse your full stock.
+              Nothing needs restocking right now. Tap &quot;All Items&quot; to browse your full stock.
             </Text>
           </View>
         );
@@ -919,90 +890,152 @@ export default function PantryScreen() {
           }
         />
 
-        {/* Trial Nudge Banner */}
-        <TrialNudgeBanner />
+        <View key={pageAnimationKey} style={styles.animationWrapper}>
+          {/* Trial Nudge Banner */}
+          <AnimatedSection key={`nudge-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={0}>
+            <TrialNudgeBanner />
+          </AnimatedSection>
 
-        {/* Contextual Tips */}
-        <TipBanner context="pantry" />
+          {/* Contextual Tips */}
+          <AnimatedSection key={`tip-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={50}>
+            <TipBanner context="pantry" />
+          </AnimatedSection>
 
-        {/* Duplicate Detection Banner */}
-        {!dedupDismissed && duplicateGroups && duplicateGroups.length > 0 && (
-          <Pressable onPress={handleMergeDuplicates} style={styles.dedupBanner}>
-            <MaterialCommunityIcons name="content-duplicate" size={18} color={colors.accent.warning} />
-            <Text style={styles.dedupBannerText}>
-              {duplicateGroups.length} duplicate group{duplicateGroups.length !== 1 ? "s" : ""} found
-            </Text>
-            <Text style={styles.dedupBannerAction}>Tap to merge</Text>
-          </Pressable>
-        )}
+          {/* Duplicate Detection Banner */}
+          {!dedupDismissed && duplicateGroups && duplicateGroups.length > 0 && (
+            <AnimatedSection key={`dedup-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={100}>
+              <Pressable onPress={handleMergeDuplicates} style={styles.dedupBanner}>
+                <MaterialCommunityIcons name="content-duplicate" size={18} color={colors.accent.warning} />
+                <Text style={styles.dedupBannerText}>
+                  {duplicateGroups.length} duplicate group{duplicateGroups.length !== 1 ? "s" : ""} found
+                </Text>
+                <Text style={styles.dedupBannerAction}>Tap to merge</Text>
+              </Pressable>
+            </AnimatedSection>
+          )}
 
-        {/* View Mode Tabs — sliding pill animates between warning↔primary */}
-        <GlassCapsuleSwitcher
-          tabs={[
-            {
-              label: "Needs Restocking",
-              activeColor: attentionCount === 0 ? colors.semantic.success : colors.accent.warning,
-              icon: attentionCount > 0 ? "alert-circle-outline" : undefined,
-              badge: attentionCount > 0 ? attentionCount : undefined,
-              badgeCustom: attentionCount === 0 ? (
-                <MaterialCommunityIcons name="check" size={12} color={colors.semantic.success} />
-              ) : undefined,
-            },
-            {
-              label: "All Items",
-              activeColor: colors.accent.primary,
-              icon: "view-list-outline",
-              badge: items.length,
-            },
-          ]}
-          activeIndex={capsuleActiveIndex}
-          onTabChange={handleViewModeSwitch}
-          style={styles.viewModeTabs}
-        />
+          {/* View Mode Tabs */}
+          <AnimatedSection key={`tabs-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={150}>
+            <GlassCapsuleSwitcher
+              tabs={[
+                {
+                  label: "Needs Restocking",
+                  activeColor: attentionCount === 0 ? colors.semantic.success : colors.accent.warning,
+                  icon: attentionCount > 0 ? "alert-circle-outline" : undefined,
+                  badge: attentionCount > 0 ? attentionCount : undefined,
+                  badgeCustom: attentionCount === 0 ? (
+                    <MaterialCommunityIcons name="check" size={12} color={colors.semantic.success} />
+                  ) : undefined,
+                },
+                {
+                  label: "All Items",
+                  activeColor: colors.accent.primary,
+                  icon: "view-list-outline",
+                  badge: items.length,
+                },
+              ]}
+              activeIndex={capsuleActiveIndex}
+              onTabChange={handleViewModeSwitch}
+              style={styles.viewModeTabs}
+            />
+          </AnimatedSection>
 
-        {/* Search field */}
-        <View style={styles.searchContainer}>
-          <GlassSearchInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onClear={() => setSearchQuery("")}
-            placeholder="Search stock..."
-          />
-        </View>
-
-        {/* Step 1.5: Virtualized SectionList (replaces both ScrollViews) */}
-        <SectionList
-          sections={sections}
-          keyExtractor={keyExtractor}
-          renderItem={renderItem}
-          renderSectionHeader={renderSectionHeader}
-          ListHeaderComponent={ListHeader}
-          ListFooterComponent={
-            <View>
-              {/* Archived items footer (only in "all" mode, not during search) */}
-              {viewMode === "all" && !searchQuery.trim() && archivedCount > 0 && (
-                <View style={styles.archivedFooter}>
-                  <MaterialCommunityIcons
-                    name="archive-outline"
-                    size={16}
-                    color={colors.text.tertiary}
-                  />
-                  <Text style={styles.archivedFooterText}>
-                    {archivedCount} archived item{archivedCount !== 1 ? "s" : ""} (search to find them)
-                  </Text>
-                </View>
-              )}
-              <View style={{ height: 140 + insets.bottom }} />
+          {/* Search field */}
+          <AnimatedSection key={`search-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={200}>
+            <View style={styles.searchContainer}>
+              <GlassSearchInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onClear={() => setSearchQuery("")}
+                placeholder="Search stock..."
+              />
             </View>
-          }
-          stickySectionHeadersEnabled={false}
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          initialNumToRender={15}
-          maxToRenderPerBatch={10}
-          windowSize={5}
-        />
+          </AnimatedSection>
+
+          {/* SectionList - Content portion */}
+          <View key={`list-${animationKey}`} style={styles.listWrapper}>
+            <SectionList
+              sections={sections}
+              keyExtractor={keyExtractor}
+              renderItem={({ item, section, index }) => {
+                // If category is collapsed, render nothing
+                if (collapsedCategories.has(section.title)) return null;
+                const isArchivedResult = item.status === "archived";
+
+                // Find the section index for staggered delay
+                const sectionIndex = sections.findIndex(s => s.title === section.title);
+                const delay = 300 + (sectionIndex * 50) + (index * 30);
+
+                return (
+                  <AnimatedSection key={`${item._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={delay}>
+                    <PantryItemRow
+                      item={item}
+                      onSwipeDecrease={handleSwipeDecrease}
+                      onSwipeIncrease={handleSwipeIncrease}
+                      onRemove={handleRemoveItem}
+                      onAddToList={handleAddToList}
+                      onLongPress={handleItemLongPress}
+                      isArchivedResult={isArchivedResult}
+                    />
+                  </AnimatedSection>
+                );
+              }}
+              renderSectionHeader={({ section }) => {
+                const sectionIndex = sections.findIndex(s => s.title === section.title);
+                const delay = 250 + (sectionIndex * 50);
+
+                return (
+                  <AnimatedSection key={`header-${section.title}-${animationKey}`} animation="fadeInDown" duration={400} delay={delay}>
+                    {section.title === ESSENTIALS_SECTION_TITLE ? (
+                      <EssentialsSectionHeader
+                        count={section.data.length}
+                        isCollapsed={collapsedCategories.has(ESSENTIALS_SECTION_TITLE)}
+                        onToggle={toggleEssentials}
+                      />
+                    ) : (
+                      <CategoryHeader
+                        category={section.title}
+                        count={section.data.length}
+                        isCollapsed={collapsedCategories.has(section.title)}
+                        onToggle={toggleCategory}
+                      />
+                    )}
+                  </AnimatedSection>
+                );
+              }}
+              ListHeaderComponent={
+                <AnimatedSection key={`listheader-${animationKey}`} animation="fadeInDown" duration={400} delay={220}>
+                  {ListHeader}
+                </AnimatedSection>
+              }
+              ListFooterComponent={
+                <View>
+                  {/* Archived items footer (only in "all" mode, not during search) */}
+                  {viewMode === "all" && !searchQuery.trim() && archivedCount > 0 && (
+                    <View style={styles.archivedFooter}>
+                      <MaterialCommunityIcons
+                        name="archive-outline"
+                        size={16}
+                        color={colors.text.tertiary}
+                      />
+                      <Text style={styles.archivedFooterText}>
+                        {archivedCount} archived item{archivedCount !== 1 ? "s" : ""} (search to find them)
+                      </Text>
+                    </View>
+                  )}
+                  <View style={{ height: 140 + insets.bottom }} />
+                </View>
+              }
+              stickySectionHeadersEnabled={false}
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              initialNumToRender={15}
+              maxToRenderPerBatch={10}
+              windowSize={5}
+            />
+          </View>
+        </View>
 
         {/* Added-to-list Toast */}
         {toastVisible && (
@@ -1045,6 +1078,9 @@ export default function PantryScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  animationWrapper: {
     flex: 1,
   },
   skeletonContainer: {
@@ -1106,6 +1142,9 @@ const styles = StyleSheet.create({
   searchContainer: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
+  },
+  listWrapper: {
+    flex: 1,
   },
   filterButton: {
     width: 36,

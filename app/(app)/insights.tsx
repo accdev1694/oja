@@ -15,7 +15,6 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LineChart } from "react-native-chart-kit";
 import ConfettiCannon from "react-native-confetti-cannon";
 import Animated, {
-  FadeInDown,
   FadeInUp,
   useAnimatedStyle,
   useSharedValue,
@@ -32,6 +31,7 @@ import {
   GlassCollapsible,
   GlassToast,
   SkeletonCard,
+  AnimatedSection,
   colors,
   typography,
   spacing,
@@ -178,7 +178,7 @@ export default function InsightsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ============ WEEKLY DIGEST ============ */}
-        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons
@@ -263,10 +263,10 @@ export default function InsightsScreen() {
               </>
             )}
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
 
         {/* ============ WEEKLY CHALLENGE ============ */}
-        <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons
@@ -332,10 +332,10 @@ export default function InsightsScreen() {
               </TouchableOpacity>
             )}
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
 
         {/* ============ SAVINGS JAR ============ */}
-        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={300}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons
@@ -387,11 +387,11 @@ export default function InsightsScreen() {
               </View>
             )}
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
 
         {/* ============ MONTHLY TRENDS (CHART) ============ */}
         {monthlyTrends && monthlyTrends.months.length > 1 && (
-          <Animated.View entering={FadeInDown.delay(400).duration(400)}>
+          <AnimatedSection animation="fadeInDown" duration={400} delay={400}>
             <View style={styles.section}>
             <GlassCollapsible
               title="Monthly Trends"
@@ -486,12 +486,12 @@ export default function InsightsScreen() {
               </View>
             </GlassCollapsible>
             </View>
-          </Animated.View>
+          </AnimatedSection>
         )}
 
         {/* ============ BUDGET ADHERENCE ============ */}
         {monthlyTrends && monthlyTrends.budgetAdherence.total > 0 && (
-          <Animated.View entering={FadeInDown.delay(450).duration(400)}>
+          <AnimatedSection animation="fadeInDown" duration={400} delay={450}>
             <View style={styles.section}>
             <GlassCollapsible
               title="Budget Adherence"
@@ -534,12 +534,12 @@ export default function InsightsScreen() {
               </View>
             </GlassCollapsible>
             </View>
-          </Animated.View>
+          </AnimatedSection>
         )}
 
         {/* ============ CATEGORY BREAKDOWN ============ */}
         {monthlyTrends && monthlyTrends.categoryBreakdown.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(500).duration(400)}>
+          <AnimatedSection animation="fadeInDown" duration={400} delay={500}>
             <View style={styles.section}>
             <GlassCollapsible
               title="Top Categories"
@@ -584,12 +584,12 @@ export default function InsightsScreen() {
               </View>
             </GlassCollapsible>
             </View>
-          </Animated.View>
+          </AnimatedSection>
         )}
 
         {/* ============ STORE BREAKDOWN ============ */}
         {storeBreakdownData && storeBreakdownData.stores.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(525).duration(400)}>
+          <AnimatedSection animation="fadeInDown" duration={400} delay={525}>
             <View style={styles.section}>
               <GlassCollapsible
                 title="Store Breakdown"
@@ -713,11 +713,11 @@ export default function InsightsScreen() {
                 )}
               </GlassCollapsible>
             </View>
-          </Animated.View>
+          </AnimatedSection>
         )}
 
         {/* ============ STREAKS ============ */}
-        <Animated.View entering={FadeInDown.delay(550).duration(400)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={550}>
           <View style={styles.section}>
           <GlassCollapsible
             title="Streaks"
@@ -764,11 +764,11 @@ export default function InsightsScreen() {
             )}
           </GlassCollapsible>
           </View>
-        </Animated.View>
+        </AnimatedSection>
 
         {/* ============ PERSONAL BESTS ============ */}
         {personalBests && (
-          <Animated.View entering={FadeInDown.delay(600).duration(400)}>
+          <AnimatedSection animation="fadeInDown" duration={400} delay={600}>
             <View style={styles.section}>
             <GlassCollapsible
               title="Personal Bests"
@@ -803,11 +803,11 @@ export default function InsightsScreen() {
               </View>
             </GlassCollapsible>
             </View>
-          </Animated.View>
+          </AnimatedSection>
         )}
 
         {/* ============ ACHIEVEMENTS ============ */}
-        <Animated.View entering={FadeInDown.delay(650).duration(400)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={650}>
           <View style={styles.section}>
           <GlassCollapsible
             title="Achievements"
@@ -840,10 +840,10 @@ export default function InsightsScreen() {
             )}
           </GlassCollapsible>
           </View>
-        </Animated.View>
+        </AnimatedSection>
 
         {/* ============ DISCOVERY ZONE ============ */}
-        <Animated.View entering={FadeInDown.delay(700).duration(400)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={700}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons
@@ -857,7 +857,7 @@ export default function InsightsScreen() {
               {seasonalTip}
             </Text>
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
 
         <View style={{ height: 140 }} />
       </ScrollView>

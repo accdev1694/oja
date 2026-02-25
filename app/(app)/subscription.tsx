@@ -12,7 +12,6 @@ import { api } from "@/convex/_generated/api";
 import { useState, useCallback } from "react";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   GlassScreen,
   GlassCard,
@@ -20,6 +19,7 @@ import {
   SimpleHeader,
   GlassModal,
   SkeletonCard,
+  AnimatedSection,
   colors,
   typography,
   spacing,
@@ -165,7 +165,7 @@ export default function SubscriptionScreen() {
       >
         {/* Trial Banner */}
         {isTrial && trialDaysLeft > 0 && (
-          <Animated.View entering={FadeInDown.duration(400)}>
+          <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
             <GlassCard style={styles.trialBanner}>
               <MaterialCommunityIcons
                 name="clock-alert-outline"
@@ -182,12 +182,12 @@ export default function SubscriptionScreen() {
                 </Text>
               </View>
             </GlassCard>
-          </Animated.View>
+          </AnimatedSection>
         )}
 
         {/* Expired Banner */}
         {isExpired && (
-          <Animated.View entering={FadeInDown.duration(400)}>
+          <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
             <GlassCard style={styles.expiredBanner}>
               <MaterialCommunityIcons
                 name="alert-circle-outline"
@@ -203,11 +203,11 @@ export default function SubscriptionScreen() {
                 </Text>
               </View>
             </GlassCard>
-          </Animated.View>
+          </AnimatedSection>
         )}
 
         {/* Current Plan Card */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
           <GlassCard style={styles.planCard}>
             <View style={styles.planHeader}>
               <MaterialCommunityIcons
@@ -266,11 +266,11 @@ export default function SubscriptionScreen() {
               </View>
             )}
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
 
         {/* Scan Rewards — unified tier + credits */}
         {scanCredits && (
-          <Animated.View entering={FadeInDown.duration(400).delay(150)}>
+          <AnimatedSection animation="fadeInDown" duration={400} delay={150}>
             <GlassCard style={styles.scanCreditsCard}>
               {/* Tier Header */}
               <View style={styles.sectionHeader}>
@@ -419,12 +419,12 @@ export default function SubscriptionScreen() {
                 </>
               )}
             </GlassCard>
-          </Animated.View>
+          </AnimatedSection>
         )}
 
         {/* Free user value prop — remind them what they have */}
         {!isPremium && !isTrial && (
-          <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+          <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
             <GlassCard style={styles.trialCta}>
               <MaterialCommunityIcons
                 name="gift-outline"
@@ -436,12 +436,12 @@ export default function SubscriptionScreen() {
                 You have full access to every feature — insights, price history, partner mode, and more. Upgrade to remove limits on lists and pantry items.
               </Text>
             </GlassCard>
-          </Animated.View>
+          </AnimatedSection>
         )}
 
         {/* Plans */}
         {plans && (
-          <Animated.View entering={FadeInDown.duration(400).delay(300)}>
+          <AnimatedSection animation="fadeInDown" duration={400} delay={300}>
             <Text style={styles.sectionTitle}>
               {isPremium ? "Change Plan" : "Choose a Plan"}
             </Text>
@@ -513,7 +513,7 @@ export default function SubscriptionScreen() {
                   </GlassCard>
                 );
               })}
-          </Animated.View>
+          </AnimatedSection>
         )}
 
         <View style={{ height: 140 }} />
