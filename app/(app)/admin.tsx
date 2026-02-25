@@ -12,17 +12,19 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery, useMutation, usePaginatedQuery, useStorageUrl } from "convex/react";
+import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
+// @ts-ignore - useStorageUrl exists but may not be in type definitions
+import { useStorageUrl } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   GlassScreen,
   GlassCard,
   GlassButton,
   SimpleHeader,
   SkeletonCard,
+  AnimatedSection,
   colors,
   typography,
   spacing,
@@ -30,6 +32,7 @@ import {
   GlassDateRangePicker,
   type DateRange,
 } from "@/components/ui/glass";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
 type AdminTab = "overview" | "users" | "receipts" | "catalog" | "settings";
 
@@ -38,7 +41,7 @@ export default function AdminScreen() {
   const { alert: showAlert } = useGlassAlert();
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
 
-  const analytics = useQuery(api.admin.getAnalytics);
+  const analytics = useQuery(api.admin.getAnalytics, {});
   const loading = analytics === undefined;
 
   if (analytics === null) {
@@ -165,7 +168,10 @@ function OverviewTab() {
           <View>
             <Text style={styles.sectionTitle}>Dashboard Status</Text>
             <Text style={styles.lastUpdatedText}>
-              Last updated: {lastUpdated.toLocaleTimeString()}
+              {analytics?.computedAt
+                ? `Metrics as of: ${new Date(analytics.computedAt).toLocaleString()}${analytics.isPrecomputed ? ' (cached)' : ' (live)'}`
+                : `Last refreshed: ${lastUpdated.toLocaleTimeString()}`
+              }
             </Text>
           </View>
           <View style={styles.refreshToggle}>
@@ -182,7 +188,7 @@ function OverviewTab() {
 
       {/* System Health */}
       {health && (
-        <Animated.View entering={FadeInDown.duration(400)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
           <GlassCard style={styles.section}>
             <View style={styles.healthHeader}>
               <View style={[styles.healthDot, { backgroundColor: health.status === "healthy" ? colors.semantic.success : colors.semantic.warning }]} />
@@ -195,12 +201,12 @@ function OverviewTab() {
               Failed: {health.receiptProcessing.failed} | Processing: {health.receiptProcessing.processing}
             </Text>
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
       )}
 
       {/* Analytics */}
       {analytics && (
-        <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="chart-box" size={24} color={colors.accent.primary} />
@@ -219,12 +225,12 @@ function OverviewTab() {
               <Text style={styles.gmvValue}>£{analytics.totalGMV.toLocaleString()}</Text>
             </View>
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
       )}
 
       {/* Revenue */}
       {revenue && (
-        <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="cash-multiple" size={24} color={colors.semantic.success} />
@@ -244,12 +250,12 @@ function OverviewTab() {
               {revenue.monthlySubscribers} monthly • {revenue.annualSubscribers} annual • {revenue.trialsActive} trials
             </Text>
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
       )}
 
       {/* Audit Logs */}
       {auditLogs && auditLogs.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(400).delay(300)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={300}>
           <GlassCard style={styles.section}>
             <Text style={styles.sectionTitle}>Recent Audit Logs</Text>
             {auditLogs.map((log: any) => (
@@ -273,7 +279,7 @@ function OverviewTab() {
               <ActivityIndicator color={colors.accent.primary} style={{ marginTop: spacing.sm }} />
             )}
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
       )}
 
       <View style={{ height: 140 }} />
@@ -369,7 +375,7 @@ function UsersTab() {
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       {/* Search */}
-      <Animated.View entering={FadeInDown.duration(400)}>
+      <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
         <GlassCard style={styles.section}>
           <View style={styles.searchRow}>
             <MaterialCommunityIcons name="magnify" size={20} color={colors.text.tertiary} />
@@ -382,11 +388,11 @@ function UsersTab() {
             />
           </View>
         </GlassCard>
-      </Animated.View>
+      </AnimatedSection>
 
       {/* User Detail Modal */}
       {selectedUser && userDetail && (
-        <Animated.View entering={FadeInDown.duration(400)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
           <GlassCard style={styles.section}>
             <View style={styles.detailHeader}>
               <Text style={styles.sectionTitle}>{userDetail.name}</Text>
@@ -433,12 +439,12 @@ function UsersTab() {
               </Pressable>
             </View>
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
       )}
 
       {/* User List */}
       {displayUsers && displayUsers.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
           <GlassCard style={styles.section}>
             <Text style={styles.sectionTitle}>
               {search.length >= 2 ? `Results (${displayUsers.length})` : `Users (${displayUsers.length})`}
@@ -470,7 +476,7 @@ function UsersTab() {
               </Pressable>
             ))}
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
       )}
 
       <View style={{ height: 140 }} />
@@ -496,8 +502,9 @@ function ReceiptsTab() {
     searchTerm: search.length >= 2 ? search : undefined,
     status: statusFilter || undefined,
   });
-  const flaggedReceipts = useQuery(api.admin.getFlaggedReceipts);
-  const priceAnomalies = useQuery(api.admin.getPriceAnomalies);
+  const flaggedReceipts = useQuery(api.admin.getFlaggedReceipts, {});
+  const priceAnomaliesData = useQuery(api.admin.getPriceAnomalies, {});
+  const priceAnomalies = priceAnomaliesData?.anomalies || [];
 
   const deleteReceipt = useMutation(api.admin.deleteReceipt);
   const bulkAction = useMutation(api.admin.bulkReceiptAction);
@@ -615,7 +622,7 @@ function ReceiptsTab() {
 
       {/* Flagged Receipts */}
       {flaggedReceipts && flaggedReceipts.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(400)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="flag" size={24} color={colors.semantic.warning} />
@@ -648,12 +655,12 @@ function ReceiptsTab() {
               style={{ marginTop: spacing.sm }}
             >{`Approve All (${flaggedReceipts.length})`}</GlassButton>
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
       )}
 
       {/* Price Anomalies */}
       {priceAnomalies && priceAnomalies.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="alert-circle" size={24} color={colors.semantic.danger} />
@@ -673,12 +680,12 @@ function ReceiptsTab() {
               </View>
             ))}
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
       )}
 
       {/* Recent Receipts */}
       {recentReceipts && recentReceipts.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
           <GlassCard style={styles.section}>
             <Text style={styles.sectionTitle}>Recent Receipts</Text>
             {recentReceipts.map((r: any) => (
@@ -702,7 +709,7 @@ function ReceiptsTab() {
               </View>
             ))}
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
       )}
 
       <View style={{ height: 140 }} />
@@ -716,8 +723,8 @@ function ReceiptsTab() {
 
 function CatalogTab() {
   const { alert: showAlert } = useGlassAlert();
-  const categories = useQuery(api.admin.getCategories);
-  const duplicateStores = useQuery(api.admin.getDuplicateStores);
+  const categories = useQuery(api.admin.getCategories, {});
+  const duplicateStores = useQuery(api.admin.getDuplicateStores, {});
   const mergeStores = useMutation(api.admin.mergeStoreNames);
 
   const handleMerge = async (variants: string[], suggested: string) => {
@@ -741,7 +748,7 @@ function CatalogTab() {
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       {/* Duplicate Stores */}
       {duplicateStores && duplicateStores.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(400)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="store-alert" size={24} color={colors.semantic.warning} />
@@ -762,12 +769,12 @@ function CatalogTab() {
               </View>
             ))}
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
       )}
 
       {/* Categories */}
       {categories && categories.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
           <GlassCard style={styles.section}>
             <Text style={styles.sectionTitle}>Categories ({categories.length})</Text>
             <View style={styles.categoryGrid}>
@@ -779,7 +786,7 @@ function CatalogTab() {
               ))}
             </View>
           </GlassCard>
-        </Animated.View>
+        </AnimatedSection>
       )}
 
       <View style={{ height: 140 }} />
@@ -886,7 +893,7 @@ function SettingsTab() {
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       {/* Platform Pricing */}
-      <Animated.View entering={FadeInDown.duration(400)}>
+      <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
         <GlassCard style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons name="currency-gbp" size={24} color={colors.semantic.success} />
@@ -909,10 +916,10 @@ function SettingsTab() {
             </View>
           ))}
         </GlassCard>
-      </Animated.View>
+      </AnimatedSection>
 
       {/* Feature Flags */}
-      <Animated.View entering={FadeInDown.duration(400)}>
+      <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
         <GlassCard style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons name="toggle-switch" size={24} color={colors.accent.primary} />
@@ -948,10 +955,10 @@ function SettingsTab() {
             </Pressable>
           </View>
         </GlassCard>
-      </Animated.View>
+      </AnimatedSection>
 
       {/* Announcements */}
-      <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+      <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
         <GlassCard style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons name="bullhorn" size={24} color={colors.semantic.warning} />
@@ -1028,21 +1035,7 @@ function SettingsTab() {
             </View>
           ))}
         </GlassCard>
-
-        {!search && (
-          <View style={styles.loadMoreContainer}>
-            {status === "CanLoadMore" ? (
-              <GlassButton onPress={() => loadMore(50)} variant="secondary" size="sm">
-                Load More
-              </GlassButton>
-            ) : status === "LoadingMore" ? (
-              <ActivityIndicator color={colors.accent.primary} />
-            ) : (
-              <Text style={styles.doneText}>No more users</Text>
-            )}
-          </View>
-        )}
-      </Animated.View>
+      </AnimatedSection>
 
       <View style={{ height: 140 }} />
     </ScrollView>
@@ -1343,7 +1336,7 @@ const styles = StyleSheet.create({
   imageModalContent: {
     width: "100%",
     maxHeight: "90%",
-    backgroundColor: colors.background.default,
+    backgroundColor: colors.background.primary,
     borderRadius: 20,
     overflow: "hidden",
   },

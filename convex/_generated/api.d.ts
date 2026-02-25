@@ -11,6 +11,7 @@
 import type * as admin from "../admin.js";
 import type * as ai from "../ai.js";
 import type * as aiUsage from "../aiUsage.js";
+import type * as analytics from "../analytics.js";
 import type * as crons from "../crons.js";
 import type * as currentPrices from "../currentPrices.js";
 import type * as http from "../http.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   ai: typeof ai;
   aiUsage: typeof aiUsage;
+  analytics: typeof analytics;
   crons: typeof crons;
   currentPrices: typeof currentPrices;
   http: typeof http;

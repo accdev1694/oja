@@ -33,4 +33,12 @@ crons.daily(
   internal.pantryItems.archiveStaleItems,
 );
 
+// Compute daily platform metrics — runs daily at 2am UTC
+// Precomputes analytics to avoid full table scans in admin dashboard
+crons.daily(
+  "compute-daily-metrics",
+  { hourUTC: 2, minuteUTC: 0 },
+  internal.analytics.computeDailyMetrics
+);
+
 export default crons;

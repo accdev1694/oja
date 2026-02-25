@@ -57,7 +57,9 @@ export default defineSchema({
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_email", ["email"])
-    .index("by_created", ["createdAt"]),
+    .index("by_created", ["createdAt"])
+    .index("by_last_active", ["lastActiveAt"])
+    .index("by_is_admin", ["isAdmin"]),
 
   // Pantry items (stock tracker)
   pantryItems: defineTable({
@@ -497,7 +499,8 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_stripe_customer", ["stripeCustomerId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_current_period_end", ["currentPeriodEnd"]),
 
   // Loyalty points balance
   loyaltyPoints: defineTable({
@@ -589,7 +592,41 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_admin", ["adminUserId"])
-    .index("by_action", ["action"]),
+    .index("by_action", ["action"])
+    .index("by_created", ["createdAt"]),
+
+  // Precomputed platform metrics (Phase 1 Performance Optimization)
+  // Updated daily by cron job to avoid full table scans in getAnalytics
+  platformMetrics: defineTable({
+    date: v.string(), // "2025-02-25" (ISO date for easy querying)
+
+    // User metrics
+    totalUsers: v.number(),
+    newUsersToday: v.number(),
+    newUsersThisWeek: v.number(),
+    newUsersThisMonth: v.number(),
+    activeUsersThisWeek: v.number(),
+
+    // List metrics
+    totalLists: v.number(),
+    completedLists: v.number(),
+    listsCreatedToday: v.number(),
+
+    // Receipt metrics
+    totalReceipts: v.number(),
+    receiptsToday: v.number(),
+    receiptsThisWeek: v.number(),
+    receiptsThisMonth: v.number(),
+
+    // GMV (Gross Merchandise Value)
+    totalGMV: v.number(),
+    gmvToday: v.number(),
+    gmvThisWeek: v.number(),
+    gmvThisMonth: v.number(),
+
+    computedAt: v.number(), // Timestamp when metrics were computed
+  })
+    .index("by_date", ["date"]),
 
   // Feature flags
   featureFlags: defineTable({
