@@ -11,6 +11,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   TouchableOpacity,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
@@ -46,6 +47,7 @@ export default function AdminScreen() {
 
   const analytics = useQuery(api.admin.getAnalytics, {});
   const myPerms = useQuery(api.admin.getMyPermissions, {});
+  const logSession = useMutation(api.admin.logAdminSession);
   
   const loading = analytics === undefined || myPerms === undefined;
 
@@ -54,6 +56,25 @@ export default function AdminScreen() {
     if (myPerms.role === "super_admin") return true;
     return myPerms.permissions.includes(p);
   }, [myPerms]);
+
+  // Session Heartbeat
+  useEffect(() => {
+    if (analytics === null || myPerms === null || loading) return;
+
+    const heartbeat = async () => {
+      try {
+        await logSession({
+          userAgent: `Mobile App (${Platform.OS})`,
+        });
+      } catch (e) {
+        console.error("Failed to log admin session:", e);
+      }
+    };
+
+    heartbeat();
+    const interval = setInterval(heartbeat, 5 * 60 * 1000); // every 5 mins
+    return () => clearInterval(interval);
+  }, [analytics === null, myPerms === null, loading]);
 
   if (analytics === null || myPerms === null) {
     return (
@@ -90,27 +111,6 @@ export default function AdminScreen() {
   ];
 
   const visibleTabs = tabs.filter(tab => hasPermission(tab.permission));
-
-  const logSession = useMutation(api.admin.logAdminSession);
-
-  // Session Heartbeat
-  useEffect(() => {
-    if (analytics === null || myPerms === null) return;
-
-    const heartbeat = async () => {
-      try {
-        await logSession({
-          userAgent: `Mobile App (${Platform.OS})`,
-        });
-      } catch (e) {
-        console.error("Failed to log admin session:", e);
-      }
-    };
-
-    heartbeat();
-    const interval = setInterval(heartbeat, 5 * 60 * 1000); // every 5 mins
-    return () => clearInterval(interval);
-  }, [analytics === null, myPerms === null]);
 
   return (
     <GlassScreen>
@@ -1508,4 +1508,10 @@ const styles = StyleSheet.create({
   imageModalTitle: { ...typography.headlineSmall, color: colors.text.primary },
   imageContainer: { width: "100%", height: 500, backgroundColor: "#000" },
   receiptImage: { width: "100%", height: "100%" },
+  emptyText: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    paddingVertical: spacing.md,
+  },
 });

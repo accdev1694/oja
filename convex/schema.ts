@@ -51,6 +51,7 @@ export default defineSchema({
 
     // Admin
     isAdmin: v.optional(v.boolean()),
+    suspended: v.optional(v.boolean()),
 
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -59,7 +60,8 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_created", ["createdAt"])
     .index("by_last_active", ["lastActiveAt"])
-    .index("by_is_admin", ["isAdmin"]),
+    .index("by_is_admin", ["isAdmin"])
+    .index("by_suspended", ["suspended"]),
 
   // Pantry items (stock tracker)
   pantryItems: defineTable({

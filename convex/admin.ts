@@ -854,10 +854,14 @@ export const extendTrial = mutation({
  * Grant free premium access
  */
 export const grantComplimentaryAccess = mutation({
-  args: { userId: v.id("users") },
+  args: { 
+    userId: v.id("users"),
+    months: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const admin = await requirePermission(ctx, "edit_users");
     const now = Date.now();
+    const months = args.months ?? 12;
 
     const existing = await ctx.db
       .query("subscriptions")
@@ -865,11 +869,13 @@ export const grantComplimentaryAccess = mutation({
       .order("desc")
       .first();
 
+    const duration = months * 30 * 24 * 60 * 60 * 1000;
+
     if (existing) {
       await ctx.db.patch(existing._id, {
         plan: "premium_annual",
         status: "active",
-        currentPeriodEnd: now + 365 * 24 * 60 * 60 * 1000,
+        currentPeriodEnd: now + duration,
         updatedAt: now,
       });
     } else {
@@ -878,18 +884,22 @@ export const grantComplimentaryAccess = mutation({
         plan: "premium_annual",
         status: "active",
         currentPeriodStart: now,
-        currentPeriodEnd: now + 365 * 24 * 60 * 60 * 1000,
+        currentPeriodEnd: now + duration,
         createdAt: now,
         updatedAt: now,
       });
     }
+
+    await ctx.db.patch(args.userId, {
+      updatedAt: now,
+    });
 
     await ctx.db.insert("adminLogs", {
       adminUserId: admin._id,
       action: "grant_complimentary",
       targetType: "user",
       targetId: args.userId,
-      details: "Granted free premium annual access",
+      details: `Granted free premium access for ${months} months`,
       createdAt: now,
     });
 
