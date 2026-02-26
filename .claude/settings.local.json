@@ -141,7 +141,9 @@
       "Bash(dir:*)",
       "mcp__playwright__browser_navigate_back",
       "Bash(git log:*)",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(tasklist:*)",
+      "Bash(awk:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

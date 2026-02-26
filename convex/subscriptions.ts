@@ -9,6 +9,7 @@ import {
   getNextTierInfo,
   type TierName,
 } from "./lib/featureGating";
+import { trackFunnelEvent } from "./lib/analytics";
 
 async function requireUser(ctx: any) {
   const identity = await ctx.auth.getUserIdentity();
@@ -82,6 +83,11 @@ export const upsertSubscription = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     const now = Date.now();
+
+    // Track funnel event: subscribed if status is active
+    if (args.status === "active") {
+      await trackFunnelEvent(ctx, user._id, "subscribed");
+    }
 
     const existing = await ctx.db
       .query("subscriptions")

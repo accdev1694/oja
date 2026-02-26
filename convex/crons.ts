@@ -41,4 +41,29 @@ crons.daily(
   internal.analytics.computeDailyMetrics
 );
 
+// Advanced Analytics — Phase 2
+crons.daily(
+  "compute-user-segments",
+  { hourUTC: 2, minuteUTC: 30 },
+  internal.analytics_advanced.computeUserSegments
+);
+
+crons.daily(
+  "compute-cohort-retention",
+  { hourUTC: 3, minuteUTC: 0 },
+  internal.analytics_advanced.computeCohortRetention
+);
+
+crons.monthly(
+  "compute-monthly-metrics",
+  { day: 1, hourUTC: 4, minuteUTC: 0 },
+  internal.analytics_advanced.computeChurnMetrics
+);
+
+crons.monthly(
+  "compute-monthly-ltv",
+  { day: 1, hourUTC: 4, minuteUTC: 30 },
+  internal.analytics_advanced.computeLTVMetrics
+);
+
 export default crons;

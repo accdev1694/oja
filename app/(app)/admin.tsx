@@ -14,7 +14,7 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
+import { useQuery, useMutation, usePaginatedQuery, useAction } from "convex/react";
 // @ts-ignore - useStorageUrl exists but may not be in type definitions
 import { useStorageUrl } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/glass";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
-type AdminTab = "overview" | "users" | "receipts" | "catalog" | "settings";
+type AdminTab = "overview" | "users" | "analytics" | "receipts" | "catalog" | "settings";
 
 // Error Boundary wrapper for crash protection
 class AdminErrorBoundary extends React.Component<
@@ -145,6 +145,7 @@ function AdminScreenInner() {
   const tabs: { key: AdminTab; label: string; icon: string; permission: string }[] = [
     { key: "overview", label: "Overview", icon: "view-dashboard", permission: "view_analytics" },
     { key: "users", label: "Users", icon: "account-group", permission: "view_users" },
+    { key: "analytics", label: "Analytics", icon: "chart-timeline-variant", permission: "view_analytics" },
     { key: "receipts", label: "Receipts", icon: "receipt", permission: "view_receipts" },
     { key: "catalog", label: "Catalog", icon: "tag-multiple", permission: "manage_catalog" },
     { key: "settings", label: "Settings", icon: "cog", permission: "manage_flags" }, 
@@ -183,6 +184,7 @@ function AdminScreenInner() {
       <View style={{ flex: 1 }}>
         {activeTab === "overview" && <OverviewTab hasPermission={hasPermission} />}
         {activeTab === "users" && <UsersTab hasPermission={hasPermission} />}
+        {activeTab === "analytics" && <AnalyticsTab hasPermission={hasPermission} />}
         {activeTab === "receipts" && <ReceiptsTab hasPermission={hasPermission} />}
         {activeTab === "catalog" && <CatalogTab hasPermission={hasPermission} />}
         {activeTab === "settings" && <SettingsTab hasPermission={hasPermission} />}
@@ -220,6 +222,7 @@ function OverviewTab({ hasPermission }: { hasPermission: (p: string) => boolean 
 
   const analytics = useQuery(api.admin.getAnalytics, queryArgs);
   const revenue = useQuery(api.admin.getRevenueReport, queryArgs);
+  const financial = useQuery(api.admin.getFinancialReport, queryArgs);
   const health = useQuery(api.admin.getSystemHealth, { refreshKey });
   
   const { results: auditLogs, status: auditStatus, loadMore: loadMoreLogs } = usePaginatedQuery(
@@ -341,6 +344,23 @@ function OverviewTab({ hasPermission }: { hasPermission: (p: string) => boolean 
             <Text style={styles.metricText}>
               {revenue.monthlySubscribers ?? 0} monthly • {revenue.annualSubscribers ?? 0} annual • {revenue.trialsActive ?? 0} trials
             </Text>
+            {financial && (
+              <View style={[styles.revenueGrid, { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border, paddingTop: spacing.md }]}>
+                <View style={styles.revenueItem}>
+                  <Text style={[styles.revenueValue, { color: colors.accent.primary }]}>£{financial.netRevenue.toFixed(2)}</Text>
+                  <Text style={styles.revenueLabel}>Est. Net (MRR)</Text>
+                </View>
+                <View style={styles.revenueItem}>
+                  <Text style={[styles.revenueValue, { color: colors.text.secondary }]}>{financial.margin.toFixed(0)}%</Text>
+                  <Text style={styles.revenueLabel}>Margin</Text>
+                </View>
+              </View>
+            )}
+            {financial && (
+              <Text style={[styles.metricText, { fontSize: 10 }]}>
+                Estimated tax (VAT 20%): £{financial.estimatedTax.toFixed(2)} • COGS: £{financial.estimatedCOGS.toFixed(2)}
+              </Text>
+            )}
           </GlassCard>
         </AnimatedSection>
       )}
@@ -594,6 +614,247 @@ function UsersTab({ hasPermission }: { hasPermission: (p: string) => boolean }) 
 
       <View style={{ height: 140 }} />
     </ScrollView>
+  );
+}
+
+// ============================================================================
+// ANALYTICS TAB
+// ============================================================================
+
+function AnalyticsTab({ hasPermission }: { hasPermission: (p: string) => boolean }) {
+  const cohortMetrics = useQuery(api.admin.getCohortMetrics);
+  const funnelAnalytics = useQuery(api.admin.getFunnelAnalytics);
+  const churnMetrics = useQuery(api.admin.getChurnMetrics);
+  const ltvMetrics = useQuery(api.admin.getLTVMetrics);
+  const segmentSummary = useQuery(api.admin.getUserSegmentSummary);
+  
+  const { alert: showAlert } = useGlassAlert();
+  const exportData = useAction(api.admin.exportDataToCSV);
+
+  const loading = !cohortMetrics || !funnelAnalytics || !churnMetrics || !ltvMetrics || !segmentSummary;
+
+  const handleExportCSV = useCallback(async (type: "users" | "receipts" | "prices" | "analytics") => {
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const result = await exportData({ dataType: type });
+      
+      // In a real app, we'd use Expo Sharing to share the CSV file
+      showAlert("Export Complete", `Generated ${result.fileName}.\n\nPreview (Top 5 rows):\n${result.csv.split('\n').slice(0, 5).join('\n')}`);
+    } catch (e: any) {
+      showAlert("Error", e.message || "Failed to export CSV");
+    }
+  }, [exportData]);
+
+  if (loading) {
+    return (
+      <View style={styles.loading}>
+        <SkeletonCard />
+        <SkeletonCard style={{ marginTop: spacing.md }} />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      {/* Funnel Analytics */}
+      <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="filter-variant" size={24} color={colors.accent.primary} />
+            <Text style={styles.sectionTitle}>Conversion Funnel</Text>
+          </View>
+          <View style={styles.funnelContainer}>
+            {funnelAnalytics.map((step, idx) => (
+              <View key={step.step} style={styles.funnelStep}>
+                <View style={styles.funnelBarContainer}>
+                  <View 
+                    style={[
+                      styles.funnelBar, 
+                      { width: `${step.percentage}%`, backgroundColor: `rgba(0, 212, 170, ${0.4 + (1 - idx/funnelAnalytics.length) * 0.6})` }
+                    ]} 
+                  />
+                  <Text style={styles.funnelCount}>{step.count}</Text>
+                </View>
+                <View style={styles.funnelLabelRow}>
+                  <Text style={styles.funnelLabel}>{step.step.replace(/_/g, " ").toUpperCase()}</Text>
+                  <Text style={styles.funnelPercentage}>{step.percentage.toFixed(1)}%</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+          <GlassButton 
+            onPress={() => handleExportCSV("analytics")} 
+            variant="ghost" 
+            size="sm" 
+            icon="download"
+            style={{ marginTop: spacing.md }}
+          >Export Funnel Data</GlassButton>
+        </GlassCard>
+      </AnimatedSection>
+
+      {/* User Segments */}
+      <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="account-group" size={24} color={colors.accent.primary} />
+            <Text style={styles.sectionTitle}>User Segments</Text>
+          </View>
+          <View style={styles.segmentGrid}>
+            {segmentSummary.map((seg) => (
+              <View key={seg.name} style={styles.segmentCard}>
+                <Text style={styles.segmentValue}>{seg.count}</Text>
+                <Text style={styles.segmentName}>{seg.name.replace(/_/g, " ")}</Text>
+                <Text style={styles.segmentPercent}>{seg.percentage.toFixed(1)}%</Text>
+              </View>
+            ))}
+          </View>
+          <GlassButton 
+            onPress={() => handleExportCSV("analytics")} 
+            variant="ghost" 
+            size="sm" 
+            icon="download"
+            style={{ marginTop: spacing.md }}
+          >Export Segment Data</GlassButton>
+        </GlassCard>
+      </AnimatedSection>
+
+      {/* Cohort Retention */}
+      <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="calendar-clock" size={24} color={colors.accent.primary} />
+            <Text style={styles.sectionTitle}>Cohort Retention (%)</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.retentionTable}>
+              <View style={styles.retentionHeader}>
+                <Text style={[styles.retentionCell, styles.retentionHeaderCell, { width: 80 }]}>Cohort</Text>
+                <Text style={[styles.retentionCell, styles.retentionHeaderCell]}>Users</Text>
+                <Text style={[styles.retentionCell, styles.retentionHeaderCell]}>D7</Text>
+                <Text style={[styles.retentionCell, styles.retentionHeaderCell]}>D14</Text>
+                <Text style={[styles.retentionCell, styles.retentionHeaderCell]}>D30</Text>
+                <Text style={[styles.retentionCell, styles.retentionHeaderCell]}>D60</Text>
+                <Text style={[styles.retentionCell, styles.retentionHeaderCell]}>D90</Text>
+              </View>
+              {cohortMetrics.map((row) => (
+                <View key={row.cohortMonth} style={styles.retentionRow}>
+                  <Text style={[styles.retentionCell, { width: 80, fontWeight: "600" }]}>{row.cohortMonth}</Text>
+                  <Text style={styles.retentionCell}>{row.totalUsers}</Text>
+                  <RetentionCell value={row.retentionDay7} />
+                  <RetentionCell value={row.retentionDay14} />
+                  <RetentionCell value={row.retentionDay30} />
+                  <RetentionCell value={row.retentionDay60} />
+                  <RetentionCell value={row.retentionDay90} />
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+          <GlassButton 
+            onPress={() => handleExportCSV("analytics")} 
+            variant="ghost" 
+            size="sm" 
+            icon="download"
+            style={{ marginTop: spacing.md }}
+          >Export Retention Table</GlassButton>
+        </GlassCard>
+      </AnimatedSection>
+
+      {/* LTV Metrics */}
+      <AnimatedSection animation="fadeInDown" duration={400} delay={300}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="trending-up" size={24} color={colors.semantic.success} />
+            <Text style={styles.sectionTitle}>Lifetime Value (LTV)</Text>
+          </View>
+          {ltvMetrics.map((ltv) => (
+            <View key={ltv.cohortMonth} style={styles.ltvRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.userName}>{ltv.cohortMonth} Cohort</Text>
+                <Text style={styles.userEmail}>
+                  {ltv.paidUsers} paid ({ltv.conversionRate.toFixed(1)}% conv.)
+                </Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={styles.ltvValue}>£{ltv.avgLTV.toFixed(2)}</Text>
+                <Text style={styles.ltvLabel}>Avg LTV</Text>
+              </View>
+            </View>
+          ))}
+          <View style={styles.gmvRow}>
+            <Text style={styles.gmvLabel}>Total Cohort Revenue</Text>
+            <Text style={styles.gmvValue}>£{ltvMetrics.reduce((s, l) => s + l.totalRevenue, 0).toLocaleString()}</Text>
+          </View>
+          <GlassButton 
+            onPress={() => handleExportCSV("analytics")} 
+            variant="ghost" 
+            size="sm" 
+            icon="download"
+            style={{ marginTop: spacing.md }}
+          >Export LTV Data</GlassButton>
+        </GlassCard>
+      </AnimatedSection>
+
+      {/* Churn Analytics */}
+      <AnimatedSection animation="fadeInDown" duration={400} delay={400}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="account-minus" size={24} color={colors.semantic.danger} />
+            <Text style={styles.sectionTitle}>Churn Analytics</Text>
+          </View>
+          {churnMetrics.map((m) => (
+            <View key={m.month} style={styles.churnRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.userName}>{m.month}</Text>
+                <Text style={styles.userEmail}>
+                  {m.churnedUsers} churned • {m.atRiskCount} at risk
+                </Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={[styles.ltvValue, { color: colors.semantic.danger }]}>{m.churnRate.toFixed(1)}%</Text>
+                <Text style={styles.ltvLabel}>Churn Rate</Text>
+              </View>
+            </View>
+          ))}
+          <GlassButton 
+            onPress={() => handleExportCSV("analytics")} 
+            variant="ghost" 
+            size="sm" 
+            icon="download"
+            style={{ marginTop: spacing.md }}
+          >Export Churn Data</GlassButton>
+        </GlassCard>
+      </AnimatedSection>
+
+      <View style={{ height: 140 }} />
+    </ScrollView>
+  );
+}
+
+function RetentionCell({ value }: { value: number }) {
+  // Color scale for retention
+  let backgroundColor = "rgba(0, 212, 170, 0.05)";
+  let textColor = colors.text.tertiary;
+
+  if (value > 40) {
+    backgroundColor = `rgba(0, 212, 170, 0.8)`;
+    textColor = "#000";
+  } else if (value > 25) {
+    backgroundColor = `rgba(0, 212, 170, 0.5)`;
+    textColor = "#000";
+  } else if (value > 15) {
+    backgroundColor = `rgba(0, 212, 170, 0.3)`;
+    textColor = colors.text.primary;
+  } else if (value > 5) {
+    backgroundColor = `rgba(0, 212, 170, 0.15)`;
+    textColor = colors.text.secondary;
+  }
+
+  return (
+    <View style={[styles.retentionCell, { backgroundColor, borderRadius: 4, margin: 2 }]}>
+      <Text style={[styles.retentionCellText, { color: textColor }]}>
+        {value > 0 ? `${value.toFixed(0)}%` : "-"}
+      </Text>
+    </View>
   );
 }
 
@@ -1338,6 +1599,37 @@ const styles = StyleSheet.create({
   revenueItem: { alignItems: "center" },
   revenueValue: { ...typography.headlineMedium, color: colors.semantic.success },
   revenueLabel: { ...typography.bodySmall, color: colors.text.tertiary },
+
+  // Funnel
+  funnelContainer: { gap: spacing.md },
+  funnelStep: { gap: 4 },
+  funnelBarContainer: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  funnelBar: { height: 16, borderRadius: 8 },
+  funnelCount: { ...typography.labelSmall, color: colors.text.primary, fontWeight: "700" },
+  funnelLabelRow: { flexDirection: "row", justifyContent: "space-between" },
+  funnelLabel: { ...typography.labelSmall, color: colors.text.tertiary, fontSize: 8 },
+  funnelPercentage: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 8 },
+
+  // Segments
+  segmentGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  segmentCard: { width: "47%", backgroundColor: colors.glass.background, borderRadius: 12, padding: spacing.md, alignItems: "center", gap: 2 },
+  segmentValue: { ...typography.headlineSmall, color: colors.text.primary },
+  segmentName: { ...typography.labelSmall, color: colors.text.tertiary, textTransform: "uppercase", fontSize: 9 },
+  segmentPercent: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 9 },
+
+  // Retention Table
+  retentionTable: { gap: 4, minWidth: 400 },
+  retentionHeader: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.glass.border, paddingBottom: 4 },
+  retentionRow: { flexDirection: "row" },
+  retentionCell: { width: 50, textAlign: "center", color: colors.text.secondary, fontSize: 10, paddingVertical: 4 },
+  retentionHeaderCell: { color: colors.text.tertiary, fontWeight: "700" },
+  retentionCellText: { fontSize: 9, fontWeight: "600" },
+
+  // LTV & Churn
+  ltvRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  ltvValue: { ...typography.headlineSmall, color: colors.semantic.success },
+  ltvLabel: { ...typography.bodySmall, color: colors.text.tertiary, fontSize: 10 },
+  churnRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
 
   // Users
   searchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },

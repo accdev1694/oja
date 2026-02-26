@@ -13,6 +13,7 @@ import {
   variantKey,
 } from "./lib/communityHelpers";
 import { toGroceryTitleCase } from "./lib/titleCase";
+import { trackFunnelEvent } from "./lib/analytics";
 
 /**
  * Get all variants for a base item (e.g., "milk" → [1pt, 2pt, 4pt]).
@@ -385,6 +386,7 @@ export const enrichFromScan = mutation({
     imageStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
     const normalizedBase = args.baseItem.toLowerCase().trim();
     const normalizedSize = args.size.toLowerCase().trim();
 
@@ -392,6 +394,17 @@ export const enrichFromScan = mutation({
     const confidenceOk = (args.confidence ?? 0) >= 70;
     const nameValid = isValidProductName(args.productName ?? args.baseItem);
     const communityEnrich = confidenceOk && nameValid;
+
+    // Track funnel event if user is authenticated
+    if (identity) {
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+        .unique();
+      if (user) {
+        await trackFunnelEvent(ctx, user._id, "first_scan");
+      }
+    }
 
     // Try exact baseItem match first
     let existing = await ctx.db

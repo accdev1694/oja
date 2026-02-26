@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { normalizeStoreName } from "./lib/storeNormalizer";
 import { pushReceiptId } from "./lib/receiptHelpers";
 import { toGroceryTitleCase } from "./lib/titleCase";
+import { trackFunnelEvent } from "./lib/analytics";
 
 /**
  * Generate a fingerprint for duplicate detection.
@@ -116,6 +117,9 @@ export const create = mutation({
       createdAt: now,
       ...(args.isAdminSeed && { isAdminSeed: true }),
     });
+
+    // Track funnel event: first_receipt
+    await trackFunnelEvent(ctx, user._id, "first_receipt");
 
     return receiptId;
   },

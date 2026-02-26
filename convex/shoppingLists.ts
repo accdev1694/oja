@@ -8,6 +8,7 @@ import { getReceiptIds, pushReceiptId } from "./lib/receiptHelpers";
 import { getIconForItem } from "./iconMapping";
 import { isDuplicateItemName } from "./lib/fuzzyMatch";
 import { toGroceryTitleCase } from "./lib/titleCase";
+import { trackFunnelEvent } from "./lib/analytics";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -232,6 +233,9 @@ export const create = mutation({
       updatedAt: now,
     });
 
+    // Track funnel event: first_list
+    await trackFunnelEvent(ctx, user._id, "first_list");
+
     return listId;
   },
 });
@@ -307,6 +311,9 @@ export const createFromReceipt = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // Track funnel event: first_list
+    await trackFunnelEvent(ctx, user._id, "first_list");
 
     // ── 2. Create list items from receipt items ──
     // Track names we've seen to avoid duplicate list items from receipt dupes

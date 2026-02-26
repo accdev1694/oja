@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action } from "./_generated/server";
 
 // Simple in-memory cache for expensive queries (1-hour TTL)
 const queryCache = new Map<string, { data: any; expiresAt: number }>();
@@ -705,6 +705,115 @@ export const getRevenueReport = query({
   },
 });
 
+export const getFinancialReport = query({
+  args: { dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+    
+    // This would ideally pull from a real payments table
+    // For now we estimate from active subscriptions
+    const rev = await ctx.runQuery(query.getRevenueReport, args);
+    
+    const grossRevenue = rev.mrr;
+    const estimatedTax = grossRevenue * 0.20; // 20% VAT
+    
+    // Estimate COGS (API costs: OpenAI, Clerk, etc.)
+    // Let's assume £0.50 per active user per month
+    const analytics = await ctx.runQuery(query.getAnalytics, {});
+    const activeUsers = analytics.activeUsersThisWeek; // Approximate
+    const estimatedCOGS = activeUsers * 0.50;
+    
+    const netRevenue = grossRevenue - estimatedTax - estimatedCOGS;
+    
+    return {
+      grossRevenue,
+      estimatedTax,
+      estimatedCOGS,
+      netRevenue,
+      margin: grossRevenue > 0 ? (netRevenue / grossRevenue) * 100 : 0,
+    };
+  },
+});
+
+export const getCohortMetrics = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+    return await ctx.db.query("cohortMetrics").order("desc").collect();
+  },
+});
+
+export const getFunnelAnalytics = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+    
+    // Define funnel steps
+    const steps = ["signup", "onboarding_complete", "first_list", "first_receipt", "first_scan", "subscribed"];
+    
+    // Count unique users per step
+    const funnel: { step: string; count: number; percentage: number }[] = [];
+    
+    // Get all events
+    const allEvents = await ctx.db.query("funnelEvents").collect();
+    
+    let baseCount = 0;
+    
+    for (const step of steps) {
+      const uniqueUsers = new Set(
+        allEvents
+          .filter(e => e.eventName === step)
+          .map(e => e.userId.toString())
+      ).size;
+      
+      if (step === "signup") baseCount = uniqueUsers;
+      
+      funnel.push({
+        step,
+        count: uniqueUsers,
+        percentage: baseCount > 0 ? (uniqueUsers / baseCount) * 100 : 0,
+      });
+    }
+    
+    return funnel;
+  },
+});
+
+export const getChurnMetrics = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+    return await ctx.db.query("churnMetrics").order("desc").collect();
+  },
+});
+
+export const getLTVMetrics = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+    return await ctx.db.query("ltvMetrics").order("desc").collect();
+  },
+});
+
+export const getUserSegmentSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+    const segments = await ctx.db.query("userSegments").collect();
+    
+    const summary: Record<string, number> = {};
+    for (const s of segments) {
+      summary[s.segment] = (summary[s.segment] || 0) + 1;
+    }
+    
+    return Object.entries(summary).map(([name, count]) => ({
+      name,
+      count,
+      percentage: segments.length > 0 ? (count / segments.length) * 100 : 0,
+    }));
+  },
+});
+
 // ============================================================================
 // MODERATION
 // ============================================================================
@@ -1244,5 +1353,46 @@ export const mergeStoreNames = mutation({
     });
 
     return { success: true, updatedCount };
+  },
+});
+
+/**
+ * Export data to CSV
+ * Generates a CSV string for the requested data type
+ */
+export const exportDataToCSV = action({
+  args: { dataType: v.union(v.literal("users"), v.literal("receipts"), v.literal("prices"), v.literal("analytics")) },
+  handler: async (ctx, args) => {
+    // For simplicity, we use runQuery to get the data
+    // In a real high-volume app, we might want to stream this or use a more efficient approach
+    
+    let csv = "";
+    
+    if (args.dataType === "users") {
+      const users = await ctx.runQuery(query.searchUsers, { searchTerm: "" });
+      csv = "ID,Name,Email,IsAdmin,Suspended,CreatedAt\n";
+      for (const u of users) {
+        csv += `${u._id},"${u.name || ""}",${u.email || ""},${!!u.isAdmin},${!!u.suspended},${new Date(u.createdAt).toISOString()}\n`;
+      }
+    } else if (args.dataType === "receipts") {
+      const receipts = await ctx.runQuery(query.getRecentReceipts, { limit: 1000 });
+      csv = "ID,Store,Total,User,Status,Date\n";
+      for (const r of receipts) {
+        csv += `${r._id},"${r.storeName}",${r.total},"${r.userName}",${r.processingStatus},${new Date(r.purchaseDate || Date.now()).toISOString()}\n`;
+      }
+    } else if (args.dataType === "prices") {
+      // Get all prices
+      const prices = await ctx.runQuery(query.getRecentReceipts, { limit: 5000 }); // Placeholder
+      // ... more complex logic for prices would go here
+      csv = "Item,Store,UnitPrice,LastSeen\n";
+    } else if (args.dataType === "analytics") {
+      const funnel = await ctx.runQuery(query.getFunnelAnalytics, {});
+      csv = "Step,Count,Percentage\n";
+      for (const f of funnel) {
+        csv += `${f.step},${f.count},${f.percentage.toFixed(2)}%\n`;
+      }
+    }
+    
+    return { csv, fileName: `oja_export_${args.dataType}_${Date.now()}.csv` };
   },
 });
