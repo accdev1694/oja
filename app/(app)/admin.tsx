@@ -80,6 +80,7 @@ function AdminScreenInner() {
   const router = useRouter();
   const { alert: showAlert } = useGlassAlert();
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
+  const [isMenuExpanded, setIsMenuExpanded] = useState(false);
 
   const analytics = useQuery(api.admin.getAnalytics, {});
   const myPerms = useQuery(api.admin.getMyPermissions, {});
@@ -161,6 +162,7 @@ function AdminScreenInner() {
   ];
 
   const visibleTabs = tabs.filter(tab => hasPermission(tab.permission));
+  const activeTabData = tabs.find(t => t.key === activeTab) || tabs[0];
 
   return (
     <GlassScreen>
@@ -170,34 +172,56 @@ function AdminScreenInner() {
         showBack onBack={() => router.back()} 
       />
 
-      {/* Tab Bar - Scrollable Menu */}
-      <View style={styles.tabBarContainer}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabBarScroll}
+      {/* Collapsible Tool Switcher */}
+      <View style={styles.switcherWrapper}>
+        <Pressable 
+          style={[styles.activeToolPill, isMenuExpanded && styles.activeToolPillExpanded]}
+          onPress={() => { setIsMenuExpanded(!isMenuExpanded); Haptics.selectionAsync(); }}
         >
-          {visibleTabs.map((tab) => (
-            <Pressable
-              key={tab.key}
-              style={[styles.tabPill, activeTab === tab.key && styles.tabPillActive]}
-              onPress={() => { setActiveTab(tab.key); Haptics.selectionAsync(); }}
-              hitSlop={8}
-            >
-              <MaterialCommunityIcons
-                name={tab.icon as any}
-                size={16}
-                color={activeTab === tab.key ? "#000" : colors.text.tertiary}
-              />
-              <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+          <View style={styles.activeToolInfo}>
+            <MaterialCommunityIcons name={activeTabData.icon as any} size={20} color={colors.accent.primary} />
+            <Text style={styles.activeToolLabel}>{activeTabData.label}</Text>
+          </View>
+          <MaterialCommunityIcons 
+            name={isMenuExpanded ? "chevron-up" : "chevron-down"} 
+            size={20} 
+            color={colors.text.tertiary} 
+          />
+        </Pressable>
+
+        {isMenuExpanded && (
+          <AnimatedSection animation="fadeInDown" duration={300}>
+            <GlassCard style={styles.menuExpandedGrid}>
+              <View style={styles.gridContainer}>
+                {visibleTabs.map((tab) => (
+                  <Pressable
+                    key={tab.key}
+                    style={[styles.gridItem, activeTab === tab.key && styles.gridItemActive]}
+                    onPress={() => { 
+                      setActiveTab(tab.key); 
+                      setIsMenuExpanded(false); 
+                      Haptics.selectionAsync(); 
+                    }}
+                  >
+                    <View style={[styles.gridIconCircle, activeTab === tab.key && styles.gridIconCircleActive]}>
+                      <MaterialCommunityIcons
+                        name={tab.icon as any}
+                        size={20}
+                        color={activeTab === tab.key ? "#000" : colors.text.secondary}
+                      />
+                    </View>
+                    <Text style={[styles.gridLabel, activeTab === tab.key && styles.gridLabelActive]}>
+                      {tab.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </GlassCard>
+          </AnimatedSection>
+        )}
       </View>
 
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, zIndex: 1 }}>
         {activeTab === "overview" && <OverviewTab hasPermission={hasPermission} />}
         {activeTab === "users" && <UsersTab hasPermission={hasPermission} handleExportCSV={handleExportCSV} />}
         {activeTab === "analytics" && <AnalyticsTab hasPermission={hasPermission} handleExportCSV={handleExportCSV} />}
@@ -2059,38 +2083,79 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
 
-  // Tab bar (Pill style)
-  tabBarContainer: {
+  // Collapsible Tool Switcher
+  switcherWrapper: {
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.glass.border,
+    zIndex: 10,
   },
-  tabBarScroll: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-  },
-  tabPill: {
+  activeToolPill: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: 20,
-    backgroundColor: `${colors.glass.border}40`,
-    gap: 6,
+    paddingVertical: spacing.sm,
+    backgroundColor: `${colors.accent.primary}10`,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "transparent",
+    borderColor: `${colors.accent.primary}30`,
   },
-  tabPillActive: {
+  activeToolPillExpanded: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    backgroundColor: `${colors.accent.primary}20`,
+  },
+  activeToolInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  activeToolLabel: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    fontSize: 16,
+  },
+  menuExpandedGrid: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    marginTop: -1, // overlap border
+    padding: spacing.md,
+  },
+  gridContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  gridItem: {
+    width: "47%",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    backgroundColor: `${colors.glass.border}20`,
+    borderRadius: 12,
+    gap: 8,
+  },
+  gridItemActive: {
     backgroundColor: colors.accent.primary,
-    borderColor: colors.accent.primary,
   },
-  tabLabel: {
+  gridIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: `${colors.text.secondary}15`,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gridIconCircleActive: {
+    backgroundColor: "rgba(0,0,0,0.1)",
+  },
+  gridLabel: {
     ...typography.labelSmall,
-    color: colors.text.tertiary,
-    fontSize: 11,
+    color: colors.text.secondary,
     fontWeight: "600",
   },
-  tabLabelActive: {
+  gridLabelActive: {
     color: "#000",
   },
 
