@@ -274,6 +274,11 @@ Every admin action creates an `adminLogs` record:
 9. **No `any` types** - Never use `any` type annotations. Use proper types, generics, or `unknown` with type guards
 10. **Parallel sub-agents** - Always deploy multiple sub-agents in parallel where possible to execute tasks concurrently, preserving context window
 11. **Never fix without approval** - Always present analysis and proposed solution first. Never jump into fixing things without the user's express approval
+12. **Convex cross-function calls** - When calling Convex queries/mutations from within other Convex functions:
+    - Import `api` from `./_generated/api`: `import { api } from "./_generated/api";`
+    - Use `ctx.runQuery(api.module.functionName, args)` or `ctx.runMutation(api.module.functionName, args)`
+    - Never use `query.functionName` - `query` is the function wrapper, not the API reference
+    - Example: `await ctx.runQuery(api.admin.getAnalytics, {})` ✅ not `await ctx.runQuery(query.getAnalytics, {})` ❌
 
 ## Feature Development Workflow
 

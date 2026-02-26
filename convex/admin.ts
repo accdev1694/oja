@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
+import { api } from "./_generated/api";
 
 // Simple in-memory cache for expensive queries (1-hour TTL)
 const queryCache = new Map<string, { data: any; expiresAt: number }>();
@@ -712,14 +713,14 @@ export const getFinancialReport = query({
     
     // This would ideally pull from a real payments table
     // For now we estimate from active subscriptions
-    const rev = await ctx.runQuery(query.getRevenueReport, args);
-    
+    const rev = await ctx.runQuery(api.admin.getRevenueReport, args);
+
     const grossRevenue = rev.mrr;
     const estimatedTax = grossRevenue * 0.20; // 20% VAT
-    
+
     // Estimate COGS (API costs: OpenAI, Clerk, etc.)
     // Let's assume £0.50 per active user per month
-    const analytics = await ctx.runQuery(query.getAnalytics, {});
+    const analytics = await ctx.runQuery(api.admin.getAnalytics, {});
     const activeUsers = analytics.activeUsersThisWeek; // Approximate
     const estimatedCOGS = activeUsers * 0.50;
     
@@ -811,6 +812,123 @@ export const getUserSegmentSummary = query({
       count,
       percentage: segments.length > 0 ? (count / segments.length) * 100 : 0,
     }));
+  },
+});
+
+// ============================================================================
+// PHASE 3: SUPPORT & OPERATIONS
+// ============================================================================
+
+export const getAdminTickets = query({
+  args: { status: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requirePermissionQuery(ctx, "view_analytics"); // Support access
+    
+    let tickets;
+    if (args.status) {
+      tickets = await ctx.db
+        .query("supportTickets")
+        .withIndex("by_status", (q) => q.eq("status", args.status as any))
+        .order("desc")
+        .collect();
+    } else {
+      tickets = await ctx.db.query("supportTickets").order("desc").collect();
+    }
+    
+    return await Promise.all(
+      tickets.map(async (t) => {
+        const u = await ctx.db.get(t.userId);
+        return {
+          ...t,
+          userName: u?.name || "Unknown",
+          userEmail: u?.email || "",
+        };
+      })
+    );
+  },
+});
+
+export const getAdminSupportSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+    
+    const allTickets = await ctx.db.query("supportTickets").collect();
+    const open = allTickets.filter(t => t.status === "open").length;
+    const inProgress = allTickets.filter(t => t.status === "in_progress").length;
+    const resolved = allTickets.filter(t => t.status === "resolved").length;
+    
+    return {
+      total: allTickets.length,
+      open,
+      inProgress,
+      resolved,
+      unassigned: allTickets.filter(t => !t.assignedTo && t.status !== "resolved").length,
+    };
+  },
+});
+
+export const getUserTimeline = query({
+  args: { userId: v.id("users"), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await requirePermissionQuery(ctx, "view_users");
+    
+    const events = await ctx.db
+      .query("activityEvents")
+      .withIndex("by_user_timestamp", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .take(args.limit || 50);
+      
+    return events;
+  },
+});
+
+export const getUserTags = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await requirePermissionQuery(ctx, "view_users");
+    const tags = await ctx.db
+      .query("userTags")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    return tags.map(t => t.tag);
+  },
+});
+
+export const bulkExtendTrial = mutation({
+  args: { userIds: v.array(v.id("users")), days: v.number() },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "bulk_operation");
+    const now = Date.now();
+    const duration = args.days * 24 * 60 * 60 * 1000;
+    
+    let count = 0;
+    for (const userId of args.userIds) {
+      const sub = await ctx.db
+        .query("subscriptions")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .first();
+        
+      if (sub) {
+        const currentEnd = sub.trialEndsAt || sub.currentPeriodEnd || now;
+        await ctx.db.patch(sub._id, {
+          trialEndsAt: currentEnd + duration,
+          currentPeriodEnd: currentEnd + duration,
+          updatedAt: now,
+        });
+        count++;
+      }
+    }
+    
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "bulk_extend_trial",
+      targetType: "user",
+      details: `Bulk extended trial by ${args.days} days for ${count} users`,
+      createdAt: now,
+    });
+    
+    return { success: true, count };
   },
 });
 
@@ -1369,24 +1487,24 @@ export const exportDataToCSV = action({
     let csv = "";
     
     if (args.dataType === "users") {
-      const users = await ctx.runQuery(query.searchUsers, { searchTerm: "" });
+      const users = await ctx.runQuery(api.admin.searchUsers, { searchTerm: "" });
       csv = "ID,Name,Email,IsAdmin,Suspended,CreatedAt\n";
       for (const u of users) {
         csv += `${u._id},"${u.name || ""}",${u.email || ""},${!!u.isAdmin},${!!u.suspended},${new Date(u.createdAt).toISOString()}\n`;
       }
     } else if (args.dataType === "receipts") {
-      const receipts = await ctx.runQuery(query.getRecentReceipts, { limit: 1000 });
+      const receipts = await ctx.runQuery(api.admin.getRecentReceipts, { limit: 1000 });
       csv = "ID,Store,Total,User,Status,Date\n";
       for (const r of receipts) {
         csv += `${r._id},"${r.storeName}",${r.total},"${r.userName}",${r.processingStatus},${new Date(r.purchaseDate || Date.now()).toISOString()}\n`;
       }
     } else if (args.dataType === "prices") {
       // Get all prices
-      const prices = await ctx.runQuery(query.getRecentReceipts, { limit: 5000 }); // Placeholder
+      const prices = await ctx.runQuery(api.admin.getRecentReceipts, { limit: 5000 }); // Placeholder
       // ... more complex logic for prices would go here
       csv = "Item,Store,UnitPrice,LastSeen\n";
     } else if (args.dataType === "analytics") {
-      const funnel = await ctx.runQuery(query.getFunnelAnalytics, {});
+      const funnel = await ctx.runQuery(api.admin.getFunnelAnalytics, {});
       csv = "Step,Count,Percentage\n";
       for (const f of funnel) {
         csv += `${f.step},${f.count},${f.percentage.toFixed(2)}%\n`;
