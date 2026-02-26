@@ -13,10 +13,13 @@ import type * as ai from "../ai.js";
 import type * as aiUsage from "../aiUsage.js";
 import type * as analytics from "../analytics.js";
 import type * as analytics_advanced from "../analytics_advanced.js";
+import type * as cms from "../cms.js";
 import type * as crons from "../crons.js";
 import type * as currentPrices from "../currentPrices.js";
+import type * as experiments from "../experiments.js";
 import type * as http from "../http.js";
 import type * as iconMapping from "../iconMapping.js";
+import type * as impersonation from "../impersonation.js";
 import type * as insights from "../insights.js";
 import type * as itemSearch from "../itemSearch.js";
 import type * as itemVariants from "../itemVariants.js";
@@ -43,6 +46,7 @@ import type * as migrations_seedPricingConfig from "../migrations/seedPricingCon
 import type * as migrations_seedRBAC from "../migrations/seedRBAC.js";
 import type * as migrations_simplifyPartnerRoles from "../migrations/simplifyPartnerRoles.js";
 import type * as migrations_titleCaseMigration from "../migrations/titleCaseMigration.js";
+import type * as monitoring from "../monitoring.js";
 import type * as notifications from "../notifications.js";
 import type * as nurture from "../nurture.js";
 import type * as pantryItems from "../pantryItems.js";
@@ -54,8 +58,11 @@ import type * as shoppingLists from "../shoppingLists.js";
 import type * as stores from "../stores.js";
 import type * as stripe from "../stripe.js";
 import type * as subscriptions from "../subscriptions.js";
+import type * as support from "../support.js";
+import type * as tags from "../tags.js";
 import type * as tips from "../tips.js";
 import type * as users from "../users.js";
+import type * as workflows from "../workflows.js";
 
 import type {
   ApiFromModules,
@@ -69,10 +76,13 @@ declare const fullApi: ApiFromModules<{
   aiUsage: typeof aiUsage;
   analytics: typeof analytics;
   analytics_advanced: typeof analytics_advanced;
+  cms: typeof cms;
   crons: typeof crons;
   currentPrices: typeof currentPrices;
+  experiments: typeof experiments;
   http: typeof http;
   iconMapping: typeof iconMapping;
+  impersonation: typeof impersonation;
   insights: typeof insights;
   itemSearch: typeof itemSearch;
   itemVariants: typeof itemVariants;
@@ -99,6 +109,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/seedRBAC": typeof migrations_seedRBAC;
   "migrations/simplifyPartnerRoles": typeof migrations_simplifyPartnerRoles;
   "migrations/titleCaseMigration": typeof migrations_titleCaseMigration;
+  monitoring: typeof monitoring;
   notifications: typeof notifications;
   nurture: typeof nurture;
   pantryItems: typeof pantryItems;
@@ -110,8 +121,11 @@ declare const fullApi: ApiFromModules<{
   stores: typeof stores;
   stripe: typeof stripe;
   subscriptions: typeof subscriptions;
+  support: typeof support;
+  tags: typeof tags;
   tips: typeof tips;
   users: typeof users;
+  workflows: typeof workflows;
 }>;
 
 /**
