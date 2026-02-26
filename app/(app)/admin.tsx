@@ -170,24 +170,31 @@ function AdminScreenInner() {
         showBack onBack={() => router.back()} 
       />
 
-      {/* Tab Bar */}
-      <View style={styles.tabBar}>
-        {visibleTabs.map((tab) => (
-          <Pressable
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-            onPress={() => { setActiveTab(tab.key); Haptics.selectionAsync(); }}
-          >
-            <MaterialCommunityIcons
-              name={tab.icon as any}
-              size={18}
-              color={activeTab === tab.key ? colors.accent.primary : colors.text.tertiary}
-            />
-            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
-              {tab.label}
-            </Text>
-          </Pressable>
-        ))}
+      {/* Tab Bar - Scrollable Menu */}
+      <View style={styles.tabBarContainer}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBarScroll}
+        >
+          {visibleTabs.map((tab) => (
+            <Pressable
+              key={tab.key}
+              style={[styles.tabPill, activeTab === tab.key && styles.tabPillActive]}
+              onPress={() => { setActiveTab(tab.key); Haptics.selectionAsync(); }}
+              hitSlop={8}
+            >
+              <MaterialCommunityIcons
+                name={tab.icon as any}
+                size={16}
+                color={activeTab === tab.key ? "#000" : colors.text.tertiary}
+              />
+              <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
 
       <View style={{ flex: 1 }}>
@@ -2052,31 +2059,39 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
 
-  // Tab bar
-  tabBar: {
-    flexDirection: "row",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+  // Tab bar (Pill style)
+  tabBarContainer: {
+    paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.glass.border,
   },
-  tab: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: spacing.sm,
-    gap: 2,
+  tabBarScroll: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
   },
-  tabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: colors.accent.primary,
+  tabPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: 20,
+    backgroundColor: `${colors.glass.border}40`,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  tabPillActive: {
+    backgroundColor: colors.accent.primary,
+    borderColor: colors.accent.primary,
   },
   tabLabel: {
     ...typography.labelSmall,
     color: colors.text.tertiary,
-    fontSize: 10,
+    fontSize: 11,
+    fontWeight: "600",
   },
   tabLabelActive: {
-    color: colors.accent.primary,
+    color: "#000",
   },
 
   // Sections
