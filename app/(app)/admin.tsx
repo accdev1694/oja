@@ -961,11 +961,11 @@ function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
 
   const [newFlagKey, setNewFlagKey] = useState("");
 
-  const handleUpdatePrice = async (id: string, amount: string) => {
+  const handleUpdatePrice = async (planId: string, amount: string) => {
     const price = parseFloat(amount);
     if (isNaN(price)) return;
     try {
-      await updatePricing({ id: id as any, priceAmount: price });
+      await updatePricing({ planId, priceAmount: price });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
       showAlert("Error", error.message || "Failed to update price");
@@ -1103,7 +1103,7 @@ function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
                     style={styles.flagInput}
                     keyboardType="numeric"
                     defaultValue={(p.priceAmount ?? 0).toString()}
-                    onEndEditing={(e) => handleUpdatePrice(p._id, e.nativeEvent.text)}
+                    onEndEditing={(e) => handleUpdatePrice(p.planId, e.nativeEvent.text)}
                   />
                 </View>
               </View>
@@ -1420,7 +1420,7 @@ const styles = StyleSheet.create({
   categoryName: { ...typography.bodySmall, color: colors.text.primary },
   categoryCount: { ...typography.labelSmall, color: colors.text.tertiary },
 
-  // Feature flags
+  // Feature flags & sessions
   flagRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1452,6 +1452,14 @@ const styles = StyleSheet.create({
     backgroundColor: `${colors.accent.primary}20`,
     alignItems: "center",
     justifyContent: "center",
+  },
+  sessionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
   },
 
   // Announcements

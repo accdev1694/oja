@@ -495,16 +495,29 @@ export const extendTrial = mutation({
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("User not found");
 
-    const newTrialEnd = (user.trialEndsAt || now) + (args.days * 24 * 60 * 60 * 1000);
-    await ctx.db.patch(args.userId, { trialEndsAt: newTrialEnd, updatedAt: now });
+    // Find user's subscription
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
 
-    await ctx.db.insert("adminLogs", { 
-      adminUserId: admin._id, 
-      action: "extend_trial", 
-      targetType: "user", 
-      targetId: args.userId, 
-      details: `Extended trial by ${args.days} days`, 
-      createdAt: now 
+    if (!subscription) {
+      throw new Error("No subscription found for user");
+    }
+
+    const newTrialEnd = (subscription.trialEndsAt || now) + (args.days * 24 * 60 * 60 * 1000);
+    await ctx.db.patch(subscription._id, {
+      trialEndsAt: newTrialEnd,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "extend_trial",
+      targetType: "user",
+      targetId: args.userId,
+      details: `Extended trial by ${args.days} days`,
+      createdAt: now,
     });
     return { success: true };
   },
@@ -518,15 +531,39 @@ export const grantComplimentaryAccess = mutation({
     const months = args.months ?? 12;
     const duration = months * 30 * 24 * 60 * 60 * 1000;
 
-    await ctx.db.patch(args.userId, { plan: "premium_annual", updatedAt: now });
+    // Find or create subscription
+    let subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
 
-    await ctx.db.insert("adminLogs", { 
-      adminUserId: admin._id, 
-      action: "grant_complimentary", 
-      targetType: "user", 
-      targetId: args.userId, 
-      details: `Granted free premium for ${months} months`, 
-      createdAt: now 
+    if (subscription) {
+      await ctx.db.patch(subscription._id, {
+        plan: "premium_annual",
+        status: "active",
+        currentPeriodStart: now,
+        currentPeriodEnd: now + duration,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("subscriptions", {
+        userId: args.userId,
+        plan: "premium_annual",
+        status: "active",
+        currentPeriodStart: now,
+        currentPeriodEnd: now + duration,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "grant_complimentary",
+      targetType: "user",
+      targetId: args.userId,
+      details: `Granted free premium for ${months} months`,
+      createdAt: now,
     });
     return { success: true };
   },
@@ -626,10 +663,45 @@ export const getRevenueReport = query({
   args: { refreshKey: v.optional(v.string()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_analytics");
+
+    // Get dynamic pricing
+    const monthlyPricing = await ctx.db
+      .query("pricingConfig")
+      .withIndex("by_plan", (q) => q.eq("planId", "premium_monthly"))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .first();
+
+    const annualPricing = await ctx.db
+      .query("pricingConfig")
+      .withIndex("by_plan", (q) => q.eq("planId", "premium_annual"))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .first();
+
+    const monthlyPrice = monthlyPricing?.priceAmount || 2.99; // Fallback for safety
+    const annualPrice = annualPricing?.priceAmount || 21.99;
+
+    // Get subscriptions
     let subs = await ctx.db.query("subscriptions").collect();
     if (args.dateFrom) subs = subs.filter(s => s.createdAt >= args.dateFrom!);
     if (args.dateTo) subs = subs.filter(s => s.createdAt <= args.dateTo!);
-    return { totalSubscriptions: subs.length, activeSubscriptions: subs.filter((s: any) => s.status === "active").length, monthlySubscribers: 0, annualSubscribers: 0, trialsActive: 0, mrr: 0, arr: 0 };
+
+    const activeSubs = subs.filter((s: any) => s.status === "active");
+    const monthlyCount = activeSubs.filter((s: any) => s.plan === "premium_monthly").length;
+    const annualCount = activeSubs.filter((s: any) => s.plan === "premium_annual").length;
+    const trialsActive = subs.filter((s: any) => s.status === "trial").length;
+
+    const mrr = monthlyCount * monthlyPrice + (annualCount * annualPrice) / 12;
+    const arr = mrr * 12;
+
+    return {
+      totalSubscriptions: subs.length,
+      activeSubscriptions: activeSubs.length,
+      monthlySubscribers: monthlyCount,
+      annualSubscribers: annualCount,
+      trialsActive,
+      mrr: Math.round(mrr * 100) / 100,
+      arr: Math.round(arr * 100) / 100,
+    };
   },
 });
 
@@ -641,11 +713,59 @@ export const getRecentReceipts = query({
   args: { limit: v.optional(v.number()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()), searchTerm: v.optional(v.string()), status: v.optional(v.string()) },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_receipts");
-    const r = await ctx.db.query("receipts").order("desc").take(args.limit || 100);
-    return await Promise.all(r.map(async receipt => {
+
+    let receipts = [];
+
+    // Apply date range filter using index if provided
+    if (args.dateFrom || args.dateTo) {
+      const allReceipts = await ctx.db.query("receipts").withIndex("by_created").order("desc").collect();
+      receipts = allReceipts.filter(r => {
+        if (args.dateFrom && r.createdAt < args.dateFrom) return false;
+        if (args.dateTo && r.createdAt > args.dateTo) return false;
+        return true;
+      });
+    } else if (args.status) {
+      // Apply status filter using index
+      const validStatus = args.status as "completed" | "pending" | "processing" | "failed";
+      receipts = await ctx.db.query("receipts")
+        .withIndex("by_processing_status", q => q.eq("processingStatus", validStatus))
+        .order("desc")
+        .collect();
+    } else {
+      // No filters - just get recent
+      receipts = await ctx.db.query("receipts").order("desc").take(args.limit || 100);
+    }
+
+    // Enrich with user data
+    const enriched = await Promise.all(receipts.map(async receipt => {
       const u = await ctx.db.get(receipt.userId);
-      return { ...receipt, userName: u?.name || "User" };
+      return {
+        ...receipt,
+        userName: u?.name || "User",
+        userEmail: u?.email || ""
+      };
     }));
+
+    // Apply search term filter (after enrichment for user name/email search)
+    let filtered = enriched;
+    if (args.searchTerm && args.searchTerm.length >= 2) {
+      const term = args.searchTerm.toLowerCase();
+      filtered = enriched.filter(r =>
+        r.storeName?.toLowerCase().includes(term) ||
+        r.userName?.toLowerCase().includes(term) ||
+        r.userEmail?.toLowerCase().includes(term)
+      );
+    }
+
+    // Apply status filter if not using index
+    if (args.status && !(args.dateFrom || args.dateTo)) {
+      // Already filtered by index above
+    } else if (args.status) {
+      filtered = filtered.filter(r => r.processingStatus === args.status);
+    }
+
+    // Apply limit
+    return filtered.slice(0, args.limit || 100);
   },
 });
 
@@ -665,7 +785,63 @@ export const getPriceAnomalies = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_receipts");
-    return { anomalies: [], hasMore: false };
+
+    // Get most recent 5000 price records for performance
+    const recentPrices = await ctx.db
+      .query("currentPrices")
+      .order("desc")
+      .take(5000);
+
+    // Group prices by itemName + storeName
+    const priceGroups = new Map<string, number[]>();
+
+    for (const price of recentPrices) {
+      const key = `${price.itemName || "unknown"}|${price.storeName || "unknown"}`;
+      if (!priceGroups.has(key)) {
+        priceGroups.set(key, []);
+      }
+      priceGroups.get(key)!.push(price.unitPrice);
+    }
+
+    // Find anomalies (prices that deviate >50% from average)
+    const anomalies: any[] = [];
+
+    for (const [key, prices] of priceGroups.entries()) {
+      if (prices.length < 2) continue; // Need at least 2 prices to detect anomaly
+
+      const avg = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+
+      for (let i = 0; i < prices.length; i++) {
+        const price = prices[i];
+        const deviation = Math.abs((price - avg) / avg);
+
+        if (deviation > 0.5) {
+          // >50% deviation is anomalous
+          const [itemName, storeName] = key.split("|");
+          const priceRecord = recentPrices.find(
+            p => p.itemName === itemName && p.storeName === storeName && p.unitPrice === price
+          );
+
+          if (priceRecord) {
+            anomalies.push({
+              ...priceRecord,
+              average: Math.round(avg * 100) / 100,
+              deviationPercent: Math.round(deviation * 100),
+            });
+          }
+        }
+      }
+    }
+
+    // Sort by deviation (highest first) and limit
+    const sorted = anomalies
+      .sort((a, b) => b.deviationPercent - a.deviationPercent)
+      .slice(0, args.limit || 50);
+
+    return {
+      anomalies: sorted,
+      hasMore: anomalies.length > (args.limit || 50),
+    };
   },
 });
 
@@ -685,15 +861,21 @@ export const bulkReceiptAction = mutation({
     // Use bulk_operation permission - triggers sensitive rate limit (10/min)
     const admin = await requirePermission(ctx, "bulk_operation");
     for (const id of args.receiptIds) {
-      if (args.action === "delete") await ctx.db.delete(id);
-      else await ctx.db.patch(id, { processingStatus: "completed" } as any);
+      if (args.action === "delete") {
+        await ctx.db.delete(id);
+      } else {
+        // Type-safe: "completed" is a valid processingStatus literal
+        await ctx.db.patch(id, {
+          processingStatus: "completed" as "completed" | "pending" | "processing" | "failed",
+        });
+      }
     }
     await ctx.db.insert("adminLogs", {
       adminUserId: admin._id,
       action: `bulk_${args.action}`,
       targetType: "receipt",
       details: `Bulk ${args.action} on ${args.receiptIds.length} receipts`,
-      createdAt: Date.now()
+      createdAt: Date.now(),
     });
     return { success: true, count: args.receiptIds.length };
   },
@@ -748,14 +930,319 @@ export const getAuditLogs = query({
   },
 });
 
-export const getFeatureFlags = query({ args: {}, handler: async (ctx) => { await requirePermissionQuery(ctx, "manage_flags"); return []; } });
-export const getAnnouncements = query({ args: {}, handler: async (ctx) => { await requirePermissionQuery(ctx, "manage_announcements"); return []; } });
-export const getPricingConfig = query({ args: {}, handler: async (ctx) => { await requirePermissionQuery(ctx, "manage_pricing"); return []; } });
-export const getCategories = query({ args: {}, handler: async (ctx) => { await requirePermissionQuery(ctx, "manage_catalog"); return []; } });
-export const getDuplicateStores = query({ args: { bustCache: v.optional(v.boolean()) }, handler: async (ctx) => { await requirePermissionQuery(ctx, "manage_catalog"); return []; } });
-export const toggleFeatureFlag = mutation({ args: { key: v.string(), value: v.boolean() }, handler: async (ctx) => { await requirePermission(ctx, "manage_flags"); return { success: true }; } });
-export const createAnnouncement = mutation({ args: { title: v.string(), body: v.string(), type: v.string() }, handler: async (ctx) => { await requirePermission(ctx, "manage_announcements"); return { success: true }; } });
-export const updateAnnouncement = mutation({ args: { announcementId: v.id("announcements"), title: v.string(), body: v.string(), type: v.string() }, handler: async (ctx) => { await requirePermission(ctx, "manage_announcements"); return { success: true }; } });
-export const toggleAnnouncement = mutation({ args: { announcementId: v.id("announcements") }, handler: async (ctx) => { await requirePermission(ctx, "manage_announcements"); return { success: true }; } });
-export const updatePricing = mutation({ args: { id: v.id("pricingConfig"), priceAmount: v.number() }, handler: async (ctx) => { await requirePermission(ctx, "manage_pricing"); return { success: true }; } });
-export const mergeStoreNames = mutation({ args: { fromNames: v.array(v.string()), toName: v.string() }, handler: async (ctx) => { await requirePermission(ctx, "manage_catalog"); return { success: true }; } });
+// ============================================================================
+// FEATURE FLAGS
+// ============================================================================
+
+export const getFeatureFlags = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "manage_flags");
+    const flags = await ctx.db.query("featureFlags").collect();
+    // Enrich with updatedBy admin name
+    return await Promise.all(flags.map(async (f) => {
+      if (!f.updatedBy) return { ...f, updatedByName: "System" };
+      const admin = await ctx.db.get(f.updatedBy);
+      return { ...f, updatedByName: admin?.name || "Unknown" };
+    }));
+  },
+});
+
+export const toggleFeatureFlag = mutation({
+  args: { key: v.string(), value: v.boolean() },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_flags");
+
+    const existing = await ctx.db
+      .query("featureFlags")
+      .filter((q) => q.eq(q.field("key"), args.key))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        value: args.value,
+        updatedBy: admin._id,
+        updatedAt: Date.now(),
+      });
+    } else {
+      // Create new flag if doesn't exist
+      await ctx.db.insert("featureFlags", {
+        key: args.key,
+        value: args.value,
+        description: "",
+        updatedBy: admin._id,
+        updatedAt: Date.now(),
+      });
+    }
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "toggle_feature_flag",
+      targetType: "featureFlag",
+      targetId: args.key,
+      details: `Toggled ${args.key} to ${args.value}`,
+      createdAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+// ============================================================================
+// ANNOUNCEMENTS
+// ============================================================================
+
+export const getAnnouncements = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "manage_announcements");
+    return await ctx.db.query("announcements").order("desc").collect();
+  },
+});
+
+export const createAnnouncement = mutation({
+  args: { title: v.string(), body: v.string(), type: v.string() },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_announcements");
+
+    if (!args.title || !args.body) {
+      throw new Error("Title and body are required");
+    }
+
+    const announcementId = await ctx.db.insert("announcements", {
+      title: args.title,
+      body: args.body,
+      type: args.type as "info" | "warning" | "promo",
+      active: true,
+      createdBy: admin._id,
+      createdAt: Date.now(),
+    });
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "create_announcement",
+      targetType: "announcement",
+      targetId: announcementId,
+      details: `Created announcement: ${args.title}`,
+      createdAt: Date.now(),
+    });
+
+    return { success: true, id: announcementId };
+  },
+});
+
+export const updateAnnouncement = mutation({
+  args: {
+    announcementId: v.id("announcements"),
+    title: v.string(),
+    body: v.string(),
+    type: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_announcements");
+
+    if (!args.title || !args.body) {
+      throw new Error("Title and body are required");
+    }
+
+    await ctx.db.patch(args.announcementId, {
+      title: args.title,
+      body: args.body,
+      type: args.type as "info" | "warning" | "promo",
+    });
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "update_announcement",
+      targetType: "announcement",
+      targetId: args.announcementId,
+      details: `Updated announcement: ${args.title}`,
+      createdAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+export const toggleAnnouncement = mutation({
+  args: { announcementId: v.id("announcements") },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_announcements");
+
+    const announcement = await ctx.db.get(args.announcementId);
+    if (!announcement) throw new Error("Announcement not found");
+
+    await ctx.db.patch(args.announcementId, {
+      active: !announcement.active,
+    });
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "toggle_announcement",
+      targetType: "announcement",
+      targetId: args.announcementId,
+      details: `Toggled announcement ${announcement.active ? "off" : "on"}: ${announcement.title}`,
+      createdAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+// ============================================================================
+// PRICING CONFIG
+// ============================================================================
+
+export const getPricingConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "manage_pricing");
+    return await ctx.db.query("pricingConfig").collect();
+  },
+});
+
+export const updatePricing = mutation({
+  args: { planId: v.string(), priceAmount: v.number() },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_pricing");
+
+    if (args.priceAmount <= 0) {
+      throw new Error("Price must be positive");
+    }
+
+    if (args.priceAmount > 10000) {
+      throw new Error("Price exceeds maximum (£10,000)");
+    }
+
+    const existing = await ctx.db
+      .query("pricingConfig")
+      .withIndex("by_plan", (q) => q.eq("planId", args.planId))
+      .first();
+
+    if (!existing) {
+      throw new Error(`Plan ${args.planId} not found`);
+    }
+
+    await ctx.db.patch(existing._id, {
+      priceAmount: args.priceAmount,
+      updatedAt: Date.now(),
+    });
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "update_pricing",
+      targetType: "pricingConfig",
+      targetId: args.planId,
+      details: `Updated ${args.planId} price to £${args.priceAmount}`,
+      createdAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+// ============================================================================
+// CATALOG MANAGEMENT
+// ============================================================================
+
+export const getCategories = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "manage_catalog");
+
+    const items = await ctx.db.query("pantryItems").collect();
+
+    // Count items by category
+    const categoryMap = new Map<string, number>();
+    for (const item of items) {
+      const cat = item.category || "Uncategorized";
+      categoryMap.set(cat, (categoryMap.get(cat) || 0) + 1);
+    }
+
+    // Convert to array and sort
+    return Array.from(categoryMap.entries())
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => a.category.localeCompare(b.category));
+  },
+});
+
+export const getDuplicateStores = query({
+  args: { bustCache: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    await requirePermissionQuery(ctx, "manage_catalog");
+
+    // Get all unique store names from currentPrices
+    const prices = await ctx.db.query("currentPrices").collect();
+
+    const storeMap = new Map<string, string[]>();
+
+    for (const price of prices) {
+      if (!price.storeName) continue;
+
+      const normalized = price.storeName.toLowerCase().trim();
+      if (!storeMap.has(normalized)) {
+        storeMap.set(normalized, []);
+      }
+      if (!storeMap.get(normalized)!.includes(price.storeName)) {
+        storeMap.get(normalized)!.push(price.storeName);
+      }
+    }
+
+    // Find groups with duplicates (different casings)
+    const duplicates = Array.from(storeMap.entries())
+      .filter(([_, variants]) => variants.length > 1)
+      .map(([normalized, variants]) => ({
+        normalized,
+        variants: variants.sort(),
+        canonical: variants[0], // Use first alphabetically as canonical
+        count: variants.length,
+      }));
+
+    return duplicates;
+  },
+});
+
+export const mergeStoreNames = mutation({
+  args: { fromNames: v.array(v.string()), toName: v.string() },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_catalog");
+
+    if (args.fromNames.length === 0) {
+      throw new Error("No store names provided to merge");
+    }
+
+    if (!args.toName) {
+      throw new Error("Target store name is required");
+    }
+
+    // Update all currentPrices records
+    const prices = await ctx.db.query("currentPrices").collect();
+    let updatedCount = 0;
+
+    for (const price of prices) {
+      if (args.fromNames.includes(price.storeName)) {
+        await ctx.db.patch(price._id, { storeName: args.toName });
+        updatedCount++;
+      }
+    }
+
+    // Also update priceHistory records
+    const history = await ctx.db.query("priceHistory").collect();
+    for (const h of history) {
+      if (args.fromNames.includes(h.storeName)) {
+        await ctx.db.patch(h._id, { storeName: args.toName });
+        updatedCount++;
+      }
+    }
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "merge_stores",
+      targetType: "stores",
+      details: `Merged ${args.fromNames.join(", ")} → ${args.toName} (${updatedCount} records)`,
+      createdAt: Date.now(),
+    });
+
+    return { success: true, updatedCount };
+  },
+});

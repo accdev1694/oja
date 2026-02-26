@@ -732,4 +732,67 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_tip", ["userId", "tipKey"]),
+
+  // ─── Phase 2: Analytics & Business Intelligence ────────────────────────────────
+
+  // Cohort retention metrics - computed weekly
+  cohortMetrics: defineTable({
+    cohortMonth: v.string(), // "2025-01" format
+    totalUsers: v.number(), // Users who signed up that month
+    retentionDay7: v.number(), // % still active after 7 days
+    retentionDay14: v.number(),
+    retentionDay30: v.number(),
+    retentionDay60: v.number(),
+    retentionDay90: v.number(),
+    computedAt: v.number(),
+  })
+    .index("by_cohort", ["cohortMonth"]),
+
+  // Funnel events - track user journey milestones
+  funnelEvents: defineTable({
+    userId: v.id("users"),
+    eventName: v.string(), // signup, onboarding_complete, first_list, first_receipt, first_scan, subscribed
+    eventData: v.optional(v.any()), // Additional context
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_event", ["eventName"])
+    .index("by_event_date", ["eventName", "createdAt"]),
+
+  // Churn metrics - computed monthly
+  churnMetrics: defineTable({
+    month: v.string(), // "2025-02" format
+    totalActiveStart: v.number(), // Active users at month start
+    totalActiveEnd: v.number(), // Active users at month end
+    churnedUsers: v.number(), // Users who became inactive
+    churnRate: v.number(), // Percentage
+    reactivatedUsers: v.number(), // Previously churned who came back
+    atRiskCount: v.number(), // No activity 14-30 days
+    computedAt: v.number(),
+  })
+    .index("by_month", ["month"]),
+
+  // LTV metrics by cohort
+  ltvMetrics: defineTable({
+    cohortMonth: v.string(), // "2025-01" format
+    avgLTV: v.number(), // Average lifetime value in £
+    avgRevenuePerUser: v.number(), // ARPU
+    totalRevenue: v.number(), // Sum of all revenue from cohort
+    paidUsers: v.number(), // Users who ever paid
+    conversionRate: v.number(), // % who converted to paid
+    computedAt: v.number(),
+  })
+    .index("by_cohort", ["cohortMonth"]),
+
+  // User segments - computed daily
+  userSegments: defineTable({
+    userId: v.id("users"),
+    segment: v.string(), // power_user, at_risk, dormant, new_user, trial_ending, churned
+    assignedAt: v.number(),
+    expiresAt: v.optional(v.number()), // For time-limited segments like trial_ending
+    metadata: v.optional(v.any()), // Additional segment data
+  })
+    .index("by_user", ["userId"])
+    .index("by_segment", ["segment"])
+    .index("by_user_segment", ["userId", "segment"]),
 });
