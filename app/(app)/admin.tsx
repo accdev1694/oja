@@ -13,7 +13,7 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery, useMutation, usePaginatedQuery, useAction, useStorageUrl } from "convex/react";
+import { useQuery, useMutation, usePaginatedQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -30,6 +30,7 @@ import {
   useGlassAlert,
   GlassDateRangePicker,
   type DateRange,
+  GlassInput,
 } from "@/components/ui/glass";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
@@ -1291,14 +1292,55 @@ function MonitoringTab({ hasPermission }: { hasPermission: (p: string) => boolea
   const summary = useQuery(api.admin.getMonitoringSummary);
   const experiments = useQuery(api.admin.getExperiments);
   const workflows = useQuery(api.admin.getWorkflows);
-  
+
   const resolveAlert = useMutation(api.admin.resolveAlert);
+  const toggleWorkflow = useMutation(api.admin.toggleWorkflow);
+  const createExperiment = useMutation(api.admin.createExperiment);
   const { alert: showAlert } = useGlassAlert();
+
+  const [experimentModalVisible, setExperimentModalVisible] = React.useState(false);
+  const [experimentForm, setExperimentForm] = React.useState({
+    name: "",
+    description: "",
+    goalEvent: "",
+    variants: [
+      { name: "Control", allocationPercent: 50 },
+      { name: "Variant A", allocationPercent: 50 }
+    ]
+  });
 
   const handleResolveAlert = async (id: string) => {
     try {
       await resolveAlert({ alertId: id as any });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) { showAlert("Error", e.message); }
+  };
+
+  const handleToggleWorkflow = async (workflowId: string) => {
+    try {
+      await toggleWorkflow({ workflowId: workflowId as any });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) { showAlert("Error", e.message); }
+  };
+
+  const handleCreateExperiment = async () => {
+    try {
+      if (!experimentForm.name || !experimentForm.goalEvent) {
+        showAlert("Error", "Name and goal event are required");
+        return;
+      }
+      await createExperiment(experimentForm);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setExperimentModalVisible(false);
+      setExperimentForm({
+        name: "",
+        description: "",
+        goalEvent: "",
+        variants: [
+          { name: "Control", allocationPercent: 50 },
+          { name: "Variant A", allocationPercent: 50 }
+        ]
+      });
     } catch (e: any) { showAlert("Error", e.message); }
   };
 
@@ -1368,7 +1410,7 @@ function MonitoringTab({ hasPermission }: { hasPermission: (p: string) => boolea
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text.tertiary} />
             </View>
           ))}
-          <GlassButton onPress={() => showAlert("Experiment", "New experiment form...")} variant="secondary" size="sm" style={{ marginTop: spacing.md }}>
+          <GlassButton onPress={() => setExperimentModalVisible(true)} variant="secondary" size="sm" style={{ marginTop: spacing.md }}>
             New Experiment
           </GlassButton>
         </GlassCard>
@@ -1387,11 +1429,100 @@ function MonitoringTab({ hasPermission }: { hasPermission: (p: string) => boolea
                 <Text style={styles.userName}>{w.name}</Text>
                 <Text style={styles.userEmail}>Trigger: {w.trigger} • {w.actions.length} actions</Text>
               </View>
-              <Switch value={w.isEnabled} onValueChange={() => {}} />
+              <Switch value={w.isEnabled} onValueChange={() => handleToggleWorkflow(w._id)} />
             </View>
           ))}
         </GlassCard>
       </AnimatedSection>
+
+      {/* Experiment Creation Modal */}
+      <Modal
+        visible={experimentModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setExperimentModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Create New Experiment</Text>
+              <TouchableOpacity onPress={() => setExperimentModalVisible(false)}>
+                <MaterialCommunityIcons name="close" size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 400 }}>
+              <View style={{ gap: spacing.md }}>
+                <View>
+                  <Text style={styles.fieldLabel}>Experiment Name *</Text>
+                  <GlassInput
+                    value={experimentForm.name}
+                    onChangeText={(name) => setExperimentForm({ ...experimentForm, name })}
+                    placeholder="e.g., New Checkout Flow"
+                  />
+                </View>
+
+                <View>
+                  <Text style={styles.fieldLabel}>Description</Text>
+                  <GlassInput
+                    value={experimentForm.description}
+                    onChangeText={(description) => setExperimentForm({ ...experimentForm, description })}
+                    placeholder="Brief description of what you're testing"
+                    multiline
+                  />
+                </View>
+
+                <View>
+                  <Text style={styles.fieldLabel}>Goal Event *</Text>
+                  <GlassInput
+                    value={experimentForm.goalEvent}
+                    onChangeText={(goalEvent) => setExperimentForm({ ...experimentForm, goalEvent })}
+                    placeholder="e.g., subscribed, first_receipt"
+                  />
+                </View>
+
+                <View>
+                  <Text style={styles.fieldLabel}>Variants (must total 100%)</Text>
+                  {experimentForm.variants.map((variant, index) => (
+                    <View key={index} style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
+                      <GlassInput
+                        value={variant.name}
+                        onChangeText={(name) => {
+                          const newVariants = [...experimentForm.variants];
+                          newVariants[index] = { ...variant, name };
+                          setExperimentForm({ ...experimentForm, variants: newVariants });
+                        }}
+                        placeholder="Variant name"
+                        style={{ flex: 1 }}
+                      />
+                      <GlassInput
+                        value={variant.allocationPercent.toString()}
+                        onChangeText={(value) => {
+                          const newVariants = [...experimentForm.variants];
+                          newVariants[index] = { ...variant, allocationPercent: parseInt(value) || 0 };
+                          setExperimentForm({ ...experimentForm, variants: newVariants });
+                        }}
+                        placeholder="%"
+                        keyboardType="numeric"
+                        style={{ width: 80 }}
+                      />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <GlassButton onPress={() => setExperimentModalVisible(false)} variant="ghost" style={{ flex: 1 }}>
+                Cancel
+              </GlassButton>
+              <GlassButton onPress={handleCreateExperiment} style={{ flex: 1 }}>
+                Create Experiment
+              </GlassButton>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <View style={{ height: 140 }} />
     </ScrollView>
@@ -2042,7 +2173,10 @@ function SettingsTab({ hasPermission }: { hasPermission: (p: string) => boolean 
 }
 
 function ReceiptImage({ storageId }: { storageId: string }) {
-  const url = useStorageUrl(storageId);
+  // Note: In Convex, storage URLs are generated server-side via getUrl()
+  // For now, we'll show a placeholder until the image fetching is implemented
+  // TODO: Add a query in convex/admin.ts that calls getUrl(storageId) and returns the URL
+  const url = storageId; // Temporary - will be replaced with proper query
   if (!url) return <ActivityIndicator color={colors.accent.primary} style={{ margin: 40 }} />;
   return (
     <View style={styles.imageContainer}>
@@ -2455,13 +2589,41 @@ const styles = StyleSheet.create({
   filterChipText: { ...typography.labelSmall, color: colors.text.tertiary },
   filterChipTextActive: { color: colors.accent.primary, fontWeight: "600" },
 
-  // Image Modal
+  // Image Modal & General Modals
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.8)",
     justifyContent: "center",
     alignItems: "center",
     padding: spacing.lg,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 500,
+    backgroundColor: colors.background.primary,
+    borderRadius: 20,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  modalTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  fieldLabel: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
   },
   imageModalContent: {
     width: "100%",

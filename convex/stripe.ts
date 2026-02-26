@@ -10,6 +10,7 @@ import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { getTierFromScans } from "./lib/featureGating";
+import { trackFunnelEvent } from "./lib/analytics";
 
 // =============================================================================
 // STRIPE CHECKOUT SESSION
@@ -316,6 +317,12 @@ export const handleCheckoutCompleted = internalMutation({
       body: "Welcome to Oja Premium. Enjoy all features!",
       read: false,
       createdAt: now,
+    });
+
+    // Track subscription funnel event
+    await trackFunnelEvent(ctx, userId, "subscribed", {
+      plan: args.planId,
+      stripeSubscriptionId: args.stripeSubscriptionId,
     });
 
     // Create initial scanCredits record for the first billing period

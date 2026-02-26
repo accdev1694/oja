@@ -1584,3 +1584,97 @@ export const exportDataToCSV = action({
     return { csv, fileName: `oja_export_${args.dataType}_${Date.now()}.csv` };
   },
 });
+
+// ============================================================================
+// WORKFLOW MANAGEMENT
+// ============================================================================
+
+export const toggleWorkflow = mutation({
+  args: { workflowId: v.id("automationWorkflows") },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_flags");
+
+    const workflow = await ctx.db.get(args.workflowId);
+    if (!workflow) throw new Error("Workflow not found");
+
+    await ctx.db.patch(args.workflowId, {
+      isEnabled: !workflow.isEnabled,
+    });
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "toggle_workflow",
+      targetType: "workflow",
+      targetId: args.workflowId,
+      details: `${workflow.isEnabled ? "Disabled" : "Enabled"} workflow: ${workflow.name}`,
+      createdAt: Date.now(),
+    });
+
+    return { success: true, isEnabled: !workflow.isEnabled };
+  },
+});
+
+// ============================================================================
+// EXPERIMENT MANAGEMENT
+// ============================================================================
+
+export const createExperiment = mutation({
+  args: {
+    name: v.string(),
+    description: v.string(),
+    goalEvent: v.string(),
+    variants: v.array(v.object({
+      name: v.string(),
+      allocationPercent: v.number(),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_flags");
+
+    if (!args.name || !args.goalEvent) {
+      throw new Error("Name and goal event are required");
+    }
+
+    if (args.variants.length < 2) {
+      throw new Error("At least 2 variants are required");
+    }
+
+    // Validate allocation percentages sum to 100
+    const totalAllocation = args.variants.reduce((sum, v) => sum + v.allocationPercent, 0);
+    if (Math.abs(totalAllocation - 100) > 0.01) {
+      throw new Error("Variant allocations must sum to 100%");
+    }
+
+    const now = Date.now();
+
+    const experimentId = await ctx.db.insert("experiments", {
+      name: args.name,
+      description: args.description,
+      goalEvent: args.goalEvent,
+      status: "draft",
+      startDate: now,
+      createdBy: admin._id,
+      createdAt: now,
+    });
+
+    // Create variant records
+    for (const variant of args.variants) {
+      await ctx.db.insert("experimentVariants", {
+        experimentId,
+        variantName: variant.name,
+        allocationPercent: variant.allocationPercent,
+      });
+    }
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "create_experiment",
+      targetType: "experiment",
+      targetId: experimentId,
+      details: `Created experiment: ${args.name} with ${args.variants.length} variants`,
+      createdAt: now,
+    });
+
+    return { success: true, experimentId };
+  },
+});

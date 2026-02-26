@@ -143,7 +143,9 @@
       "Bash(git log:*)",
       "Bash(git mv:*)",
       "Bash(tasklist:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(ping:*)",
+      "Bash(set CONVEX_DEPLOYMENT=dev:curious-sockeye-134:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
