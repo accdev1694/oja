@@ -678,8 +678,8 @@ export const getRevenueReport = query({
       .filter((q) => q.eq(q.field("isActive"), true))
       .first();
 
-    const monthlyPrice = monthlyPricing?.priceAmount || 2.99; // Fallback for safety
-    const annualPrice = annualPricing?.priceAmount || 21.99;
+    const monthlyPrice = monthlyPricing?.priceAmount || 0;
+    const annualPrice = annualPricing?.priceAmount || 0;
 
     // Get subscriptions
     let subs = await ctx.db.query("subscriptions").collect();
@@ -707,7 +707,11 @@ export const getRevenueReport = query({
 });
 
 export const getFinancialReport = query({
-  args: { dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
+  args: { 
+    refreshKey: v.optional(v.string()),
+    dateFrom: v.optional(v.number()), 
+    dateTo: v.optional(v.number()) 
+  },
   handler: async (ctx, args): Promise<{
     grossRevenue: number;
     estimatedTax: number;

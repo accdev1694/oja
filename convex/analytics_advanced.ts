@@ -145,6 +145,11 @@ export const computeLTVMetrics = internalMutation({
     const allUsers = await ctx.db.query("users").collect();
     const allSubs = await ctx.db.query("subscriptions").collect();
     
+    // Get dynamic pricing
+    const pricing = await ctx.db.query("pricingConfig").collect();
+    const monthlyPrice = pricing.find(p => p.planId === "premium_monthly" && p.isActive)?.priceAmount || 0;
+    const annualPrice = pricing.find(p => p.planId === "premium_annual" && p.isActive)?.priceAmount || 0;
+    
     // Group users by signup month
     const cohorts: Record<string, Id<"users">[]> = {};
     for (const user of allUsers) {
@@ -164,17 +169,15 @@ export const computeLTVMetrics = internalMutation({
         
         // Estimate revenue based on plan and how long they've been subscribed
         // Since we don't have a payments table, we'll estimate:
-        // Premium Monthly: £2.99/mo
-        // Premium Annual: £21.99/yr
         
         const subDurationMonths = Math.max(1, Math.ceil((now - sub.createdAt) / (30 * 24 * 60 * 60 * 1000)));
         
         if (sub.plan === "premium_monthly") {
-          totalRevenue += subDurationMonths * 2.99;
+          totalRevenue += subDurationMonths * monthlyPrice;
           paidUserCount++;
         } else if (sub.plan === "premium_annual") {
           const subDurationYears = Math.max(1, Math.ceil((now - sub.createdAt) / (365 * 24 * 60 * 60 * 1000)));
-          totalRevenue += subDurationYears * 21.99;
+          totalRevenue += subDurationYears * annualPrice;
           paidUserCount++;
         }
       }

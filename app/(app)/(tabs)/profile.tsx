@@ -323,6 +323,26 @@ export default function ProfileScreen() {
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/(app)/support" as any);
+            }}
+          >
+            <GlassCard variant="standard" style={styles.navCard}>
+              <View style={styles.navRow}>
+                <View style={[styles.navIcon, { backgroundColor: `${colors.accent.primary}20` }]}>
+                  <MaterialCommunityIcons name="help-circle-outline" size={20} color={colors.accent.primary} />
+                </View>
+                <View style={styles.navInfo}>
+                  <Text style={styles.navTitle}>Help & Support</Text>
+                  <Text style={styles.navSubtitle}>Contact support & view my tickets</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.tertiary} />
+              </View>
+            </GlassCard>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push("/(app)/ai-usage" as any);
             }}
           >

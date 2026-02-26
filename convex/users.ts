@@ -201,10 +201,17 @@ export const completeOnboarding = mutation({
       .first();
 
     if (!existingSub) {
+      // Get dynamic pricing to find the default plan
+      const defaultPlan = await ctx.db
+        .query("pricingConfig")
+        .withIndex("by_plan", (q) => q.eq("planId", "premium_monthly"))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .first();
+
       const trialEndsAt = now + 7 * 24 * 60 * 60 * 1000;
       await ctx.db.insert("subscriptions", {
         userId: user._id,
-        plan: "premium_monthly",
+        plan: (defaultPlan?.planId as any) || "premium_monthly",
         status: "trial",
         trialEndsAt,
         currentPeriodStart: now,

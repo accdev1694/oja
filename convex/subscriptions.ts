@@ -248,8 +248,8 @@ export const getPlans = query({
       .withIndex("by_active", (q: any) => q.eq("isActive", true))
       .collect();
 
-    const monthlyPrice = pricing.find((p: any) => p.planId === "premium_monthly")?.priceAmount ?? 2.99;
-    const annualPrice = pricing.find((p: any) => p.planId === "premium_annual")?.priceAmount ?? 21.99;
+    const monthlyPrice = pricing.find((p: any) => p.planId === "premium_monthly")?.priceAmount ?? 0;
+    const annualPrice = pricing.find((p: any) => p.planId === "premium_annual")?.priceAmount ?? 0;
 
     // Calculate savings
     const yearlyIfMonthly = monthlyPrice * 12;
@@ -348,8 +348,8 @@ export const getScanCredits = query({
       .withIndex("by_active", (q: any) => q.eq("isActive", true))
       .collect();
 
-    const monthlyPrice = pricing.find((p: any) => p.planId === "premium_monthly")?.priceAmount ?? 2.99;
-    const annualPrice = pricing.find((p: any) => p.planId === "premium_annual")?.priceAmount ?? 21.99;
+    const monthlyPrice = pricing.find((p: any) => p.planId === "premium_monthly")?.priceAmount ?? 0;
+    const annualPrice = pricing.find((p: any) => p.planId === "premium_annual")?.priceAmount ?? 0;
 
     // Tier-aware caps (scale for annual)
     const maxScans = isAnnual ? tierConfig.maxScans * 12 : tierConfig.maxScans;
