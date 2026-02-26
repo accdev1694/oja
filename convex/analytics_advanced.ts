@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 
 /**
@@ -213,8 +213,6 @@ export const computeUserSegments = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
     
     const allUsers = await ctx.db.query("users").collect();
     const allSubs = await ctx.db.query("subscriptions").collect();

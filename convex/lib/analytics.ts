@@ -40,3 +40,26 @@ export async function trackFunnelEvent(
   
   console.log(`[Analytics] Tracked funnel event: ${eventName} for user ${userId}`);
 }
+
+/**
+ * Tracks a user activity event for the timeline (Phase 3.4)
+ * @param ctx Convex context
+ * @param userId User ID
+ * @param eventType Type of event (login, create_list, etc.)
+ * @param metadata Additional context
+ */
+export async function trackActivity(
+  ctx: GenericMutationCtx<any>,
+  userId: Id<"users">,
+  eventType: string,
+  metadata?: any
+) {
+  const now = Date.now();
+  
+  await ctx.db.insert("activityEvents", {
+    userId,
+    eventType,
+    metadata,
+    timestamp: now,
+  });
+}

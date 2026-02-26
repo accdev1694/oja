@@ -66,4 +66,11 @@ crons.monthly(
   internal.analytics_advanced.computeLTVMetrics
 );
 
+// Automated Workflows — Phase 4
+crons.daily(
+  "process-workflows",
+  { hourUTC: 5, minuteUTC: 0 },
+  internal.workflows.processWorkflows
+);
+
 export default crons;

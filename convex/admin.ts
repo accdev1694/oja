@@ -708,7 +708,13 @@ export const getRevenueReport = query({
 
 export const getFinancialReport = query({
   args: { dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    grossRevenue: number;
+    estimatedTax: number;
+    estimatedCOGS: number;
+    netRevenue: number;
+    margin: number;
+  }> => {
     await requirePermissionQuery(ctx, "view_analytics");
     
     // This would ideally pull from a real payments table
@@ -929,6 +935,66 @@ export const bulkExtendTrial = mutation({
     });
     
     return { success: true, count };
+  },
+});
+
+// ============================================================================
+// PHASE 4: ADVANCED FEATURES
+// ============================================================================
+
+export const getMonitoringSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+    
+    const activeAlerts = await ctx.db
+      .query("adminAlerts")
+      .withIndex("by_resolved", (q) => q.eq("isResolved", false))
+      .collect();
+      
+    const recentSLA = await ctx.db
+      .query("slaMetrics")
+      .order("desc")
+      .take(10);
+      
+    return {
+      alerts: activeAlerts,
+      alertCount: activeAlerts.length,
+      slaStatus: recentSLA.some(s => s.status === "fail") ? "failing" : 
+                 recentSLA.some(s => s.status === "warn") ? "degraded" : "healthy",
+      recentSLA,
+    };
+  },
+});
+
+export const getExperiments = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+    return await ctx.db.query("experiments").order("desc").collect();
+  },
+});
+
+export const getWorkflows = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+    return await ctx.db.query("automationWorkflows").collect();
+  },
+});
+
+export const resolveAlert = mutation({
+  args: { alertId: v.id("adminAlerts") },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_flags");
+    
+    await ctx.db.patch(args.alertId, {
+      isResolved: true,
+      resolvedBy: admin._id,
+      resolvedAt: Date.now(),
+    });
+    
+    return { success: true };
   },
 });
 

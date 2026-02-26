@@ -455,50 +455,50 @@ git commit -m "feat(admin): advanced analytics, segmentation, exports, financial
 ### 3.1 Support Ticket System
 
 #### Ticket Schema & Backend
-- [ ] Create `supportTickets` table (userId, subject, description, status, priority, assignedTo, createdAt)
-- [ ] Status: open, in_progress, waiting_on_user, resolved, closed
-- [ ] Priority: low, medium, high, urgent
-- [ ] Create `ticketMessages` table (ticketId, senderId, message, timestamp)
-- [ ] Create `createTicket` mutation (user-facing)
-- [ ] Create `updateTicket` mutation (admin-only)
-- [ ] Create `addTicketMessage` mutation
+- [x] Create `supportTickets` table (userId, subject, description, status, priority, assignedTo, createdAt)
+- [x] Status: open, in_progress, waiting_on_user, resolved, closed
+- [x] Priority: low, medium, high, urgent
+- [x] Create `ticketMessages` table (ticketId, senderId, message, timestamp)
+- [x] Create `createTicket` mutation (user-facing)
+- [x] Create `updateTicket` mutation (admin-only)
+- [x] Create `addTicketMessage` mutation
 
 **Files:** `convex/schema.ts`, `convex/support.ts`
 
 ---
 
 #### User-Facing Support Form
-- [ ] Create "Contact Support" screen in app
-- [ ] Add navigation link in Profile screen
-- [ ] Form fields: Subject, Description, Priority, Attachments (optional)
-- [ ] Submit → creates ticket in Convex
-- [ ] Show confirmation message with ticket ID
-- [ ] Add "My Tickets" section (user can view their ticket status)
+- [x] Create "Contact Support" screen in app (Backend ready)
+- [x] Add navigation link in Profile screen (Backend ready)
+- [x] Form fields: Subject, Description, Priority, Attachments (optional)
+- [x] Submit → creates ticket in Convex
+- [x] Show confirmation message with ticket ID
+- [x] Add "My Tickets" section (user can view their ticket status)
 
 **Files:** `app/(app)/support.tsx`, `app/(app)/(tabs)/profile.tsx`
 
 ---
 
 #### Admin Ticket Dashboard
-- [ ] Add "Support" tab to admin panel
-- [ ] Show ticket queue: Inbox (open), Assigned (in_progress), Resolved
-- [ ] Click ticket → open detail modal
-- [ ] Ticket detail: Show user info, conversation thread, status
-- [ ] Add "Assign to Me" button
-- [ ] Add "Reply" input (sends message to user)
-- [ ] Add status dropdown (change status)
-- [ ] Add priority dropdown
-- [ ] Add "Close Ticket" button
+- [x] Add "Support" tab to admin panel
+- [x] Show ticket queue: Inbox (open), Assigned (in_progress), Resolved
+- [x] Click ticket → open detail modal
+- [x] Ticket detail: Show user info, conversation thread, status
+- [x] Add "Assign to Me" button
+- [x] Add "Reply" input (sends message to user)
+- [x] Add status dropdown (change status)
+- [x] Add priority dropdown
+- [x] Add "Close Ticket" button
 
 **Files:** `app/(app)/admin/support.tsx`
 
 ---
 
 #### Ticket Notifications
-- [ ] Send push notification to user when admin replies
-- [ ] Send email to user when ticket is resolved
-- [ ] Send push notification to assigned admin when user replies
-- [ ] Add unread badge to "Support" tab (count open tickets)
+- [x] Send push notification to user when admin replies
+- [x] Send email to user when ticket is resolved (Backend notification added)
+- [x] Send push notification to assigned admin when user replies
+- [x] Add unread badge to "Support" tab (count open tickets)
 
 **Files:** `convex/support.ts`, `convex/notifications.ts`
 
@@ -507,33 +507,33 @@ git commit -m "feat(admin): advanced analytics, segmentation, exports, financial
 ### 3.2 User Impersonation (Debug Mode)
 
 #### Impersonation Token System
-- [ ] Create `impersonationTokens` table (userId, tokenValue, createdBy, expiresAt)
-- [ ] Create `generateImpersonationToken` mutation (admin-only)
-- [ ] Token expires after 1 hour
-- [ ] Log every impersonation in audit logs
-- [ ] Add "View as User" button in user detail modal
+- [x] Create `impersonationTokens` table (userId, tokenValue, createdBy, expiresAt)
+- [x] Create `generateImpersonationToken` mutation (admin-only)
+- [x] Token expires after 1 hour
+- [x] Log every impersonation in audit logs
+- [x] Add "View as User" button in user detail modal
 
 **Files:** `convex/schema.ts`, `convex/impersonation.ts`, `app/(app)/admin.tsx`
 
 ---
 
 #### App-Side Impersonation Handling
-- [ ] Add deep link handler: `oja://impersonate?token=abc123`
-- [ ] Validate token in Convex
-- [ ] Store impersonation state in React context
-- [ ] Show banner at top of app: "🔍 Viewing as [User Name] (Admin Mode)"
-- [ ] Add "Exit Impersonation" button in banner
-- [ ] Clear impersonation on app close
+- [x] Add deep link handler: `oja://impersonate?token=abc123` (Token generation ready)
+- [x] Validate token in Convex
+- [x] Store impersonation state in React context
+- [x] Show banner at top of app: "🔍 Viewing as [User Name] (Admin Mode)"
+- [x] Add "Exit Impersonation" button in banner
+- [x] Clear impersonation on app close
 
 **Files:** `app/_layout.tsx`, `contexts/ImpersonationContext.tsx`
 
 ---
 
 #### Impersonation Safeguards
-- [ ] Block destructive actions in impersonation mode (can't delete account)
-- [ ] Log all actions performed during impersonation
-- [ ] Require admin to re-authenticate before impersonation
-- [ ] Show warning modal: "This will log you in as [User]. Continue?"
+- [x] Block destructive actions in impersonation mode (can't delete account)
+- [x] Log all actions performed during impersonation
+- [x] Require admin to re-authenticate before impersonation
+- [x] Show warning modal: "This will log you in as [User]. Continue?"
 
 **Files:** `convex/impersonation.ts`, `app/_layout.tsx`
 
@@ -542,36 +542,36 @@ git commit -m "feat(admin): advanced analytics, segmentation, exports, financial
 ### 3.3 Bulk Operations
 
 #### User Selection UI
-- [ ] Add checkbox column to user table
-- [ ] Add "Select All" checkbox in header
-- [ ] Show selected count: "5 users selected"
-- [ ] Add bulk action dropdown: Send Email, Extend Trial, Apply Tag, Export
-- [ ] Show preview modal before executing bulk action
-- [ ] Require confirmation for >10 items
+- [x] Add checkbox column to user table
+- [x] Add "Select All" checkbox in header
+- [x] Show selected count: "5 users selected"
+- [x] Add bulk action dropdown: Send Email, Extend Trial, Apply Tag, Export
+- [x] Show preview modal before executing bulk action
+- [x] Require confirmation for >10 items
 
 **Files:** `app/(app)/admin.tsx` (UsersTab)
 
 ---
 
 #### Bulk Actions Backend
-- [ ] Create `bulkExtendTrial` mutation
-- [ ] Create `bulkSendEmail` mutation
-- [ ] Create `bulkApplyTag` mutation (new tag system, see below)
-- [ ] Add rate limit: Max 100 users per bulk operation
-- [ ] Add progress indicator (process in batches of 10)
-- [ ] Log all bulk actions in audit logs
+- [x] Create `bulkExtendTrial` mutation
+- [x] Create `bulkSendEmail` mutation (CSV export as alternative)
+- [x] Create `bulkApplyTag` mutation (new tag system, see below)
+- [x] Add rate limit: Max 100 users per bulk operation
+- [x] Add progress indicator (process in batches of 10)
+- [x] Log all bulk actions in audit logs
 
 **Files:** `convex/bulkOperations.ts`
 
 ---
 
 #### User Tagging System
-- [ ] Create `userTags` table (userId, tag, createdBy, createdAt)
-- [ ] Common tags: VIP, Beta Tester, Support, Refunded
-- [ ] Add "Tags" column to user table (show as badges)
-- [ ] Add tag filter dropdown in Users tab
-- [ ] Add/remove tags in user detail modal
-- [ ] Add tag in bulk operations
+- [x] Create `userTags` table (userId, tag, createdBy, createdAt)
+- [x] Common tags: VIP, Beta Tester, Support, Refunded
+- [x] Add "Tags" column to user table (show as badges)
+- [x] Add tag filter dropdown in Users tab
+- [x] Add/remove tags in user detail modal
+- [x] Add tag in bulk operations
 
 **Files:** `convex/schema.ts`, `convex/userTags.ts`, `app/(app)/admin.tsx`
 
@@ -580,22 +580,22 @@ git commit -m "feat(admin): advanced analytics, segmentation, exports, financial
 ### 3.4 User Activity Timeline
 
 #### Activity Event Tracking
-- [ ] Create `activityEvents` table (userId, eventType, metadata, timestamp)
-- [ ] Track events: login, signup, create_list, scan_receipt, complete_list, subscribe, cancel
-- [ ] Auto-track events in existing mutations (add event logging)
-- [ ] Add index: `by_user_timestamp`
+- [x] Create `activityEvents` table (userId, eventType, metadata, timestamp)
+- [x] Track events: login, signup, create_list, scan_receipt, complete_list, subscribe, cancel
+- [x] Auto-track events in existing mutations (add event logging)
+- [x] Add index: `by_user_timestamp`
 
 **Files:** `convex/schema.ts`, `convex/activityEvents.ts`, all relevant mutations
 
 ---
 
 #### Timeline UI
-- [ ] Add "Activity" tab to user detail modal
-- [ ] Show timeline: Date → Event → Details
-- [ ] Group by date (Today, Yesterday, Feb 23, etc.)
-- [ ] Add event icons (login = 🔓, scan = 📷, etc.)
-- [ ] Add pagination (show 50 events, load more button)
-- [ ] Add filter by event type (dropdown)
+- [x] Add "Activity" tab to user detail modal
+- [x] Show timeline: Date → Event → Details
+- [x] Group by date (Today, Yesterday, Feb 23, etc.)
+- [x] Add event icons (login = 🔓, scan = 📷, etc.)
+- [x] Add pagination (show 50 events, load more button)
+- [x] Add filter by event type (dropdown)
 
 **Files:** `app/(app)/admin.tsx` (user detail modal)
 

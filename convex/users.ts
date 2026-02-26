@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
-import { trackFunnelEvent } from "./lib/analytics";
+import { trackFunnelEvent, trackActivity } from "./lib/analytics";
 
 /**
  * Get the current user from the database
@@ -21,6 +21,8 @@ export const getOrCreate = mutation({
       .unique();
 
     if (existingUser) {
+      // Track login activity
+      await trackActivity(ctx, existingUser._id, "login");
       return existingUser;
     }
 
@@ -39,6 +41,9 @@ export const getOrCreate = mutation({
 
     // Track funnel event: signup
     await trackFunnelEvent(ctx, userId, "signup");
+    
+    // Track activity: signup
+    await trackActivity(ctx, userId, "signup");
 
     return await ctx.db.get(userId);
   },
@@ -185,6 +190,9 @@ export const completeOnboarding = mutation({
 
     // Track funnel event: onboarding_complete
     await trackFunnelEvent(ctx, user._id, "onboarding_complete");
+    
+    // Track activity
+    await trackActivity(ctx, user._id, "onboarding_complete");
 
     // Auto-start 7-day premium trial for new users
     const existingSub = await ctx.db

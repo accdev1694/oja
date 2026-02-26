@@ -795,4 +795,176 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_segment", ["segment"])
     .index("by_user_segment", ["userId", "segment"]),
+
+  // ─── Phase 3: Support & Operations ──────────────────────────────────────────
+
+  // Support tickets
+  supportTickets: defineTable({
+    userId: v.id("users"),
+    subject: v.string(),
+    description: v.string(),
+    status: v.union(
+      v.literal("open"),
+      v.literal("in_progress"),
+      v.literal("waiting_on_user"),
+      v.literal("resolved"),
+      v.literal("closed")
+    ),
+    priority: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("urgent")
+    ),
+    assignedTo: v.optional(v.id("users")), // Admin user ID
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"])
+    .index("by_priority", ["priority"])
+    .index("by_assigned", ["assignedTo"]),
+
+  // Messages within a support ticket
+  ticketMessages: defineTable({
+    ticketId: v.id("supportTickets"),
+    senderId: v.id("users"),
+    message: v.string(),
+    isFromAdmin: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_ticket", ["ticketId"]),
+
+  // Impersonation tokens (Phase 3.2)
+  impersonationTokens: defineTable({
+    userId: v.id("users"),
+    tokenValue: v.string(),
+    createdBy: v.id("users"), // Admin who generated it
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_token", ["tokenValue"])
+    .index("by_user", ["userId"]),
+
+  // User tags for segmentation (Phase 3.3)
+  userTags: defineTable({
+    userId: v.id("users"),
+    tag: v.string(),
+    createdBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_tag", ["tag"]),
+
+  // Activity events for timeline (Phase 3.4)
+  activityEvents: defineTable({
+    userId: v.id("users"),
+    eventType: v.string(), // login, create_list, scan_receipt, subscribe, etc.
+    metadata: v.optional(v.any()),
+    timestamp: v.number(),
+  })
+    .index("by_user_timestamp", ["userId", "timestamp"])
+    .index("by_type", ["eventType"]),
+
+  // ─── Phase 4: Advanced Features ──────────────────────────────────────────
+
+  // 4.1 Real-Time Monitoring
+  adminAlerts: defineTable({
+    alertType: v.string(), // receipt_failure_spike, payment_failed, system_error, high_latency
+    message: v.string(),
+    severity: v.union(v.literal("info"), v.literal("warning"), v.literal("critical")),
+    isResolved: v.boolean(),
+    resolvedBy: v.optional(v.id("users")),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_severity", ["severity"])
+    .index("by_resolved", ["isResolved"]),
+
+  slaMetrics: defineTable({
+    metric: v.string(), // receipt_processing_time, api_latency, search_relevance
+    target: v.number(), // in ms
+    actual: v.number(), // in ms
+    status: v.union(v.literal("pass"), v.literal("warn"), v.literal("fail")),
+    timestamp: v.number(),
+  })
+    .index("by_metric", ["metric"])
+    .index("by_timestamp", ["timestamp"]),
+
+  // 4.2 A/B Testing Framework
+  experiments: defineTable({
+    name: v.string(),
+    description: v.string(),
+    startDate: v.number(),
+    endDate: v.optional(v.number()),
+    status: v.union(v.literal("draft"), v.literal("running"), v.literal("paused"), v.literal("completed")),
+    goalEvent: v.string(), // Event to track conversion
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status"]),
+
+  experimentVariants: defineTable({
+    experimentId: v.id("experiments"),
+    variantName: v.string(), // "control", "test_a", "test_b"
+    allocationPercent: v.number(), // 0-100
+  })
+    .index("by_experiment", ["experimentId"]),
+
+  experimentAssignments: defineTable({
+    userId: v.id("users"),
+    experimentId: v.id("experiments"),
+    variantName: v.string(),
+    assignedAt: v.number(),
+  })
+    .index("by_user_experiment", ["userId", "experimentId"])
+    .index("by_user", ["userId"])
+    .index("by_experiment", ["experimentId"]),
+
+  experimentEvents: defineTable({
+    userId: v.id("users"),
+    experimentId: v.id("experiments"),
+    variantName: v.string(),
+    eventName: v.string(),
+    timestamp: v.number(),
+  })
+    .index("by_experiment_variant", ["experimentId", "variantName"])
+    .index("by_experiment", ["experimentId"]),
+
+  // 4.3 Automated Workflows
+  automationWorkflows: defineTable({
+    name: v.string(),
+    trigger: v.string(), // subscription_canceled, trial_ending, user_inactive_30d, payment_failed
+    actions: v.array(v.object({
+      type: v.string(), // send_email, send_push, suspend_user, apply_tag
+      params: v.optional(v.any()),
+    })),
+    isEnabled: v.boolean(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_enabled", ["isEnabled"]),
+
+  // 4.4 Content Management System (CMS)
+  helpArticles: defineTable({
+    title: v.string(),
+    slug: v.string(),
+    content: v.string(), // Markdown
+    categoryId: v.id("helpCategories"),
+    status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
+    publishedAt: v.optional(v.number()),
+    createdBy: v.id("users"),
+    updatedAt: v.number(),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_category", ["categoryId"])
+    .index("by_status", ["status"]),
+
+  helpCategories: defineTable({
+    name: v.string(),
+    slug: v.string(),
+    icon: v.string(),
+    order: v.number(),
+  })
+    .index("by_order", ["order"]),
 });

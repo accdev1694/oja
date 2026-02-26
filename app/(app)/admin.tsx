@@ -8,15 +8,12 @@ import {
   TextInput,
   Modal,
   Switch,
-  RefreshControl,
   ActivityIndicator,
   TouchableOpacity,
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery, useMutation, usePaginatedQuery, useAction } from "convex/react";
-// @ts-ignore - useStorageUrl exists but may not be in type definitions
-import { useStorageUrl } from "convex/react";
+import { useQuery, useMutation, usePaginatedQuery, useAction, useStorageUrl } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -30,14 +27,13 @@ import {
   colors,
   typography,
   spacing,
-  borderRadius,
   useGlassAlert,
   GlassDateRangePicker,
   type DateRange,
 } from "@/components/ui/glass";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
-type AdminTab = "overview" | "users" | "analytics" | "receipts" | "catalog" | "settings";
+type AdminTab = "overview" | "users" | "analytics" | "support" | "monitoring" | "receipts" | "catalog" | "settings";
 
 // Error Boundary wrapper for crash protection
 class AdminErrorBoundary extends React.Component<
@@ -88,8 +84,19 @@ function AdminScreenInner() {
   const analytics = useQuery(api.admin.getAnalytics, {});
   const myPerms = useQuery(api.admin.getMyPermissions, {});
   const logSession = useMutation(api.admin.logAdminSession);
+  const exportData = useAction(api.admin.exportDataToCSV);
 
   const loading = analytics === undefined || myPerms === undefined;
+
+  const handleExportCSV = useCallback(async (type: "users" | "receipts" | "prices" | "analytics") => {
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const result = await exportData({ dataType: type });
+      showAlert("Export Complete", `Generated ${result.fileName}.\n\nPreview (Top 5 rows):\n${result.csv.split('\n').slice(0, 5).join('\n')}`);
+    } catch (e: any) {
+      showAlert("Error", e.message || "Failed to export CSV");
+    }
+  }, [exportData]);
 
   const hasPermission = useCallback((p: string) => {
     if (!myPerms) return false;
@@ -146,6 +153,8 @@ function AdminScreenInner() {
     { key: "overview", label: "Overview", icon: "view-dashboard", permission: "view_analytics" },
     { key: "users", label: "Users", icon: "account-group", permission: "view_users" },
     { key: "analytics", label: "Analytics", icon: "chart-timeline-variant", permission: "view_analytics" },
+    { key: "support", label: "Support", icon: "help-circle", permission: "view_analytics" },
+    { key: "monitoring", label: "Ops", icon: "pulse", permission: "view_analytics" },
     { key: "receipts", label: "Receipts", icon: "receipt", permission: "view_receipts" },
     { key: "catalog", label: "Catalog", icon: "tag-multiple", permission: "manage_catalog" },
     { key: "settings", label: "Settings", icon: "cog", permission: "manage_flags" }, 
@@ -183,8 +192,10 @@ function AdminScreenInner() {
 
       <View style={{ flex: 1 }}>
         {activeTab === "overview" && <OverviewTab hasPermission={hasPermission} />}
-        {activeTab === "users" && <UsersTab hasPermission={hasPermission} />}
-        {activeTab === "analytics" && <AnalyticsTab hasPermission={hasPermission} />}
+        {activeTab === "users" && <UsersTab hasPermission={hasPermission} handleExportCSV={handleExportCSV} />}
+        {activeTab === "analytics" && <AnalyticsTab hasPermission={hasPermission} handleExportCSV={handleExportCSV} />}
+        {activeTab === "support" && <SupportTab hasPermission={hasPermission} />}
+        {activeTab === "monitoring" && <MonitoringTab hasPermission={hasPermission} />}
         {activeTab === "receipts" && <ReceiptsTab hasPermission={hasPermission} />}
         {activeTab === "catalog" && <CatalogTab hasPermission={hasPermission} />}
         {activeTab === "settings" && <SettingsTab hasPermission={hasPermission} />}
@@ -400,15 +411,69 @@ function OverviewTab({ hasPermission }: { hasPermission: (p: string) => boolean 
 }
 
 // ============================================================================
+// ACTIVITY TIMELINE
+// ============================================================================
+
+function ActivityTimeline({ userId }: { userId: string }) {
+  const events = useQuery(api.admin.getUserTimeline, { userId: userId as any, limit: 20 });
+
+  if (!events) return <ActivityIndicator color={colors.accent.primary} />;
+  if (events.length === 0) return <Text style={styles.emptyText}>No recent activity found.</Text>;
+
+  const getEventIcon = (type: string) => {
+    switch (type) {
+      case "login": return "login";
+      case "signup": return "account-plus";
+      case "onboarding_complete": return "check-decagram";
+      case "first_list": return "clipboard-list";
+      case "first_receipt": return "receipt";
+      case "first_scan": return "barcode-scan";
+      case "subscribed": return "crown";
+      case "support_ticket_created": return "help-circle";
+      default: return "circle-outline";
+    }
+  };
+
+  return (
+    <View style={styles.timelineContainer}>
+      {events.map((e: any, idx: number) => (
+        <View key={e._id} style={styles.timelineRow}>
+          <View style={styles.timelineLineContainer}>
+            <View style={styles.timelineIcon}>
+              <MaterialCommunityIcons name={getEventIcon(e.eventType) as any} size={14} color={colors.accent.primary} />
+            </View>
+            {idx < events.length - 1 && <View style={styles.timelineLine} />}
+          </View>
+          <View style={styles.timelineContent}>
+            <Text style={styles.timelineType}>{e.eventType.replace(/_/g, " ").toUpperCase()}</Text>
+            <Text style={styles.timelineTime}>{new Date(e.timestamp).toLocaleString()}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ============================================================================
 // USERS TAB
 // ============================================================================
 
-function UsersTab({ hasPermission }: { hasPermission: (p: string) => boolean }) {
+function UsersTab({ 
+  hasPermission,
+  handleExportCSV
+}: { 
+  hasPermission: (p: string) => boolean;
+  handleExportCSV: (type: "users" | "receipts" | "prices" | "analytics") => Promise<void>;
+}) {
   const { alert: showAlert } = useGlassAlert();
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [detailTab, setDetailTab] = useState<"info" | "activity">("info");
+  const [newTag, setNewTag] = useState("");
 
   const canEdit = hasPermission("edit_users");
+  const canBulk = hasPermission("bulk_operation");
 
   const { results: users, status, loadMore } = usePaginatedQuery(
     api.admin.getUsers,
@@ -424,13 +489,64 @@ function UsersTab({ hasPermission }: { hasPermission: (p: string) => boolean }) 
     api.admin.getUserDetail,
     selectedUser ? { userId: selectedUser as any } : "skip"
   );
+  const userTags = useQuery(api.admin.getUserTags, selectedUser ? { userId: selectedUser as any } : "skip");
 
   const toggleAdmin = useMutation(api.admin.toggleAdmin);
   const extendTrial = useMutation(api.admin.extendTrial);
+  const bulkExtendTrial = useMutation(api.admin.bulkExtendTrial);
   const grantAccess = useMutation(api.admin.grantComplimentaryAccess);
   const toggleSuspension = useMutation(api.admin.toggleSuspension);
+  const generateToken = useMutation(api.impersonation.generateImpersonationToken);
+  const addTag = useMutation(api.tags.addUserTag);
+  const removeTag = useMutation(api.tags.removeUserTag);
 
   const displayUsers = search.length >= 2 ? searchResults : users;
+
+  const toggleUserSelection = (userId: string) => {
+    const next = new Set(selectedUsers);
+    if (next.has(userId)) next.delete(userId);
+    else next.add(userId);
+    setSelectedUsers(next);
+    Haptics.selectionAsync();
+  };
+
+  const handleBulkExtend = async () => {
+    if (selectedUsers.size === 0) return;
+    showAlert("Bulk Extend", `Add 14 days to trial for ${selectedUsers.size} users?`, [
+      { text: "Cancel", style: "cancel" },
+      { 
+        text: "Extend", 
+        onPress: async () => {
+          try {
+            await bulkExtendTrial({ userIds: Array.from(selectedUsers) as any, days: 14 });
+            setSelectedUsers(new Set());
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (e: any) { showAlert("Error", e.message); }
+        }
+      }
+    ]);
+  };
+
+  const handleImpersonate = async (userId: string) => {
+    try {
+      const result = await generateToken({ userId: userId as any });
+      showAlert("Impersonation Mode", `Token: ${result.tokenValue}\n\nUse this link:\noja://impersonate?token=${result.tokenValue}`);
+      // In a real app, this might open a browser or deep link to the app
+    } catch (e: any) {
+      showAlert("Error", e.message);
+    }
+  };
+
+  const handleAddTag = async () => {
+    if (!selectedUser || !newTag.trim()) return;
+    try {
+      await addTag({ userId: selectedUser as any, tag: newTag.trim() });
+      setNewTag("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      showAlert("Error", e.message);
+    }
+  };
 
   const handleToggleAdmin = async (userId: string) => {
     try {
@@ -502,64 +618,138 @@ function UsersTab({ hasPermission }: { hasPermission: (p: string) => boolean }) 
         </GlassCard>
       </AnimatedSection>
 
+      {/* Bulk Actions Bar */}
+      {selectedUsers.size > 0 && canBulk && (
+        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+          <GlassCard style={[styles.section, { backgroundColor: `${colors.accent.primary}10` }]}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={styles.userName}>{selectedUsers.size} users selected</Text>
+              <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                <GlassButton onPress={handleBulkExtend} variant="secondary" size="sm">
+                  +14d Trial
+                </GlassButton>
+                <GlassButton onPress={() => handleExportCSV("users")} variant="ghost" size="sm">
+                  CSV
+                </GlassButton>
+                <Pressable onPress={() => setSelectedUsers(new Set())} style={{ padding: 4 }}>
+                  <MaterialCommunityIcons name="close" size={20} color={colors.text.tertiary} />
+                </Pressable>
+              </View>
+            </View>
+          </GlassCard>
+        </AnimatedSection>
+      )}
+
       {/* User Detail Modal */}
       {selectedUser && userDetail && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
           <GlassCard style={styles.section}>
             <View style={styles.detailHeader}>
-              <Text style={styles.sectionTitle}>{userDetail.name}</Text>
-              <Pressable onPress={() => setSelectedUser(null)}>
-                <MaterialCommunityIcons name="close" size={24} color={colors.text.tertiary} />
+              <View>
+                <Text style={styles.sectionTitle}>{userDetail.name}</Text>
+                <Text style={styles.userEmail}>{userDetail.email || "No email"}</Text>
+              </View>
+              <View style={{ flexDirection: "row", gap: spacing.md }}>
+                <Pressable onPress={() => handleImpersonate(selectedUser)} hitSlop={8}>
+                  <MaterialCommunityIcons name="incognito" size={24} color={colors.accent.primary} />
+                </Pressable>
+                <Pressable onPress={() => setSelectedUser(null)}>
+                  <MaterialCommunityIcons name="close" size={24} color={colors.text.tertiary} />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Tags */}
+            <View style={[styles.filterRow, { marginVertical: spacing.sm }]}>
+              {userTags?.map((tag: string) => (
+                <View key={tag} style={styles.tagBadge}>
+                  <Text style={styles.tagBadgeText}>{tag}</Text>
+                  <Pressable onPress={() => removeTag({ userId: selectedUser as any, tag })}>
+                    <MaterialCommunityIcons name="close-circle" size={14} color={colors.text.tertiary} />
+                  </Pressable>
+                </View>
+              ))}
+              <View style={styles.addTagRow}>
+                <TextInput
+                  style={styles.tagInput}
+                  placeholder="+Tag"
+                  placeholderTextColor={colors.text.tertiary}
+                  value={newTag}
+                  onChangeText={setNewTag}
+                  onSubmitEditing={handleAddTag}
+                />
+              </View>
+            </View>
+
+            {/* Tabs */}
+            <View style={[styles.filterRow, { marginBottom: spacing.md }]}>
+              <Pressable 
+                style={[styles.filterChip, detailTab === "info" && styles.filterChipActive]}
+                onPress={() => setDetailTab("info")}
+              >
+                <Text style={[styles.filterChipText, detailTab === "info" && styles.filterChipTextActive]}>Info</Text>
+              </Pressable>
+              <Pressable 
+                style={[styles.filterChip, detailTab === "activity" && styles.filterChipActive]}
+                onPress={() => setDetailTab("activity")}
+              >
+                <Text style={[styles.filterChipText, detailTab === "activity" && styles.filterChipTextActive]}>Activity</Text>
               </Pressable>
             </View>
-            <Text style={styles.metricText}>{userDetail.email || "No email"}</Text>
-            <View style={styles.detailGrid}>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailValue}>{userDetail.receiptCount ?? 0}</Text>
-                <Text style={styles.detailLabel}>Receipts</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailValue}>{userDetail.listCount ?? 0}</Text>
-                <Text style={styles.detailLabel}>Lists</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailValue}>£{userDetail.totalSpent ?? 0}</Text>
-                <Text style={styles.detailLabel}>Spent</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailValue}>{userDetail.scanRewards?.lifetimeScans ?? 0}</Text>
-                <Text style={styles.detailLabel}>Scans</Text>
-              </View>
-            </View>
-            {userDetail.subscription && (
-              <Text style={styles.metricText}>
-                Plan: {userDetail.subscription.plan} • Status: {userDetail.subscription.status}
-              </Text>
-            )}
-            {canEdit && (
-              <View style={styles.actionRow}>
-                <Pressable style={styles.actionBtn} onPress={() => handleExtendTrial(selectedUser)}>
-                  <MaterialCommunityIcons name="clock-plus-outline" size={16} color={colors.accent.primary} />
-                  <Text style={styles.actionBtnText}>+14d Trial</Text>
-                </Pressable>
-                <Pressable style={styles.actionBtn} onPress={() => handleGrantAccess(selectedUser)}>
-                  <MaterialCommunityIcons name="crown" size={16} color={colors.semantic.warning} />
-                  <Text style={styles.actionBtnText}>Free Premium</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.actionBtn, styles.suspendBtn]}
-                  onPress={() => handleToggleSuspension(selectedUser)}
-                >
-                  <MaterialCommunityIcons
-                    name={userDetail.suspended ? "account-check-outline" : "account-off-outline"}
-                    size={16}
-                    color={colors.semantic.danger}
-                  />
-                  <Text style={[styles.actionBtnText, { color: colors.semantic.danger }]}>
-                    {userDetail.suspended ? "Unsuspend" : "Suspend"}
+
+            {detailTab === "info" ? (
+              <>
+                <View style={styles.detailGrid}>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailValue}>{userDetail.receiptCount ?? 0}</Text>
+                    <Text style={styles.detailLabel}>Receipts</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailValue}>{userDetail.listCount ?? 0}</Text>
+                    <Text style={styles.detailLabel}>Lists</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailValue}>£{userDetail.totalSpent ?? 0}</Text>
+                    <Text style={styles.detailLabel}>Spent</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailValue}>{userDetail.scanRewards?.lifetimeScans ?? 0}</Text>
+                    <Text style={styles.detailLabel}>Scans</Text>
+                  </View>
+                </View>
+                {userDetail.subscription && (
+                  <Text style={styles.metricText}>
+                    Plan: {userDetail.subscription.plan} • Status: {userDetail.subscription.status}
                   </Text>
-                </Pressable>
-              </View>
+                )}
+                {canEdit && (
+                  <View style={styles.actionRow}>
+                    <Pressable style={styles.actionBtn} onPress={() => handleExtendTrial(selectedUser)}>
+                      <MaterialCommunityIcons name="clock-plus-outline" size={16} color={colors.accent.primary} />
+                      <Text style={styles.actionBtnText}>+14d Trial</Text>
+                    </Pressable>
+                    <Pressable style={styles.actionBtn} onPress={() => handleGrantAccess(selectedUser)}>
+                      <MaterialCommunityIcons name="crown" size={16} color={colors.semantic.warning} />
+                      <Text style={styles.actionBtnText}>Free Premium</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.actionBtn, styles.suspendBtn]}
+                      onPress={() => handleToggleSuspension(selectedUser)}
+                    >
+                      <MaterialCommunityIcons
+                        name={userDetail.suspended ? "account-check-outline" : "account-off-outline"}
+                        size={16}
+                        color={colors.semantic.danger}
+                      />
+                      <Text style={[styles.actionBtnText, { color: colors.semantic.danger }]}>
+                        {userDetail.suspended ? "Unsuspend" : "Suspend"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+              </>
+            ) : (
+              <ActivityTimeline userId={selectedUser} />
             )}
           </GlassCard>
         </AnimatedSection>
@@ -575,9 +765,21 @@ function UsersTab({ hasPermission }: { hasPermission: (p: string) => boolean }) 
             {displayUsers.map((u: any) => (
               <Pressable
                 key={u._id}
-                style={styles.userRow}
+                style={[styles.userRow, selectedUsers.has(u._id) && { backgroundColor: `${colors.accent.primary}05` }]}
                 onPress={() => setSelectedUser(u._id)}
               >
+                {canBulk && (
+                  <Pressable 
+                    onPress={() => toggleUserSelection(u._id)}
+                    style={{ marginRight: spacing.sm }}
+                  >
+                    <MaterialCommunityIcons 
+                      name={selectedUsers.has(u._id) ? "checkbox-marked" : "checkbox-blank-outline"} 
+                      size={20} 
+                      color={selectedUsers.has(u._id) ? colors.accent.primary : colors.text.tertiary} 
+                    />
+                  </Pressable>
+                )}
                 <View style={styles.userInfo}>
                   <Text style={styles.userName}>{u.name}</Text>
                   <Text style={styles.userEmail}>{u.email || "No email"}</Text>
@@ -621,7 +823,13 @@ function UsersTab({ hasPermission }: { hasPermission: (p: string) => boolean }) 
 // ANALYTICS TAB
 // ============================================================================
 
-function AnalyticsTab({ hasPermission }: { hasPermission: (p: string) => boolean }) {
+function AnalyticsTab({ 
+  hasPermission,
+  handleExportCSV
+}: { 
+  hasPermission: (p: string) => boolean;
+  handleExportCSV: (type: "users" | "receipts" | "prices" | "analytics") => Promise<void>;
+}) {
   const cohortMetrics = useQuery(api.admin.getCohortMetrics);
   const funnelAnalytics = useQuery(api.admin.getFunnelAnalytics);
   const churnMetrics = useQuery(api.admin.getChurnMetrics);
@@ -629,21 +837,8 @@ function AnalyticsTab({ hasPermission }: { hasPermission: (p: string) => boolean
   const segmentSummary = useQuery(api.admin.getUserSegmentSummary);
   
   const { alert: showAlert } = useGlassAlert();
-  const exportData = useAction(api.admin.exportDataToCSV);
 
   const loading = !cohortMetrics || !funnelAnalytics || !churnMetrics || !ltvMetrics || !segmentSummary;
-
-  const handleExportCSV = useCallback(async (type: "users" | "receipts" | "prices" | "analytics") => {
-    try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const result = await exportData({ dataType: type });
-      
-      // In a real app, we'd use Expo Sharing to share the CSV file
-      showAlert("Export Complete", `Generated ${result.fileName}.\n\nPreview (Top 5 rows):\n${result.csv.split('\n').slice(0, 5).join('\n')}`);
-    } catch (e: any) {
-      showAlert("Error", e.message || "Failed to export CSV");
-    }
-  }, [exportData]);
 
   if (loading) {
     return (
@@ -664,7 +859,7 @@ function AnalyticsTab({ hasPermission }: { hasPermission: (p: string) => boolean
             <Text style={styles.sectionTitle}>Conversion Funnel</Text>
           </View>
           <View style={styles.funnelContainer}>
-            {funnelAnalytics.map((step, idx) => (
+            {funnelAnalytics.map((step: any, idx: number) => (
               <View key={step.step} style={styles.funnelStep}>
                 <View style={styles.funnelBarContainer}>
                   <View 
@@ -700,7 +895,7 @@ function AnalyticsTab({ hasPermission }: { hasPermission: (p: string) => boolean
             <Text style={styles.sectionTitle}>User Segments</Text>
           </View>
           <View style={styles.segmentGrid}>
-            {segmentSummary.map((seg) => (
+            {segmentSummary.map((seg: any) => (
               <View key={seg.name} style={styles.segmentCard}>
                 <Text style={styles.segmentValue}>{seg.count}</Text>
                 <Text style={styles.segmentName}>{seg.name.replace(/_/g, " ")}</Text>
@@ -736,7 +931,7 @@ function AnalyticsTab({ hasPermission }: { hasPermission: (p: string) => boolean
                 <Text style={[styles.retentionCell, styles.retentionHeaderCell]}>D60</Text>
                 <Text style={[styles.retentionCell, styles.retentionHeaderCell]}>D90</Text>
               </View>
-              {cohortMetrics.map((row) => (
+              {cohortMetrics.map((row: any) => (
                 <View key={row.cohortMonth} style={styles.retentionRow}>
                   <Text style={[styles.retentionCell, { width: 80, fontWeight: "600" }]}>{row.cohortMonth}</Text>
                   <Text style={styles.retentionCell}>{row.totalUsers}</Text>
@@ -766,7 +961,7 @@ function AnalyticsTab({ hasPermission }: { hasPermission: (p: string) => boolean
             <MaterialCommunityIcons name="trending-up" size={24} color={colors.semantic.success} />
             <Text style={styles.sectionTitle}>Lifetime Value (LTV)</Text>
           </View>
-          {ltvMetrics.map((ltv) => (
+          {ltvMetrics.map((ltv: any) => (
             <View key={ltv.cohortMonth} style={styles.ltvRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.userName}>{ltv.cohortMonth} Cohort</Text>
@@ -782,7 +977,7 @@ function AnalyticsTab({ hasPermission }: { hasPermission: (p: string) => boolean
           ))}
           <View style={styles.gmvRow}>
             <Text style={styles.gmvLabel}>Total Cohort Revenue</Text>
-            <Text style={styles.gmvValue}>£{ltvMetrics.reduce((s, l) => s + l.totalRevenue, 0).toLocaleString()}</Text>
+            <Text style={styles.gmvValue}>£{ltvMetrics.reduce((s: number, l: any) => s + l.totalRevenue, 0).toLocaleString()}</Text>
           </View>
           <GlassButton 
             onPress={() => handleExportCSV("analytics")} 
@@ -801,7 +996,7 @@ function AnalyticsTab({ hasPermission }: { hasPermission: (p: string) => boolean
             <MaterialCommunityIcons name="account-minus" size={24} color={colors.semantic.danger} />
             <Text style={styles.sectionTitle}>Churn Analytics</Text>
           </View>
-          {churnMetrics.map((m) => (
+          {churnMetrics.map((m: any) => (
             <View key={m.month} style={styles.churnRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.userName}>{m.month}</Text>
@@ -833,14 +1028,14 @@ function AnalyticsTab({ hasPermission }: { hasPermission: (p: string) => boolean
 function RetentionCell({ value }: { value: number }) {
   // Color scale for retention
   let backgroundColor = "rgba(0, 212, 170, 0.05)";
-  let textColor = colors.text.tertiary;
+  let textColor: string = colors.text.tertiary;
 
   if (value > 40) {
     backgroundColor = `rgba(0, 212, 170, 0.8)`;
-    textColor = "#000";
+    textColor = "#000000";
   } else if (value > 25) {
     backgroundColor = `rgba(0, 212, 170, 0.5)`;
-    textColor = "#000";
+    textColor = "#000000";
   } else if (value > 15) {
     backgroundColor = `rgba(0, 212, 170, 0.3)`;
     textColor = colors.text.primary;
@@ -851,10 +1046,324 @@ function RetentionCell({ value }: { value: number }) {
 
   return (
     <View style={[styles.retentionCell, { backgroundColor, borderRadius: 4, margin: 2 }]}>
-      <Text style={[styles.retentionCellText, { color: textColor }]}>
+      <Text style={[styles.retentionCellText, { color: textColor as any }]}>
         {value > 0 ? `${value.toFixed(0)}%` : "-"}
       </Text>
     </View>
+  );
+}
+
+// ============================================================================
+// SUPPORT TAB
+// ============================================================================
+
+function SupportTab({ hasPermission }: { hasPermission: (p: string) => boolean }) {
+  const [statusFilter, setStatusFilter] = useState<string | null>("open");
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+
+  const summary = useQuery(api.admin.getAdminSupportSummary);
+  const tickets = useQuery(api.admin.getAdminTickets, { status: statusFilter || undefined });
+  const ticketDetail = useQuery(api.support.getTicketDetail, selectedTicketId ? { ticketId: selectedTicketId as any } : "skip");
+  
+  const assignTicket = useMutation(api.support.assignTicket);
+  const addMessage = useMutation(api.support.addTicketMessage);
+  const updateStatus = useMutation(api.support.updateTicketStatus);
+
+  const { alert: showAlert } = useGlassAlert();
+
+  const handleAssign = async (ticketId: string) => {
+    try {
+      await assignTicket({ ticketId: ticketId as any });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      showAlert("Error", e.message);
+    }
+  };
+
+  const handleSendReply = async () => {
+    if (!selectedTicketId || !replyText.trim()) return;
+    try {
+      await addMessage({ ticketId: selectedTicketId as any, message: replyText.trim() });
+      setReplyText("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      showAlert("Error", e.message);
+    }
+  };
+
+  const handleCloseTicket = async (ticketId: string) => {
+    try {
+      await updateStatus({ ticketId: ticketId as any, status: "closed" });
+      setSelectedTicketId(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      showAlert("Error", e.message);
+    }
+  };
+
+  const statusOptions = [
+    { label: "All", value: null },
+    { label: "Open", value: "open" },
+    { label: "In Progress", value: "in_progress" },
+    { label: "Resolved", value: "resolved" },
+    { label: "Closed", value: "closed" },
+  ];
+
+  return (
+    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      {/* Support Summary */}
+      {summary && (
+        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+          <View style={styles.metricsGrid}>
+            <View style={[styles.metricCard, { width: "23%" }]}>
+              <Text style={styles.metricValue}>{summary.open}</Text>
+              <Text style={styles.metricLabel}>Open</Text>
+            </View>
+            <View style={[styles.metricCard, { width: "23%" }]}>
+              <Text style={styles.metricValue}>{summary.unassigned}</Text>
+              <Text style={styles.metricLabel}>Unassigned</Text>
+            </View>
+            <View style={[styles.metricCard, { width: "23%" }]}>
+              <Text style={styles.metricValue}>{summary.inProgress}</Text>
+              <Text style={styles.metricLabel}>Active</Text>
+            </View>
+            <View style={[styles.metricCard, { width: "23%" }]}>
+              <Text style={styles.metricValue}>{summary.resolved}</Text>
+              <Text style={styles.metricLabel}>Resolved</Text>
+            </View>
+          </View>
+        </AnimatedSection>
+      )}
+
+      {/* Ticket List */}
+      <GlassCard style={styles.section}>
+        <View style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+            {statusOptions.map((opt) => (
+              <Pressable
+                key={opt.value || "all"}
+                style={[styles.filterChip, statusFilter === opt.value && styles.filterChipActive]}
+                onPress={() => { setStatusFilter(opt.value); Haptics.selectionAsync(); }}
+              >
+                <Text style={[styles.filterChipText, statusFilter === opt.value && styles.filterChipTextActive]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+
+        {tickets?.map((t: any) => (
+          <Pressable 
+            key={t._id} 
+            style={styles.ticketRow}
+            onPress={() => { setSelectedTicketId(t._id); Haptics.selectionAsync(); }}
+          >
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={[styles.priorityDot, { backgroundColor: t.priority === "urgent" ? colors.semantic.danger : t.priority === "high" ? colors.semantic.warning : colors.accent.primary }]} />
+                <Text style={styles.userName}>{t.subject}</Text>
+              </View>
+              <Text style={styles.userEmail}>{t.userName} • {new Date(t.createdAt).toLocaleDateString()}</Text>
+            </View>
+            <View style={{ alignItems: "flex-end", gap: 4 }}>
+              <View style={[styles.statusBadge, t.status === "open" ? styles.warningBadge : t.status === "resolved" ? styles.successBadge : styles.infoBadge]}>
+                <Text style={styles.statusBadgeText}>{t.status}</Text>
+              </View>
+              {!t.assignedTo && (
+                <Pressable onPress={() => handleAssign(t._id)} style={styles.assignBadge}>
+                  <Text style={styles.assignBadgeText}>Claim</Text>
+                </Pressable>
+              )}
+            </View>
+          </Pressable>
+        ))}
+        {(!tickets || tickets.length === 0) && (
+          <Text style={styles.emptyText}>No tickets found for this filter.</Text>
+        )}
+      </GlassCard>
+
+      {/* Ticket Detail Modal */}
+      <Modal
+        visible={!!selectedTicketId && !!ticketDetail}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedTicketId(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.imageModalContent, { height: "85%" }]}>
+            <View style={styles.imageModalHeader}>
+              <View>
+                <Text style={styles.imageModalTitle}>{ticketDetail?.subject}</Text>
+                <Text style={styles.userEmail}>Status: {ticketDetail?.status} • Priority: {ticketDetail?.priority}</Text>
+              </View>
+              <Pressable onPress={() => setSelectedTicketId(null)}>
+                <MaterialCommunityIcons name="close" size={24} color={colors.text.primary} />
+              </Pressable>
+            </View>
+            
+            <ScrollView style={{ flex: 1, padding: spacing.md }}>
+              <Text style={[styles.userName, { marginBottom: spacing.md }]}>{ticketDetail?.description}</Text>
+              
+              <View style={styles.chatContainer}>
+                {ticketDetail?.messages.map((m: any) => (
+                  <View key={m._id} style={[styles.chatBubble, m.isFromAdmin ? styles.adminBubble : styles.userBubble]}>
+                    <Text style={[styles.chatName, m.isFromAdmin && { color: colors.accent.primary }]}>
+                      {m.isFromAdmin ? "Support" : m.senderName}
+                    </Text>
+                    <Text style={styles.chatMessage}>{m.message}</Text>
+                    <Text style={styles.chatTime}>{new Date(m.createdAt).toLocaleTimeString()}</Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+
+            <View style={styles.chatInputRow}>
+              <TextInput
+                style={styles.chatInput}
+                placeholder="Type a reply..."
+                placeholderTextColor={colors.text.tertiary}
+                value={replyText}
+                onChangeText={setReplyText}
+                multiline
+              />
+              <TouchableOpacity onPress={handleSendReply} style={styles.sendBtn}>
+                <MaterialCommunityIcons name="send" size={20} color={colors.accent.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.actionRow, { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border }]}>
+              <GlassButton onPress={() => ticketDetail && handleCloseTicket(ticketDetail._id)} variant="secondary" size="sm" style={{ flex: 1 }}>
+                Resolve & Close
+              </GlassButton>
+              {ticketDetail?.status !== "resolved" && (
+                <GlassButton onPress={() => ticketDetail && updateStatus({ ticketId: ticketDetail._id, status: "resolved" })} size="sm" style={{ flex: 1 }}>
+                  Mark Resolved
+                </GlassButton>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <View style={{ height: 140 }} />
+    </ScrollView>
+  );
+}
+
+// ============================================================================
+// MONITORING & OPS TAB
+// ============================================================================
+
+function MonitoringTab({ hasPermission }: { hasPermission: (p: string) => boolean }) {
+  const summary = useQuery(api.admin.getMonitoringSummary);
+  const experiments = useQuery(api.admin.getExperiments);
+  const workflows = useQuery(api.admin.getWorkflows);
+  
+  const resolveAlert = useMutation(api.admin.resolveAlert);
+  const { alert: showAlert } = useGlassAlert();
+
+  const handleResolveAlert = async (id: string) => {
+    try {
+      await resolveAlert({ alertId: id as any });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) { showAlert("Error", e.message); }
+  };
+
+  if (!summary) return <View style={styles.loading}><SkeletonCard /></View>;
+
+  return (
+    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      {/* Active Alerts */}
+      <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="bell-ring" size={24} color={colors.semantic.danger} />
+            <Text style={styles.sectionTitle}>Active Alerts ({summary.alertCount})</Text>
+          </View>
+          {summary.alerts.map((a: any) => (
+            <View key={a._id} style={styles.alertRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.userName, { color: a.severity === "critical" ? colors.semantic.danger : colors.semantic.warning }]}>
+                  {a.alertType.toUpperCase().replace(/_/g, " ")}
+                </Text>
+                <Text style={styles.userEmail}>{a.message}</Text>
+                <Text style={styles.logTime}>{new Date(a.createdAt).toLocaleString()}</Text>
+              </View>
+              <GlassButton onPress={() => handleResolveAlert(a._id)} variant="ghost" size="sm">Resolve</GlassButton>
+            </View>
+          ))}
+          {summary.alerts.length === 0 && (
+            <Text style={styles.emptyText}>All systems nominal. No active alerts.</Text>
+          )}
+        </GlassCard>
+      </AnimatedSection>
+
+      {/* SLA Health */}
+      <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="heart-pulse" size={24} color={colors.semantic.success} />
+            <Text style={styles.sectionTitle}>SLA Performance: {summary.slaStatus.toUpperCase()}</Text>
+          </View>
+          {summary.recentSLA.map((s: any) => (
+            <View key={s._id} style={styles.slaRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.userName}>{s.metric.replace(/_/g, " ").toUpperCase()}</Text>
+                <Text style={styles.userEmail}>Target: {s.target}ms | Actual: {s.actual}ms</Text>
+              </View>
+              <View style={[styles.statusBadge, s.status === "pass" ? styles.successBadge : s.status === "warn" ? styles.warningBadge : styles.errorBadge]}>
+                <Text style={styles.statusBadgeText}>{s.status}</Text>
+              </View>
+            </View>
+          ))}
+        </GlassCard>
+      </AnimatedSection>
+
+      {/* A/B Experiments */}
+      <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="beaker-outline" size={24} color={colors.accent.primary} />
+            <Text style={styles.sectionTitle}>Experiments</Text>
+          </View>
+          {experiments?.map((e: any) => (
+            <View key={e._id} style={styles.experimentRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.userName}>{e.name}</Text>
+                <Text style={styles.userEmail}>{e.status} • Goal: {e.goalEvent}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text.tertiary} />
+            </View>
+          ))}
+          <GlassButton onPress={() => showAlert("Experiment", "New experiment form...")} variant="secondary" size="sm" style={{ marginTop: spacing.md }}>
+            New Experiment
+          </GlassButton>
+        </GlassCard>
+      </AnimatedSection>
+
+      {/* Automated Workflows */}
+      <AnimatedSection animation="fadeInDown" duration={400} delay={300}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="robot-outline" size={24} color={colors.accent.primary} />
+            <Text style={styles.sectionTitle}>Workflows</Text>
+          </View>
+          {workflows?.map((w: any) => (
+            <View key={w._id} style={styles.workflowRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.userName}>{w.name}</Text>
+                <Text style={styles.userEmail}>Trigger: {w.trigger} • {w.actions.length} actions</Text>
+              </View>
+              <Switch value={w.isEnabled} onValueChange={() => {}} />
+            </View>
+          ))}
+        </GlassCard>
+      </AnimatedSection>
+
+      <View style={{ height: 140 }} />
+    </ScrollView>
   );
 }
 
@@ -1176,8 +1685,8 @@ function CatalogTab({ hasPermission }: { hasPermission: (p: string) => boolean }
             <Text style={styles.sectionTitle}>Categories ({categories.length})</Text>
             <View style={styles.categoryGrid}>
               {categories.map((c: any) => (
-                <View key={c.name} style={styles.categoryChip}>
-                  <Text style={styles.categoryName}>{c.name}</Text>
+                <View key={c.category} style={styles.categoryChip}>
+                  <Text style={styles.categoryName}>{c.category}</Text>
                   <Text style={styles.categoryCount}>{c.count}</Text>
                 </View>
               ))}
@@ -1630,6 +2139,47 @@ const styles = StyleSheet.create({
   ltvValue: { ...typography.headlineSmall, color: colors.semantic.success },
   ltvLabel: { ...typography.bodySmall, color: colors.text.tertiary, fontSize: 10 },
   churnRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+
+  // Support
+  ticketRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  priorityDot: { width: 8, height: 8, borderRadius: 4 },
+  assignBadge: { backgroundColor: `${colors.accent.primary}20`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  assignBadgeText: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 9 },
+  
+  // Chat
+  chatContainer: { gap: spacing.md, paddingBottom: spacing.xl },
+  chatBubble: { maxWidth: "85%", padding: spacing.sm, borderRadius: 12 },
+  userBubble: { alignSelf: "flex-start", backgroundColor: colors.glass.background, borderBottomLeftRadius: 2 },
+  adminBubble: { alignSelf: "flex-end", backgroundColor: `${colors.accent.primary}15`, borderBottomRightRadius: 2 },
+  chatName: { ...typography.labelSmall, color: colors.text.tertiary, marginBottom: 2 },
+  chatMessage: { ...typography.bodyMedium, color: colors.text.primary },
+  chatTime: { ...typography.labelSmall, color: colors.text.tertiary, alignSelf: "flex-end", fontSize: 8, marginTop: 2 },
+  chatInputRow: { flexDirection: "row", padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border, gap: spacing.sm, alignItems: "flex-end" },
+  chatInput: { flex: 1, backgroundColor: colors.glass.background, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, color: colors.text.primary, maxHeight: 100 },
+  sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: `${colors.accent.primary}10`, alignItems: "center", justifyContent: "center" },
+
+  // Timeline
+  timelineContainer: { marginTop: spacing.md },
+  timelineRow: { flexDirection: "row", gap: spacing.md },
+  timelineLineContainer: { width: 24, alignItems: "center" },
+  timelineIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: `${colors.accent.primary}15`, alignItems: "center", justifyContent: "center", zIndex: 1 },
+  timelineLine: { width: 2, flex: 1, backgroundColor: `${colors.accent.primary}20`, marginVertical: -2 },
+  timelineContent: { flex: 1, paddingBottom: spacing.lg },
+  timelineType: { ...typography.labelSmall, color: colors.text.primary, fontWeight: "700" },
+  timelineTime: { ...typography.labelSmall, color: colors.text.tertiary, fontSize: 9 },
+
+  // Alerts & SLA
+  alertRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  slaRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  experimentRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  workflowRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  errorBadge: { backgroundColor: `${colors.semantic.danger}20` },
+
+  // Tags
+  tagBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: `${colors.accent.primary}15`, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  tagBadgeText: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 10 },
+  tagInput: { ...typography.labelSmall, color: colors.text.primary, padding: 0, minWidth: 40 },
+  addTagRow: { backgroundColor: colors.glass.background, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: colors.glass.border },
 
   // Users
   searchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
