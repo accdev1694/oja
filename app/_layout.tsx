@@ -90,7 +90,7 @@ function InitialLayout() {
     // currentUser === undefined means query still loading; null means no record
     if (currentUser === null && !creatingUser.current) {
       creatingUser.current = true;
-      getOrCreate()
+      getOrCreate({ mfaEnabled: false })
         .catch(() => {})
         .finally(() => {
           creatingUser.current = false;
@@ -119,9 +119,13 @@ function InitialLayout() {
     // Wait for user record to load (undefined = loading, null = not found yet)
     if (isSignedIn && currentUser !== undefined && currentUser !== null) {
       const inAppGroup = segments[0] === "(app)";
+      const inOnboarding = segments[0] === "onboarding";
+      const isAdminSetup = segments[1] === "admin-setup";
+      const isAdminPath = segments[1] === "admin";
+      
       if (!currentUser.onboardingComplete && !inOnboarding) {
         router.replace("/onboarding/welcome");
-      } else if (currentUser.onboardingComplete && !inAppGroup) {
+      } else if (currentUser.onboardingComplete && !inAppGroup && !isAdminPath && !isAdminSetup) {
         router.replace("/(app)/(tabs)");
       }
     }

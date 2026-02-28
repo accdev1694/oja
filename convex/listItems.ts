@@ -447,6 +447,7 @@ export const toggleChecked = mutation({
     const updates: Record<string, unknown> = {
       isChecked: newCheckedStatus,
       checkedAt: newCheckedStatus ? Date.now() : undefined,
+      checkedByUserId: newCheckedStatus ? user._id : undefined,
       updatedAt: Date.now(),
     };
 

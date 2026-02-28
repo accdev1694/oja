@@ -58,17 +58,18 @@ export default function SubscriptionScreen() {
   const [showPaywall, setShowPaywall] = useState(false);
 
   const loading = subscription === undefined;
+  const isAdmin = (subscription as any)?.isAdminOverride;
   const isPremium =
     subscription && "isActive" in subscription
       ? (subscription as any).isActive
       : subscription?.plan !== "free";
-  const isTrial = subscription?.status === "trial";
-  const isCancelled = subscription?.status === "cancelled";
-  const isExpired = subscription?.status === "expired";
+  const isTrial = !isAdmin && subscription?.status === "trial";
+  const isCancelled = !isAdmin && subscription?.status === "cancelled";
+  const isExpired = !isAdmin && subscription?.status === "expired";
 
   // Trial days remaining
   const trialDaysLeft =
-    isTrial && subscription && "trialEndsAt" in subscription
+    !isAdmin && isTrial && subscription && "trialEndsAt" in subscription
       ? Math.max(
           0,
           Math.ceil(
@@ -80,7 +81,7 @@ export default function SubscriptionScreen() {
 
   // Period end for active subs
   const periodEnd =
-    subscription && "currentPeriodEnd" in subscription
+    !isAdmin && subscription && "currentPeriodEnd" in subscription
       ? (subscription as any).currentPeriodEnd
       : null;
 
@@ -211,30 +212,34 @@ export default function SubscriptionScreen() {
           <GlassCard style={styles.planCard}>
             <View style={styles.planHeader}>
               <MaterialCommunityIcons
-                name={isPremium ? "crown" : "crown-outline"}
+                name={isAdmin ? "shield-crown" : isPremium ? "crown" : "crown-outline"}
                 size={32}
                 color={
-                  isPremium ? colors.accent.secondary : colors.text.tertiary
+                  isAdmin ? colors.semantic.danger : isPremium ? colors.accent.secondary : colors.text.tertiary
                 }
               />
               <View style={{ flex: 1 }}>
                 <Text style={styles.planName}>
-                  {isPremium
-                    ? subscription?.plan === "premium_annual"
-                      ? "Premium Annual"
-                      : "Premium Monthly"
-                    : "Free Plan"}
+                  {isAdmin
+                    ? "Admin Access"
+                    : isPremium
+                      ? subscription?.plan === "premium_annual"
+                        ? "Premium Annual"
+                        : "Premium Monthly"
+                      : "Free Plan"}
                 </Text>
                 <Text style={styles.planStatus}>
-                  {isTrial
-                    ? "Trial Active"
-                    : isCancelled
-                      ? "Cancels at period end"
-                      : isPremium
-                        ? "Active"
-                        : "Upgrade for unlimited lists & pantry"}
+                  {isAdmin
+                    ? "Full platform access enabled"
+                    : isTrial
+                      ? "Trial Active"
+                      : isCancelled
+                        ? "Cancels at period end"
+                        : isPremium
+                          ? "Active"
+                          : "Upgrade for unlimited lists & pantry"}
                 </Text>
-                {isPremium && periodEnd && (
+                {isPremium && periodEnd && !isAdmin && (
                   <Text style={styles.periodEnd}>
                     {isCancelled ? "Access until" : "Renews"}{" "}
                     {new Date(periodEnd).toLocaleDateString()}
@@ -244,7 +249,7 @@ export default function SubscriptionScreen() {
             </View>
 
             {/* Action Buttons for Premium Users */}
-            {isPremium && !isTrial && (
+            {isPremium && !isTrial && !isAdmin && (
               <View style={styles.planActions}>
                 <GlassButton
                   variant="secondary"
@@ -324,7 +329,7 @@ export default function SubscriptionScreen() {
                 </View>
               )}
 
-              {/* Credit Progress (premium only) */}
+              {/* Credit Progress (premium/admin only) */}
               {scanCredits.isPremium && (
                 <>
                   <View style={styles.creditDivider} />
@@ -373,8 +378,8 @@ export default function SubscriptionScreen() {
                     </View>
                   </View>
 
-                  {/* Effective price */}
-                  {scanCredits.creditsEarned > 0 && (
+                  {/* Effective price (hide for admins, show cashback branding) */}
+                  {scanCredits.creditsEarned > 0 && !isAdmin && (
                     <View style={styles.effectivePriceRow}>
                       <Text style={styles.effectivePriceLabel}>Next renewal:</Text>
                       <View style={styles.effectivePriceValues}>
@@ -387,13 +392,23 @@ export default function SubscriptionScreen() {
                       </View>
                     </View>
                   )}
+                  {scanCredits.creditsEarned > 0 && isAdmin && (
+                    <View style={styles.effectivePriceRow}>
+                      <Text style={styles.effectivePriceLabel}>Cashback reward:</Text>
+                      <View style={styles.effectivePriceValues}>
+                        <Text style={[styles.effectivePriceValue, { color: colors.accent.primary }]}>
+                          £{scanCredits.creditsEarned.toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
 
                   {/* Encouragement */}
                   {scanCredits.scansThisPeriod < scanCredits.maxScans ? (
                     <Text style={styles.scanEncouragement}>
                       Scan {scanCredits.maxScans - scanCredits.scansThisPeriod} more receipt
                       {scanCredits.maxScans - scanCredits.scansThisPeriod !== 1 ? "s" : ""} to
-                      save £{(scanCredits.maxCredits - scanCredits.creditsEarned).toFixed(2)} more
+                      {isAdmin ? " earn " : " save "}£{(scanCredits.maxCredits - scanCredits.creditsEarned).toFixed(2)} more
                     </Text>
                   ) : (
                     <View style={styles.scanMaxedRow}>
@@ -407,7 +422,7 @@ export default function SubscriptionScreen() {
               )}
 
               {/* Free user CTA */}
-              {!scanCredits.isPremium && (
+              {!scanCredits.isPremium && !isAdmin && (
                 <>
                   <View style={styles.creditDivider} />
                   <View style={styles.freeUserCta}>
@@ -422,8 +437,8 @@ export default function SubscriptionScreen() {
           </AnimatedSection>
         )}
 
-        {/* Free user value prop — remind them what they have */}
-        {!isPremium && !isTrial && (
+        {/* Free user value prop — hide for admins */}
+        {!isPremium && !isTrial && !isAdmin && (
           <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
             <GlassCard style={styles.trialCta}>
               <MaterialCommunityIcons
@@ -439,8 +454,8 @@ export default function SubscriptionScreen() {
           </AnimatedSection>
         )}
 
-        {/* Plans */}
-        {plans && (
+        {/* Plans — hide for admins */}
+        {plans && !isAdmin && (
           <AnimatedSection animation="fadeInDown" duration={400} delay={300}>
             <Text style={styles.sectionTitle}>
               {isPremium ? "Change Plan" : "Choose a Plan"}

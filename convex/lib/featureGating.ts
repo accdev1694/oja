@@ -109,15 +109,16 @@ export function getNextTierInfo(lifetimeScans: number) {
  * Returns plan features and whether the user has premium.
  */
 export async function checkFeatureAccess(ctx: any, userId: any) {
+  const user = await ctx.db.get(userId);
   const sub = await ctx.db
     .query("subscriptions")
     .withIndex("by_user", (q: any) => q.eq("userId", userId))
     .order("desc")
     .first();
 
-  const isPremium = sub ? isEffectivelyPremium(sub) : false;
+  const isPremium = (sub ? isEffectivelyPremium(sub) : false) || !!user?.isAdmin;
 
-  const plan = sub?.plan ?? "free";
+  const plan = user?.isAdmin ? "premium_annual" : (sub?.plan ?? "free");
   const features = isPremium ? getPlanFeatures(plan) : getFreeFeatures();
 
   return { isPremium, plan, features };

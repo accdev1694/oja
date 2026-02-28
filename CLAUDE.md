@@ -398,31 +398,22 @@ GEMINI_API_KEY, OPENAI_API_KEY, STRIPE_SECRET_KEY, CLERK_SECRET_KEY
 
 ## Admin Dashboard Improvement Project (ACTIVE)
 
-> **Status:** IN PROGRESS (Started: 2025-02-25)
-> **Current Phase:** Verification & Quick Wins
-> **Next Milestone:** Complete E2E verification → Start Quick Wins → Phase 1 (Security & Performance)
+> **Status:** 🔴 **IN PROGRESS** (Started: 2025-02-25)
+> **Tracking Document:** `admin.md`
+> **Current Phase:** Not started (0% complete)
+> **Priority:** P0 security fixes MUST be completed before production deployment
 
-### 📋 Required Reading for New Sessions
+### 📋 Single Source of Truth
 
-**Before doing ANY admin work, read these files in order:**
+**For ALL admin dashboard work, use:**
 
-1. **`ADMIN-ANALYSIS-2025.md`** (Reference Document - READ FIRST)
-   - Comprehensive analysis of current admin dashboard
-   - Critical gaps vs. industry standards (2025 benchmarks)
-   - Feature comparison matrix
-   - Competitive analysis (Instacart, DoorDash, etc.)
-   - WHY changes are needed
-   - **Purpose:** Context and justification
-   - **Status:** Reference only (mostly read-only)
-
-2. **`ADMIN-IMPROVEMENT-PLAN.md`** (Working Document - USE THIS)
-   - Step-by-step implementation plan with checkboxes
-   - Quick Wins (9 items - 1-2 days each)
-   - Phase 1-4 (detailed tasks with test steps)
-   - **End-to-End Feature Verification** section (CRITICAL)
-   - Progress tracking
-   - **Purpose:** Daily execution and progress tracking
-   - **Status:** Actively updated - check off items as you complete them
+**`admin.md`** - Comprehensive Analysis & Improvement Tracking
+- **226 issues** identified across 5 categories (Security, Performance, UX, Code Quality, Features)
+- **12-week phased roadmap** with checkboxes for progress tracking
+- **P0 blockers** (5 critical security/performance issues) listed at top
+- **Detailed findings** from 5 parallel agent analysis (Code, Architecture, UX, Security, Features)
+- **Progress tracking section** at top of file - update as you complete tasks
+- **Status:** Living document - check off items as completed, update progress percentages
 
 ### 🎯 Current Workflow
 

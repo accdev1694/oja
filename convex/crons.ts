@@ -10,6 +10,13 @@ crons.daily(
   internal.subscriptions.expireTrials
 );
 
+// Cleanup expired admin sessions — runs hourly
+crons.interval(
+  "cleanup-admin-sessions",
+  { minutes: 60 },
+  internal.admin.cleanupExpiredSessions
+);
+
 // Process nurture sequence for new users — runs daily at 10am UTC (good for UK)
 // Sends day 1-5 welcome nudges, trial ending reminders, re-engagement messages
 crons.daily(

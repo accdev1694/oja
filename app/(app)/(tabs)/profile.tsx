@@ -74,6 +74,19 @@ export default function ProfileScreen() {
   const [isResetting, setIsResetting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [animationKey, setAnimationKey] = useState(0);
+  const [gmvFilter, setGmvFilter] = useState<"week" | "month" | "year" | "lifetime">("lifetime");
+
+  const myAdminPerms = useQuery(api.admin.getMyPermissions, {});
+  const isAdmin = !!convexUser?.isAdmin || !!myAdminPerms;
+
+  const adminAnalytics = useQuery(
+    api.admin.getAnalytics,
+    isAdmin ? {} : "skip"
+  );
+  const systemHealth = useQuery(
+    api.admin.getSystemHealth,
+    isAdmin ? {} : "skip"
+  );
 
   // Trigger animations every time this tab gains focus
   useFocusEffect(
@@ -82,15 +95,20 @@ export default function ProfileScreen() {
     }, [])
   );
 
-  // Auto-generate a weekly challenge if none active
-  const challengeSeeded = useRef(false);
-  useEffect(() => {
-    if (activeChallenge === undefined || challengeSeeded.current) return; // still loading
-    if (activeChallenge === null) {
-      challengeSeeded.current = true;
-      generateChallenge().catch(console.warn);
+  const handleSupportPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    if (myAdminPerms?.role === "super_admin") {
+      // Super Admin goes to Monitoring/Ops tab in Admin Dashboard
+      router.push("/(app)/admin?tab=monitoring" as any);
+    } else if (convexUser?.isAdmin || myAdminPerms) {
+      // Regular Admin goes to support with internal flag
+      router.push("/(app)/support?type=internal" as any);
+    } else {
+      // Normal user goes to standard support
+      router.push("/(app)/support" as any);
     }
-  }, [activeChallenge]);
+  };
 
   const handleSignOut = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -204,8 +222,95 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View key={animationKey}>
+        
+        {/* Admin Control Center - TOP PRIORITY FOR ADMINS */}
+        {isAdmin && (
+          <View style={{ gap: spacing.lg, marginBottom: spacing.lg }}>
+            {/* 1. Platform Vitals (GMV + Health) */}
+            <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Platform Overview</Text>
+                <GlassCard variant="bordered" accentColor={colors.accent.primary} style={styles.adminHeroCard}>
+                  <View style={styles.gmvRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.adminLabel}>Gross Volume</Text>
+                      <Text style={styles.gmvValueHero}>
+                        £{((gmvFilter === "week" ? adminAnalytics?.gmvThisWeek : 
+                           gmvFilter === "month" ? adminAnalytics?.gmvThisMonth : 
+                           gmvFilter === "year" ? adminAnalytics?.gmvThisYear : 
+                           adminAnalytics?.totalGMV) ?? 0).toLocaleString()}
+                      </Text>
+                    </View>
+                    <View style={styles.adminPicker}>
+                      {(["week", "month", "year", "lifetime"] as const).map((f) => (
+                        <Pressable
+                          key={f}
+                          onPress={() => { setGmvFilter(f); Haptics.selectionAsync(); }}
+                          style={[styles.adminPickerBtn, gmvFilter === f && styles.adminPickerBtnActive]}
+                        >
+                          <Text style={[styles.adminPickerText, gmvFilter === f && styles.adminPickerTextActive]}>
+                            {f === "lifetime" ? "All" : f === "week" ? "Wk" : f === "month" ? "Mth" : "Yr"}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.healthDivider} />
+
+                  <View style={styles.healthRow}>
+                    <View style={styles.healthInfo}>
+                      <View style={[styles.healthDot, { backgroundColor: systemHealth?.status === "healthy" ? colors.semantic.success : colors.semantic.warning }]} />
+                      <Text style={styles.healthText}>
+                        System: {systemHealth?.status?.toUpperCase() || "LOADING..."}
+                      </Text>
+                    </View>
+                    <Text style={styles.healthSubtext}>
+                      {systemHealth?.receiptProcessing?.successRate ?? 100}% Extract Rate
+                    </Text>
+                  </View>
+                </GlassCard>
+              </View>
+            </AnimatedSection>
+
+            {/* 2. Primary Launchpad */}
+            <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Launchpad</Text>
+                <GlassButton
+                  variant="primary"
+                  size="lg"
+                  icon="shield-crown"
+                  onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.push("/(app)/admin" as any); }}
+                  style={styles.mainAdminBtn}
+                >
+                  Enter Admin Dashboard
+                </GlassButton>
+                
+                <View style={styles.quickActionRow}>
+                  <Pressable 
+                    onPress={() => router.push("/(app)/admin?tab=users" as any)}
+                    style={({ pressed }) => [styles.quickActionBtn, pressed && { opacity: 0.7 }]}
+                  >
+                    <MaterialCommunityIcons name="account-search" size={24} color={colors.accent.primary} />
+                    <Text style={styles.quickActionText}>Search Users</Text>
+                  </Pressable>
+                  
+                  <Pressable 
+                    onPress={() => router.push("/(app)/admin?tab=receipts" as any)}
+                    style={({ pressed }) => [styles.quickActionBtn, pressed && { opacity: 0.7 }]}
+                  >
+                    <MaterialCommunityIcons name="receipt" size={24} color={colors.accent.primary} />
+                    <Text style={styles.quickActionText}>Review Data</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </AnimatedSection>
+          </View>
+        )}
+
         {/* User Account Section */}
-        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+        <AnimatedSection animation="fadeInDown" duration={400} delay={isAdmin ? 200 : 0}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Account</Text>
             <GlassCard variant="bordered" accentColor={colors.semantic.profile}>
@@ -230,8 +335,9 @@ export default function ProfileScreen() {
           </View>
         </AnimatedSection>
 
-        {/* New user milestone path — hide once all steps are done */}
+        {/* New user milestone path — hide once all steps are done OR if admin */}
         {(() => {
+          if (convexUser?.isAdmin) return null;
           const milestones = [
             { icon: "package-variant" as const, text: "Add items to your stock", done: pantryItems.length > 0 },
             { icon: "clipboard-list-outline" as const, text: "Create your first list", done: allLists.length > 0 },
@@ -321,19 +427,41 @@ export default function ProfileScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/(app)/support" as any);
-            }}
+            onPress={handleSupportPress}
           >
             <GlassCard variant="standard" style={styles.navCard}>
               <View style={styles.navRow}>
-                <View style={[styles.navIcon, { backgroundColor: `${colors.accent.primary}20` }]}>
-                  <MaterialCommunityIcons name="help-circle-outline" size={20} color={colors.accent.primary} />
+                <View style={[
+                  styles.navIcon, 
+                  { backgroundColor: myAdminPerms?.role === "super_admin" ? `${colors.semantic.danger}20` : `${colors.accent.primary}20` }
+                ]}>
+                  <MaterialCommunityIcons 
+                    name={
+                      myAdminPerms?.role === "super_admin" 
+                        ? "pulse" 
+                        : (convexUser?.isAdmin || myAdminPerms) 
+                          ? "shield-account-outline" 
+                          : "help-circle-outline"
+                    } 
+                    size={20} 
+                    color={myAdminPerms?.role === "super_admin" ? colors.semantic.danger : colors.accent.primary} 
+                  />
                 </View>
                 <View style={styles.navInfo}>
-                  <Text style={styles.navTitle}>Help & Support</Text>
-                  <Text style={styles.navSubtitle}>Contact support & view my tickets</Text>
+                  <Text style={styles.navTitle}>
+                    {myAdminPerms?.role === "super_admin" 
+                      ? "System Status" 
+                      : (convexUser?.isAdmin || myAdminPerms) 
+                        ? "Internal Support" 
+                        : "Help & Support"}
+                  </Text>
+                  <Text style={styles.navSubtitle}>
+                    {myAdminPerms?.role === "super_admin" 
+                      ? "Monitoring & Diagnostics" 
+                      : (convexUser?.isAdmin || myAdminPerms) 
+                        ? "Support for admins & policy" 
+                        : "Contact support & view my tickets"}
+                  </Text>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.tertiary} />
               </View>
@@ -535,6 +663,105 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginBottom: spacing.sm,
     marginLeft: spacing.xs,
+  },
+
+  // Admin Control Center
+  adminHeroCard: {
+    padding: spacing.md,
+  },
+  gmvRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  gmvValueHero: {
+    ...typography.displaySmall,
+    color: colors.semantic.success,
+    fontWeight: "800",
+    fontSize: 28,
+  },
+  adminLabel: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  adminPicker: {
+    flexDirection: "row",
+    backgroundColor: `${colors.glass.border}40`,
+    borderRadius: 10,
+    padding: 3,
+    alignSelf: "flex-end",
+    marginBottom: 4,
+  },
+  adminPickerBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  adminPickerBtnActive: {
+    backgroundColor: colors.accent.primary,
+  },
+  adminPickerText: {
+    fontSize: 9,
+    color: colors.text.tertiary,
+    fontWeight: "700",
+  },
+  adminPickerTextActive: {
+    color: "#000",
+  },
+  healthDivider: {
+    height: 1,
+    backgroundColor: colors.glass.border,
+    marginVertical: spacing.md,
+  },
+  healthRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  healthInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  healthDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  healthText: {
+    ...typography.labelSmall,
+    color: colors.text.primary,
+    fontWeight: "700",
+  },
+  healthSubtext: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+  },
+  mainAdminBtn: {
+    marginBottom: spacing.md,
+  },
+  quickActionRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  quickActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: `${colors.glass.border}20`,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  quickActionText: {
+    ...typography.labelSmall,
+    color: colors.text.primary,
+    fontWeight: "700",
   },
 
   // Account Card

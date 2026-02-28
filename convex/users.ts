@@ -3,12 +3,37 @@ import { mutation, query, action } from "./_generated/server";
 import { trackFunnelEvent, trackActivity } from "./lib/analytics";
 
 /**
+ * Sync MFA status from the frontend (security requirement)
+ */
+export const syncMfaStatus = mutation({
+  args: { mfaEnabled: v.boolean() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    await ctx.db.patch(user._id, {
+      mfaEnabled: args.mfaEnabled,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
  * Get the current user from the database
  * Creates a new user if one doesn't exist for this Clerk ID
  */
 export const getOrCreate = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { mfaEnabled: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
@@ -23,6 +48,15 @@ export const getOrCreate = mutation({
     if (existingUser) {
       // Track login activity
       await trackActivity(ctx, existingUser._id, "login");
+      
+      // Update MFA status if provided
+      if (args.mfaEnabled !== undefined && existingUser.mfaEnabled !== args.mfaEnabled) {
+        await ctx.db.patch(existingUser._id, {
+          mfaEnabled: args.mfaEnabled,
+          updatedAt: Date.now(),
+        });
+      }
+      
       return existingUser;
     }
 
@@ -35,6 +69,7 @@ export const getOrCreate = mutation({
       avatarUrl: identity.pictureUrl,
       currency: "GBP", // Default for UK
       onboardingComplete: false,
+      mfaEnabled: args.mfaEnabled ?? false,
       createdAt: now,
       updatedAt: now,
     });
@@ -77,6 +112,16 @@ export const getByClerkId = query({
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
       .unique();
+  },
+});
+
+/**
+ * Get user by internal ID
+ */
+export const getById = query({
+  args: { id: v.id("users") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
   },
 });
 

@@ -652,19 +652,37 @@ export const startShopping = mutation({
     }
     requireEditableList(list);
 
-    // Verify ownership
+    // Verify ownership OR partnership
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
-    if (!user || list.userId !== user._id) {
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    let isAuthorized = list.userId === user._id;
+    if (!isAuthorized) {
+      const partner = await ctx.db
+        .query("listPartners")
+        .withIndex("by_list_user", (q: any) =>
+          q.eq("listId", args.id).eq("userId", user._id)
+        )
+        .unique();
+      if (partner && partner.status === "accepted") {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
       throw new Error("Unauthorized");
     }
 
     await ctx.db.patch(args.id, {
       status: "shopping",
       shoppingStartedAt: Date.now(),
+      activeShopperId: user._id,
       updatedAt: Date.now(),
     });
 
@@ -688,13 +706,30 @@ export const completeShopping = mutation({
       throw new Error("List not found");
     }
 
-    // Verify ownership
+    // Verify ownership OR partnership
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
-    if (!user || list.userId !== user._id) {
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    let isAuthorized = list.userId === user._id;
+    if (!isAuthorized) {
+      const partner = await ctx.db
+        .query("listPartners")
+        .withIndex("by_list_user", (q: any) =>
+          q.eq("listId", args.id).eq("userId", user._id)
+        )
+        .unique();
+      if (partner && partner.status === "accepted") {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
       throw new Error("Unauthorized");
     }
 
@@ -737,6 +772,7 @@ export const completeShopping = mutation({
       completedAt: now,
       updatedAt: now,
       actualTotal: actualTotal > 0 ? actualTotal : undefined,
+      activeShopperId: undefined,
     });
 
     const storeBreakdown = Array.from(storeMap.entries()).map(([storeId, data]) => ({
@@ -768,19 +804,37 @@ export const pauseShopping = mutation({
     }
     requireEditableList(list);
 
-    // Verify ownership
+    // Verify ownership OR partnership
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
-    if (!user || list.userId !== user._id) {
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    let isAuthorized = list.userId === user._id;
+    if (!isAuthorized) {
+      const partner = await ctx.db
+        .query("listPartners")
+        .withIndex("by_list_user", (q: any) =>
+          q.eq("listId", args.id).eq("userId", user._id)
+        )
+        .unique();
+      if (partner && partner.status === "accepted") {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
       throw new Error("Unauthorized");
     }
 
     await ctx.db.patch(args.id, {
       status: "active",
       pausedAt: Date.now(),
+      activeShopperId: undefined,
       updatedAt: Date.now(),
     });
 
@@ -805,13 +859,30 @@ export const resumeShopping = mutation({
     }
     requireEditableList(list);
 
-    // Verify ownership
+    // Verify ownership OR partnership
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
-    if (!user || list.userId !== user._id) {
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    let isAuthorized = list.userId === user._id;
+    if (!isAuthorized) {
+      const partner = await ctx.db
+        .query("listPartners")
+        .withIndex("by_list_user", (q: any) =>
+          q.eq("listId", args.id).eq("userId", user._id)
+        )
+        .unique();
+      if (partner && partner.status === "accepted") {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
       throw new Error("Unauthorized");
     }
 
@@ -822,6 +893,7 @@ export const resumeShopping = mutation({
     await ctx.db.patch(args.id, {
       status: "shopping",
       pausedAt: undefined,
+      activeShopperId: user._id,
       updatedAt: Date.now(),
     });
 

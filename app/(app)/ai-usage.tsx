@@ -15,6 +15,7 @@ import {
   typography,
   spacing,
 } from "@/components/ui/glass";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 /**
  * AI Usage Screen
@@ -22,9 +23,12 @@ import {
  */
 export default function AIUsageScreen() {
   const router = useRouter();
+  const { user: convexUser } = useCurrentUser();
   const usageSummary = useQuery(api.aiUsage.getUsageSummary);
   const scanCredits = useQuery(api.subscriptions.getScanCredits);
   const updateAiSettings = useMutation(api.aiUsage.updateAiSettings);
+
+  const isAdmin = !!convexUser?.isAdmin;
 
   const handleToggleVoice = async (value: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -100,44 +104,50 @@ export default function AIUsageScreen() {
                 <Text style={styles.usageValue}>
                   <Text style={{ color: voiceColor }}>{voice.usage}</Text>
                   <Text style={styles.usageDivider}> / </Text>
-                  <Text>{voice.limit}</Text>
+                  <Text>{isAdmin ? "Unlimited" : voice.limit}</Text>
                 </Text>
               </View>
-              <View style={styles.percentageBadge}>
-                <Text style={[styles.percentageText, { color: voiceColor }]}>
-                  {voice.percentage}%
-                </Text>
-              </View>
+              {!isAdmin && (
+                <View style={styles.percentageBadge}>
+                  <Text style={[styles.percentageText, { color: voiceColor }]}>
+                    {voice.percentage}%
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Progress Bar */}
-            <View style={styles.progressContainer}>
-              <View style={styles.progressTrack}>
-                <Animated.View
-                  style={[
-                    styles.progressFill,
-                    {
-                      width: `${Math.min(100, voice.percentage)}%`,
-                      backgroundColor: voiceColor,
-                    },
-                  ]}
-                />
+            {!isAdmin && (
+              <View style={styles.progressContainer}>
+                <View style={styles.progressTrack}>
+                  <Animated.View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: `${Math.min(100, voice.percentage)}%`,
+                        backgroundColor: voiceColor,
+                      },
+                    ]}
+                  />
+                </View>
+                <View style={styles.progressMarkers}>
+                  <View style={[styles.marker, voice.percentage >= 50 && styles.markerPassed]} />
+                  <View style={[styles.marker, voice.percentage >= 80 && styles.markerPassed]} />
+                </View>
               </View>
-              <View style={styles.progressMarkers}>
-                <View style={[styles.marker, voice.percentage >= 50 && styles.markerPassed]} />
-                <View style={[styles.marker, voice.percentage >= 80 && styles.markerPassed]} />
-              </View>
-            </View>
+            )}
 
             {/* Status Message */}
             <Text style={styles.statusMessage}>
-              {voice.percentage >= 100
-                ? "Limit reached. Resets next month."
-                : voice.percentage >= 80
-                  ? `${voice.limit - voice.usage} requests left. Almost there!`
-                  : voice.percentage >= 50
-                    ? `${voice.limit - voice.usage} requests remaining.`
-                    : "Plenty of requests available."}
+              {isAdmin 
+                ? "Admin access: No usage limits applied."
+                : voice.percentage >= 100
+                  ? "Limit reached. Resets next month."
+                  : voice.percentage >= 80
+                    ? `${voice.limit - voice.usage} requests left. Almost there!`
+                    : voice.percentage >= 50
+                      ? `${voice.limit - voice.usage} requests remaining.`
+                      : "Plenty of requests available."}
             </Text>
           </GlassCard>
         </View>
@@ -185,7 +195,7 @@ export default function AIUsageScreen() {
                   <Text style={[styles.receiptStatValue, { color: colors.semantic.success }]}>
                     £{receipts.creditsEarned.toFixed(2)}
                   </Text>
-                  <Text style={styles.receiptStatLabel}>earned</Text>
+                  <Text style={styles.receiptStatLabel}>{isAdmin ? "earned" : "saved"}</Text>
                 </View>
               </View>
             </View>
@@ -197,7 +207,9 @@ export default function AIUsageScreen() {
                 color={colors.text.tertiary}
               />
               <Text style={styles.receiptNoteText}>
-                Scan receipts to earn credits off your subscription. Unlimited for Premium.
+                {isAdmin 
+                  ? "Scan receipts to earn cashback rewards. Maximum rewards enabled for Admin."
+                  : "Scan receipts to earn credits off your subscription. Unlimited for Premium."}
               </Text>
             </View>
           </GlassCard>

@@ -48,6 +48,15 @@ export const getCurrentSubscription = query({
       .first();
 
     if (!sub) {
+      if (user.isAdmin) {
+        return {
+          plan: "premium_annual" as const,
+          status: "active" as const,
+          features: getPlanFeatures("premium_annual"),
+          isActive: true,
+          isAdminOverride: true,
+        };
+      }
       return {
         plan: "free" as const,
         status: "active" as const,
@@ -55,14 +64,15 @@ export const getCurrentSubscription = query({
       };
     }
 
-    const status = effectiveStatus(sub);
-    const isPrem = isEffectivelyPremium(sub);
+    const status = user.isAdmin ? "active" : effectiveStatus(sub);
+    const isPrem = user.isAdmin || isEffectivelyPremium(sub);
 
     return {
       ...sub,
       status,
-      features: isPrem ? getPlanFeatures(sub.plan) : getFreeFeatures(),
+      features: isPrem ? getPlanFeatures(user.isAdmin ? "premium_annual" : sub.plan) : getFreeFeatures(),
       isActive: isPrem,
+      isAdminOverride: !!user.isAdmin,
     };
   },
 });
@@ -197,6 +207,8 @@ export const hasPremium = query({
       .unique();
     if (!user) return false;
 
+    if (user.isAdmin) return true;
+
     const sub = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q: any) => q.eq("userId", user._id))
@@ -223,6 +235,10 @@ export const requirePremium = query({
       .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
+
+    if (user.isAdmin) {
+      return { isPremium: true, plan: "premium_annual", status: "active" };
+    }
 
     const sub = await ctx.db
       .query("subscriptions")
@@ -328,8 +344,8 @@ export const getScanCredits = query({
       .first();
 
     const now = Date.now();
-    const plan = sub?.plan || "free";
-    const isPremium = sub ? isEffectivelyPremium(sub) && plan !== "free" : false;
+    const plan = user.isAdmin ? "premium_annual" : (sub?.plan || "free");
+    const isPremium = user.isAdmin || (sub ? isEffectivelyPremium(sub) && plan !== "free" : false);
     const isAnnual = plan === "premium_annual";
 
     // Find latest credit record for this user
@@ -422,8 +438,8 @@ export const earnScanCredit = mutation({
       .order("desc")
       .first();
 
-    const plan = sub?.plan || "free";
-    const isPremium = sub ? isEffectivelyPremium(sub) && plan !== "free" : false;
+    const plan = user.isAdmin ? "premium_annual" : (sub?.plan || "free");
+    const isPremium = user.isAdmin || (sub ? isEffectivelyPremium(sub) && plan !== "free" : false);
     const isAnnual = plan === "premium_annual";
 
     // Get or create credit record

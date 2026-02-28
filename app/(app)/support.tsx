@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import {
   GlassScreen,
   GlassCard,
@@ -29,8 +29,11 @@ import * as Haptics from "expo-haptics";
 
 export default function SupportScreen() {
   const router = useRouter();
+  const { type } = useLocalSearchParams();
   const { alert: showAlert } = useGlassAlert();
   const [view, setView] = useState<"form" | "list">("form");
+  
+  const isInternal = type === "internal";
   
   // Form State
   const [subject, setSubject] = useState("");
@@ -50,15 +53,21 @@ export default function SupportScreen() {
     setIsNewSubmitting(true);
     try {
       await createTicket({
-        subject: subject.trim(),
+        subject: isInternal ? `[INTERNAL] ${subject.trim()}` : subject.trim(),
         description: description.trim(),
         priority,
       });
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert("Ticket Created", "We've received your request and will get back to you soon.", [
-        { text: "View My Tickets", onPress: () => setView("list") }
-      ]);
+      showAlert(
+        isInternal ? "Internal Ticket Created" : "Ticket Created", 
+        isInternal 
+          ? "Your request has been sent to the Super Admin team." 
+          : "We've received your request and will get back to you soon.", 
+        [
+          { text: "View My Tickets", onPress: () => setView("list") }
+        ]
+      );
       
       setSubject("");
       setDescription("");
@@ -72,8 +81,8 @@ export default function SupportScreen() {
   return (
     <GlassScreen>
       <SimpleHeader 
-        title="Support" 
-        subtitle="How can we help you today?" 
+        title={isInternal ? "Internal Support" : "Support"} 
+        subtitle={isInternal ? "Admin-to-SuperAdmin communication" : "How can we help you today?"} 
         showBack 
         onBack={() => router.back()} 
       />

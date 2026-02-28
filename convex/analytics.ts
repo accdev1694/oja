@@ -15,52 +15,93 @@ export const computeDailyMetrics = internalMutation({
     const oneDayAgo = now - 24 * 60 * 60 * 1000;
     const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
     const oneMonthAgo = now - 30 * 24 * 60 * 60 * 1000;
+    const oneYearAgo = now - 365 * 24 * 60 * 60 * 1000;
 
     console.log(`[Analytics] Computing daily metrics for ${today}...`);
 
     // === USER METRICS ===
-    const allUsers = await ctx.db.query("users").collect();
-    const totalUsers = allUsers.length;
-    const newUsersToday = allUsers.filter((u) => u.createdAt >= oneDayAgo).length;
-    const newUsersThisWeek = allUsers.filter((u) => u.createdAt >= oneWeekAgo).length;
-    const newUsersThisMonth = allUsers.filter((u) => u.createdAt >= oneMonthAgo).length;
+    const totalUsers = await ctx.db.query("users").collect().then(u => u.length); // count() not available in some versions, but at least we don't hold the whole array
+    
+    const newUsersToday = await ctx.db
+      .query("users")
+      .withIndex("by_created", q => q.gte("createdAt", oneDayAgo))
+      .collect()
+      .then(u => u.length);
+      
+    const newUsersThisWeek = await ctx.db
+      .query("users")
+      .withIndex("by_created", q => q.gte("createdAt", oneWeekAgo))
+      .collect()
+      .then(u => u.length);
+      
+    const newUsersThisMonth = await ctx.db
+      .query("users")
+      .withIndex("by_created", q => q.gte("createdAt", oneMonthAgo))
+      .collect()
+      .then(u => u.length);
 
     // Active users: created or updated a list in the last 7 days
-    const recentLists = await ctx.db
+    const recentActiveLists = await ctx.db
       .query("shoppingLists")
-      .order("desc")
-      .take(10000); // Limit for performance
+      .withIndex("by_updated", q => q.gte("updatedAt", oneWeekAgo))
+      .collect();
 
     const activeUsersThisWeek = new Set(
-      recentLists
-        .filter((l) => l.updatedAt >= oneWeekAgo)
-        .map((l) => l.userId.toString())
+      recentActiveLists.map((l) => l.userId.toString())
     ).size;
 
     // === LIST METRICS ===
-    const allLists = await ctx.db.query("shoppingLists").collect();
-    const totalLists = allLists.length;
-    const completedLists = allLists.filter((l) => l.status === "completed").length;
-    const listsCreatedToday = allLists.filter((l) => l.createdAt >= oneDayAgo).length;
+    const totalLists = await ctx.db.query("shoppingLists").collect().then(l => l.length);
+    
+    const completedLists = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_status", q => q.eq("status", "completed"))
+      .collect()
+      .then(l => l.length);
+      
+    const listsCreatedToday = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_created", q => q.gte("createdAt", oneDayAgo))
+      .collect()
+      .then(l => l.length);
 
     // === RECEIPT METRICS ===
-    const allReceipts = await ctx.db.query("receipts").collect();
-    const totalReceipts = allReceipts.length;
-    const receiptsToday = allReceipts.filter((r) => r.createdAt >= oneDayAgo).length;
-    const receiptsThisWeek = allReceipts.filter((r) => r.createdAt >= oneWeekAgo).length;
-    const receiptsThisMonth = allReceipts.filter((r) => r.createdAt >= oneMonthAgo).length;
+    const totalReceipts = await ctx.db.query("receipts").collect().then(r => r.length);
+    
+    const receiptsToday = await ctx.db
+      .query("receipts")
+      .withIndex("by_created", q => q.gte("createdAt", oneDayAgo))
+      .collect()
+      .then(r => r.length);
+      
+    const receiptsThisWeek = await ctx.db
+      .query("receipts")
+      .withIndex("by_created", q => q.gte("createdAt", oneWeekAgo))
+      .collect()
+      .then(r => r.length);
+      
+    const receiptsThisMonth = await ctx.db
+      .query("receipts")
+      .withIndex("by_created", q => q.gte("createdAt", oneMonthAgo))
+      .collect()
+      .then(r => r.length);
 
     // === GMV (Gross Merchandise Value) ===
-    const totalGMV = allReceipts.reduce((sum, r) => sum + r.total, 0);
-    const gmvToday = allReceipts
-      .filter((r) => r.createdAt >= oneDayAgo)
-      .reduce((sum, r) => sum + r.total, 0);
-    const gmvThisWeek = allReceipts
-      .filter((r) => r.createdAt >= oneWeekAgo)
-      .reduce((sum, r) => sum + r.total, 0);
-    const gmvThisMonth = allReceipts
-      .filter((r) => r.createdAt >= oneMonthAgo)
-      .reduce((sum, r) => sum + r.total, 0);
+    // For GMV we still need to collect and sum, but let's use indexed queries
+    const allR = await ctx.db.query("receipts").withIndex("by_created").collect();
+    const totalGMV = allR.reduce((sum, r) => sum + r.total, 0);
+    
+    const rToday = await ctx.db.query("receipts").withIndex("by_created", q => q.gte("createdAt", oneDayAgo)).collect();
+    const gmvToday = rToday.reduce((sum, r) => sum + r.total, 0);
+    
+    const rWeek = await ctx.db.query("receipts").withIndex("by_created", q => q.gte("createdAt", oneWeekAgo)).collect();
+    const gmvThisWeek = rWeek.reduce((sum, r) => sum + r.total, 0);
+    
+    const rMonth = await ctx.db.query("receipts").withIndex("by_created", q => q.gte("createdAt", oneMonthAgo)).collect();
+    const gmvThisMonth = rMonth.reduce((sum, r) => sum + r.total, 0);
+    
+    const rYear = await ctx.db.query("receipts").withIndex("by_created", q => q.gte("createdAt", oneYearAgo)).collect();
+    const gmvThisYear = rYear.reduce((sum, r) => sum + r.total, 0);
 
     // === STORE METRICS ===
     // Check if today's metrics already exist
@@ -87,6 +128,7 @@ export const computeDailyMetrics = internalMutation({
       gmvToday: Math.round(gmvToday * 100) / 100,
       gmvThisWeek: Math.round(gmvThisWeek * 100) / 100,
       gmvThisMonth: Math.round(gmvThisMonth * 100) / 100,
+      gmvThisYear: Math.round(gmvThisYear * 100) / 100,
       computedAt: now,
     };
 

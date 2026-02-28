@@ -38,6 +38,7 @@ import {
   SimpleHeader,
   CircularBudgetDial,
   OfflineBanner,
+  AnimatedSection,
   colors,
   typography,
   spacing,
@@ -295,6 +296,13 @@ export default function ListDetailScreen() {
 
   const isShopping = listStatus === "shopping";
   const isPaused = listStatus === "active" && !!list?.shoppingStartedAt && !!list?.pausedAt;
+
+  // Active Shopper Logic
+  const activeShopper = useQuery(
+    api.users.getById,
+    list?.activeShopperId ? { id: list.activeShopperId } : "skip"
+  );
+  const isSomeoneElseShopping = isShopping && list?.activeShopperId && list.activeShopperId !== currentUser?._id;
 
   // Edit budget handlers
   function handleOpenEditBudget() {
@@ -708,6 +716,19 @@ export default function ListDetailScreen() {
   // ─── FlashList ListHeaderComponent ───────────────────────────────────────────
   const listHeader = useMemo(() => (
     <View style={styles.listHeaderContainer}>
+      {/* Active Shopper Banner (Partner Mode) */}
+      {isSomeoneElseShopping && (
+        <AnimatedSection animation="fadeInDown" duration={400}>
+          <View style={styles.activeShopperBanner}>
+            <View style={styles.activeShopperPulse} />
+            <MaterialCommunityIcons name="account-search" size={18} color={colors.accent.primary} />
+            <Text style={styles.activeShopperText}>
+              {activeShopper?.name || "Your partner"} is currently shopping this list
+            </Text>
+          </View>
+        </AnimatedSection>
+      )}
+
       {/* Circular Budget Dial -- tap to edit (owner only) */}
       {budget > 0 && (
         <CircularBudgetDial
@@ -753,21 +774,23 @@ export default function ListDetailScreen() {
 
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
-        {list?.status === "active" && canEdit && (
+        {list?.status === "active" && (canEdit || isPartner) && (
           <Animated.View style={[styles.actionButton, goShoppingAnimStyle]}>
             <GlassButton
               variant="primary"
               size="md"
               icon={isPaused ? "cart-arrow-right" : "cart-outline"}
               onPress={handleStartShopping}
-              disabled={(items?.length ?? 0) === 0}
+              disabled={(items?.length ?? 0) === 0 || !!isSomeoneElseShopping}
               fullWidth
             >
-              {isPaused ? "Resume Shopping" : "Go Shopping"}
+              {isSomeoneElseShopping 
+                ? `${activeShopper?.name || "Partner"} is shopping` 
+                : isPaused ? "Resume Shopping" : "Go Shopping"}
             </GlassButton>
           </Animated.View>
         )}
-        {list?.status === "shopping" && canEdit && (
+        {list?.status === "shopping" && (canEdit || isPartner) && (
           <View style={styles.shoppingModeContainer}>
             <ShoppingTypewriterHint
               storeName={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
@@ -780,6 +803,7 @@ export default function ListDetailScreen() {
                   icon="swap-horizontal"
                   onPress={() => setShowMidShopStorePicker(true)}
                   style={styles.shoppingBtnFlex2}
+                  disabled={!!isSomeoneElseShopping}
                 >
                   Switch Store
                 </GlassButton>
@@ -789,6 +813,7 @@ export default function ListDetailScreen() {
                   icon="pencil-outline"
                   onPress={handlePauseShopping}
                   style={styles.shoppingBtnFlex1}
+                  disabled={!!isSomeoneElseShopping}
                 >
                   Edit List
                 </GlassButton>
@@ -800,6 +825,7 @@ export default function ListDetailScreen() {
                   icon="plus"
                   onPress={() => setShowAddItemsModal(true)}
                   style={styles.shoppingBtnFlex1}
+                  disabled={!!isSomeoneElseShopping}
                 >
                   Add Items
                 </GlassButton>
@@ -809,6 +835,7 @@ export default function ListDetailScreen() {
                   icon="check-circle-outline"
                   onPress={handleCompleteShopping}
                   style={styles.shoppingBtnFlex2}
+                  disabled={!!isSomeoneElseShopping}
                 >
                   Complete Shopping
                 </GlassButton>
@@ -1176,6 +1203,31 @@ const styles = StyleSheet.create({
   footerContainer: {
     gap: spacing.lg,
     marginTop: spacing.lg,
+  },
+
+  // Active Shopper Banner
+  activeShopperBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: `${colors.accent.primary}15`,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: `${colors.accent.primary}30`,
+    gap: spacing.sm,
+  },
+  activeShopperPulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent.primary,
+  },
+  activeShopperText: {
+    ...typography.bodySmall,
+    color: colors.text.primary,
+    fontWeight: "600",
   },
 
   // Action Buttons

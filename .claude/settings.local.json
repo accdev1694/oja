@@ -145,7 +145,11 @@
       "Bash(tasklist:*)",
       "Bash(awk:*)",
       "Bash(ping:*)",
-      "Bash(set CONVEX_DEPLOYMENT=dev:curious-sockeye-134:*)"
+      "Bash(set CONVEX_DEPLOYMENT=dev:curious-sockeye-134:*)",
+      "Bash(timeout 15 tail:*)",
+      "Bash(exit 0)",
+      "Bash(timeout 10 tail:*)",
+      "Bash(timeout 20 tail:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

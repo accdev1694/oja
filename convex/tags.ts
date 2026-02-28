@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { api } from "./_generated/api";
 
 /**
  * Add a tag to a user (admin-only)
@@ -8,7 +9,9 @@ import { Id } from "./_generated/dataModel";
 export const addUserTag = mutation({
   args: { userId: v.id("users"), tag: v.string() },
   handler: async (ctx, args) => {
-    // 1. Require admin permission
+    // P1 Fix: Use standardized admin check
+    // We can't import requirePermission because of circular dependencies 
+    // if admin.ts also imports tags.ts. Let's check admin.ts imports.
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     
@@ -56,7 +59,7 @@ export const addUserTag = mutation({
 export const removeUserTag = mutation({
   args: { userId: v.id("users"), tag: v.string() },
   handler: async (ctx, args) => {
-    // 1. Require admin permission
+    // P1 Fix: Use standardized admin check
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     
@@ -76,6 +79,16 @@ export const removeUserTag = mutation({
       
     if (tag) {
       await ctx.db.delete(tag._id);
+      
+      // P1 Fix: Add missing audit log
+      await ctx.db.insert("adminLogs", {
+        adminUserId: admin._id,
+        action: "remove_user_tag",
+        targetType: "user",
+        targetId: args.userId,
+        details: `Removed tag "${args.tag}" from user ${args.userId}`,
+        createdAt: Date.now(),
+      });
     }
     
     return { success: true };

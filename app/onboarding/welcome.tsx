@@ -3,6 +3,8 @@ import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 import {
   GlassScreen,
@@ -12,14 +14,24 @@ import {
   typography,
   spacing,
 } from "@/components/ui/glass";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user: convexUser } = useCurrentUser();
+  const myAdminPerms = useQuery(api.admin.getMyPermissions, {});
+
+  const isAdmin = !!convexUser?.isAdmin || !!myAdminPerms;
 
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push("/onboarding/cuisine-selection");
+    
+    if (isAdmin) {
+      router.push("/onboarding/admin-setup");
+    } else {
+      router.push("/onboarding/cuisine-selection");
+    }
   };
 
   return (

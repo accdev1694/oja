@@ -52,6 +52,7 @@ export default defineSchema({
     // Admin
     isAdmin: v.optional(v.boolean()),
     suspended: v.optional(v.boolean()),
+    mfaEnabled: v.optional(v.boolean()),
 
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -61,7 +62,9 @@ export default defineSchema({
     .index("by_created", ["createdAt"])
     .index("by_last_active", ["lastActiveAt"])
     .index("by_is_admin", ["isAdmin"])
-    .index("by_suspended", ["suspended"]),
+    .index("by_suspended", ["suspended"])
+    .searchIndex("search_name", { searchField: "name" })
+    .searchIndex("search_email", { searchField: "email" }),
 
   // Pantry items (stock tracker)
   pantryItems: defineTable({
@@ -114,7 +117,8 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_category", ["userId", "category"])
     .index("by_user_stock", ["userId", "stockLevel"])
-    .index("by_user_status", ["userId", "status"]),
+    .index("by_user_status", ["userId", "status"])
+    .index("by_created", ["createdAt"]),
 
   // Shopping lists
   shoppingLists: defineTable({
@@ -146,6 +150,7 @@ export default defineSchema({
     // Timestamps
     plannedDate: v.optional(v.number()),
     shoppingStartedAt: v.optional(v.number()),
+    activeShopperId: v.optional(v.id("users")), // Who is currently shopping this list
     completedAt: v.optional(v.number()),
     pausedAt: v.optional(v.number()),
     archivedAt: v.optional(v.number()),
@@ -166,7 +171,10 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_status", ["userId", "status"]),
+    .index("by_user_status", ["userId", "status"])
+    .index("by_status", ["status"])
+    .index("by_created", ["createdAt"])
+    .index("by_updated", ["updatedAt"]),
 
   // Shopping list items
   listItems: defineTable({
@@ -196,6 +204,7 @@ export default defineSchema({
     // Status
     isChecked: v.boolean(),
     checkedAt: v.optional(v.number()),
+    checkedByUserId: v.optional(v.id("users")), // Who checked this item off
 
     // Auto-added from pantry
     autoAdded: v.boolean(),
@@ -291,7 +300,10 @@ export default defineSchema({
     .index("by_list", ["listId"])
     .index("by_user_fingerprint", ["userId", "fingerprint"])
     .index("by_processing_status", ["processingStatus"])
-    .index("by_created", ["createdAt"]),
+    .index("by_created", ["createdAt"])
+    .index("by_store_status", ["storeName", "processingStatus"])
+    .index("by_status_created", ["processingStatus", "createdAt"])
+    .searchIndex("search_store", { searchField: "storeName" }),
 
   // Current best-known prices (freshest price per item per store)
   currentPrices: defineTable({
@@ -318,7 +330,8 @@ export default defineSchema({
   })
     .index("by_item", ["normalizedName"])
     .index("by_item_store", ["normalizedName", "storeName"])
-    .index("by_store", ["storeName"]),
+    .index("by_store", ["storeName"])
+    .index("by_updated", ["updatedAt"]),
 
   // Price history tracking
   priceHistory: defineTable({
@@ -349,7 +362,8 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_item", ["userId", "normalizedName"])
     .index("by_user_item_date", ["userId", "normalizedName", "purchaseDate"])
-    .index("by_receipt", ["receiptId"]),
+    .index("by_receipt", ["receiptId"])
+    .index("by_store", ["storeName"]),
 
   // Item variants (size-aware pricing + community product catalog)
   itemVariants: defineTable({
@@ -502,7 +516,9 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_stripe_customer", ["stripeCustomerId"])
     .index("by_status", ["status"])
-    .index("by_current_period_end", ["currentPeriodEnd"]),
+    .index("by_current_period_end", ["currentPeriodEnd"])
+    .index("by_plan_status", ["plan", "status"])
+    .index("by_created", ["createdAt"]),
 
   // Loyalty points balance
   loyaltyPoints: defineTable({
@@ -595,7 +611,8 @@ export default defineSchema({
   })
     .index("by_admin", ["adminUserId"])
     .index("by_action", ["action"])
-    .index("by_created", ["createdAt"]),
+    .index("by_created", ["createdAt"])
+    .index("by_admin_created", ["adminUserId", "createdAt"]),
 
   // RBAC Roles (Phase 1.2)
   adminRoles: defineTable({
@@ -669,6 +686,7 @@ export default defineSchema({
     gmvToday: v.number(),
     gmvThisWeek: v.number(),
     gmvThisMonth: v.number(),
+    gmvThisYear: v.optional(v.number()), // Optional for backward compatibility with existing records
 
     computedAt: v.number(), // Timestamp when metrics were computed
   })

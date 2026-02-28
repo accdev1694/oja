@@ -41,6 +41,7 @@ import type * as migrations_backfillListNumbers from "../migrations/backfillList
 import type * as migrations_backfillListStores from "../migrations/backfillListStores.js";
 import type * as migrations_grantAdminAccess from "../migrations/grantAdminAccess.js";
 import type * as migrations_migrateAdminsToRBAC from "../migrations/migrateAdminsToRBAC.js";
+import type * as migrations_removeSeedReceipts from "../migrations/removeSeedReceipts.js";
 import type * as migrations_rephraseItemNames from "../migrations/rephraseItemNames.js";
 import type * as migrations_seedPricingConfig from "../migrations/seedPricingConfig.js";
 import type * as migrations_seedRBAC from "../migrations/seedRBAC.js";
@@ -104,6 +105,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/backfillListStores": typeof migrations_backfillListStores;
   "migrations/grantAdminAccess": typeof migrations_grantAdminAccess;
   "migrations/migrateAdminsToRBAC": typeof migrations_migrateAdminsToRBAC;
+  "migrations/removeSeedReceipts": typeof migrations_removeSeedReceipts;
   "migrations/rephraseItemNames": typeof migrations_rephraseItemNames;
   "migrations/seedPricingConfig": typeof migrations_seedPricingConfig;
   "migrations/seedRBAC": typeof migrations_seedRBAC;

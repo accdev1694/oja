@@ -1,0 +1,371 @@
+import { StyleSheet } from "react-native";
+import { colors, typography, spacing } from "@/components/ui/glass";
+
+export const adminStyles = StyleSheet.create({
+  scrollView: { flex: 1 },
+  scrollContent: { padding: spacing.md, paddingBottom: 100 },
+  section: { padding: spacing.md, marginBottom: spacing.md },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
+  sectionTitle: { ...typography.headlineSmall, color: colors.text.primary, marginBottom: spacing.sm },
+  loading: { flex: 1, justifyContent: "center", padding: spacing.xl },
+  emptyText: { ...typography.bodyMedium, color: colors.text.tertiary, textAlign: "center", marginTop: spacing.xl },
+  accessDenied: { flex: 1, justifyContent: "center", alignItems: "center", padding: spacing.xl, gap: spacing.md },
+  accessTitle: { ...typography.headlineMedium, color: colors.text.primary },
+  accessSubtext: { ...typography.bodyLarge, color: colors.text.secondary, textAlign: "center" },
+
+  // Tool Switcher
+  switcherWrapper: { zIndex: 10, paddingHorizontal: spacing.md, marginBottom: spacing.sm },
+  activeToolPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.glass.background,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  activeToolPillExpanded: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  activeToolInfo: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  activeToolLabel: { ...typography.labelLarge, color: colors.text.primary },
+  menuExpandedGrid: {
+    position: "absolute",
+    top: "100%",
+    left: spacing.md,
+    right: spacing.md,
+    zIndex: 100,
+    borderTopWidth: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    padding: spacing.md,
+  },
+  gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  gridItem: { width: "22%", alignItems: "center", gap: 6 },
+  gridItemActive: { opacity: 1 },
+  gridIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: `${colors.glass.border}40`, alignItems: "center", justifyContent: "center" },
+  gridIconCircleActive: { backgroundColor: colors.accent.primary },
+  gridLabel: { fontSize: 10, color: colors.text.tertiary, textAlign: "center" },
+  gridLabelActive: { color: colors.accent.primary, fontWeight: "700" },
+
+  // Overview
+  healthHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
+  healthDot: { width: 12, height: 12, borderRadius: 6 },
+  metricText: { ...typography.bodyMedium, color: colors.text.tertiary, marginTop: 4 },
+
+  // Metrics grid
+  metricsGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md },
+  metricCard: {
+    width: "30%",
+    alignItems: "center",
+    backgroundColor: colors.glass.background,
+    borderRadius: 12,
+    padding: spacing.sm,
+    gap: 4,
+  },
+  metricValue: { ...typography.headlineSmall, color: colors.text.primary },
+  metricLabel: { ...typography.bodySmall, color: colors.text.tertiary, textAlign: "center", fontSize: 10 },
+  gmvSection: { paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border, gap: spacing.xs },
+  gmvFilterRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
+  gmvRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.sm },
+  gmvLabel: { ...typography.labelSmall, color: colors.text.tertiary, textTransform: "uppercase", marginBottom: 2 },
+  gmvValue: { ...typography.headlineMedium, color: colors.semantic.success, fontWeight: "700" },
+  gmvValueLarge: { ...typography.headlineLarge, color: colors.semantic.success, fontWeight: "800", fontSize: 26 },
+  gmvPicker: { flexDirection: "row", backgroundColor: `${colors.glass.border}40`, borderRadius: 10, padding: 3, marginBottom: 4 },
+  gmvPickerBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  gmvPickerBtnActive: { backgroundColor: colors.accent.primary },
+  gmvPickerText: { fontSize: 9, color: colors.text.tertiary, fontWeight: "700" },
+  gmvPickerTextActive: { color: "#000" },
+
+  // Revenue
+  revenueGrid: { flexDirection: "row", gap: spacing.lg, marginBottom: spacing.sm },
+  revenueItem: { alignItems: "center" },
+  revenueValue: { ...typography.headlineMedium, color: colors.semantic.success },
+  revenueValueLarge: { ...typography.headlineLarge, color: colors.semantic.success, fontSize: 28, fontWeight: "800" },
+  revenueLabel: { ...typography.bodySmall, color: colors.text.tertiary },
+
+  // Funnel
+  funnelContainer: { gap: spacing.md },
+  funnelStep: { gap: 4 },
+  funnelBarContainer: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  funnelBar: { height: 16, borderRadius: 8 },
+  funnelCount: { ...typography.labelSmall, color: colors.text.primary, fontWeight: "700" },
+  funnelLabelRow: { flexDirection: "row", justifyContent: "space-between" },
+  funnelLabel: { ...typography.labelSmall, color: colors.text.tertiary, fontSize: 8 },
+  funnelPercentage: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 8 },
+
+  // Segments
+  segmentGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  segmentCard: { width: "47%", backgroundColor: colors.glass.background, borderRadius: 12, padding: spacing.md, alignItems: "center", gap: 2 },
+  segmentValue: { ...typography.headlineSmall, color: colors.text.primary },
+  segmentName: { ...typography.labelSmall, color: colors.text.tertiary, textTransform: "uppercase", fontSize: 9 },
+  segmentPercent: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 9 },
+
+  // Retention Table
+  retentionTable: { gap: 4, minWidth: 400 },
+  retentionHeader: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.glass.border, paddingBottom: 4 },
+  retentionRow: { flexDirection: "row" },
+  retentionCell: { width: 50, textAlign: "center", color: colors.text.secondary, fontSize: 10, paddingVertical: 4 },
+  retentionHeaderCell: { color: colors.text.tertiary, fontWeight: "700" },
+  retentionCellText: { fontSize: 9, fontWeight: "600" },
+
+  // LTV & Churn
+  ltvRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  ltvValue: { ...typography.headlineSmall, color: colors.semantic.success },
+  ltvLabel: { ...typography.bodySmall, color: colors.text.tertiary, fontSize: 10 },
+  churnRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+
+  // Support
+  ticketRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  priorityDot: { width: 8, height: 8, borderRadius: 4 },
+  assignBadge: { backgroundColor: `${colors.accent.primary}20`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  assignBadgeText: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 9 },
+  
+  // Chat
+  chatContainer: { gap: spacing.md, paddingBottom: spacing.xl },
+  chatBubble: { maxWidth: "85%", padding: spacing.sm, borderRadius: 12 },
+  userBubble: { alignSelf: "flex-start", backgroundColor: colors.glass.background, borderBottomLeftRadius: 2 },
+  adminBubble: { alignSelf: "flex-end", backgroundColor: `${colors.accent.primary}15`, borderBottomRightRadius: 2 },
+  chatName: { ...typography.labelSmall, color: colors.text.tertiary, marginBottom: 2 },
+  chatMessage: { ...typography.bodyMedium, color: colors.text.primary },
+  chatTime: { ...typography.labelSmall, color: colors.text.tertiary, alignSelf: "flex-end", fontSize: 8, marginTop: 2 },
+  chatInputRow: { flexDirection: "row", padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border, gap: spacing.sm, alignItems: "flex-end" },
+  chatInput: { flex: 1, backgroundColor: colors.glass.background, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, color: colors.text.primary, maxHeight: 100 },
+  sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: `${colors.accent.primary}10`, alignItems: "center", justifyContent: "center" },
+
+  // Timeline
+  timelineContainer: { marginTop: spacing.md },
+  timelineRow: { flexDirection: "row", gap: spacing.md },
+  timelineLineContainer: { width: 24, alignItems: "center" },
+  timelineIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: `${colors.accent.primary}15`, alignItems: "center", justifyContent: "center", zIndex: 1 },
+  timelineLine: { width: 2, flex: 1, backgroundColor: `${colors.accent.primary}20`, marginVertical: -2 },
+  timelineContent: { flex: 1, paddingBottom: spacing.lg },
+  timelineType: { ...typography.labelSmall, color: colors.text.primary, fontWeight: "700" },
+  timelineTime: { ...typography.labelSmall, color: colors.text.tertiary, fontSize: 9 },
+
+  // Alerts & SLA
+  alertRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  slaRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  experimentRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  workflowRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  errorBadge: { backgroundColor: `${colors.semantic.danger}20` },
+
+  // Tags
+  tagBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: `${colors.accent.primary}15`, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  tagBadgeText: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 10 },
+  tagInput: { ...typography.labelSmall, color: colors.text.primary, padding: 0, minWidth: 40 },
+  addTagRow: { backgroundColor: colors.glass.background, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: colors.glass.border },
+
+  // Users
+  searchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  searchInput: { flex: 1, ...typography.bodyMedium, color: colors.text.primary, padding: 0 },
+  userRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  userInfo: { flex: 1 },
+  userName: { ...typography.bodyMedium, color: colors.text.primary, fontWeight: "600" },
+  userEmail: { ...typography.bodySmall, color: colors.text.tertiary },
+  userActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  adminBadge: { backgroundColor: `${colors.accent.primary}20`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  adminBadgeText: { ...typography.labelSmall, color: colors.accent.primary },
+
+  // User detail
+  detailHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  detailGrid: { flexDirection: "row", gap: spacing.md, marginVertical: spacing.md },
+  detailItem: { flex: 1, alignItems: "center", backgroundColor: colors.glass.background, borderRadius: 12, padding: spacing.sm },
+  detailValue: { ...typography.headlineSmall, color: colors.text.primary },
+  detailLabel: { ...typography.bodySmall, color: colors.text.tertiary, fontSize: 10 },
+  detailTabs: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.md },
+  detailTab: { paddingBottom: 4, borderBottomWidth: 2, borderBottomColor: "transparent" },
+  detailTabActive: { borderBottomColor: colors.accent.primary },
+  detailTabText: { ...typography.bodyMedium, color: colors.text.tertiary },
+  detailTabTextActive: { color: colors.accent.primary, fontWeight: "700" },
+  actionRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+    backgroundColor: colors.glass.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  actionBtnText: { ...typography.labelSmall, color: colors.accent.primary },
+  suspendBtn: { borderColor: `${colors.semantic.danger}40` },
+  dangerBtn: { borderColor: `${colors.semantic.danger}40` },
+
+  // Receipts
+  receiptRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+    gap: spacing.sm,
+  },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  successBadge: { backgroundColor: `${colors.semantic.success}20` },
+  warningBadge: { backgroundColor: `${colors.semantic.warning}20` },
+  promoBadge: { backgroundColor: `${colors.semantic.success}20` },
+  infoBadge: { backgroundColor: `${colors.accent.primary}20` },
+  statusBadgeText: { ...typography.labelSmall, color: colors.text.secondary, fontSize: 10 },
+
+  // Catalog
+  storeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+    gap: spacing.sm,
+  },
+  mergeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: `${colors.accent.primary}20`,
+    borderRadius: 8,
+  },
+  mergeBtnText: { ...typography.labelSmall, color: colors.accent.primary },
+  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.glass.background,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  categoryName: { ...typography.bodySmall, color: colors.text.primary },
+  categoryCount: { ...typography.labelSmall, color: colors.text.tertiary },
+
+  // Feature flags & sessions
+  flagRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+  },
+  addFlagRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  flagInput: {
+    flex: 1,
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    backgroundColor: colors.glass.background,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  addFlagBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: `${colors.accent.primary}20`,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sessionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+  },
+
+  // Announcements
+  annRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+  },
+  annTypeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  newAnnForm: { gap: spacing.sm, marginBottom: spacing.md },
+  annInput: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    backgroundColor: colors.glass.background,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  typeRow: { flexDirection: "row", gap: spacing.sm },
+  typeBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  typeBtnActive: {
+    borderColor: colors.accent.primary,
+    backgroundColor: `${colors.accent.primary}15`,
+  },
+  typeBtnText: { ...typography.labelSmall, color: colors.text.tertiary },
+  typeBtnTextActive: { color: colors.accent.primary },
+  formActions: { flexDirection: "row", gap: spacing.sm, justifyContent: "flex-end" },
+
+  // Audit logs
+  logRow: { paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  logAction: { ...typography.bodyMedium, color: colors.text.primary, fontWeight: "600" },
+  logDetails: { ...typography.bodySmall, color: colors.text.secondary },
+  logTime: { ...typography.bodySmall, color: colors.text.tertiary, marginTop: 2 },
+
+  // Refresh controls
+  refreshCard: { marginBottom: spacing.md, paddingVertical: spacing.sm },
+  refreshHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  refreshToggle: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  toggleLabel: { ...typography.bodySmall, color: colors.text.tertiary },
+  lastUpdatedText: { ...typography.bodySmall, color: colors.text.tertiary, fontSize: 10 },
+
+  // Pagination
+  loadMoreContainer: { alignItems: "center", marginVertical: spacing.md },
+  doneText: { ...typography.bodySmall, color: colors.text.tertiary, fontStyle: "italic" },
+
+  // Filters
+  filterRow: { flexDirection: "row", marginTop: spacing.md, alignItems: "center" },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.glass.background,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  filterChipActive: {
+    backgroundColor: `${colors.accent.primary}20`,
+    borderColor: colors.accent.primary,
+  },
+  filterChipText: { ...typography.labelSmall, color: colors.text.tertiary },
+  filterChipTextActive: { color: colors.accent.primary, fontWeight: "700" },
+
+  // Modals
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: spacing.md },
+  modalContent: { backgroundColor: colors.glass.background, borderRadius: 20, padding: spacing.lg, gap: spacing.md },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  modalTitle: { ...typography.headlineSmall, color: colors.text.primary },
+  fieldLabel: { ...typography.labelSmall, color: colors.text.tertiary, marginBottom: 4 },
+  modalActions: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
+
+  imageModalContent: { backgroundColor: colors.glass.background, borderRadius: 20, padding: 0, overflow: "hidden" },
+  imageModalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
+  imageModalTitle: { ...typography.headlineSmall, color: colors.text.primary },
+  imageContainer: { flex: 1, backgroundColor: "#000" },
+  receiptImage: { width: "100%", height: "100%" },
+});

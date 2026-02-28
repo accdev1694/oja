@@ -1,6 +1,11 @@
 import { v } from "convex/values";
-import { mutation, query, action } from "./_generated/server";
+import { mutation, query, action, internalMutation } from "./_generated/server";
 import { api } from "./_generated/api";
+import { Doc, Id, DataModel } from "./_generated/dataModel";
+import { GenericMutationCtx, GenericQueryCtx } from "convex/server";
+
+type QueryCtx = GenericQueryCtx<DataModel>;
+type MutationCtx = GenericMutationCtx<DataModel>;
 
 // Simple in-memory cache for expensive queries (1-hour TTL)
 const queryCache = new Map<string, { data: any; expiresAt: number }>();
@@ -55,17 +60,29 @@ function normalizeClerkId(clerkId: string): string {
 }
 
 /**
+ * Simple XSS sanitization - escapes common HTML special characters
+ */
+function sanitizeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+/**
  * Gets the current authenticated user from the database
  * Returns null if not authenticated or user not found
  */
-async function getCurrentUser(ctx: any) {
+async function getCurrentUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"users"> | null> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
 
   // Try to find user by exact clerkId first
   let user = await ctx.db
     .query("users")
-    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+    .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .first();
 
   // If not found, try normalized ID (handle OAuth prefixes)
@@ -74,7 +91,7 @@ async function getCurrentUser(ctx: any) {
     if (normalizedId !== identity.subject) {
       user = await ctx.db
         .query("users")
-        .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", normalizedId))
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", normalizedId))
         .first();
     }
   }
@@ -86,7 +103,7 @@ async function getCurrentUser(ctx: any) {
     if (possibleId) {
       user = await ctx.db
         .query("users")
-        .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", possibleId))
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", possibleId))
         .first();
     }
   }
@@ -98,11 +115,21 @@ async function getCurrentUser(ctx: any) {
  * Validates that the current user is an admin
  * Checks both legacy isAdmin flag and RBAC userRoles table
  */
-async function requireAdmin(ctx: any) {
+async function requireAdmin(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> {
   const user = await getCurrentUser(ctx);
 
   if (!user) {
     throw new Error("Not authenticated");
+  }
+
+  // P0 Fix: Check if user is suspended
+  if (user.suspended) {
+    throw new Error("Account suspended");
+  }
+
+  // P1 Fix: MFA Requirement for Admins
+  if (!user.mfaEnabled) {
+    throw new Error("MFA_REQUIRED: Admin access requires multi-factor authentication");
   }
 
   // Check legacy isAdmin flag
@@ -113,7 +140,7 @@ async function requireAdmin(ctx: any) {
   // Check RBAC userRoles table
   const userRole = await ctx.db
     .query("userRoles")
-    .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+    .withIndex("by_user", (q) => q.eq("userId", user._id))
     .first();
 
   if (userRole) {
@@ -149,7 +176,7 @@ const SENSITIVE_RATE_LIMIT = 10;        // 10 requests per minute for sensitive 
  * @param action - The action/permission being performed
  * @returns true if within limits, throws error if exceeded
  */
-async function checkRateLimit(ctx: any, userId: any, action: string): Promise<void> {
+async function checkRateLimit(ctx: MutationCtx, userId: Id<"users">, action: string): Promise<void> {
   const now = Date.now();
   const isSensitive = SENSITIVE_ACTIONS.has(action);
   const limit = isSensitive ? SENSITIVE_RATE_LIMIT : GENERAL_RATE_LIMIT;
@@ -157,7 +184,7 @@ async function checkRateLimit(ctx: any, userId: any, action: string): Promise<vo
   // Find existing rate limit record for this user+action
   const existing = await ctx.db
     .query("adminRateLimits")
-    .withIndex("by_user_action", (q: any) =>
+    .withIndex("by_user_action", (q) =>
       q.eq("userId", userId).eq("action", action)
     )
     .first();
@@ -204,7 +231,7 @@ async function checkRateLimit(ctx: any, userId: any, action: string): Promise<vo
  * Query-safe rate limit check (read-only, doesn't enforce)
  * For queries that want to check limit status without modifying
  */
-async function getRateLimitStatus(ctx: any, userId: any, action: string): Promise<{
+async function getRateLimitStatus(ctx: QueryCtx, userId: Id<"users">, action: string): Promise<{
   count: number;
   limit: number;
   remaining: number;
@@ -216,7 +243,7 @@ async function getRateLimitStatus(ctx: any, userId: any, action: string): Promis
 
   const existing = await ctx.db
     .query("adminRateLimits")
-    .withIndex("by_user_action", (q: any) =>
+    .withIndex("by_user_action", (q) =>
       q.eq("userId", userId).eq("action", action)
     )
     .first();
@@ -248,12 +275,11 @@ async function getRateLimitStatus(ctx: any, userId: any, action: string): Promis
  * Checks if user has a specific permission via their assigned role
  * Also enforces rate limiting on mutations
  */
-async function requirePermission(ctx: any, permission: string, options?: { skipRateLimit?: boolean }) {
+async function requirePermission(ctx: MutationCtx, permission: string, options?: { skipRateLimit?: boolean }): Promise<Doc<"users">> {
   const user = await requireAdmin(ctx);
 
-  // Enforce rate limiting (only for mutations - ctx.db.insert exists)
-  // Skip for queries or if explicitly disabled
-  if (!options?.skipRateLimit && typeof ctx.db.insert === 'function') {
+  // Enforce rate limiting
+  if (!options?.skipRateLimit) {
     await checkRateLimit(ctx, user._id, permission);
   }
 
@@ -265,7 +291,7 @@ async function requirePermission(ctx: any, permission: string, options?: { skipR
   // Get user's role
   const userRole = await ctx.db
     .query("userRoles")
-    .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+    .withIndex("by_user", (q) => q.eq("userId", user._id))
     .first();
 
   if (!userRole) {
@@ -286,12 +312,12 @@ async function requirePermission(ctx: any, permission: string, options?: { skipR
   // Check if role has the required permission
   const hasPermission = await ctx.db
     .query("rolePermissions")
-    .withIndex("by_role", (q: any) => q.eq("roleId", userRole.roleId))
-    .filter((q: any) => q.eq(q.field("permission"), permission))
+    .withIndex("by_role", (q) => q.eq("roleId", userRole.roleId))
+    .filter((q) => q.eq(q.field("permission"), permission))
     .first();
 
   if (!hasPermission) {
-    throw new Error(`Permission denied: ${permission}`);
+    throw new Error(`Permission denied: ${permission} for role ${role.name}`);
   }
 
   return user;
@@ -300,8 +326,47 @@ async function requirePermission(ctx: any, permission: string, options?: { skipR
 /**
  * Permission check for queries (no rate limiting, read-only)
  */
-async function requirePermissionQuery(ctx: any, permission: string) {
-  return requirePermission(ctx, permission, { skipRateLimit: true });
+async function requirePermissionQuery(ctx: QueryCtx, permission: string): Promise<Doc<"users">> {
+  const user = await requireAdmin(ctx);
+
+  // Super admins (via legacy isAdmin) get all permissions
+  if (user.isAdmin) {
+    return user;
+  }
+
+  // Get user's role
+  const userRole = await ctx.db
+    .query("userRoles")
+    .withIndex("by_user", (q) => q.eq("userId", user._id))
+    .first();
+
+  if (!userRole) {
+    throw new Error(`Permission denied: ${permission}`);
+  }
+
+  // Get role details
+  const role = await ctx.db.get(userRole.roleId);
+  if (!role) {
+    throw new Error(`Permission denied: ${permission}`);
+  }
+
+  // Super admin role gets all permissions
+  if (role.name === "super_admin") {
+    return user;
+  }
+
+  // Check if role has the required permission
+  const hasPermission = await ctx.db
+    .query("rolePermissions")
+    .withIndex("by_role", (q) => q.eq("roleId", userRole.roleId))
+    .filter((q) => q.eq(q.field("permission"), permission))
+    .first();
+
+  if (!hasPermission) {
+    throw new Error(`Permission denied: ${permission} for role ${role.name}`);
+  }
+
+  return user;
 }
 
 // ============================================================================
@@ -375,6 +440,9 @@ export const getRoles = query({
 // ADMIN SESSION TRACKING
 // ============================================================================
 
+// 8 hours in milliseconds
+const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000;
+
 export const logAdminSession = mutation({
   args: { ipAddress: v.optional(v.string()), userAgent: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -388,9 +456,15 @@ export const logAdminSession = mutation({
       .order("desc")
       .first();
 
-    if (existing && existing.userAgent === args.userAgent) {
-      await ctx.db.patch(existing._id, { lastSeenAt: now, ipAddress: args.ipAddress || existing.ipAddress });
-      return { sessionId: existing._id };
+    // P1 Fix: Check if existing session is expired (8-hour timeout)
+    if (existing) {
+      const isExpired = (now - existing.lastSeenAt) > SESSION_TIMEOUT_MS;
+      if (isExpired) {
+        await ctx.db.patch(existing._id, { status: "expired", logoutAt: now });
+      } else if (existing.userAgent === args.userAgent) {
+        await ctx.db.patch(existing._id, { lastSeenAt: now, ipAddress: args.ipAddress || existing.ipAddress });
+        return { sessionId: existing._id };
+      }
     }
 
     return {
@@ -438,6 +512,39 @@ export const forceLogoutSession = mutation({
   },
 });
 
+/**
+ * Periodically cleanup expired admin sessions
+ * Called by cron job hourly
+ */
+export const cleanupExpiredSessions = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const expiredThreshold = now - SESSION_TIMEOUT_MS;
+
+    const activeSessions = await ctx.db
+      .query("adminSessions")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect();
+
+    let count = 0;
+    for (const session of activeSessions) {
+      if (session.lastSeenAt < expiredThreshold) {
+        await ctx.db.patch(session._id, {
+          status: "expired",
+          logoutAt: now,
+        });
+        count++;
+      }
+    }
+
+    if (count > 0) {
+      console.log(`[Admin] Cleaned up ${count} expired admin sessions`);
+    }
+    return { count };
+  },
+});
+
 // ============================================================================
 // USER MANAGEMENT
 // ============================================================================
@@ -454,12 +561,33 @@ export const searchUsers = query({
   args: { searchTerm: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_users");
-    const term = args.searchTerm.toLowerCase();
-    const recent = await ctx.db.query("users").order("desc").take(1000);
-    return recent.filter(u =>
-      (u.name && u.name.toLowerCase().includes(term)) ||
-      (u.email && u.email.toLowerCase().includes(term))
-    ).slice(0, args.limit || 50);
+    const term = args.searchTerm;
+    
+    // Minimum 2 characters for performance
+    if (term.length < 2) return [];
+
+    const byName = await ctx.db
+      .query("users")
+      .withSearchIndex("search_name", (q: any) => q.search("name", term))
+      .take(args.limit || 50);
+
+    const byEmail = await ctx.db
+      .query("users")
+      .withSearchIndex("search_email", (q: any) => q.search("email", term))
+      .take(args.limit || 50);
+
+    // Merge results and de-duplicate by ID
+    const results = [...byName];
+    const userIds = new Set(results.map((u: any) => u._id));
+    
+    for (const user of byEmail) {
+      if (!userIds.has(user._id)) {
+        results.push(user);
+        userIds.add(user._id);
+      }
+    }
+
+    return results.slice(0, args.limit || 50);
   },
 });
 
@@ -467,6 +595,31 @@ export const toggleAdmin = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const admin = await requirePermission(ctx, "edit_users");
+    
+    // P0 Fix: Prevent self-promotion/demotion
+    if (args.userId === admin._id) {
+      throw new Error("Security Violation: Cannot toggle your own admin status");
+    }
+
+    // P0 Fix: Check if performing admin is a super_admin
+    // (only super_admins can grant/revoke admin privileges)
+    const isSuperAdmin = admin.isAdmin === true; // legacy super_admin
+    let hasSuperRole = false;
+    
+    if (!isSuperAdmin) {
+      const userRole = await ctx.db.query("userRoles").withIndex("by_user", q => q.eq("userId", admin._id)).first();
+      if (userRole) {
+        const role = await ctx.db.get(userRole.roleId);
+        if (role && role.name === "super_admin") {
+          hasSuperRole = true;
+        }
+      }
+    }
+
+    if (!isSuperAdmin && !hasSuperRole) {
+      throw new Error("Security Violation: Only super_admins can toggle admin status for other users");
+    }
+
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("User not found");
     const newStatus = !user.isAdmin;
@@ -594,30 +747,56 @@ export const toggleSuspension = mutation({
 // ANALYTICS & REPORTING
 // ============================================================================
 
+/**
+ * Generates a temporary download URL for a receipt image
+ */
+export const getReceiptImageUrl = query({
+  args: { storageId: v.string() },
+  handler: async (ctx, args) => {
+    await requirePermissionQuery(ctx, "view_receipts");
+    return await ctx.storage.getUrl(args.storageId);
+  },
+});
+
 export const getAnalytics = query({
   args: { refreshKey: v.optional(v.string()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    if (args.dateFrom || args.dateTo) return getLiveAnalytics(ctx, args.dateFrom, args.dateTo);
+    
+    // P0 Fix: If a date range is provided, we still need to compute it, 
+    // but let's make the "overview" (default) use precomputed ONLY.
+    if (!args.dateFrom && !args.dateTo) {
+      const today = new Date().toISOString().split("T")[0];
+      let metrics = await ctx.db.query("platformMetrics").withIndex("by_date", q => q.eq("date", today)).unique();
+      
+      // Fallback to latest available precomputed metrics
+      if (!metrics) {
+        metrics = await ctx.db.query("platformMetrics").order("desc").first();
+      }
+      
+      if (metrics) {
+        return {
+          totalUsers: metrics.totalUsers,
+          newUsersThisWeek: metrics.newUsersThisWeek,
+          newUsersThisMonth: metrics.newUsersThisMonth,
+          activeUsersThisWeek: metrics.activeUsersThisWeek,
+          totalLists: metrics.totalLists,
+          completedLists: metrics.completedLists,
+          totalReceipts: metrics.totalReceipts,
+          receiptsThisWeek: metrics.receiptsThisWeek,
+          receiptsThisMonth: metrics.receiptsThisMonth,
+          totalGMV: metrics.totalGMV,
+          gmvThisWeek: metrics.gmvThisWeek,
+          gmvThisMonth: metrics.gmvThisMonth,
+          gmvThisYear: metrics.gmvThisYear || 0,
+          computedAt: metrics.computedAt,
+          isPrecomputed: true,
+        };
+      }
+    }
 
-    const today = new Date().toISOString().split("T")[0];
-    const metrics = await ctx.db.query("platformMetrics").withIndex("by_date", q => q.eq("date", today)).unique();
-    if (!metrics) return getLiveAnalytics(ctx);
-
-    return {
-      totalUsers: metrics.totalUsers,
-      newUsersThisWeek: metrics.newUsersThisWeek,
-      newUsersThisMonth: metrics.newUsersThisMonth,
-      activeUsersThisWeek: metrics.activeUsersThisWeek,
-      totalLists: metrics.totalLists,
-      completedLists: metrics.completedLists,
-      totalReceipts: metrics.totalReceipts,
-      receiptsThisWeek: metrics.receiptsThisWeek,
-      receiptsThisMonth: metrics.receiptsThisMonth,
-      totalGMV: metrics.totalGMV,
-      computedAt: metrics.computedAt,
-      isPrecomputed: true,
-    };
+    // If date range provided OR precomputed metrics missing, use optimized live analytics
+    return getLiveAnalytics(ctx, args.dateFrom, args.dateTo);
   },
 });
 
@@ -625,35 +804,54 @@ async function getLiveAnalytics(ctx: any, dateFrom?: number, dateTo?: number) {
   return measureQueryPerformance("getLiveAnalytics", async () => {
     const now = Date.now();
     const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-    const [allU, allL, allR] = await Promise.all([
-      ctx.db.query("users").collect(),
-      ctx.db.query("shoppingLists").collect(),
-      ctx.db.query("receipts").collect()
-    ]);
+    const monthAgo = now - 30 * 24 * 60 * 60 * 1000;
+    const yearAgo = now - 365 * 24 * 60 * 60 * 1000;
+    
+    // P0 Fix: Optimized queries using indexes instead of .collect() on everything
+    // For 50k+ records, we should still use .take() or pagination if possible, 
+    // but for analytics totals, we often need to touch all records.
+    // At scale, this MUST come from platformMetrics only.
+    
+    const usersQuery = dateFrom 
+      ? ctx.db.query("users").withIndex("by_created", (q: any) => q.gte("createdAt", dateFrom))
+      : ctx.db.query("users").withIndex("by_created");
+      
+    const listsQuery = dateFrom
+      ? ctx.db.query("shoppingLists").withIndex("by_created", (q: any) => q.gte("createdAt", dateFrom))
+      : ctx.db.query("shoppingLists").withIndex("by_created");
+      
+    const receiptsQuery = dateFrom
+      ? ctx.db.query("receipts").withIndex("by_created", (q: any) => q.gte("createdAt", dateFrom))
+      : ctx.db.query("receipts").withIndex("by_created");
 
-    let u = allU, l = allL, r = allR;
-    if (dateFrom) {
-      u = u.filter((x: any) => x.createdAt >= dateFrom);
-      l = l.filter((x: any) => x.createdAt >= dateFrom);
-      r = r.filter((x: any) => x.createdAt >= dateFrom);
-    }
+    // We still have to collect to filter/aggregate if dateTo is provided or for status checks
+    // This is the bottleneck that platformMetrics solves.
+    let u = await usersQuery.collect();
+    let l = await listsQuery.collect();
+    let r = await receiptsQuery.collect();
+
     if (dateTo) {
       u = u.filter((x: any) => x.createdAt <= dateTo);
       l = l.filter((x: any) => x.createdAt <= dateTo);
       r = r.filter((x: any) => x.createdAt <= dateTo);
     }
 
+    const computeGMV = (receipts: any[]) => Math.round(receipts.reduce((s: number, x: any) => s + (x.total || 0), 0) * 100) / 100;
+
     return {
       totalUsers: u.length,
       newUsersThisWeek: u.filter((x: any) => x.createdAt >= weekAgo).length,
-      newUsersThisMonth: 0,
+      newUsersThisMonth: u.filter((x: any) => x.createdAt >= monthAgo).length,
       activeUsersThisWeek: new Set(l.filter((x: any) => x.updatedAt >= weekAgo).map((x: any) => x.userId.toString())).size,
       totalLists: l.length,
       completedLists: l.filter((x: any) => x.status === "completed").length,
       totalReceipts: r.length,
-      receiptsThisWeek: 0,
-      receiptsThisMonth: 0,
-      totalGMV: Math.round(r.reduce((s: number, x: any) => s + (x.total || 0), 0) * 100) / 100,
+      receiptsThisWeek: r.filter((x: any) => x.createdAt >= weekAgo).length,
+      receiptsThisMonth: r.filter((x: any) => x.createdAt >= monthAgo).length,
+      totalGMV: computeGMV(r),
+      gmvThisWeek: computeGMV(r.filter((x: any) => x.createdAt >= weekAgo)),
+      gmvThisMonth: computeGMV(r.filter((x: any) => x.createdAt >= monthAgo)),
+      gmvThisYear: computeGMV(r.filter((x: any) => x.createdAt >= yearAgo)),
       computedAt: now,
       isPrecomputed: false,
     };
@@ -681,9 +879,12 @@ export const getRevenueReport = query({
     const monthlyPrice = monthlyPricing?.priceAmount || 0;
     const annualPrice = annualPricing?.priceAmount || 0;
 
-    // Get subscriptions
-    let subs = await ctx.db.query("subscriptions").collect();
-    if (args.dateFrom) subs = subs.filter(s => s.createdAt >= args.dateFrom!);
+    // P0 Fix: Optimized query using index
+    const subsQuery = args.dateFrom 
+      ? ctx.db.query("subscriptions").withIndex("by_created", q => q.gte("createdAt", args.dateFrom!))
+      : ctx.db.query("subscriptions").withIndex("by_created");
+      
+    let subs = await subsQuery.collect();
     if (args.dateTo) subs = subs.filter(s => s.createdAt <= args.dateTo!);
 
     const activeSubs = subs.filter((s: any) => s.status === "active");
@@ -1007,62 +1208,65 @@ export const resolveAlert = mutation({
 // ============================================================================
 
 export const getRecentReceipts = query({
-  args: { limit: v.optional(v.number()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()), searchTerm: v.optional(v.string()), status: v.optional(v.string()) },
+  args: { 
+    limit: v.optional(v.number()), 
+    dateFrom: v.optional(v.number()), 
+    dateTo: v.optional(v.number()), 
+    searchTerm: v.optional(v.string()), 
+    status: v.optional(v.string()) 
+  },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_receipts");
 
     let receipts = [];
+    const limit = args.limit || 100;
 
-    // Apply date range filter using index if provided
-    if (args.dateFrom || args.dateTo) {
-      const allReceipts = await ctx.db.query("receipts").withIndex("by_created").order("desc").collect();
-      receipts = allReceipts.filter(r => {
-        if (args.dateFrom && r.createdAt < args.dateFrom) return false;
-        if (args.dateTo && r.createdAt > args.dateTo) return false;
-        return true;
-      });
-    } else if (args.status) {
-      // Apply status filter using index
+    // 1. Efficient querying based on available filters
+    if (args.status && !args.dateFrom && !args.dateTo) {
       const validStatus = args.status as "completed" | "pending" | "processing" | "failed";
       receipts = await ctx.db.query("receipts")
         .withIndex("by_processing_status", q => q.eq("processingStatus", validStatus))
         .order("desc")
-        .collect();
+        .take(limit);
+    } else if (args.dateFrom || args.dateTo) {
+      let q = ctx.db.query("receipts").withIndex("by_created");
+      if (args.dateFrom) q = q.filter(q => q.gte(q.field("createdAt"), args.dateFrom!));
+      if (args.dateTo) q = q.filter(q => q.lte(q.field("createdAt"), args.dateTo!));
+      receipts = await q.order("desc").take(limit);
     } else {
-      // No filters - just get recent
-      receipts = await ctx.db.query("receipts").order("desc").take(args.limit || 100);
+      receipts = await ctx.db.query("receipts").order("desc").take(limit);
     }
 
-    // Enrich with user data
-    const enriched = await Promise.all(receipts.map(async receipt => {
-      const u = await ctx.db.get(receipt.userId);
+    // 2. Batch load unique users to avoid N+1 and redundant fetches
+    const userIds = [...new Set(receipts.map(r => r.userId))];
+    const users = await Promise.all(userIds.map(id => ctx.db.get(id)));
+    const userMap = new Map(users.filter(u => u).map(u => [u!._id, u!]));
+
+    const enriched = receipts.map(receipt => {
+      const u = userMap.get(receipt.userId);
       return {
         ...receipt,
         userName: u?.name || "User",
         userEmail: u?.email || ""
       };
-    }));
+    });
 
-    // Apply search term filter (after enrichment for user name/email search)
+    // 3. Post-query filtering for search term and extra status filters
     let filtered = enriched;
     if (args.searchTerm && args.searchTerm.length >= 2) {
       const term = args.searchTerm.toLowerCase();
-      filtered = enriched.filter(r =>
+      filtered = filtered.filter(r =>
         r.storeName?.toLowerCase().includes(term) ||
         r.userName?.toLowerCase().includes(term) ||
         r.userEmail?.toLowerCase().includes(term)
       );
     }
 
-    // Apply status filter if not using index
-    if (args.status && !(args.dateFrom || args.dateTo)) {
-      // Already filtered by index above
-    } else if (args.status) {
+    if (args.status && (args.dateFrom || args.dateTo)) {
       filtered = filtered.filter(r => r.processingStatus === args.status);
     }
 
-    // Apply limit
-    return filtered.slice(0, args.limit || 100);
+    return filtered.slice(0, limit);
   },
 });
 
@@ -1070,10 +1274,22 @@ export const getFlaggedReceipts = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_receipts");
-    const failed = await ctx.db.query("receipts").withIndex("by_processing_status", q => q.eq("processingStatus", "failed")).collect();
-    return await Promise.all(failed.map(async r => {
-      const u = await ctx.db.get(r.userId);
-      return { ...r, userName: u?.name || "Unknown" };
+    
+    // P1 Fix: Use index and limit
+    const failed = await ctx.db
+      .query("receipts")
+      .withIndex("by_processing_status", q => q.eq("processingStatus", "failed"))
+      .order("desc")
+      .take(100);
+      
+    // P1 Fix: Batch load unique users to avoid N+1
+    const userIds = [...new Set(failed.map(r => r.userId))];
+    const users = await Promise.all(userIds.map(id => ctx.db.get(id)));
+    const userMap = new Map(users.filter(u => u).map(u => [u!._id, u!]));
+    
+    return failed.map(r => ({
+      ...r,
+      userName: userMap.get(r.userId)?.name || "Unknown"
     }));
   },
 });
@@ -1083,9 +1299,10 @@ export const getPriceAnomalies = query({
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_receipts");
 
-    // Get most recent 5000 price records for performance
+    // P1 Fix: Use index for most recent 5000 price records
     const recentPrices = await ctx.db
       .query("currentPrices")
+      .withIndex("by_updated")
       .order("desc")
       .take(5000);
 
@@ -1146,8 +1363,26 @@ export const deleteReceipt = mutation({
   args: { receiptId: v.id("receipts") },
   handler: async (ctx, args) => {
     const admin = await requirePermission(ctx, "delete_receipts");
+    
+    // P1 Fix: Cascading deletes for priceHistory
+    const history = await ctx.db
+      .query("priceHistory")
+      .withIndex("by_receipt", q => q.eq("receiptId", args.receiptId))
+      .collect();
+      
+    for (const h of history) {
+      await ctx.db.delete(h._id);
+    }
+
     await ctx.db.delete(args.receiptId);
-    await ctx.db.insert("adminLogs", { adminUserId: admin._id, action: "delete_receipt", targetType: "receipt", targetId: args.receiptId, createdAt: Date.now() });
+    await ctx.db.insert("adminLogs", { 
+      adminUserId: admin._id, 
+      action: "delete_receipt", 
+      targetType: "receipt", 
+      targetId: args.receiptId, 
+      details: `Deleted receipt and ${history.length} price history entries`,
+      createdAt: Date.now() 
+    });
     return { success: true };
   },
 });
@@ -1157,16 +1392,28 @@ export const bulkReceiptAction = mutation({
   handler: async (ctx, args) => {
     // Use bulk_operation permission - triggers sensitive rate limit (10/min)
     const admin = await requirePermission(ctx, "bulk_operation");
+    let deletedCount = 0;
+    let approvedCount = 0;
+
     for (const id of args.receiptIds) {
       if (args.action === "delete") {
+        // P1 Fix: Also handle cascading deletes in bulk
+        const history = await ctx.db
+          .query("priceHistory")
+          .withIndex("by_receipt", q => q.eq("receiptId", id))
+          .collect();
+        for (const h of history) await ctx.db.delete(h._id);
+        
         await ctx.db.delete(id);
+        deletedCount++;
       } else {
-        // Type-safe: "completed" is a valid processingStatus literal
         await ctx.db.patch(id, {
-          processingStatus: "completed" as "completed" | "pending" | "processing" | "failed",
+          processingStatus: "completed",
         });
+        approvedCount++;
       }
     }
+    
     await ctx.db.insert("adminLogs", {
       adminUserId: admin._id,
       action: `bulk_${args.action}`,
@@ -1181,9 +1428,31 @@ export const bulkReceiptAction = mutation({
 export const overridePrice = mutation({
   args: { priceId: v.id("currentPrices"), newPrice: v.optional(v.number()), deleteEntry: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
-    await requirePermission(ctx, "edit_users");
-    if (args.deleteEntry) await ctx.db.delete(args.priceId);
-    else if (args.newPrice) await ctx.db.patch(args.priceId, { unitPrice: args.newPrice });
+    const admin = await requirePermission(ctx, "manage_catalog");
+    const existing = await ctx.db.get(args.priceId);
+    if (!existing) throw new Error("Price record not found");
+
+    if (args.deleteEntry) {
+      await ctx.db.delete(args.priceId);
+      await ctx.db.insert("adminLogs", {
+        adminUserId: admin._id,
+        action: "delete_price",
+        targetType: "currentPrice",
+        targetId: args.priceId,
+        details: `Deleted price record for ${existing.itemName} at ${existing.storeName}`,
+        createdAt: Date.now()
+      });
+    } else if (args.newPrice !== undefined) {
+      await ctx.db.patch(args.priceId, { unitPrice: args.newPrice });
+      await ctx.db.insert("adminLogs", {
+        adminUserId: admin._id,
+        action: "override_price",
+        targetType: "currentPrice",
+        targetId: args.priceId,
+        details: `Overrode price for ${existing.itemName} from £${existing.unitPrice} to £${args.newPrice}`,
+        createdAt: Date.now()
+      });
+    }
     return { success: true };
   },
 });
@@ -1194,11 +1463,29 @@ export const getUserDetail = query({
     await requirePermissionQuery(ctx, "view_users");
     const u = await ctx.db.get(args.userId);
     if (!u) return null;
+
+    // P1 Fix: More efficient counting (still using collect().length as Convex lacks count() in all versions, 
+    // but scoped by index is better than full scan)
     const [r, l] = await Promise.all([
       ctx.db.query("receipts").withIndex("by_user", q => q.eq("userId", u._id)).collect(),
       ctx.db.query("shoppingLists").withIndex("by_user", q => q.eq("userId", u._id)).collect()
     ]);
-    return { ...u, receiptCount: r.length, listCount: l.length, totalSpent: Math.round(r.reduce((s, x) => s + (x.total || 0), 0) * 100) / 100, scanRewards: { lifetimeScans: 0 }, subscription: { plan: "free", status: "active" } };
+
+    // Find user's latest subscription
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", q => q.eq("userId", u._id))
+      .order("desc")
+      .first();
+
+    return { 
+      ...u, 
+      receiptCount: r.length, 
+      listCount: l.length, 
+      totalSpent: Math.round(r.reduce((s, x) => s + (x.total || 0), 0) * 100) / 100, 
+      scanRewards: { lifetimeScans: 0 }, 
+      subscription: subscription || { plan: "free", status: "active" } 
+    };
   },
 });
 
@@ -1218,11 +1505,28 @@ export const getAuditLogs = query({
   args: { paginationOpts: v.any(), refreshKey: v.optional(v.string()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_audit_logs");
-    const logs = await ctx.db.query("adminLogs").order("desc").paginate(args.paginationOpts);
-    const enriched = await Promise.all(logs.page.map(async l => {
-      const u = await ctx.db.get(l.adminUserId);
-      return { ...l, adminName: u?.name || "Unknown" };
+    
+    let query = ctx.db.query("adminLogs").withIndex("by_created");
+    
+    if (args.dateFrom) {
+      query = query.filter(q => q.gte(q.field("createdAt"), args.dateFrom!));
+    }
+    if (args.dateTo) {
+      query = query.filter(q => q.lte(q.field("createdAt"), args.dateTo!));
+    }
+    
+    const logs = await query.order("desc").paginate(args.paginationOpts);
+    
+    // P1 Fix: Batch load unique admin users to avoid N+1 and redundant fetches
+    const adminIds = [...new Set(logs.page.map(l => l.adminUserId))];
+    const admins = await Promise.all(adminIds.map(id => ctx.db.get(id)));
+    const adminMap = new Map(admins.filter(a => a).map(a => [a!._id, a!]));
+    
+    const enriched = logs.page.map(l => ({
+      ...l,
+      adminName: adminMap.get(l.adminUserId)?.name || "Unknown"
     }));
+    
     return { ...logs, page: enriched };
   },
 });
@@ -1236,12 +1540,19 @@ export const getFeatureFlags = query({
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "manage_flags");
     const flags = await ctx.db.query("featureFlags").collect();
-    // Enrich with updatedBy admin name
-    return await Promise.all(flags.map(async (f) => {
+    
+    // P1 Fix: Batch load unique admin users to avoid N+1
+    const adminIds = [...new Set(flags.map(f => f.updatedBy).filter(id => !!id))];
+    const admins = await Promise.all(adminIds.map(id => ctx.db.get(id!)));
+    const adminMap = new Map(admins.filter(a => a).map(a => [a!._id, a!]));
+
+    return flags.map((f) => {
       if (!f.updatedBy) return { ...f, updatedByName: "System" };
-      const admin = await ctx.db.get(f.updatedBy);
-      return { ...f, updatedByName: admin?.name || "Unknown" };
-    }));
+      return { 
+        ...f, 
+        updatedByName: adminMap.get(f.updatedBy)?.name || "Unknown" 
+      };
+    });
   },
 });
 
@@ -1306,9 +1617,16 @@ export const createAnnouncement = mutation({
       throw new Error("Title and body are required");
     }
 
+    // P0 Fix: XSS Sanitization & Length Validation
+    if (args.title.length > 200) throw new Error("Title exceeds 200 characters");
+    if (args.body.length > 5000) throw new Error("Body exceeds 5000 characters");
+
+    const sanitizedTitle = sanitizeHtml(args.title);
+    const sanitizedBody = sanitizeHtml(args.body);
+
     const announcementId = await ctx.db.insert("announcements", {
-      title: args.title,
-      body: args.body,
+      title: sanitizedTitle,
+      body: sanitizedBody,
       type: args.type as "info" | "warning" | "promo",
       active: true,
       createdBy: admin._id,
@@ -1320,7 +1638,7 @@ export const createAnnouncement = mutation({
       action: "create_announcement",
       targetType: "announcement",
       targetId: announcementId,
-      details: `Created announcement: ${args.title}`,
+      details: `Created announcement: ${sanitizedTitle}`,
       createdAt: Date.now(),
     });
 
@@ -1342,9 +1660,16 @@ export const updateAnnouncement = mutation({
       throw new Error("Title and body are required");
     }
 
+    // P0 Fix: XSS Sanitization & Length Validation
+    if (args.title.length > 200) throw new Error("Title exceeds 200 characters");
+    if (args.body.length > 5000) throw new Error("Body exceeds 5000 characters");
+
+    const sanitizedTitle = sanitizeHtml(args.title);
+    const sanitizedBody = sanitizeHtml(args.body);
+
     await ctx.db.patch(args.announcementId, {
-      title: args.title,
-      body: args.body,
+      title: sanitizedTitle,
+      body: sanitizedBody,
       type: args.type as "info" | "warning" | "promo",
     });
 
@@ -1353,7 +1678,7 @@ export const updateAnnouncement = mutation({
       action: "update_announcement",
       targetType: "announcement",
       targetId: args.announcementId,
-      details: `Updated announcement: ${args.title}`,
+      details: `Updated announcement: ${sanitizedTitle}`,
       createdAt: Date.now(),
     });
 
@@ -1447,7 +1772,12 @@ export const getCategories = query({
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "manage_catalog");
 
-    const items = await ctx.db.query("pantryItems").collect();
+    // P1 Fix: Avoid full table scan by taking most recent 5000 items
+    const items = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_created")
+      .order("desc")
+      .take(5000);
 
     // Count items by category
     const categoryMap = new Map<string, number>();
@@ -1468,8 +1798,12 @@ export const getDuplicateStores = query({
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "manage_catalog");
 
-    // Get all unique store names from currentPrices
-    const prices = await ctx.db.query("currentPrices").collect();
+    // P1 Fix: Avoid full table scan by taking most recent 5000 price records
+    const prices = await ctx.db
+      .query("currentPrices")
+      .withIndex("by_updated")
+      .order("desc")
+      .take(5000);
 
     const storeMap = new Map<string, string[]>();
 
@@ -1503,7 +1837,7 @@ export const mergeStoreNames = mutation({
   args: { fromNames: v.array(v.string()), toName: v.string() },
   handler: async (ctx, args) => {
     const admin = await requirePermission(ctx, "manage_catalog");
-
+    
     if (args.fromNames.length === 0) {
       throw new Error("No store names provided to merge");
     }
@@ -1512,21 +1846,31 @@ export const mergeStoreNames = mutation({
       throw new Error("Target store name is required");
     }
 
-    // Update all currentPrices records
-    const prices = await ctx.db.query("currentPrices").collect();
     let updatedCount = 0;
 
-    for (const price of prices) {
-      if (args.fromNames.includes(price.storeName)) {
+    // P1 Fix: Use index for currentPrices to avoid full table scan
+    for (const fromName of args.fromNames) {
+      const prices = await ctx.db
+        .query("currentPrices")
+        .withIndex("by_store", q => q.eq("storeName", fromName))
+        .collect();
+        
+      for (const price of prices) {
         await ctx.db.patch(price._id, { storeName: args.toName });
         updatedCount++;
       }
     }
 
-    // Also update priceHistory records
-    const history = await ctx.db.query("priceHistory").collect();
-    for (const h of history) {
-      if (args.fromNames.includes(h.storeName)) {
+    // P1 Fix: Use index for priceHistory to avoid full table scan
+    // (We should have added by_store to priceHistory earlier - verify schema)
+    for (const fromName of args.fromNames) {
+      // Use existing index if available, or just filter
+      const history = await ctx.db
+        .query("priceHistory")
+        .withIndex("by_store", q => q.eq("storeName", fromName))
+        .collect();
+        
+      for (const h of history) {
         await ctx.db.patch(h._id, { storeName: args.toName });
         updatedCount++;
       }
@@ -1543,7 +1887,6 @@ export const mergeStoreNames = mutation({
     return { success: true, updatedCount };
   },
 });
-
 /**
  * Export data to CSV
  * Generates a CSV string for the requested data type
@@ -1582,6 +1925,91 @@ export const exportDataToCSV = action({
     }
     
     return { csv, fileName: `oja_export_${args.dataType}_${Date.now()}.csv` };
+  },
+});
+
+/**
+ * Clear all seed/placeholder data from the system
+ * Removes placeholder receipts, test data, and resets demo content
+ */
+export const clearSeedData = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const admin = await requirePermission(ctx, "manage_catalog");
+
+    // Find all seed receipts (marked with isAdminSeed flag or dummy storage IDs)
+    const allReceipts = await ctx.db.query("receipts").collect();
+
+    let deletedReceipts = 0;
+    let deletedPrices = 0;
+    let deletedPriceHistory = 0;
+
+    // Delete seed receipts
+    for (const receipt of allReceipts) {
+      const isSeedFlag = !!receipt.isAdminSeed;
+      const isDummyId = receipt.imageStorageId && (
+        receipt.imageStorageId.startsWith("placeholder") ||
+        receipt.imageStorageId.startsWith("seed") ||
+        !receipt.imageStorageId.includes("_")
+      );
+
+      if (isSeedFlag || isDummyId) {
+        await ctx.db.delete(receipt._id);
+        deletedReceipts++;
+      }
+    }
+
+    // Delete seed prices (prices with suspicious patterns)
+    const allPrices = await ctx.db.query("currentPrices").collect();
+    for (const price of allPrices) {
+      // Remove prices that are exactly 0, or have "seed"/"test" in item name
+      const isSeedPrice =
+        price.unitPrice === 0 ||
+        (price.itemName && (
+          price.itemName.toLowerCase().includes("seed") ||
+          price.itemName.toLowerCase().includes("test") ||
+          price.itemName.toLowerCase().includes("placeholder")
+        ));
+
+      if (isSeedPrice) {
+        await ctx.db.delete(price._id);
+        deletedPrices++;
+      }
+    }
+
+    // Delete seed price history
+    const allHistory = await ctx.db.query("priceHistory").collect();
+    for (const history of allHistory) {
+      const isSeedHistory =
+        history.price === 0 ||
+        (history.itemName && (
+          history.itemName.toLowerCase().includes("seed") ||
+          history.itemName.toLowerCase().includes("test") ||
+          history.itemName.toLowerCase().includes("placeholder")
+        ));
+
+      if (isSeedHistory) {
+        await ctx.db.delete(history._id);
+        deletedPriceHistory++;
+      }
+    }
+
+    const now = Date.now();
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "clear_seed_data",
+      targetType: "system",
+      details: `Cleared seed data: ${deletedReceipts} receipts, ${deletedPrices} prices, ${deletedPriceHistory} price history records`,
+      createdAt: now,
+    });
+
+    return {
+      success: true,
+      message: `Cleared ${deletedReceipts} seed receipts, ${deletedPrices} seed prices, ${deletedPriceHistory} seed price history records`,
+      deletedReceipts,
+      deletedPrices,
+      deletedPriceHistory,
+    };
   },
 });
 
@@ -1678,3 +2106,4 @@ export const createExperiment = mutation({
     return { success: true, experimentId };
   },
 });
+
