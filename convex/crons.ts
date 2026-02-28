@@ -93,10 +93,46 @@ crons.interval(
   internal.monitoring.checkApiLatency
 );
 
+crons.interval(
+  "check-security-anomalies",
+  { minutes: 15 },
+  internal.monitoring.checkSecurityAnomalies
+);
+
+crons.interval(
+  "check-price-anomalies",
+  { minutes: 30 },
+  internal.monitoring.checkPriceAnomalies
+);
+
 crons.daily(
   "prune-old-alerts",
   { hourUTC: 5, minuteUTC: 0 },
   internal.monitoring.pruneAlerts
+);
+
+// Maintenance: Move old admin logs to archive weekly (Sunday at 2am UTC)
+// Uses dayOfWeek parameter required by Convex crons.weekly()
+crons.weekly(
+  "archive-old-admin-logs",
+  { dayOfWeek: "sunday", hourUTC: 2, minuteUTC: 0 },
+  internal.admin.archiveOldAdminLogs
+);
+
+// Scheduled Reports: Weekly Summary (Monday at 6am)
+crons.weekly(
+  "weekly-admin-summary-report",
+  { dayOfWeek: "monday", hourUTC: 6, minuteUTC: 0 },
+  internal.admin.runScheduledReports,
+  { type: "weekly_summary" }
+);
+
+// Scheduled Reports: Monthly Financial (1st of month at 7am)
+crons.monthly(
+  "monthly-financial-report",
+  { day: 1, hourUTC: 7, minuteUTC: 0 },
+  internal.admin.runScheduledReports,
+  { type: "monthly_financial" }
 );
 
 export default crons;

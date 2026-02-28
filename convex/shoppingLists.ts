@@ -9,6 +9,7 @@ import { getIconForItem } from "./iconMapping";
 import { isDuplicateItemName } from "./lib/fuzzyMatch";
 import { toGroceryTitleCase } from "./lib/titleCase";
 import { trackFunnelEvent, trackActivity } from "./lib/analytics";
+import { getUserListPermissions } from "./partners";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -176,7 +177,7 @@ export const getById = query({
           q.eq("listId", args.id).eq("userId", user._id)
         )
         .unique();
-      if (!partner || partner.status !== "accepted") {
+      if (!partner || (partner.status !== "accepted" && partner.status !== "pending")) {
         return null;
       }
     }
@@ -571,13 +572,18 @@ export const update = mutation({
     }
     requireEditableList(list);
 
-    // Verify ownership
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
-    if (!user || list.userId !== user._id) {
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Verify ownership or partnership
+    const perms = await getUserListPermissions(ctx, args.id, user._id);
+    if (!perms.canEdit) {
       throw new Error("Unauthorized");
     }
 
@@ -612,13 +618,18 @@ export const remove = mutation({
       throw new Error("List not found");
     }
 
-    // Verify ownership
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
-    if (!user || list.userId !== user._id) {
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Verify ownership or partnership
+    const perms = await getUserListPermissions(ctx, args.id, user._id);
+    if (!perms.canEdit) {
       throw new Error("Unauthorized");
     }
 
@@ -673,7 +684,7 @@ export const startShopping = mutation({
           q.eq("listId", args.id).eq("userId", user._id)
         )
         .unique();
-      if (partner && partner.status === "accepted") {
+      if (partner && (partner.status === "accepted" || partner.status === "pending")) {
         isAuthorized = true;
       }
     }
@@ -727,7 +738,7 @@ export const completeShopping = mutation({
           q.eq("listId", args.id).eq("userId", user._id)
         )
         .unique();
-      if (partner && partner.status === "accepted") {
+      if (partner && (partner.status === "accepted" || partner.status === "pending")) {
         isAuthorized = true;
       }
     }
@@ -825,7 +836,7 @@ export const pauseShopping = mutation({
           q.eq("listId", args.id).eq("userId", user._id)
         )
         .unique();
-      if (partner && partner.status === "accepted") {
+      if (partner && (partner.status === "accepted" || partner.status === "pending")) {
         isAuthorized = true;
       }
     }
@@ -880,7 +891,7 @@ export const resumeShopping = mutation({
           q.eq("listId", args.id).eq("userId", user._id)
         )
         .unique();
-      if (partner && partner.status === "accepted") {
+      if (partner && (partner.status === "accepted" || partner.status === "pending")) {
         isAuthorized = true;
       }
     }
@@ -931,7 +942,10 @@ export const switchStoreMidShop = mutation({
     const list = await ctx.db.get(args.listId);
     if (!list) throw new Error("List not found");
     requireEditableList(list);
-    if (list.userId !== user._id) throw new Error("Unauthorized");
+    
+    // Verify ownership or partnership
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canEdit) throw new Error("Unauthorized");
     if (list.status !== "shopping") {
       throw new Error("Can only switch stores while actively shopping");
     }
@@ -1001,7 +1015,7 @@ export const getTripStats = query({
           q.eq("listId", args.id).eq("userId", user._id)
         )
         .unique();
-      if (!partner || partner.status !== "accepted") {
+      if (!partner || (partner.status !== "accepted" && partner.status !== "pending")) {
         return null;
       }
     }
@@ -1103,7 +1117,13 @@ export const archiveList = mutation({
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
-    if (!user || list.userId !== user._id) {
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Verify ownership or partnership
+    const perms = await getUserListPermissions(ctx, args.id, user._id);
+    if (!perms.canEdit) {
       throw new Error("Unauthorized");
     }
 
@@ -1230,8 +1250,21 @@ export const getTripSummary = query({
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
-    if (!user || list.userId !== user._id) {
+    if (!user) {
       return null;
+    }
+
+    // Allow access if owner OR accepted partner
+    if (list.userId !== user._id) {
+      const partner = await ctx.db
+        .query("listPartners")
+        .withIndex("by_list_user", (q: any) =>
+          q.eq("listId", args.id).eq("userId", user._id)
+        )
+        .unique();
+      if (!partner || (partner.status !== "accepted" && partner.status !== "pending")) {
+        return null;
+      }
     }
 
     // Get list items
@@ -1333,8 +1366,9 @@ export const setStore = mutation({
     }
     requireEditableList(list);
 
-    // Verify ownership
-    if (list.userId !== user._id) {
+    // Verify ownership or partnership
+    const perms = await getUserListPermissions(ctx, args.id, user._id);
+    if (!perms.canEdit) {
       throw new Error("Unauthorized");
     }
 
@@ -1457,7 +1491,7 @@ export const compareListAcrossStores = query({
           q.eq("listId", args.listId).eq("userId", user._id)
         )
         .unique();
-      if (!partner || partner.status !== "accepted") {
+      if (!partner || (partner.status !== "accepted" && partner.status !== "pending")) {
         return null;
       }
     }
@@ -1699,9 +1733,10 @@ export const switchStore = mutation({
     }
     requireEditableList(list);
 
-    // Only the list owner can switch stores
-    if (list.userId !== user._id) {
-      throw new Error("Unauthorized: Only the list owner can switch stores");
+    // Only the list owner or partner can switch stores
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canEdit) {
+      throw new Error("Unauthorized: You don't have permission to switch stores for this list");
     }
 
     // Validate the new store ID

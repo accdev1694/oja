@@ -149,7 +149,12 @@
       "Bash(timeout 15 tail:*)",
       "Bash(exit 0)",
       "Bash(timeout 10 tail:*)",
-      "Bash(timeout 20 tail:*)"
+      "Bash(timeout 20 tail:*)",
+      "Bash(head:*)",
+      "Bash(timeout 30 npx convex dev:*)",
+      "Bash(timeout 45 npx convex dev:*)",
+      "Bash(timeout 60 npx convex dev:*)",
+      "mcp__playwright__browser_tabs"
     ]
   },
   "enableAllProjectMcpServers": true,

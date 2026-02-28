@@ -213,6 +213,7 @@ export {
 } from "./GlassModal";
 
 export { TrialNudgeBanner } from "./TrialNudgeBanner";
+export { ImpersonationBanner } from "./ImpersonationBanner";
 export { GuidedBorder } from "./GuidedBorder";
 
 // =============================================================================

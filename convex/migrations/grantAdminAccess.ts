@@ -40,6 +40,7 @@ export const grantAdmin = internalMutation({
     // Grant admin access
     await ctx.db.patch(user._id, {
       isAdmin: true,
+      adminGrantedAt: Date.now(), // Start 14-day MFA grace period
       updatedAt: Date.now(),
     });
 

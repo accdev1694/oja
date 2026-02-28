@@ -141,7 +141,7 @@ export default function ListDetailScreen() {
 
   // Partner data
   const listPartners = useQuery(api.partners.getByList, { listId: id });
-  const hasPartners = (listPartners ?? []).some((p: any) => p.status === "accepted");
+  const hasPartners = (listPartners ?? []).some((p: any) => p.status === "accepted" || p.status === "pending");
   const listMessageCount = useQuery(api.partners.getListMessageCount, hasPartners ? { listId: id } : "skip");
 
   // Edit budget modal state

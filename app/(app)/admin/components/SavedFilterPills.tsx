@@ -7,15 +7,32 @@ import { colors, spacing, typography } from "@/components/ui/glass";
 import * as Haptics from "expo-haptics";
 import type { Id } from "@/convex/_generated/dataModel";
 
+// Discriminated union for filter data
+type UserFilterData = {
+  type: "users";
+  searchQuery?: string;
+  statusFilter?: string;
+  planFilter?: string;
+};
+
+type ReceiptFilterData = {
+  type: "receipts";
+  storeFilter?: string;
+  statusFilter?: string;
+  dateRange?: { from: number; to: number };
+};
+
+type FilterData = UserFilterData | ReceiptFilterData;
+
 interface SavedFilter {
   _id: string;
   name: string;
-  filterData: any;
+  filterData: FilterData;
 }
 
 interface SavedFilterPillsProps {
   tab: "users" | "receipts";
-  onSelect: (filterData: any) => void;
+  onSelect: (filterData: FilterData) => void;
 }
 
 /**

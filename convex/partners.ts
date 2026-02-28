@@ -62,7 +62,7 @@ export async function getUserListPermissions(
     .withIndex("by_list_user", (q: any) => q.eq("listId", listId).eq("userId", userId))
     .unique();
 
-  if (!partner || partner.status !== "accepted") {
+  if (!partner || (partner.status !== "accepted" && partner.status !== "pending")) {
     return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false };
   }
 
@@ -71,7 +71,7 @@ export async function getUserListPermissions(
     isPartner: true,
     role: "member",
     canView: true,
-    canEdit: false, // Members can only view, comment, and chat
+    canEdit: !isLocked, // Partners can now add/edit items
   };
 }
 

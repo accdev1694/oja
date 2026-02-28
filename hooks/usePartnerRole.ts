@@ -21,6 +21,7 @@ export function usePartnerRole(listId: Id<"shoppingLists"> | undefined) {
 
   return {
     ...permissions,
+    isPartner: permissions.isPartner || permissions.role === "member", // role is set for both accepted and pending
     loading: false,
   };
 }

@@ -307,3 +307,11 @@ export interface Webhook {
   updatedAt: number;
 }
 
+export interface AdminDashboardPreferences {
+  overviewWidgets: {
+    id: string;
+    visible: boolean;
+    order: number;
+  }[];
+}
+

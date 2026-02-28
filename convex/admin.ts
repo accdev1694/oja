@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query, action, internalMutation } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { Doc, Id, DataModel } from "./_generated/dataModel";
 import { GenericMutationCtx, GenericQueryCtx } from "convex/server";
+import { logToSIEM } from "./lib/siem";
 
 type QueryCtx = GenericQueryCtx<DataModel>;
 type MutationCtx = GenericMutationCtx<DataModel>;
@@ -124,23 +125,81 @@ async function requireAdmin(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> 
   const user = await getCurrentUser(ctx);
 
   if (!user) {
+    // We don't have a userId here, but we log the blocked attempt
+    if ("db" in ctx) {
+      // SIEM only works in mutations (where ctx.db.insert exists)
+      await logToSIEM(ctx as MutationCtx, {
+        action: "admin_access_attempt",
+        userId: "unauthenticated",
+        status: "blocked",
+        severity: "medium",
+        details: "Unauthenticated access attempt to admin function"
+      });
+    }
     throw new Error("Not authenticated");
   }
 
   // P0 Fix: Check if user is suspended
   if (user.suspended) {
+    if ("db" in ctx) {
+      await logToSIEM(ctx as MutationCtx, {
+        action: "admin_access_attempt",
+        userId: user._id,
+        status: "blocked",
+        severity: "high",
+        details: "Suspended user attempted admin access"
+      });
+    }
     throw new Error("Account suspended");
   }
 
-  // P1 Fix: MFA Requirement for Admins
+  // P1 Fix: MFA Requirement for Admins (with 14-day grace period)
   if (!user.mfaEnabled) {
-    throw new Error("MFA_REQUIRED: Admin access requires multi-factor authentication");
+    const now = Date.now();
+    const GRACE_PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+
+    // Bootstrap: If adminGrantedAt doesn't exist, set it now (mutation context only)
+    let adminGrantedAt = user.adminGrantedAt;
+    const isMutation = "db" in ctx && "patch" in (ctx as any).db;
+
+    if (!adminGrantedAt && isMutation) {
+      adminGrantedAt = now;
+      await (ctx as MutationCtx).db.patch(user._id, { adminGrantedAt });
+    }
+
+    // Calculate time since admin access was granted
+    // If no adminGrantedAt and we're in a query, treat as "just granted" (grace period active)
+    const timeSinceGrant = adminGrantedAt ? now - adminGrantedAt : 0;
+    const daysRemaining = Math.ceil((GRACE_PERIOD_MS - timeSinceGrant) / (24 * 60 * 60 * 1000));
+
+    if (timeSinceGrant > GRACE_PERIOD_MS) {
+      // Grace period expired - block access
+      if (isMutation) {
+        await logToSIEM(ctx as MutationCtx, {
+          action: "admin_access_attempt",
+          userId: user._id,
+          status: "blocked",
+          severity: "high",
+          details: `MFA grace period expired (${Math.floor(timeSinceGrant / (24 * 60 * 60 * 1000))} days since grant)`
+        });
+      }
+      throw new Error("MFA_REQUIRED: Multi-factor authentication setup required. Your 14-day grace period has expired.");
+    }
+
+    // Within grace period - allow but log warning
+    if (isMutation) {
+      await logToSIEM(ctx as MutationCtx, {
+        action: "admin_access_attempt",
+        userId: user._id,
+        status: "allowed_grace_period",
+        severity: "low",
+        details: `Admin access without MFA (${daysRemaining} days remaining in grace period)`
+      });
+    }
   }
 
   // P3 Fix: IP Whitelisting check
   if (user.allowedIps && user.allowedIps.length > 0) {
-    // We need to know the current IP. Since it's not in identity, 
-    // we find it via the most recent active session for this user.
     const session = await ctx.db
       .query("adminSessions")
       .withIndex("by_user", q => q.eq("userId", user._id))
@@ -149,25 +208,39 @@ async function requireAdmin(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> 
       .first();
       
     if (session && session.ipAddress && !user.allowedIps.includes(session.ipAddress)) {
+      if ("db" in ctx) {
+        await logToSIEM(ctx as MutationCtx, {
+          action: "admin_access_attempt",
+          userId: user._id,
+          status: "blocked",
+          severity: "high",
+          ipAddress: session.ipAddress,
+          details: `IP restriction: Access attempt from unauthorized IP ${session.ipAddress}`
+        });
+      }
       throw new Error(`IP_RESTRICTED: Admin access not allowed from IP ${session.ipAddress}`);
     }
   }
 
-  // Check legacy isAdmin flag
-  if (user.isAdmin) {
-    return user;
-  }
-
-  // Check RBAC userRoles table
+  // Check legacy isAdmin flag or RBAC table
   const userRole = await ctx.db
     .query("userRoles")
     .withIndex("by_user", (q) => q.eq("userId", user._id))
     .first();
 
-  if (userRole) {
+  if (user.isAdmin || userRole) {
     return user;
   }
 
+  if ("db" in ctx) {
+    await logToSIEM(ctx as MutationCtx, {
+      action: "admin_access_attempt",
+      userId: user._id,
+      status: "blocked",
+      severity: "high",
+      details: "Non-admin user attempted admin access"
+    });
+  }
   throw new Error("Admin access required");
 }
 
@@ -301,8 +374,31 @@ async function requirePermission(ctx: MutationCtx, permission: string, options?:
 
   // Enforce rate limiting
   if (!options?.skipRateLimit) {
-    await checkRateLimit(ctx, user._id, permission);
+    try {
+      await checkRateLimit(ctx, user._id, permission);
+    } catch (e) {
+      await logToSIEM(ctx, {
+        action: "rate_limit_blocked",
+        userId: user._id,
+        status: "blocked",
+        severity: "medium",
+        details: `Rate limit reached for permission: ${permission}`
+      });
+      throw e;
+    }
   }
+
+  // Helper to log and throw
+  const deny = async (reason: string) => {
+    await logToSIEM(ctx, {
+      action: "permission_denied",
+      userId: user._id,
+      status: "blocked",
+      severity: "high",
+      details: `${reason}: ${permission}`
+    });
+    throw new Error(`Permission denied: ${permission}`);
+  };
 
   // Super admins (via legacy isAdmin) get all permissions
   if (user.isAdmin) {
@@ -316,13 +412,13 @@ async function requirePermission(ctx: MutationCtx, permission: string, options?:
     .first();
 
   if (!userRole) {
-    throw new Error(`Permission denied: ${permission}`);
+    return await deny("No role assigned");
   }
 
   // Get role details
   const role = await ctx.db.get(userRole.roleId);
   if (!role) {
-    throw new Error(`Permission denied: ${permission}`);
+    return await deny("Assigned role not found");
   }
 
   // Super admin role gets all permissions
@@ -338,7 +434,7 @@ async function requirePermission(ctx: MutationCtx, permission: string, options?:
     .first();
 
   if (!hasPermission) {
-    throw new Error(`Permission denied: ${permission} for role ${role.name}`);
+    return await deny(`Role ${role.name} lacks permission`);
   }
 
   return user;
@@ -450,6 +546,52 @@ export const getMyPermissions = query({
   },
 });
 
+export const getMfaGracePeriodStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+
+    if (!user) {
+      return null;
+    }
+
+    // Not an admin - return null
+    const userRole = await ctx.db
+      .query("userRoles")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .first();
+
+    if (!user.isAdmin && !userRole) {
+      return null;
+    }
+
+    // Already has MFA enabled - no grace period needed
+    if (user.mfaEnabled) {
+      return {
+        mfaEnabled: true,
+        inGracePeriod: false,
+        daysRemaining: 0,
+        gracePeriodExpired: false,
+      };
+    }
+
+    // Calculate grace period status
+    const now = Date.now();
+    const GRACE_PERIOD_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+    const adminGrantedAt = user.adminGrantedAt || now;
+    const timeSinceGrant = now - adminGrantedAt;
+    const daysRemaining = Math.max(0, Math.ceil((GRACE_PERIOD_MS - timeSinceGrant) / (24 * 60 * 60 * 1000)));
+    const gracePeriodExpired = timeSinceGrant > GRACE_PERIOD_MS;
+
+    return {
+      mfaEnabled: false,
+      inGracePeriod: !gracePeriodExpired,
+      daysRemaining,
+      gracePeriodExpired,
+    };
+  },
+});
+
 export const getRoles = query({
   args: {},
   handler: async (ctx) => {
@@ -463,6 +605,7 @@ export const getRoles = query({
 
 // 8 hours in milliseconds
 const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000;
+const MAX_CONCURRENT_SESSIONS = 3;
 
 export const logAdminSession = mutation({
   args: { ipAddress: v.optional(v.string()), userAgent: v.optional(v.string()) },
@@ -470,34 +613,86 @@ export const logAdminSession = mutation({
     const user = await requireAdmin(ctx);
     const now = Date.now();
 
-    const existing = await ctx.db
+    // 1. Get all currently active sessions for this user
+    const activeSessions = await ctx.db
       .query("adminSessions")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .filter((q) => q.eq(q.field("status"), "active"))
       .order("desc")
-      .first();
+      .collect();
 
-    // P1 Fix: Check if existing session is expired (8-hour timeout)
-    if (existing) {
-      const isExpired = (now - existing.lastSeenAt) > SESSION_TIMEOUT_MS;
+    // 2. Identify and handle expired or duplicate sessions
+    let currentSession = null;
+    const trulyActive = [];
+
+    for (const session of activeSessions) {
+      const isExpired = (now - session.lastSeenAt) > SESSION_TIMEOUT_MS;
       if (isExpired) {
-        await ctx.db.patch(existing._id, { status: "expired", logoutAt: now });
-      } else if (existing.userAgent === args.userAgent) {
-        await ctx.db.patch(existing._id, { lastSeenAt: now, ipAddress: args.ipAddress || existing.ipAddress });
-        return { sessionId: existing._id };
+        await ctx.db.patch(session._id, { status: "expired", logoutAt: now });
+      } else if (!currentSession && session.userAgent === args.userAgent) {
+        // Same browser/device - reuse this session
+        await ctx.db.patch(session._id, { lastSeenAt: now, ipAddress: args.ipAddress || session.ipAddress });
+        currentSession = session;
+        trulyActive.push(session);
+      } else {
+        trulyActive.push(session);
       }
     }
 
-    return {
-      sessionId: await ctx.db.insert("adminSessions", {
+    if (currentSession) return { sessionId: currentSession._id };
+
+    // 3. Enforce concurrency limit (Max 3)
+    // If we're about to add a new one, we must have at most MAX-1
+    if (trulyActive.length >= MAX_CONCURRENT_SESSIONS) {
+      // Sort oldest first and expire until we have space
+      const sortedByAge = [...trulyActive].sort((a, b) => a.loginAt - b.loginAt);
+      const toExpireCount = trulyActive.length - (MAX_CONCURRENT_SESSIONS - 1);
+      
+      for (let i = 0; i < toExpireCount; i++) {
+        const sessionToKill = sortedByAge[i];
+        await ctx.db.patch(sessionToKill._id, { 
+          status: "expired", 
+          logoutAt: now,
+          // Add metadata to note it was killed by concurrency limit
+        });
+      }
+
+      await ctx.db.insert("adminLogs", {
+        adminUserId: user._id,
+        action: "session_limit_exceeded",
+        targetType: "session",
+        details: `Automatic logout of ${toExpireCount} oldest session(s) due to concurrency limit (${MAX_CONCURRENT_SESSIONS})`,
+        createdAt: now,
+      });
+
+      await logToSIEM(ctx, {
+        action: "session_limit_enforced",
         userId: user._id,
-        ipAddress: args.ipAddress,
-        userAgent: args.userAgent,
-        loginAt: now,
-        lastSeenAt: now,
-        status: "active",
-      })
-    };
+        status: "success",
+        severity: "medium",
+        details: `Concurrency limit (${MAX_CONCURRENT_SESSIONS}) reached. Expired ${toExpireCount} old sessions.`
+      });
+    }
+
+    const sessionId = await ctx.db.insert("adminSessions", {
+      userId: user._id,
+      ipAddress: args.ipAddress,
+      userAgent: args.userAgent,
+      loginAt: now,
+      lastSeenAt: now,
+      status: "active",
+    });
+
+    await logToSIEM(ctx, {
+      action: "admin_login",
+      userId: user._id,
+      status: "success",
+      severity: "low",
+      ipAddress: args.ipAddress,
+      details: `Admin logged in from ${args.userAgent || "unknown device"}`
+    });
+
+    return { sessionId };
   },
 });
 
@@ -655,7 +850,14 @@ export const toggleAdmin = mutation({
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("User not found");
     const newStatus = !user.isAdmin;
-    await ctx.db.patch(args.userId, { isAdmin: newStatus, updatedAt: Date.now() });
+
+    // Set adminGrantedAt when granting admin access (starts MFA grace period)
+    const patchData: any = { isAdmin: newStatus, updatedAt: Date.now() };
+    if (newStatus) {
+      patchData.adminGrantedAt = Date.now();
+    }
+
+    await ctx.db.patch(args.userId, patchData);
     
     if (newStatus) {
       const exists = await ctx.db.query("userRoles").withIndex("by_user", q => q.eq("userId", args.userId)).first();
@@ -832,7 +1034,7 @@ export const getAnalytics = query({
   },
 });
 
-async function getLiveAnalytics(ctx: any, dateFrom?: number, dateTo?: number) {
+async function getLiveAnalytics(ctx: QueryCtx, dateFrom?: number, dateTo?: number) {
   const cacheKey = `live_analytics_${dateFrom || 0}_${dateTo || 0}`;
   return await getCachedOrCompute(cacheKey, 5 * 60 * 1000, async () => {
     return measureQueryPerformance("getLiveAnalytics", async () => {
@@ -989,7 +1191,7 @@ export const getCohortMetrics = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    return await ctx.db.query("cohortMetrics").order("desc").collect();
+    return await ctx.db.query("cohortMetrics").order("desc").take(100);
   },
 });
 
@@ -1004,8 +1206,8 @@ export const getFunnelAnalytics = query({
     // Count unique users per step
     const funnel: { step: string; count: number; percentage: number }[] = [];
     
-    // Get all events
-    const allEvents = await ctx.db.query("funnelEvents").collect();
+    // Get recent events (limit for performance)
+    const allEvents = await ctx.db.query("funnelEvents").order("desc").take(10000);
     
     let baseCount = 0;
     
@@ -1033,7 +1235,7 @@ export const getChurnMetrics = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    return await ctx.db.query("churnMetrics").order("desc").collect();
+    return await ctx.db.query("churnMetrics").order("desc").take(100);
   },
 });
 
@@ -1041,7 +1243,7 @@ export const getLTVMetrics = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    return await ctx.db.query("ltvMetrics").order("desc").collect();
+    return await ctx.db.query("ltvMetrics").order("desc").take(100);
   },
 });
 
@@ -1049,7 +1251,7 @@ export const getUserSegmentSummary = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    const segments = await ctx.db.query("userSegments").collect();
+    const segments = await ctx.db.query("userSegments").take(5000);
     
     const summary: Record<string, number> = {};
     for (const s of segments) {
@@ -1067,6 +1269,148 @@ export const getUserSegmentSummary = query({
 // ============================================================================
 // PHASE 3: SUPPORT & OPERATIONS
 // ============================================================================
+
+/**
+ * Data Retention: Moves admin logs older than 90 days to cold storage
+ * Runs weekly via cron
+ */
+export const archiveOldAdminLogs = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+    
+    // Process in batches of 100 to avoid timeout/heavy ops
+    const oldLogs = await ctx.db
+      .query("adminLogs")
+      .withIndex("by_created", (q) => q.lt("createdAt", ninetyDaysAgo))
+      .take(100);
+
+    if (oldLogs.length === 0) return { archived: 0 };
+
+    for (const log of oldLogs) {
+      // 1. Copy to archive
+      await ctx.db.insert("archivedAdminLogs", {
+        adminUserId: log.adminUserId,
+        action: log.action,
+        targetType: log.targetType,
+        targetId: log.targetId,
+        details: log.details,
+        createdAt: log.createdAt,
+        archivedAt: Date.now(),
+      });
+      
+      // 2. Delete from active logs
+      await ctx.db.delete(log._id);
+    }
+
+    return { archived: oldLogs.length };
+  },
+});
+
+/**
+ * Scheduled Reports: Generates and archives reports for admins
+ * Runs weekly/monthly via cron
+ */
+export const runScheduledReports = internalMutation({
+  args: { type: v.union(v.literal("weekly_summary"), v.literal("monthly_financial")) },
+  handler: async (ctx, args) => {
+    const activeConfigs = await ctx.db
+      .query("scheduledReports")
+      .filter((q) => q.and(q.eq(q.field("type"), args.type), q.eq(q.field("status"), "active")))
+      .collect();
+
+    if (activeConfigs.length === 0) return { status: "no_active_configs" };
+
+    // 1. Compute report data (reuse existing analytics logic)
+    let reportData = {};
+    if (args.type === "weekly_summary") {
+      reportData = await ctx.runQuery(api.admin.getAnalytics, {});
+    } else {
+      reportData = await ctx.runQuery(api.admin.getRevenueReport, {});
+    }
+
+    // 2. Archive the report and simulate "sending"
+    for (const config of activeConfigs) {
+      await ctx.db.insert("reportHistory", {
+        reportId: config._id,
+        data: reportData,
+        sentAt: Date.now(),
+        status: "success", // In future: "failed" if email API fails
+      });
+
+      await ctx.db.patch(config._id, { lastRunAt: Date.now() });
+
+      // LOG: Admin report generated
+      await ctx.db.insert("adminLogs", {
+        adminUserId: config.recipientEmails[0] as any, // Mock link
+        action: "report_generated",
+        targetType: "report",
+        targetId: config._id,
+        details: `Generated ${args.type} for ${config.recipientEmails.join(", ")}`,
+        createdAt: Date.now(),
+      });
+    }
+
+    return { status: "success", count: activeConfigs.length };
+  },
+});
+
+/**
+ * Scale Testing: Simulates 50,000 users and 100,000 receipts
+ * For verifying SLA monitoring and dashboard performance at scale
+ * WARNING: This adds significant data and should only be run on test environments
+ */
+export const simulateHighLoad = internalMutation({
+  args: { userCount: v.number(), receiptCount: v.number() },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    
+    // Batch inserts for users
+    for (let i = 0; i < args.userCount; i += 100) {
+      const batch = Math.min(100, args.userCount - i);
+      await Promise.all(Array.from({ length: batch }).map((_, j) =>
+        ctx.db.insert("users", {
+          clerkId: `mock_clerk_${i + j}`,
+          name: `Mock User ${i + j}`,
+          email: `mock_${i + j}@example.com`,
+          onboardingComplete: true,
+          currency: "GBP",
+          createdAt: now - Math.random() * 30 * 24 * 60 * 60 * 1000, // Last 30 days
+          updatedAt: now,
+        })
+      ));
+    }
+
+    // Batch inserts for receipts
+    const allUsers = await ctx.db.query("users").take(100); // Sample users for assignment
+    for (let i = 0; i < args.receiptCount; i += 100) {
+      const batch = Math.min(100, args.receiptCount - i);
+      await Promise.all(Array.from({ length: batch }).map((_, j) =>
+        ctx.db.insert("receipts", {
+          userId: allUsers[Math.floor(Math.random() * allUsers.length)]._id,
+          storeName: "Mock Store",
+          total: Math.random() * 100,
+          subtotal: Math.random() * 90,
+          items: [],
+          purchaseDate: now - Math.random() * 7 * 24 * 60 * 60 * 1000,
+          processingStatus: "completed",
+          createdAt: now - Math.random() * 7 * 24 * 60 * 60 * 1000,
+        })
+      ));
+    }
+
+    // Log the stress test
+    await ctx.db.insert("adminLogs", {
+      adminUserId: allUsers[0]._id, // Use mock admin
+      action: "stress_test_execution",
+      targetType: "system",
+      details: `Generated ${args.userCount} users and ${args.receiptCount} receipts for scaling test`,
+      createdAt: now,
+    });
+
+    return { success: true, users: args.userCount, receipts: args.receiptCount };
+  },
+});
 
 export const getAdminTickets = query({
   args: { status: v.optional(v.string()) },
@@ -1989,12 +2333,128 @@ export const deleteWebhook = mutation({
   },
 });
 
+export const getActiveImpersonationToken = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    // 1. Find a token that is used and not expired for this user
+    const token = await ctx.db
+      .query("impersonationTokens")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .filter((q) => 
+        q.and(
+          q.neq(q.field("usedAt"), undefined),
+          q.gt(q.field("expiresAt"), Date.now())
+        )
+      )
+      .first();
+
+    if (!token) return null;
+
+    // 2. Fetch admin name for display
+    const admin = await ctx.db.get(token.createdBy);
+    
+    return {
+      tokenValue: token.tokenValue,
+      createdBy: token.createdBy,
+      adminName: admin?.name || "Admin",
+      expiresAt: token.expiresAt,
+    };
+  },
+});
+
+export const stopImpersonation = mutation({
+  args: { tokenValue: v.string() },
+  handler: async (ctx, args) => {
+    const token = await ctx.db
+      .query("impersonationTokens")
+      .withIndex("by_token", (q) => q.eq("tokenValue", args.tokenValue))
+      .unique();
+
+    if (token) {
+      // Force expire the token
+      await ctx.db.patch(token._id, { expiresAt: Date.now() - 1 });
+      
+      // Log the end of impersonation
+      await ctx.db.insert("adminLogs", {
+        adminUserId: token.createdBy,
+        action: "stop_impersonation",
+        targetType: "user",
+        targetId: token.userId,
+        details: `Stopped impersonation of user ${token.userId}`,
+        createdAt: Date.now(),
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+export const getDashboardPreferences = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return null;
+
+    const prefs = await ctx.db
+      .query("adminDashboardPreferences")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+
+    if (!prefs) {
+      // Return default configuration
+      return {
+        overviewWidgets: [
+          { id: "health", visible: true, order: 0 },
+          { id: "analytics", visible: true, order: 1 },
+          { id: "revenue", visible: true, order: 2 },
+          { id: "audit_logs", visible: true, order: 3 },
+        ],
+      };
+    }
+
+    return prefs;
+  },
+});
+
+export const updateDashboardPreferences = mutation({
+  args: {
+    overviewWidgets: v.array(v.object({
+      id: v.string(),
+      visible: v.boolean(),
+      order: v.number(),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAdmin(ctx);
+    
+    const existing = await ctx.db
+      .query("adminDashboardPreferences")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        overviewWidgets: args.overviewWidgets,
+        updatedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("adminDashboardPreferences", {
+        userId: user._id,
+        overviewWidgets: args.overviewWidgets,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return { success: true };
+  },
+});
+
 export const testWebhook = action({
   args: { id: v.id("webhooks") },
   handler: async (ctx, args) => {
     // For now, this just updates the lastTriggeredAt field
     // In a real implementation, it would send a POST request
-    await ctx.runMutation(api.admin.updateWebhookTrigger, { id: args.id, status: 200 });
+    await ctx.runMutation(internal.admin.updateWebhookTrigger, { id: args.id, status: 200 });
     return { success: true };
   },
 });
@@ -2221,67 +2681,97 @@ export const exportDataToCSV = action({
 /**
  * Clear all seed/placeholder data from the system
  * Removes placeholder receipts, test data, and resets demo content
+ * OPTIMIZED: Uses batch processing to avoid full table scans
  */
 export const clearSeedData = mutation({
   args: {},
   handler: async (ctx) => {
     const admin = await requirePermission(ctx, "manage_catalog");
 
-    // Find all seed receipts (marked with isAdminSeed flag or dummy storage IDs)
-    const allReceipts = await ctx.db.query("receipts").collect();
-
     let deletedReceipts = 0;
     let deletedPrices = 0;
     let deletedPriceHistory = 0;
 
-    // Delete seed receipts
-    for (const receipt of allReceipts) {
-      const isSeedFlag = !!receipt.isAdminSeed;
-      const isDummyId = receipt.imageStorageId && (
-        receipt.imageStorageId.startsWith("placeholder") ||
-        receipt.imageStorageId.startsWith("seed") ||
-        !receipt.imageStorageId.includes("_")
-      );
-
-      if (isSeedFlag || isDummyId) {
-        await ctx.db.delete(receipt._id);
-        deletedReceipts++;
+    // Delete seed receipts in batches (process 100 at a time to avoid timeouts)
+    let hasMoreReceipts = true;
+    while (hasMoreReceipts) {
+      const receipts = await ctx.db.query("receipts").take(100);
+      if (receipts.length === 0) {
+        hasMoreReceipts = false;
+        break;
       }
+
+      for (const receipt of receipts) {
+        const isSeedFlag = !!receipt.isAdminSeed;
+        const isDummyId = receipt.imageStorageId && (
+          receipt.imageStorageId.startsWith("placeholder") ||
+          receipt.imageStorageId.startsWith("seed") ||
+          !receipt.imageStorageId.includes("_")
+        );
+
+        if (isSeedFlag || isDummyId) {
+          await ctx.db.delete(receipt._id);
+          deletedReceipts++;
+        }
+      }
+
+      // If we got less than 100, we've processed all
+      if (receipts.length < 100) hasMoreReceipts = false;
     }
 
-    // Delete seed prices (prices with suspicious patterns)
-    const allPrices = await ctx.db.query("currentPrices").collect();
-    for (const price of allPrices) {
-      // Remove prices that are exactly 0, or have "seed"/"test" in item name
-      const isSeedPrice =
-        price.unitPrice === 0 ||
-        (price.itemName && (
-          price.itemName.toLowerCase().includes("seed") ||
-          price.itemName.toLowerCase().includes("test") ||
-          price.itemName.toLowerCase().includes("placeholder")
-        ));
-
-      if (isSeedPrice) {
-        await ctx.db.delete(price._id);
-        deletedPrices++;
+    // Delete seed prices in batches (process 100 at a time)
+    let hasMorePrices = true;
+    while (hasMorePrices) {
+      const prices = await ctx.db.query("currentPrices").take(100);
+      if (prices.length === 0) {
+        hasMorePrices = false;
+        break;
       }
+
+      for (const price of prices) {
+        // Remove prices that are exactly 0, or have "seed"/"test" in item name
+        const isSeedPrice =
+          price.unitPrice === 0 ||
+          (price.itemName && (
+            price.itemName.toLowerCase().includes("seed") ||
+            price.itemName.toLowerCase().includes("test") ||
+            price.itemName.toLowerCase().includes("placeholder")
+          ));
+
+        if (isSeedPrice) {
+          await ctx.db.delete(price._id);
+          deletedPrices++;
+        }
+      }
+
+      if (prices.length < 100) hasMorePrices = false;
     }
 
-    // Delete seed price history
-    const allHistory = await ctx.db.query("priceHistory").collect();
-    for (const history of allHistory) {
-      const isSeedHistory =
-        history.price === 0 ||
-        (history.itemName && (
-          history.itemName.toLowerCase().includes("seed") ||
-          history.itemName.toLowerCase().includes("test") ||
-          history.itemName.toLowerCase().includes("placeholder")
-        ));
-
-      if (isSeedHistory) {
-        await ctx.db.delete(history._id);
-        deletedPriceHistory++;
+    // Delete seed price history in batches (process 100 at a time)
+    let hasMoreHistory = true;
+    while (hasMoreHistory) {
+      const history = await ctx.db.query("priceHistory").take(100);
+      if (history.length === 0) {
+        hasMoreHistory = false;
+        break;
       }
+
+      for (const h of history) {
+        const isSeedHistory =
+          h.price === 0 ||
+          (h.itemName && (
+            h.itemName.toLowerCase().includes("seed") ||
+            h.itemName.toLowerCase().includes("test") ||
+            h.itemName.toLowerCase().includes("placeholder")
+          ));
+
+        if (isSeedHistory) {
+          await ctx.db.delete(h._id);
+          deletedPriceHistory++;
+        }
+      }
+
+      if (history.length < 100) hasMoreHistory = false;
     }
 
     const now = Date.now();

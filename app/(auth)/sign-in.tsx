@@ -74,15 +74,24 @@ export default function SignInScreen() {
     setError("");
 
     try {
-      const signInAttempt = await signIn.create({
+      // First, create the sign-in attempt with identifier only to check available strategies
+      let signInAttempt = await signIn.create({
         identifier: emailAddress,
-        password,
       });
 
-      if (signInAttempt.status === "complete") {
-        await setActive({ session: signInAttempt.createdSessionId });
-        // Navigation handled by _layout.tsx useEffect
+      // Check if password strategy is available
+      const passwordFactor = signInAttempt.supportedFirstFactors?.find(
+        (factor) => factor.strategy === "password"
+      );
+
+      if (passwordFactor && password) {
+        // Password strategy available - attempt password auth
+        signInAttempt = await signIn.attemptFirstFactor({
+          strategy: "password",
+          password,
+        });
       } else if (signInAttempt.status === "needs_first_factor") {
+        // No password strategy - try email code
         const emailFactor = signInAttempt.supportedFirstFactors?.find(
           (factor) => factor.strategy === "email_code"
         );
@@ -93,15 +102,29 @@ export default function SignInScreen() {
           });
           setPendingVerification(true);
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          return;
         } else {
-          setError("Email verification required. Please check your email.");
+          // No password, no email code - this account likely uses OAuth only
+          setError("This account uses Google sign-in. Please use the Google button below.");
+          return;
         }
+      }
+
+      if (signInAttempt.status === "complete") {
+        await setActive({ session: signInAttempt.createdSessionId });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        // Navigation handled by _layout.tsx useEffect
+      } else if (signInAttempt.status === "needs_second_factor") {
+        // Handle 2FA if needed
+        setError("Two-factor authentication required. Please check your authenticator app.");
       } else {
         console.log("[SignIn] Unexpected status:", signInAttempt.status);
         setError(`Sign in incomplete (${signInAttempt.status}). Please try again.`);
       }
     } catch (err: any) {
-      const message = err?.errors?.[0]?.message || "Sign in failed";
+      console.error("[SignIn] Error:", err);
+      const clerkError = err?.errors?.[0];
+      const message = clerkError?.longMessage || clerkError?.message || "Sign in failed";
       setError(message);
     } finally {
       setIsLoading(false);

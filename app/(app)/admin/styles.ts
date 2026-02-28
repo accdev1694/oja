@@ -333,6 +333,23 @@ export const adminStyles = StyleSheet.create({
   refreshToggle: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   toggleLabel: { ...typography.bodySmall, color: colors.text.tertiary },
   lastUpdatedText: { ...typography.bodySmall, color: colors.text.tertiary, fontSize: 10 },
+  customizeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: `${colors.glass.border}40`,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  widgetActions: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
 
   // Pagination
   loadMoreContainer: { alignItems: "center", marginVertical: spacing.md },

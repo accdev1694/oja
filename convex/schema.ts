@@ -51,6 +51,7 @@ export default defineSchema({
 
     // Admin
     isAdmin: v.optional(v.boolean()),
+    adminGrantedAt: v.optional(v.number()), // Timestamp when admin access was granted (for MFA grace period)
     suspended: v.optional(v.boolean()),
     mfaEnabled: v.optional(v.boolean()),
     allowedIps: v.optional(v.array(v.string())), // For IP Whitelisting (Phase 4.1)
@@ -632,6 +633,17 @@ export default defineSchema({
     .index("by_created", ["createdAt"])
     .index("by_admin_created", ["adminUserId", "createdAt"]),
 
+  // Cold storage for old admin logs (Phase 3.1)
+  archivedAdminLogs: defineTable({
+    adminUserId: v.id("users"),
+    action: v.string(),
+    targetType: v.string(),
+    targetId: v.optional(v.string()),
+    details: v.optional(v.string()),
+    createdAt: v.number(),
+    archivedAt: v.number(),
+  }).index("by_created", ["createdAt"]),
+
   // RBAC Roles (Phase 1.2)
   adminRoles: defineTable({
     name: v.string(), // "super_admin", "support", "analyst", "developer"
@@ -1031,4 +1043,32 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_admin_tab", ["adminUserId", "tab"]),
+
+  // Admin Dashboard customization (Phase 4.4)
+  adminDashboardPreferences: defineTable({
+    userId: v.id("users"),
+    overviewWidgets: v.array(v.object({
+      id: v.string(), // "health", "analytics", "revenue", "audit_logs"
+      visible: v.boolean(),
+      order: v.number(),
+    })),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+
+  // 4.7 Scheduled Reports (Phase 4.4)
+  scheduledReports: defineTable({
+    type: v.union(v.literal("weekly_summary"), v.literal("monthly_financial")),
+    recipientEmails: v.array(v.string()),
+    lastRunAt: v.optional(v.number()),
+    status: v.union(v.literal("active"), v.literal("paused")),
+    createdAt: v.number(),
+  }),
+
+  reportHistory: defineTable({
+    reportId: v.id("scheduledReports"),
+    data: v.any(), // Serialized metrics
+    sentAt: v.number(),
+    status: v.union(v.literal("success"), v.literal("failed")),
+    error: v.optional(v.string()),
+  }).index("by_report", ["reportId"]),
 });

@@ -23,6 +23,8 @@ import { VoiceFAB } from "@/components/voice/VoiceFAB";
 import {
   TAB_CONFIG,
   TAB_BAR_HEIGHT,
+  ImpersonationBanner,
+  TrialNudgeBanner,
   colors,
   spacing,
   typography,
@@ -246,6 +248,7 @@ export default function AppLayout() {
 
   return (
     <View style={{ flex: 1 }}>
+      <ImpersonationBanner />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="list/[id]" />

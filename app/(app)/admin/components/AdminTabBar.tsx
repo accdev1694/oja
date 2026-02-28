@@ -1,5 +1,5 @@
 import React, { ComponentProps } from "react";
-import { ScrollView, Pressable, Text, View, StyleSheet } from "react-native";
+import { ScrollView, Pressable, Text, View, StyleSheet, Platform } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, typography } from "@/components/ui/glass";
 import * as Haptics from "expo-haptics";
@@ -23,6 +23,9 @@ interface AdminTabBarProps {
  * A persistent horizontal scrollable navigation bar for the Admin Dashboard.
  */
 export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: AdminTabBarProps) {
+  const isWeb = Platform.OS === 'web';
+  const shortcutLabel = Platform.OS === 'ios' || (isWeb && /Mac/i.test(navigator.userAgent)) ? "⌘K" : "Ctrl+K";
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
@@ -68,6 +71,11 @@ export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: Admi
           style={styles.searchButton}
         >
           <MaterialCommunityIcons name="magnify" size={22} color={colors.text.tertiary} />
+          {isWeb && (
+            <View style={styles.shortcutBadge}>
+              <Text style={styles.shortcutText}>{shortcutLabel}</Text>
+            </View>
+          )}
         </Pressable>
       </View>
     </View>
@@ -91,12 +99,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   searchButton: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: spacing.md,
     height: 48,
-    alignItems: "center",
-    justifyContent: "center",
+    gap: 6,
     borderLeftWidth: 1,
     borderLeftColor: colors.glass.border,
+  },
+  shortcutBadge: {
+    backgroundColor: `${colors.glass.border}60`,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  },
+  shortcutText: {
+    fontSize: 9,
+    color: colors.text.tertiary,
+    fontWeight: "700",
   },
   tabItem: {
     flexDirection: "row",

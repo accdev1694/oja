@@ -59,6 +59,8 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
   const updatePricing = useMutation(api.admin.updatePricing);
   const forceLogout = useMutation(api.admin.forceLogoutSession);
   const clearSeedDataMutation = useMutation(api.admin.clearSeedData);
+  const archiveLogs = useMutation(api.admin.archiveOldAdminLogs);
+  const simulateLoad = useMutation(api.admin.simulateHighLoad);
 
   const [showNewAnnouncement, setShowNewAnnouncement] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
@@ -68,6 +70,8 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
 
   const [newFlagKey, setNewFlagKey] = useState("");
   const [isCleaning, setIsCleaning] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
 
   const handleClearSeedData = useCallback(async () => {
     showAlert("Clear Seed Data", "This will permanently remove all placeholder and testing data (receipts, prices, price history). Real scans will NOT be affected. Proceed?", [
@@ -90,6 +94,41 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
       }
     ]);
   }, [clearSeedDataMutation, showAlert, showToast]);
+
+  const handleArchiveLogs = useCallback(async () => {
+    setIsArchiving(true);
+    try {
+      const result = await archiveLogs({});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(`Archived ${result.archived} old logs`, "success");
+    } catch (e) {
+      showToast((e as Error).message || "Failed to archive logs", "error");
+    } finally {
+      setIsArchiving(false);
+    }
+  }, [archiveLogs, showToast]);
+
+  const handleSimulateLoad = useCallback(async () => {
+    showAlert("Scale Test", "Generate 50,000 mock users and 100,000 receipts? This should ONLY be run in a test environment.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Run Test",
+        style: "destructive",
+        onPress: async () => {
+          setIsSimulating(true);
+          try {
+            const result = await simulateLoad({ userCount: 50000, receiptCount: 100000 });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            showToast("Scale test complete", "success");
+          } catch (e) {
+            showToast((e as Error).message || "Scale test failed", "error");
+          } finally {
+            setIsSimulating(false);
+          }
+        }
+      }
+    ]);
+  }, [simulateLoad, showAlert, showToast]);
 
   const handleUpdatePrice = useCallback(async (planId: string, amount: string) => {
     const price = parseFloat(amount);
@@ -240,6 +279,36 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
                   onPress={handleClearSeedData}
                   loading={isCleaning}
                 >Clear</GlassButton>
+              </View>
+
+              <View style={{ height: 1, backgroundColor: colors.glass.border, opacity: 0.5, marginVertical: spacing.xs }} />
+
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <View style={{ flex: 1, marginRight: spacing.md }}>
+                  <Text style={styles.userName}>Archive Old Logs</Text>
+                  <Text style={styles.userEmail}>Manually trigger archival of admin logs older than 90 days.</Text>
+                </View>
+                <GlassButton 
+                  variant="secondary" 
+                  size="sm" 
+                  onPress={handleArchiveLogs}
+                  loading={isArchiving}
+                >Archive</GlassButton>
+              </View>
+
+              <View style={{ height: 1, backgroundColor: colors.glass.border, opacity: 0.5, marginVertical: spacing.xs }} />
+
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <View style={{ flex: 1, marginRight: spacing.md }}>
+                  <Text style={styles.userName}>Scale Testing</Text>
+                  <Text style={styles.userEmail}>Simulate 50k users/100k receipts to verify dashboard performance.</Text>
+                </View>
+                <GlassButton 
+                  variant="secondary" 
+                  size="sm" 
+                  onPress={handleSimulateLoad}
+                  loading={isSimulating}
+                >Run Test</GlassButton>
               </View>
             </View>
           </GlassCard>

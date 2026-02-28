@@ -137,10 +137,24 @@ function AdminScreenInner() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger if typing in an input
-      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+        // Allow Esc to blur input
+        if (e.key === 'Escape') {
+          (e.target as HTMLElement).blur();
+        }
+        return;
+      }
 
-      // 1-8 for tabs
-      if (e.key >= '1' && e.key <= '8') {
+      // Cmd+K or Ctrl+K for search
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchVisible(true);
+        Haptics.selectionAsync();
+        return;
+      }
+
+      // 1-9 for tabs
+      if (e.key >= '1' && e.key <= '9') {
         const index = parseInt(e.key) - 1;
         if (tabs[index]) {
           setActiveTab(tabs[index].key);
@@ -148,8 +162,20 @@ function AdminScreenInner() {
         }
       }
 
-      // S for search
-      if (e.key.toLowerCase() === 's') {
+      // Arrow keys for tab navigation
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        const currentIndex = tabs.findIndex(t => t.key === activeTab);
+        let nextIndex = currentIndex + (e.key === 'ArrowRight' ? 1 : -1);
+        
+        if (nextIndex < 0) nextIndex = tabs.length - 1;
+        if (nextIndex >= tabs.length) nextIndex = 0;
+        
+        setActiveTab(tabs[nextIndex].key);
+        Haptics.selectionAsync();
+      }
+
+      // S for search (legacy)
+      if (e.key.toLowerCase() === 's' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         setSearchVisible(true);
         Haptics.selectionAsync();
@@ -163,7 +189,7 @@ function AdminScreenInner() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tabs]);
+  }, [tabs, activeTab]);
 
   const handleSelectSearchResult = useCallback((tab: AdminTab, id: string) => {
     setActiveTab(tab);
