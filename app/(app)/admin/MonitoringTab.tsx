@@ -18,7 +18,6 @@ import {
   AnimatedSection,
   colors,
   spacing,
-  useGlassAlert,
   SkeletonCard,
 } from "@/components/ui/glass";
 import { adminStyles as styles } from "./styles";
@@ -41,7 +40,6 @@ interface MonitoringTabProps {
  */
 export function MonitoringTab({ hasPermission }: MonitoringTabProps) {
   const { showToast } = useAdminToast();
-  const { alert: showAlert } = useGlassAlert();
   
   const summary = useQuery(api.admin.getMonitoringSummary) as MonitoringSummary | undefined;
   const experiments = useQuery(api.admin.getExperiments) as Experiment[] | undefined;

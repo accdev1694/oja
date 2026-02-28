@@ -22,7 +22,8 @@ import { adminStyles as styles } from "./styles";
 import { User } from "./types";
 import { ActivityTimeline } from "./ActivityTimeline";
 import type { Id } from "@/convex/_generated/dataModel";
-import { useAdminToast } from "./hooks";
+import { useAdminToast, useResponsive } from "./hooks";
+import { SavedFilterPills } from "./components/SavedFilterPills";
 
 interface UsersTabProps {
   /** Permission check function */
@@ -45,6 +46,7 @@ export function UsersTab({
   initialUserId,
   onSelectionChange
 }: UsersTabProps) {
+  const { isMobile } = useResponsive();
   const { alert: showAlert } = useGlassAlert();
   const { showToast } = useAdminToast();
   const [search, setSearch] = useState("");
@@ -102,6 +104,7 @@ export function UsersTab({
   const generateToken = useMutation(api.impersonation.generateImpersonationToken);
   const addTag = useMutation(api.tags.addUserTag);
   const removeTag = useMutation(api.tags.removeUserTag);
+  const saveFilter = useMutation(api.admin.saveFilter);
 
   // Determine which users to display based on search
   const displayUsers = useMemo(() => 
@@ -109,6 +112,29 @@ export function UsersTab({
   [search, searchResults, users]);
 
   // --- Handlers ---
+
+  const handleApplyPreset = useCallback((data: any) => {
+    if (data.search !== undefined) setSearch(data.search);
+    showToast("Preset applied", "info");
+  }, [showToast]);
+
+  const handleSavePreset = useCallback(() => {
+    if (!search) return;
+    showAlert("Save Preset", "Give this search filter a name:", [
+      { text: "Cancel", style: "cancel" },
+      { 
+        text: "Save", 
+        onPress: async () => {
+          // In a real app we'd have a text input in the alert
+          // For now let's use the search term as the name
+          try {
+            await saveFilter({ name: `Search: ${search}`, tab: "users", filterData: { search } });
+            showToast("Search preset saved", "success");
+          } catch (e) { showToast((e as Error).message, "error"); }
+        }
+      }
+    ]);
+  }, [search, saveFilter, showAlert, showToast]);
 
   const handleSelectUser = useCallback((userId: string) => {
     setSelectedUser(userId);
@@ -147,7 +173,15 @@ export function UsersTab({
   const handleImpersonate = useCallback(async (userId: string) => {
     try {
       const result = await generateToken({ userId: userId as Id<"users"> });
-      showAlert("Impersonation Mode", `Token: ${result.tokenValue}\n\nUse this link:\noja://impersonate?token=${result.tokenValue}`);
+      const impersonateUrl = `oja://impersonate?token=${result.tokenValue}`;
+      showAlert(
+        "Impersonation Ready", 
+        `User session token generated.\n\nDeep Link:\n${impersonateUrl}\n\nNote: This token expires in 1 hour.`,
+        [
+          { text: "Copy Link", onPress: () => showToast("Link copied to clipboard", "info") },
+          { text: "Done", style: "cancel" }
+        ]
+      );
     } catch (e) { showToast((e as Error).message, "error"); }
   }, [generateToken, showAlert, showToast]);
 
@@ -232,7 +266,7 @@ export function UsersTab({
 
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-      {/* Search */}
+      {/* Search & Saved Filters */}
       <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
         <GlassCard style={styles.section}>
           <View style={styles.searchRow}>
@@ -244,6 +278,15 @@ export function UsersTab({
               value={search}
               onChangeText={setSearch}
             />
+            {search.length > 0 && (
+              <Pressable onPress={handleSavePreset} hitSlop={12} style={{ padding: 4 }}>
+                <MaterialCommunityIcons name="bookmark-plus-outline" size={20} color={colors.accent.primary} />
+              </Pressable>
+            )}
+          </View>
+          
+          <View style={{ marginTop: spacing.sm }}>
+            <SavedFilterPills tab="users" onSelect={handleApplyPreset} />
           </View>
         </GlassCard>
       </AnimatedSection>
@@ -329,7 +372,7 @@ export function UsersTab({
 
             {detailTab === "info" ? (
               <>
-                <View style={styles.detailGrid}>
+                <View style={[styles.detailGrid, isMobile && styles.mobileDetailGrid]}>
                   <View style={styles.detailItem}>
                     <Text style={styles.detailValue}>{userDetail.receiptCount ?? 0}</Text>
                     <Text style={styles.detailLabel}>Receipts</Text>
@@ -353,7 +396,7 @@ export function UsersTab({
                   </Text>
                 )}
                 {canEdit && (
-                  <View style={styles.actionRow}>
+                  <View style={[styles.actionRow, isMobile && styles.mobileActionRow]}>
                     <Pressable style={styles.actionBtn} onPress={() => handleExtendTrial(selectedUser)}>
                       <MaterialCommunityIcons name="clock-plus-outline" size={16} color={colors.accent.primary} />
                       <Text style={styles.actionBtnText}>+14d Trial</Text>

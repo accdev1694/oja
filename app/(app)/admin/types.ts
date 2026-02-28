@@ -1,4 +1,4 @@
-export type AdminTab = "overview" | "users" | "analytics" | "support" | "monitoring" | "receipts" | "catalog" | "settings";
+export type AdminTab = "overview" | "users" | "analytics" | "support" | "monitoring" | "receipts" | "catalog" | "settings" | "webhooks";
 
 export interface AnalyticsData {
   totalUsers: number;
@@ -74,6 +74,7 @@ export interface User {
   isAdmin?: boolean;
   suspended?: boolean;
   mfaEnabled?: boolean;
+  churnRiskScore?: number;
   createdAt: number;
   lastActiveAt?: number;
   receiptCount?: number;
@@ -193,6 +194,7 @@ export interface PricingConfig {
   displayName: string;
   priceAmount: number;
   currency: string;
+  region?: string;
   isActive: boolean;
   updatedAt: number;
 }
@@ -291,3 +293,17 @@ export interface MonitoringSummary {
     status: "pass" | "warn" | "fail";
   }[];
 }
+
+export interface Webhook {
+  _id: string;
+  url: string;
+  secret: string;
+  description?: string;
+  events: string[];
+  isEnabled: boolean;
+  lastTriggeredAt?: number;
+  lastResponseStatus?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+

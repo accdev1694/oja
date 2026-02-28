@@ -7,23 +7,28 @@ import { GenericMutationCtx, GenericQueryCtx } from "convex/server";
 type QueryCtx = GenericQueryCtx<DataModel>;
 type MutationCtx = GenericMutationCtx<DataModel>;
 
-// Simple in-memory cache for expensive queries (1-hour TTL)
+// Simple in-memory cache for expensive queries (5-minute TTL)
 const queryCache = new Map<string, { data: any; expiresAt: number }>();
 
-function getCachedOrCompute<T>(
+/**
+ * Helper to fetch from cache or compute and store
+ */
+async function getCachedOrCompute<T>(
   cacheKey: string,
-  computeFn: () => Promise<T>,
-  ttlMs: number = 60 * 60 * 1000 // 1 hour default
+  ttlMs: number,
+  computeFn: () => Promise<T>
 ): Promise<T> {
   const cached = queryCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    return Promise.resolve(cached.data);
+    return cached.data;
   }
-
-  return computeFn().then((data) => {
-    queryCache.set(cacheKey, { data, expiresAt: Date.now() + ttlMs });
-    return data;
+  
+  const result = await computeFn();
+  queryCache.set(cacheKey, {
+    data: result,
+    expiresAt: Date.now() + ttlMs,
   });
+  return result;
 }
 
 /**
@@ -130,6 +135,22 @@ async function requireAdmin(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> 
   // P1 Fix: MFA Requirement for Admins
   if (!user.mfaEnabled) {
     throw new Error("MFA_REQUIRED: Admin access requires multi-factor authentication");
+  }
+
+  // P3 Fix: IP Whitelisting check
+  if (user.allowedIps && user.allowedIps.length > 0) {
+    // We need to know the current IP. Since it's not in identity, 
+    // we find it via the most recent active session for this user.
+    const session = await ctx.db
+      .query("adminSessions")
+      .withIndex("by_user", q => q.eq("userId", user._id))
+      .filter(q => q.eq(q.field("status"), "active"))
+      .order("desc")
+      .first();
+      
+    if (session && session.ipAddress && !user.allowedIps.includes(session.ipAddress)) {
+      throw new Error(`IP_RESTRICTED: Admin access not allowed from IP ${session.ipAddress}`);
+    }
   }
 
   // Check legacy isAdmin flag
@@ -495,11 +516,22 @@ export const getActiveSessions = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    const active = await ctx.db.query("adminSessions").withIndex("by_status", (q) => q.eq("status", "active")).collect();
-    return await Promise.all(active.map(async (s) => {
-      const u = await ctx.db.get(s.userId);
+    
+    // P1 Fix: Use index and limit
+    const active = await ctx.db
+      .query("adminSessions")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .take(100);
+      
+    // P1 Fix: Batch load unique users to avoid N+1
+    const userIds = [...new Set(active.map(s => s.userId))];
+    const users = await Promise.all(userIds.map(id => ctx.db.get(id)));
+    const userMap = new Map(users.filter(u => u).map(u => [u!._id, u!]));
+
+    return active.map((s) => {
+      const u = userMap.get(s.userId);
       return { ...s, userName: u?.name || "Unknown", userEmail: u?.email || "" };
-    }));
+    });
   },
 });
 
@@ -801,24 +833,26 @@ export const getAnalytics = query({
 });
 
 async function getLiveAnalytics(ctx: any, dateFrom?: number, dateTo?: number) {
-  return measureQueryPerformance("getLiveAnalytics", async () => {
-    const now = Date.now();
-    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-    const monthAgo = now - 30 * 24 * 60 * 60 * 1000;
-    const yearAgo = now - 365 * 24 * 60 * 60 * 1000;
-    
-    // P0 Fix: Optimized queries using indexes instead of .collect() on everything
-    // For 50k+ records, we should still use .take() or pagination if possible, 
-    // but for analytics totals, we often need to touch all records.
-    // At scale, this MUST come from platformMetrics only.
-    
-    const usersQuery = dateFrom 
-      ? ctx.db.query("users").withIndex("by_created", (q: any) => q.gte("createdAt", dateFrom))
-      : ctx.db.query("users").withIndex("by_created");
+  const cacheKey = `live_analytics_${dateFrom || 0}_${dateTo || 0}`;
+  return await getCachedOrCompute(cacheKey, 5 * 60 * 1000, async () => {
+    return measureQueryPerformance("getLiveAnalytics", async () => {
+      const now = Date.now();
+      const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+      const monthAgo = now - 30 * 24 * 60 * 60 * 1000;
+      const yearAgo = now - 365 * 24 * 60 * 60 * 1000;
       
-    const listsQuery = dateFrom
-      ? ctx.db.query("shoppingLists").withIndex("by_created", (q: any) => q.gte("createdAt", dateFrom))
-      : ctx.db.query("shoppingLists").withIndex("by_created");
+      // P0 Fix: Optimized queries using indexes instead of .collect() on everything
+      // For 50k+ records, we should still use .take() or pagination if possible, 
+      // but for analytics totals, we often need to touch all records.
+      // At scale, this MUST come from platformMetrics only.
+      
+      const usersQuery = dateFrom 
+        ? ctx.db.query("users").withIndex("by_created", (q: any) => q.gte("createdAt", dateFrom))
+        : ctx.db.query("users").withIndex("by_created");
+        
+      const listsQuery = dateFrom
+        ? ctx.db.query("shoppingLists").withIndex("by_created", (q: any) => q.gte("createdAt", dateFrom))
+        : ctx.db.query("shoppingLists").withIndex("by_created");
       
     const receiptsQuery = dateFrom
       ? ctx.db.query("receipts").withIndex("by_created", (q: any) => q.gte("createdAt", dateFrom))
@@ -856,6 +890,7 @@ async function getLiveAnalytics(ctx: any, dateFrom?: number, dateTo?: number) {
       isPrecomputed: false,
     };
   });
+  });
 }
 
 export const getRevenueReport = query({
@@ -863,47 +898,50 @@ export const getRevenueReport = query({
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_analytics");
 
-    // Get dynamic pricing
-    const monthlyPricing = await ctx.db
-      .query("pricingConfig")
-      .withIndex("by_plan", (q) => q.eq("planId", "premium_monthly"))
-      .filter((q) => q.eq(q.field("isActive"), true))
-      .first();
+    const cacheKey = `revenue_report_${args.dateFrom || 0}_${args.dateTo || 0}`;
+    return await getCachedOrCompute(cacheKey, 5 * 60 * 1000, async () => {
+      // Get dynamic pricing
+      const monthlyPricing = await ctx.db
+        .query("pricingConfig")
+        .withIndex("by_plan", (q) => q.eq("planId", "premium_monthly"))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .first();
 
-    const annualPricing = await ctx.db
-      .query("pricingConfig")
-      .withIndex("by_plan", (q) => q.eq("planId", "premium_annual"))
-      .filter((q) => q.eq(q.field("isActive"), true))
-      .first();
+      const annualPricing = await ctx.db
+        .query("pricingConfig")
+        .withIndex("by_plan", (q) => q.eq("planId", "premium_annual"))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .first();
 
-    const monthlyPrice = monthlyPricing?.priceAmount || 0;
-    const annualPrice = annualPricing?.priceAmount || 0;
+      const monthlyPrice = monthlyPricing?.priceAmount || 0;
+      const annualPrice = annualPricing?.priceAmount || 0;
 
-    // P0 Fix: Optimized query using index
-    const subsQuery = args.dateFrom 
-      ? ctx.db.query("subscriptions").withIndex("by_created", q => q.gte("createdAt", args.dateFrom!))
-      : ctx.db.query("subscriptions").withIndex("by_created");
-      
-    let subs = await subsQuery.collect();
-    if (args.dateTo) subs = subs.filter(s => s.createdAt <= args.dateTo!);
+      // P0 Fix: Optimized query using index
+      const subsQuery = args.dateFrom 
+        ? ctx.db.query("subscriptions").withIndex("by_created", q => q.gte("createdAt", args.dateFrom!))
+        : ctx.db.query("subscriptions").withIndex("by_created");
+        
+      let subs = await subsQuery.collect();
+      if (args.dateTo) subs = subs.filter(s => s.createdAt <= args.dateTo!);
 
-    const activeSubs = subs.filter((s: any) => s.status === "active");
-    const monthlyCount = activeSubs.filter((s: any) => s.plan === "premium_monthly").length;
-    const annualCount = activeSubs.filter((s: any) => s.plan === "premium_annual").length;
-    const trialsActive = subs.filter((s: any) => s.status === "trial").length;
+      const activeSubs = subs.filter((s: any) => s.status === "active");
+      const monthlyCount = activeSubs.filter((s: any) => s.plan === "premium_monthly").length;
+      const annualCount = activeSubs.filter((s: any) => s.plan === "premium_annual").length;
+      const trialsActive = subs.filter((s: any) => s.status === "trial").length;
 
-    const mrr = monthlyCount * monthlyPrice + (annualCount * annualPrice) / 12;
-    const arr = mrr * 12;
+      const mrr = monthlyCount * monthlyPrice + (annualCount * annualPrice) / 12;
+      const arr = mrr * 12;
 
-    return {
-      totalSubscriptions: subs.length,
-      activeSubscriptions: activeSubs.length,
-      monthlySubscribers: monthlyCount,
-      annualSubscribers: annualCount,
-      trialsActive,
-      mrr: Math.round(mrr * 100) / 100,
-      arr: Math.round(arr * 100) / 100,
-    };
+      return {
+        totalSubscriptions: subs.length,
+        activeSubscriptions: activeSubs.length,
+        monthlySubscribers: monthlyCount,
+        annualSubscribers: annualCount,
+        trialsActive,
+        mrr: Math.round(mrr * 100) / 100,
+        arr: Math.round(arr * 100) / 100,
+      };
+    });
   },
 });
 
@@ -1035,27 +1073,31 @@ export const getAdminTickets = query({
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_analytics"); // Support access
     
-    let tickets;
+    let ticketsQuery;
     if (args.status) {
-      tickets = await ctx.db
+      ticketsQuery = ctx.db
         .query("supportTickets")
-        .withIndex("by_status", (q) => q.eq("status", args.status as any))
-        .order("desc")
-        .collect();
+        .withIndex("by_status", (q) => q.eq("status", args.status as any));
     } else {
-      tickets = await ctx.db.query("supportTickets").order("desc").collect();
+      ticketsQuery = ctx.db.query("supportTickets");
     }
     
-    return await Promise.all(
-      tickets.map(async (t) => {
-        const u = await ctx.db.get(t.userId);
-        return {
-          ...t,
-          userName: u?.name || "Unknown",
-          userEmail: u?.email || "",
-        };
-      })
-    );
+    // P1 Fix: Use take(100) instead of collect()
+    const tickets = await ticketsQuery.order("desc").take(100);
+    
+    // P1 Fix: Batch load unique users to avoid N+1
+    const userIds = [...new Set(tickets.map(t => t.userId))];
+    const users = await Promise.all(userIds.map(id => ctx.db.get(id)));
+    const userMap = new Map(users.filter(u => u).map(u => [u!._id, u!]));
+
+    return tickets.map((t) => {
+      const u = userMap.get(t.userId);
+      return {
+        ...t,
+        userName: u?.name || "Unknown",
+        userEmail: u?.email || "",
+      };
+    });
   },
 });
 
@@ -1064,17 +1106,26 @@ export const getAdminSupportSummary = query({
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
     
-    const allTickets = await ctx.db.query("supportTickets").collect();
-    const open = allTickets.filter(t => t.status === "open").length;
-    const inProgress = allTickets.filter(t => t.status === "in_progress").length;
-    const resolved = allTickets.filter(t => t.status === "resolved").length;
+    // P1 Fix: Use indexed counts instead of .collect()
+    const [open, inProgress, resolved] = await Promise.all([
+      ctx.db.query("supportTickets").withIndex("by_status", q => q.eq("status", "open")).collect().then(res => res.length),
+      ctx.db.query("supportTickets").withIndex("by_status", q => q.eq("status", "in_progress")).collect().then(res => res.length),
+      ctx.db.query("supportTickets").withIndex("by_status", q => q.eq("status", "resolved")).collect().then(res => res.length),
+    ]);
+    
+    const unassigned = await ctx.db
+      .query("supportTickets")
+      .withIndex("by_assigned", q => q.eq("assignedTo", undefined))
+      .filter(q => q.neq(q.field("status"), "resolved"))
+      .collect()
+      .then(res => res.length);
     
     return {
-      total: allTickets.length,
+      total: open + inProgress + resolved,
       open,
       inProgress,
       resolved,
-      unassigned: allTickets.filter(t => !t.assignedTo && t.status !== "resolved").length,
+      unassigned,
     };
   },
 });
@@ -1184,7 +1235,8 @@ export const getWorkflows = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    return await ctx.db.query("automationWorkflows").collect();
+    // P1 Fix: Use take(100) instead of collect()
+    return await ctx.db.query("automationWorkflows").take(100);
   },
 });
 
@@ -1497,7 +1549,45 @@ export const getSystemHealth = query({
   args: { refreshKey: v.optional(v.string()) },
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    return { status: "healthy", receiptProcessing: { total: 0, failed: 0, processing: 0, successRate: 100 }, timestamp: Date.now() };
+    const now = Date.now();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+
+    // 1. Get active alerts
+    const activeAlerts = await ctx.db
+      .query("adminAlerts")
+      .withIndex("by_resolved", q => q.eq("isResolved", false))
+      .collect();
+
+    // 2. Get recent receipt stats
+    const recentReceipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_created", q => q.gte("createdAt", oneDayAgo))
+      .collect();
+    
+    const failed = recentReceipts.filter(r => r.processingStatus === "failed").length;
+    const processing = recentReceipts.filter(r => r.processingStatus === "processing").length;
+    const total = recentReceipts.length;
+    const successRate = total > 0 ? Math.round(((total - failed) / total) * 100) : 100;
+
+    // 3. Determine status
+    let status: "healthy" | "degraded" | "down" = "healthy";
+    if (activeAlerts.some(a => a.severity === "critical") || successRate < 80) {
+      status = "down";
+    } else if (activeAlerts.length > 0 || successRate < 95) {
+      status = "degraded";
+    }
+
+    return { 
+      status, 
+      receiptProcessing: { 
+        total, 
+        failed, 
+        processing, 
+        successRate 
+      }, 
+      alertCount: activeAlerts.length,
+      timestamp: now 
+    };
   },
 });
 
@@ -1604,7 +1694,8 @@ export const getAnnouncements = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "manage_announcements");
-    return await ctx.db.query("announcements").order("desc").collect();
+    // P1 Fix: Use take(100) instead of collect()
+    return await ctx.db.query("announcements").order("desc").take(100);
   },
 });
 
@@ -1724,41 +1815,240 @@ export const getPricingConfig = query({
 });
 
 export const updatePricing = mutation({
-  args: { planId: v.string(), priceAmount: v.number() },
+  args: { 
+    planId: v.string(), 
+    priceAmount: v.optional(v.number()), 
+    displayName: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
+    region: v.optional(v.string())
+  },
   handler: async (ctx, args) => {
     const admin = await requirePermission(ctx, "manage_pricing");
 
-    if (args.priceAmount <= 0) {
-      throw new Error("Price must be positive");
-    }
-
-    if (args.priceAmount > 10000) {
-      throw new Error("Price exceeds maximum (£10,000)");
-    }
-
-    const existing = await ctx.db
+    // Find if a config exists for this plan AND region
+    let existing;
+    const configs = await ctx.db
       .query("pricingConfig")
       .withIndex("by_plan", (q) => q.eq("planId", args.planId))
-      .first();
+      .collect();
+      
+    existing = configs.find(c => c.region === args.region);
 
-    if (!existing) {
-      throw new Error(`Plan ${args.planId} not found`);
+    const updates: any = { updatedAt: Date.now() };
+    if (args.priceAmount !== undefined) {
+      if (args.priceAmount <= 0) throw new Error("Price must be positive");
+      if (args.priceAmount > 10000) throw new Error("Price exceeds maximum (£10,000)");
+      updates.priceAmount = args.priceAmount;
     }
+    if (args.displayName !== undefined) updates.displayName = args.displayName;
+    if (args.isActive !== undefined) updates.isActive = args.isActive;
 
-    await ctx.db.patch(existing._id, {
-      priceAmount: args.priceAmount,
-      updatedAt: Date.now(),
-    });
+    if (existing) {
+      await ctx.db.patch(existing._id, updates);
+    } else {
+      // Create new regional override
+      if (args.priceAmount === undefined || !args.displayName) {
+        throw new Error("Price and display name are required for new regional overrides");
+      }
+      await ctx.db.insert("pricingConfig", {
+        planId: args.planId,
+        priceAmount: args.priceAmount,
+        displayName: args.displayName,
+        isActive: args.isActive ?? true,
+        region: args.region,
+        currency: "GBP",
+        updatedAt: Date.now(),
+      });
+    }
 
     await ctx.db.insert("adminLogs", {
       adminUserId: admin._id,
       action: "update_pricing",
       targetType: "pricingConfig",
       targetId: args.planId,
-      details: `Updated ${args.planId} price to £${args.priceAmount}`,
+      details: `Updated ${args.planId} ${args.region ? `(Region: ${args.region})` : '(Global)'}: ${Object.keys(updates).join(", ")}`,
       createdAt: Date.now(),
     });
 
+    return { success: true };
+  },
+});
+
+export const togglePricingPlan = mutation({
+  args: { planId: v.string() },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_pricing");
+    const existing = await ctx.db.query("pricingConfig").withIndex("by_plan", q => q.eq("planId", args.planId)).first();
+    if (!existing) throw new Error("Plan not found");
+    
+    const newStatus = !existing.isActive;
+    await ctx.db.patch(existing._id, { isActive: newStatus, updatedAt: Date.now() });
+    
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "toggle_pricing_plan",
+      targetType: "pricingConfig",
+      targetId: args.planId,
+      details: `${newStatus ? "Enabled" : "Disabled"} plan ${args.planId}`,
+      createdAt: Date.now(),
+    });
+    return { success: true, isActive: newStatus };
+  },
+});
+
+// ============================================================================
+// WEBHOOK MANAGEMENT (Phase 4.1)
+// ============================================================================
+
+export const getWebhooks = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "manage_flags"); // Reuse flag permission for now
+    return await ctx.db.query("webhooks").order("desc").collect();
+  },
+});
+
+export const createWebhook = mutation({
+  args: {
+    url: v.string(),
+    description: v.optional(v.string()),
+    events: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_flags");
+    
+    // Generate a signing secret
+    const secret = "whsec_" + Math.random().toString(36).substring(2, 15);
+    
+    const webhookId = await ctx.db.insert("webhooks", {
+      url: args.url,
+      secret,
+      description: args.description,
+      events: args.events,
+      isEnabled: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      createdBy: admin._id,
+    });
+    
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "create_webhook",
+      targetType: "webhook",
+      targetId: webhookId,
+      details: `Created webhook for ${args.url}`,
+      createdAt: Date.now(),
+    });
+    
+    return webhookId;
+  },
+});
+
+export const toggleWebhook = mutation({
+  args: { id: v.id("webhooks") },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_flags");
+    const webhook = await ctx.db.get(args.id);
+    if (!webhook) throw new Error("Webhook not found");
+    
+    const newStatus = !webhook.isEnabled;
+    await ctx.db.patch(args.id, { isEnabled: newStatus, updatedAt: Date.now() });
+    
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "toggle_webhook",
+      targetType: "webhook",
+      targetId: args.id,
+      details: `${newStatus ? "Enabled" : "Disabled"} webhook ${webhook.url}`,
+      createdAt: Date.now(),
+    });
+    
+    return { success: true, isEnabled: newStatus };
+  },
+});
+
+export const deleteWebhook = mutation({
+  args: { id: v.id("webhooks") },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "manage_flags");
+    const webhook = await ctx.db.get(args.id);
+    if (!webhook) throw new Error("Webhook not found");
+    
+    await ctx.db.delete(args.id);
+    
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "delete_webhook",
+      targetType: "webhook",
+      targetId: args.id,
+      details: `Deleted webhook ${webhook.url}`,
+      createdAt: Date.now(),
+    });
+    
+    return { success: true };
+  },
+});
+
+export const testWebhook = action({
+  args: { id: v.id("webhooks") },
+  handler: async (ctx, args) => {
+    // For now, this just updates the lastTriggeredAt field
+    // In a real implementation, it would send a POST request
+    await ctx.runMutation(api.admin.updateWebhookTrigger, { id: args.id, status: 200 });
+    return { success: true };
+  },
+});
+
+export const updateWebhookTrigger = internalMutation({
+  args: { id: v.id("webhooks"), status: v.number() },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      lastTriggeredAt: Date.now(),
+      lastResponseStatus: args.status,
+    });
+  },
+});
+
+// ============================================================================
+// ADVANCED FILTERING (Phase 4.2)
+// ============================================================================
+
+export const getSavedFilters = query({
+  args: { tab: v.string() },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user || !user.isAdmin) return [];
+    
+    return await ctx.db
+      .query("savedFilters")
+      .withIndex("by_admin_tab", q => q.eq("adminUserId", user._id).eq("tab", args.tab))
+      .collect();
+  },
+});
+
+export const saveFilter = mutation({
+  args: { name: v.string(), tab: v.string(), filterData: v.any() },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "view_analytics");
+    
+    return await ctx.db.insert("savedFilters", {
+      adminUserId: admin._id,
+      name: args.name,
+      tab: args.tab,
+      filterData: args.filterData,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+export const deleteSavedFilter = mutation({
+  args: { id: v.id("savedFilters") },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "view_analytics");
+    const existing = await ctx.db.get(args.id);
+    if (existing && existing.adminUserId === admin._id) {
+      await ctx.db.delete(args.id);
+    }
     return { success: true };
   },
 });

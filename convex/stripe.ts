@@ -10,7 +10,7 @@ import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { getTierFromScans } from "./lib/featureGating";
-import { trackFunnelEvent } from "./lib/analytics";
+import { trackFunnelEvent, trackActivity } from "./lib/analytics";
 
 // =============================================================================
 // STRIPE CHECKOUT SESSION
@@ -324,6 +324,9 @@ export const handleCheckoutCompleted = internalMutation({
       plan: args.planId,
       stripeSubscriptionId: args.stripeSubscriptionId,
     });
+
+    // Track activity
+    await trackActivity(ctx, userId, "subscribed", { plan: args.planId });
 
     // Create initial scanCredits record for the first billing period
     // Carry forward lifetime scans from trial period if they exist

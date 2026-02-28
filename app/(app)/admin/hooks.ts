@@ -1,9 +1,21 @@
 import { useCallback, useMemo, useState, createContext, useContext } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useWindowDimensions } from "react-native";
+import { useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
-import { useGlassAlert, colors } from "@/components/ui/glass";
-import { PermissionData, AnalyticsData } from "./types";
+import { PermissionData, AnalyticsData, AdminTab } from "./types";
+
+/**
+ * Hook for responsive layout detection
+ */
+export function useResponsive() {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const isTablet = width >= 768 && width < 1024;
+  const isDesktop = width >= 1024;
+  
+  return { isMobile, isTablet, isDesktop, width };
+}
 
 interface ToastState {
   visible: boolean;

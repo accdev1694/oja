@@ -3,7 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { normalizeStoreName } from "./lib/storeNormalizer";
 import { pushReceiptId } from "./lib/receiptHelpers";
 import { toGroceryTitleCase } from "./lib/titleCase";
-import { trackFunnelEvent } from "./lib/analytics";
+import { trackFunnelEvent, trackActivity } from "./lib/analytics";
 
 /**
  * Generate a fingerprint for duplicate detection.
@@ -120,6 +120,9 @@ export const create = mutation({
 
     // Track funnel event: first_receipt
     await trackFunnelEvent(ctx, user._id, "first_receipt");
+    
+    // Track activity
+    await trackActivity(ctx, user._id, "upload_receipt", { receiptId });
 
     return receiptId;
   },
@@ -203,6 +206,16 @@ export const update = mutation({
     if (args.imageQuality !== undefined) updates.imageQuality = args.imageQuality;
 
     await ctx.db.patch(args.id, updates);
+
+    // Track successful scan
+    if (args.processingStatus === "completed") {
+      await trackFunnelEvent(ctx, user._id, "first_scan");
+      await trackActivity(ctx, user._id, "receipt_processed", { 
+        receiptId: args.id, 
+        storeName: (updates.storeName as string) || receipt.storeName 
+      });
+    }
+
     return await ctx.db.get(args.id);
   },
 });

@@ -89,14 +89,14 @@ export function GlobalSearchModal({ visible, onClose, onSelectResult }: GlobalSe
             ))}
 
             {query.length >= 2 && results.length === 0 && (
-              <Text style={styles.emptyText}>No results found for "{query}"</Text>
+              <Text style={styles.emptyText}>No results found for {"\""}{query}{"\""}</Text>
             )}
             
             {query.length < 2 && (
               <View style={styles.hints}>
                 <Text style={styles.hintText}>Type at least 2 characters to search...</Text>
                 <View style={styles.shortcutRow}>
-                  <Text style={styles.shortcutLabel}>Tip: Try searching for "Tesco" or "Premium"</Text>
+                  <Text style={styles.shortcutLabel}>Tip: Try searching for {"\""}Tesco{"\""} or {"\""}Premium{"\""}</Text>
                 </View>
               </View>
             )}

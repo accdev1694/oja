@@ -368,4 +368,11 @@ export const adminStyles = StyleSheet.create({
   imageModalTitle: { ...typography.headlineSmall, color: colors.text.primary },
   imageContainer: { flex: 1, backgroundColor: "#000" },
   receiptImage: { width: "100%", height: "100%" },
+
+  // Responsive overrides
+  mobileGridItem: { width: "45%" },
+  mobileMetricCard: { width: "47%" },
+  mobileDetailGrid: { flexDirection: "column", gap: spacing.sm },
+  mobileActionRow: { flexDirection: "column", gap: spacing.sm },
+  mobileRevenueGrid: { flexDirection: "column", gap: spacing.md },
 });

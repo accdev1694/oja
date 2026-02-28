@@ -61,16 +61,16 @@ crons.daily(
   internal.analytics_advanced.computeCohortRetention
 );
 
-crons.monthly(
-  "compute-monthly-metrics",
-  { day: 1, hourUTC: 4, minuteUTC: 0 },
-  internal.analytics_advanced.computeChurnMetrics
+crons.daily(
+  "compute-churn-risk",
+  { hourUTC: 3, minuteUTC: 30 },
+  internal.analytics_advanced.computeChurnRisk
 );
 
 crons.monthly(
-  "compute-monthly-ltv",
-  { day: 1, hourUTC: 4, minuteUTC: 30 },
-  internal.analytics_advanced.computeLTVMetrics
+  "compute-monthly-analytics",
+  { day: 1, hourUTC: 4, minuteUTC: 0 },
+  internal.analytics_advanced.runMonthlyAnalytics
 );
 
 // Automated Workflows — Phase 4
@@ -78,6 +78,25 @@ crons.daily(
   "process-workflows",
   { hourUTC: 5, minuteUTC: 0 },
   internal.workflows.processWorkflows
+);
+
+// Real-time Monitoring — Phase 4
+crons.interval(
+  "check-receipt-health",
+  { minutes: 30 },
+  internal.monitoring.checkReceiptFailures
+);
+
+crons.interval(
+  "check-api-latency",
+  { minutes: 15 },
+  internal.monitoring.checkApiLatency
+);
+
+crons.daily(
+  "prune-old-alerts",
+  { hourUTC: 5, minuteUTC: 0 },
+  internal.monitoring.pruneAlerts
 );
 
 export default crons;

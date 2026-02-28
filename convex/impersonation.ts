@@ -74,3 +74,31 @@ export const validateImpersonationToken = query({
     };
   },
 });
+
+/**
+ * Marks an impersonation token as used and activates the session
+ */
+export const startImpersonation = mutation({
+  args: { tokenValue: v.string() },
+  handler: async (ctx, args) => {
+    const token = await ctx.db
+      .query("impersonationTokens")
+      .withIndex("by_token", (q) => q.eq("tokenValue", args.tokenValue))
+      .unique();
+      
+    if (!token) throw new Error("Invalid token");
+    if (token.expiresAt < Date.now()) throw new Error("Token expired");
+    if (token.usedAt) throw new Error("Token already used");
+    
+    await ctx.db.patch(token._id, { usedAt: Date.now() });
+    
+    const user = await ctx.db.get(token.userId);
+    if (!user) throw new Error("User not found");
+    
+    return { 
+      success: true, 
+      userId: token.userId,
+      clerkId: user.clerkId
+    };
+  },
+});

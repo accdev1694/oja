@@ -53,6 +53,11 @@ export default defineSchema({
     isAdmin: v.optional(v.boolean()),
     suspended: v.optional(v.boolean()),
     mfaEnabled: v.optional(v.boolean()),
+    allowedIps: v.optional(v.array(v.string())), // For IP Whitelisting (Phase 4.1)
+    
+    // Analytics (Phase 4.2)
+    churnRiskScore: v.optional(v.number()), // 0-100 probability
+    lastChurnRiskComputeAt: v.optional(v.number()),
 
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -505,6 +510,7 @@ export default defineSchema({
     userId: v.id("users"),
     plan: v.union(v.literal("free"), v.literal("premium_monthly"), v.literal("premium_annual")),
     status: v.union(v.literal("active"), v.literal("cancelled"), v.literal("expired"), v.literal("trial")),
+    lastStatus: v.optional(v.string()), // For movement tracking (e.g., "trial" -> "active")
     stripeCustomerId: v.optional(v.string()),
     stripeSubscriptionId: v.optional(v.string()),
     currentPeriodStart: v.optional(v.number()),
@@ -519,6 +525,18 @@ export default defineSchema({
     .index("by_current_period_end", ["currentPeriodEnd"])
     .index("by_plan_status", ["plan", "status"])
     .index("by_created", ["createdAt"]),
+
+  // Revenue movements tracking (Phase 4.1)
+  revenueMetrics: defineTable({
+    month: v.string(), // "2025-02"
+    newMrr: v.number(),       // Revenue from new subscribers
+    expansionMrr: v.number(), // Revenue from upgrades
+    contractionMrr: v.number(), // Revenue from downgrades
+    churnMrr: v.number(),     // Lost revenue from cancellations
+    totalMrr: v.number(),     // Net MRR at month end
+    computedAt: v.number(),
+  })
+    .index("by_month", ["month"]),
 
   // Loyalty points balance
   loyaltyPoints: defineTable({
@@ -721,12 +739,14 @@ export default defineSchema({
     displayName: v.string(), // "Premium Monthly"
     priceAmount: v.number(), // 2.99
     currency: v.string(), // "GBP"
+    region: v.optional(v.string()), // "UK", "US", or postcode prefix (Phase 4.1)
     stripePriceId: v.optional(v.string()), // From env: STRIPE_PRICE_MONTHLY
     isActive: v.boolean(),
     updatedAt: v.number(),
   })
     .index("by_plan", ["planId"])
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_region", ["region"]),
 
   // ─── Nurture Sequence ────────────────────────────────────────────────────────
   // Tracks which nurture messages have been sent to each user
@@ -859,6 +879,7 @@ export default defineSchema({
     tokenValue: v.string(),
     createdBy: v.id("users"), // Admin who generated it
     expiresAt: v.number(),
+    usedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_token", ["tokenValue"])
@@ -985,4 +1006,29 @@ export default defineSchema({
     order: v.number(),
   })
     .index("by_order", ["order"]),
+
+  // 4.5 External Integrations (Phase 4.1)
+  webhooks: defineTable({
+    url: v.string(),
+    secret: v.string(),
+    description: v.optional(v.string()),
+    events: v.array(v.string()), // ["receipt.completed", "user.subscribed", etc.]
+    isEnabled: v.boolean(),
+    lastTriggeredAt: v.optional(v.number()),
+    lastResponseStatus: v.optional(v.number()),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_enabled", ["isEnabled"]),
+
+  // 4.6 Advanced Search & Filtering (Phase 4.2)
+  savedFilters: defineTable({
+    adminUserId: v.id("users"),
+    name: v.string(),
+    tab: v.string(), // "users" | "receipts"
+    filterData: v.any(), // JSON serialized filter state
+    createdAt: v.number(),
+  })
+    .index("by_admin_tab", ["adminUserId", "tab"]),
 });

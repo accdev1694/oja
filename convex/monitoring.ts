@@ -1,119 +1,106 @@
-import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { internalMutation } from "./_generated/server";
 
 /**
- * Report a new admin alert
+ * Monitors receipt processing failure rate
+ * Threshold: > 10% failure rate in the last hour triggers a warning
+ * Threshold: > 25% failure rate in the last hour triggers a critical alert
  */
-export const reportAlert = mutation({
-  args: {
-    alertType: v.string(),
-    message: v.string(),
-    severity: v.union(v.literal("info"), v.literal("warning"), v.literal("critical")),
-  },
-  handler: async (ctx, args) => {
-    const alertId = await ctx.db.insert("adminAlerts", {
-      alertType: args.alertType,
-      message: args.message,
-      severity: args.severity,
-      isResolved: false,
-      createdAt: Date.now(),
-    });
-    
-    // In a real app, this would trigger an actual push notification to admins
-    console.log(`[ALERT] ${args.severity.toUpperCase()}: ${args.message}`);
-    
-    return alertId;
-  },
-});
-
-/**
- * Resolve an alert
- */
-export const resolveAlert = mutation({
-  args: { alertId: v.id("adminAlerts") },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-    
-    const admin = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
-      
-    if (!admin || !admin.isAdmin) throw new Error("Unauthorized");
-    
-    await ctx.db.patch(args.alertId, {
-      isResolved: true,
-      resolvedBy: admin._id,
-      resolvedAt: Date.now(),
-    });
-    
-    return { success: true };
-  },
-});
-
-/**
- * Record an SLA metric
- */
-export const recordSLAMetric = mutation({
-  args: {
-    metric: v.string(),
-    target: v.number(),
-    actual: v.number(),
-  },
-  handler: async (ctx, args) => {
-    let status: "pass" | "warn" | "fail" = "pass";
-    
-    if (args.actual > args.target * 1.5) status = "fail";
-    else if (args.actual > args.target) status = "warn";
-    
-    const metricId = await ctx.db.insert("slaMetrics", {
-      metric: args.metric,
-      target: args.target,
-      actual: args.actual,
-      status,
-      timestamp: Date.now(),
-    });
-    
-    // Auto-report alert if SLA fails
-    if (status === "fail") {
-      await ctx.db.insert("adminAlerts", {
-        alertType: "sla_breach",
-        message: `SLA Breach: ${args.metric} is ${args.actual}ms (target ${args.target}ms)`,
-        severity: "warning",
-        isResolved: false,
-        createdAt: Date.now(),
-      });
-    }
-    
-    return metricId;
-  },
-});
-
-/**
- * Get active alerts
- */
-export const getActiveAlerts = query({
+export const checkReceiptFailures = internalMutation({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
-      .query("adminAlerts")
-      .withIndex("by_resolved", (q) => q.eq("isResolved", false))
-      .order("desc")
+    const now = Date.now();
+    const oneHourAgo = now - 60 * 60 * 1000;
+
+    const recentReceipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_created", (q) => q.gte("createdAt", oneHourAgo))
       .collect();
+
+    if (recentReceipts.length < 5) return { checked: false, reason: "Insufficient data" };
+
+    const failed = recentReceipts.filter(r => r.processingStatus === "failed").length;
+    const failureRate = (failed / recentReceipts.length) * 100;
+
+    if (failureRate > 10) {
+      const severity = failureRate > 25 ? "critical" : "warning";
+      
+      // Check for existing unresolved alert of same type to avoid spam
+      const existing = await ctx.db
+        .query("adminAlerts")
+        .withIndex("by_resolved", q => q.eq("isResolved", false))
+        .filter(q => q.eq(q.field("alertType"), "receipt_failure_spike"))
+        .first();
+
+      if (!existing) {
+        await ctx.db.insert("adminAlerts", {
+          alertType: "receipt_failure_spike",
+          message: `Receipt failure rate is ${failureRate.toFixed(1)}% (${failed}/${recentReceipts.length})`,
+          severity,
+          isResolved: false,
+          createdAt: now,
+        });
+      }
+    }
+
+    return { checked: true, failureRate };
   },
 });
 
 /**
- * Get SLA metrics for dashboard
+ * Monitors API Latency via SLA metrics
  */
-export const getSLAMetrics = query({
-  args: { limit: v.optional(v.number()) },
-  handler: async (ctx, args) => {
-    return await ctx.db
+export const checkApiLatency = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    
+    // Get last 10 SLA metrics
+    const recentSla = await ctx.db
       .query("slaMetrics")
       .order("desc")
-      .take(args.limit || 20);
+      .take(10);
+      
+    const failingCount = recentSla.filter(s => s.status === "fail").length;
+    
+    if (failingCount >= 3) {
+      const existing = await ctx.db
+        .query("adminAlerts")
+        .withIndex("by_resolved", q => q.eq("isResolved", false))
+        .filter(q => q.eq(q.field("alertType"), "high_latency"))
+        .first();
+
+      if (!existing) {
+        await ctx.db.insert("adminAlerts", {
+          alertType: "high_latency",
+          message: `System experiencing high latency: ${failingCount}/10 recent checks failed SLA`,
+          severity: "warning",
+          isResolved: false,
+          createdAt: now,
+        });
+      }
+    }
+    
+    return { checked: true, failingCount };
+  },
+});
+
+/**
+ * Periodic cleanup of resolved/old alerts
+ */
+export const pruneAlerts = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    
+    const oldAlerts = await ctx.db
+      .query("adminAlerts")
+      .filter(q => q.lt(q.field("createdAt"), ninetyDaysAgo))
+      .collect();
+      
+    for (const alert of oldAlerts) {
+      await ctx.db.delete(alert._id);
+    }
+    
+    return { pruned: oldAlerts.length };
   },
 });

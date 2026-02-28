@@ -1,8 +1,7 @@
-import React, { useState, useCallback, useEffect, ComponentProps } from "react";
+import React, { useState, useCallback, useEffect, useMemo, ComponentProps } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   Pressable,
   ActivityIndicator,
   Platform,
@@ -14,10 +13,7 @@ import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   GlassScreen,
-  GlassCard,
-  AnimatedSection,
   colors,
-  typography,
   spacing,
   useGlassAlert,
 } from "@/components/ui/glass";
@@ -33,7 +29,7 @@ import { MonitoringTab } from "./admin/MonitoringTab";
 import { ReceiptsTab } from "./admin/ReceiptsTab";
 import { CatalogTab } from "./admin/CatalogTab";
 import { SettingsTab } from "./admin/SettingsTab";
-
+import { WebhooksTab } from "./admin/WebhooksTab";
 import { AdminTabBar } from "./admin/components/AdminTabBar";
 import { ToastProvider } from "./admin/components/ToastProvider";
 import { GlobalSearchModal } from "./admin/components/GlobalSearchModal";
@@ -87,7 +83,7 @@ function AdminScreenInner() {
   const [selectionLabel, setSelectionLabel] = useState<string | null>(null);
   const { alert: showAlert } = useGlassAlert();
 
-  const tabs: { key: AdminTab; label: string; icon: ComponentProps<typeof MaterialCommunityIcons>["name"]; permission?: string }[] = [
+  const tabs: { key: AdminTab; label: string; icon: ComponentProps<typeof MaterialCommunityIcons>["name"]; permission?: string }[] = useMemo(() => [
     { key: "overview", label: "Overview", icon: "view-dashboard" },
     { key: "users", label: "Users", icon: "account-group", permission: "view_users" },
     { key: "analytics", label: "Analytics", icon: "chart-bar", permission: "view_analytics" },
@@ -95,11 +91,12 @@ function AdminScreenInner() {
     { key: "catalog", label: "Catalog", icon: "database", permission: "manage_catalog" },
     { key: "support", label: "Support", icon: "help-circle", permission: "view_support" },
     { key: "monitoring", label: "Monitoring", icon: "pulse", permission: "view_analytics" },
+    { key: "webhooks", label: "Webhooks", icon: "webhook", permission: "manage_flags" },
     { key: "settings", label: "Settings", icon: "cog", permission: "manage_flags" },
-  ];
+  ], []);
 
   useEffect(() => {
-    if (tab && ["overview", "users", "analytics", "support", "monitoring", "receipts", "catalog", "settings"].includes(tab)) {
+    if (tab && ["overview", "users", "analytics", "support", "monitoring", "receipts", "catalog", "settings", "webhooks"].includes(tab)) {
       setActiveTab(tab as AdminTab);
     }
   }, [tab]);
@@ -247,6 +244,7 @@ function AdminScreenInner() {
           />
         )}
         {activeTab === "catalog" && <CatalogTab hasPermission={hasPermission} />}
+        {activeTab === "webhooks" && <WebhooksTab hasPermission={hasPermission} />}
         {activeTab === "settings" && <SettingsTab hasPermission={hasPermission} />}
       </View>
     </GlassScreen>

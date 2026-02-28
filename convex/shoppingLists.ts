@@ -8,7 +8,7 @@ import { getReceiptIds, pushReceiptId } from "./lib/receiptHelpers";
 import { getIconForItem } from "./iconMapping";
 import { isDuplicateItemName } from "./lib/fuzzyMatch";
 import { toGroceryTitleCase } from "./lib/titleCase";
-import { trackFunnelEvent } from "./lib/analytics";
+import { trackFunnelEvent, trackActivity } from "./lib/analytics";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -235,6 +235,9 @@ export const create = mutation({
 
     // Track funnel event: first_list
     await trackFunnelEvent(ctx, user._id, "first_list");
+    
+    // Track activity
+    await trackActivity(ctx, user._id, "create_list", { listId, name: args.name });
 
     return listId;
   },

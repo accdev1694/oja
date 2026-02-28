@@ -5,12 +5,19 @@ import { mutation, query } from "./_generated/server";
  * Get all active pricing configurations
  */
 export const getPricing = query({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.db
-      .query("pricingConfig")
-      .withIndex("by_active", (q: any) => q.eq("isActive", true))
-      .collect();
+  args: { region: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    let q = ctx.db.query("pricingConfig").withIndex("by_active", (q: any) => q.eq("isActive", true));
+    
+    const allActive = await q.collect();
+    
+    // Filter by region if provided, otherwise return global prices (where region is undefined)
+    if (args.region) {
+      const regional = allActive.filter(p => p.region === args.region);
+      if (regional.length > 0) return regional;
+    }
+    
+    return allActive.filter(p => p.region === undefined);
   },
 });
 

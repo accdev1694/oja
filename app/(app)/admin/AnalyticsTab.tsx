@@ -25,6 +25,7 @@ import {
   UserSegment 
 } from "./types";
 import { RetentionCell } from "./components/RetentionCell";
+import { useResponsive } from "./hooks";
 
 interface AnalyticsTabProps {
   hasPermission: (p: string) => boolean;
@@ -35,14 +36,13 @@ export function AnalyticsTab({
   hasPermission,
   handleExportCSV
 }: AnalyticsTabProps) {
+  const { isMobile } = useResponsive();
   const cohortMetrics = useQuery(api.admin.getCohortMetrics) as CohortMetric[] | undefined;
   const funnelAnalytics = useQuery(api.admin.getFunnelAnalytics) as FunnelStep[] | undefined;
   const churnMetrics = useQuery(api.admin.getChurnMetrics) as ChurnMetric[] | undefined;
   const ltvMetrics = useQuery(api.admin.getLTVMetrics) as LTVMetric[] | undefined;
   const segmentSummary = useQuery(api.admin.getUserSegmentSummary) as UserSegment[] | undefined;
   
-  const { alert: showAlert } = useGlassAlert();
-
   const loading = !cohortMetrics || !funnelAnalytics || !churnMetrics || !ltvMetrics || !segmentSummary;
 
   if (loading) {
@@ -101,7 +101,7 @@ export function AnalyticsTab({
           </View>
           <View style={styles.segmentGrid}>
             {segmentSummary.map((seg) => (
-              <View key={seg.name} style={styles.segmentCard}>
+              <View key={seg.name} style={[styles.segmentCard, isMobile && styles.mobileMetricCard]}>
                 <Text style={styles.segmentValue}>{seg.count}</Text>
                 <Text style={styles.segmentName}>{seg.name.replace(/_/g, " ")}</Text>
                 <Text style={styles.segmentPercent}>{seg.percentage.toFixed(1)}%</Text>

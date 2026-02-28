@@ -1,6 +1,8 @@
-import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { Id, DataModel } from "./_generated/dataModel";
+import { GenericMutationCtx } from "convex/server";
+
+type MutationCtx = GenericMutationCtx<DataModel>;
 
 /**
  * Compute cohort retention metrics
@@ -75,6 +77,54 @@ export const computeCohortRetention = internalMutation({
   },
 });
 
+export async function computeChurnMetricsInternal(ctx: MutationCtx) {
+  const now = Date.now();
+  const date = new Date();
+  const currentMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+  
+  // Get all users
+  const allUsers = await ctx.db.query("users").collect();
+  
+  // Define active users (active in last 30 days)
+  const activeThreshold = now - thirtyDaysMs;
+  const atRiskThreshold = now - fourteenDaysMs;
+  
+  const activeUsers = allUsers.filter(u => (u.lastActiveAt ?? 0) >= activeThreshold);
+  const atRiskUsers = allUsers.filter(u => 
+    (u.lastActiveAt ?? 0) < atRiskThreshold && (u.lastActiveAt ?? 0) >= activeThreshold
+  );
+  const churnedUsers = allUsers.filter(u => 
+    u.lastActiveAt && u.lastActiveAt < activeThreshold
+  );
+  
+  const metrics = {
+    month: currentMonth,
+    totalActiveStart: allUsers.length, // Fallback
+    totalActiveEnd: activeUsers.length,
+    churnedUsers: churnedUsers.length,
+    churnRate: allUsers.length > 0 ? (churnedUsers.length / allUsers.length) * 100 : 0,
+    reactivatedUsers: 0, // Would need historical data to compute properly
+    atRiskCount: atRiskUsers.length,
+    computedAt: now,
+  };
+  
+  const existing = await ctx.db
+    .query("churnMetrics")
+    .withIndex("by_month", (q) => q.eq("month", currentMonth))
+    .unique();
+    
+  if (existing) {
+    await ctx.db.patch(existing._id, metrics);
+  } else {
+    await ctx.db.insert("churnMetrics", metrics);
+  }
+  
+  return metrics;
+}
+
 /**
  * Compute churn metrics
  * Runs monthly via cron
@@ -82,55 +132,75 @@ export const computeCohortRetention = internalMutation({
 export const computeChurnMetrics = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const now = Date.now();
-    const date = new Date();
-    const currentMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    return await computeChurnMetricsInternal(ctx);
+  },
+});
+
+export async function computeLTVMetricsInternal(ctx: MutationCtx) {
+  const now = Date.now();
+  
+  // Get all users and subscriptions
+  const allUsers = await ctx.db.query("users").collect();
+  const allSubs = await ctx.db.query("subscriptions").collect();
+  
+  // Get dynamic pricing
+  const pricing = await ctx.db.query("pricingConfig").collect();
+  const monthlyPrice = pricing.find(p => p.planId === "premium_monthly" && p.isActive)?.priceAmount || 0;
+  const annualPrice = pricing.find(p => p.planId === "premium_annual" && p.isActive)?.priceAmount || 0;
+  
+  // Group users by signup month
+  const cohorts: Record<string, Id<"users">[]> = {};
+  for (const user of allUsers) {
+    const date = new Date(user.createdAt);
+    const cohortMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    if (!cohorts[cohortMonth]) cohorts[cohortMonth] = [];
+    cohorts[cohortMonth].push(user._id);
+  }
+  
+  for (const [month, userIds] of Object.entries(cohorts)) {
+    let totalRevenue = 0;
+    let paidUserCount = 0;
     
-    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-    const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+    for (const userId of userIds) {
+      const sub = allSubs.find(s => s.userId === userId);
+      if (!sub || sub.status === "trial") continue;
+      
+      const subDurationMonths = Math.max(1, Math.ceil((now - sub.createdAt) / (30 * 24 * 60 * 60 * 1000)));
+      
+      if (sub.plan === "premium_monthly") {
+        totalRevenue += subDurationMonths * monthlyPrice;
+        paidUserCount++;
+      } else if (sub.plan === "premium_annual") {
+        const subDurationYears = Math.max(1, Math.ceil((now - sub.createdAt) / (365 * 24 * 60 * 60 * 1000)));
+        totalRevenue += subDurationYears * annualPrice;
+        paidUserCount++;
+      }
+    }
     
-    // Get all users
-    const allUsers = await ctx.db.query("users").collect();
-    
-    // Define active users (active in last 30 days)
-    const activeThreshold = now - thirtyDaysMs;
-    const atRiskThreshold = now - fourteenDaysMs;
-    
-    const activeUsers = allUsers.filter(u => (u.lastActiveAt ?? 0) >= activeThreshold);
-    const atRiskUsers = allUsers.filter(u => 
-      (u.lastActiveAt ?? 0) < atRiskThreshold && (u.lastActiveAt ?? 0) >= activeThreshold
-    );
-    const churnedUsers = allUsers.filter(u => 
-      u.lastActiveAt && u.lastActiveAt < activeThreshold
-    );
-    
-    // In a real scenario, we'd compare with the previous month's metrics
-    // For now, we'll just compute the current state
     const metrics = {
-      month: currentMonth,
-      totalActiveStart: allUsers.length, // Fallback
-      totalActiveEnd: activeUsers.length,
-      churnedUsers: churnedUsers.length,
-      churnRate: allUsers.length > 0 ? (churnedUsers.length / allUsers.length) * 100 : 0,
-      reactivatedUsers: 0, // Would need historical data to compute properly
-      atRiskCount: atRiskUsers.length,
+      cohortMonth: month,
+      avgLTV: userIds.length > 0 ? totalRevenue / userIds.length : 0,
+      avgRevenuePerUser: userIds.length > 0 ? totalRevenue / userIds.length : 0,
+      totalRevenue: Math.round(totalRevenue * 100) / 100,
+      paidUsers: paidUserCount,
+      conversionRate: userIds.length > 0 ? (paidUserCount / userIds.length) * 100 : 0,
       computedAt: now,
     };
     
     const existing = await ctx.db
-      .query("churnMetrics")
-      .withIndex("by_month", (q) => q.eq("month", currentMonth))
+      .query("ltvMetrics")
+      .withIndex("by_cohort", (q) => q.eq("cohortMonth", month))
       .unique();
       
     if (existing) {
       await ctx.db.patch(existing._id, metrics);
     } else {
-      await ctx.db.insert("churnMetrics", metrics);
+      await ctx.db.insert("ltvMetrics", metrics);
     }
-    
-    return metrics;
-  },
-});
+  }
+  
+  return { success: true, cohortsProcessed: Object.keys(cohorts).length };
+}
 
 /**
  * Compute LTV metrics by cohort
@@ -139,72 +209,97 @@ export const computeChurnMetrics = internalMutation({
 export const computeLTVMetrics = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const now = Date.now();
-    
-    // Get all users and subscriptions
-    const allUsers = await ctx.db.query("users").collect();
-    const allSubs = await ctx.db.query("subscriptions").collect();
-    
-    // Get dynamic pricing
-    const pricing = await ctx.db.query("pricingConfig").collect();
-    const monthlyPrice = pricing.find(p => p.planId === "premium_monthly" && p.isActive)?.priceAmount || 0;
-    const annualPrice = pricing.find(p => p.planId === "premium_annual" && p.isActive)?.priceAmount || 0;
-    
-    // Group users by signup month
-    const cohorts: Record<string, Id<"users">[]> = {};
-    for (const user of allUsers) {
-      const date = new Date(user.createdAt);
-      const cohortMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      if (!cohorts[cohortMonth]) cohorts[cohortMonth] = [];
-      cohorts[cohortMonth].push(user._id);
+    return await computeLTVMetricsInternal(ctx);
+  },
+});
+
+export async function computeRevenueMetricsInternal(ctx: MutationCtx) {
+  const now = Date.now();
+  const date = new Date();
+  const currentMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  
+  // Get all subscriptions
+  const allSubs = await ctx.db.query("subscriptions").collect();
+  
+  // Get pricing for calculations
+  const pricing = await ctx.db.query("pricingConfig").collect();
+  const monthlyPrice = pricing.find(p => p.planId === "premium_monthly" && p.isActive)?.priceAmount || 0;
+  const annualPrice = pricing.find(p => p.planId === "premium_annual" && p.isActive)?.priceAmount || 0;
+  
+  const getMrr = (sub: any) => {
+    if (sub.status !== "active") return 0;
+    if (sub.plan === "premium_monthly") return monthlyPrice;
+    if (sub.plan === "premium_annual") return annualPrice / 12;
+    return 0;
+  };
+
+  let newMrr = 0;
+  let churnMrr = 0;
+  let expansionMrr = 0;
+  let contractionMrr = 0;
+  let totalMrr = 0;
+
+  const oneMonthAgo = now - 30 * 24 * 60 * 60 * 1000;
+
+  for (const sub of allSubs) {
+    const currentVal = getMrr(sub);
+    totalMrr += currentVal;
+
+    // New revenue (created this month)
+    if (sub.createdAt >= oneMonthAgo && sub.status === "active") {
+      newMrr += currentVal;
     }
     
-    for (const [month, userIds] of Object.entries(cohorts)) {
-      let totalRevenue = 0;
-      let paidUserCount = 0;
-      
-      for (const userId of userIds) {
-        const sub = allSubs.find(s => s.userId === userId);
-        if (!sub || sub.status === "trial") continue;
-        
-        // Estimate revenue based on plan and how long they've been subscribed
-        // Since we don't have a payments table, we'll estimate:
-        
-        const subDurationMonths = Math.max(1, Math.ceil((now - sub.createdAt) / (30 * 24 * 60 * 60 * 1000)));
-        
-        if (sub.plan === "premium_monthly") {
-          totalRevenue += subDurationMonths * monthlyPrice;
-          paidUserCount++;
-        } else if (sub.plan === "premium_annual") {
-          const subDurationYears = Math.max(1, Math.ceil((now - sub.createdAt) / (365 * 24 * 60 * 60 * 1000)));
-          totalRevenue += subDurationYears * annualPrice;
-          paidUserCount++;
-        }
-      }
-      
+    // Churn (canceled this month)
+    if (sub.updatedAt >= oneMonthAgo && sub.status === "cancelled") {
+      churnMrr += (sub.plan === "premium_monthly" ? monthlyPrice : annualPrice / 12);
+    }
+  }
+
       const metrics = {
-        cohortMonth: month,
-        avgLTV: userIds.length > 0 ? totalRevenue / userIds.length : 0,
-        avgRevenuePerUser: userIds.length > 0 ? totalRevenue / userIds.length : 0,
-        totalRevenue: Math.round(totalRevenue * 100) / 100,
-        paidUsers: paidUserCount,
-        conversionRate: userIds.length > 0 ? (paidUserCount / userIds.length) * 100 : 0,
+        month: currentMonth,
+        newMrr: Math.round(newMrr * 100) / 100,
+        expansionMrr: 0,
+        contractionMrr: 0,
+        churnMrr: Math.round(churnMrr * 100) / 100,
+        totalMrr: Math.round(totalMrr * 100) / 100,
         computedAt: now,
       };
-      
-      const existing = await ctx.db
-        .query("ltvMetrics")
-        .withIndex("by_cohort", (q) => q.eq("cohortMonth", month))
-        .unique();
-        
-      if (existing) {
-        await ctx.db.patch(existing._id, metrics);
-      } else {
-        await ctx.db.insert("ltvMetrics", metrics);
-      }
-    }
-    
-    return { success: true, cohortsProcessed: Object.keys(cohorts).length };
+  const existing = await ctx.db
+    .query("revenueMetrics")
+    .withIndex("by_month", q => q.eq("month", currentMonth))
+    .unique();
+
+  if (existing) {
+    await ctx.db.patch(existing._id, metrics);
+  } else {
+    await ctx.db.insert("revenueMetrics", metrics);
+  }
+
+  return metrics;
+}
+
+/**
+ * Compute detailed revenue breakdown (MRR movements)
+ * Runs monthly via cron
+ */
+export const computeRevenueMetrics = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    return await computeRevenueMetricsInternal(ctx);
+  },
+});
+
+/**
+ * Runs all monthly analytics jobs
+ */
+export const runMonthlyAnalytics = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    await computeChurnMetricsInternal(ctx);
+    await computeLTVMetricsInternal(ctx);
+    await computeRevenueMetricsInternal(ctx);
+    return { success: true };
   },
 });
 
@@ -250,7 +345,7 @@ export const computeUserSegments = internalMutation({
       const existing = await ctx.db
         .query("userSegments")
         .withIndex("by_user", (q) => q.eq("userId", user._id))
-        .first(); // Just get the latest one
+        .first(); 
         
       if (existing) {
         if (existing.segment !== segment) {
@@ -270,5 +365,53 @@ export const computeUserSegments = internalMutation({
     }
     
     return { success: true, segmentsProcessed };
+  },
+});
+
+/**
+ * Heuristic Churn Prediction Model
+ * Calculates a 0-100 risk score for each user
+ * Runs daily via cron
+ */
+export const computeChurnRisk = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const allUsers = await ctx.db.query("users").collect();
+    const allSubs = await ctx.db.query("subscriptions").collect();
+    
+    let processed = 0;
+    
+    for (const user of allUsers) {
+      let riskScore = 0;
+      const daysSinceActive = (now - (user.lastActiveAt ?? 0)) / (24 * 60 * 60 * 1000);
+      const sub = allSubs.find(s => s.userId === user._id);
+      
+      // 1. Inactivity Factor (Max 50 pts)
+      if (daysSinceActive > 30) riskScore += 50;
+      else if (daysSinceActive > 14) riskScore += 30;
+      else if (daysSinceActive > 7) riskScore += 10;
+      
+      // 2. Subscription Status (Max 30 pts)
+      if (sub?.status === "cancelled") riskScore += 30;
+      else if (sub?.status === "trial" && sub.trialEndsAt && (sub.trialEndsAt - now) < (2 * 24 * 60 * 60 * 1000)) {
+        riskScore += 20; // Trial ending soon
+      }
+      
+      // 3. Engagement History (Max 20 pts)
+      if (user.sessionCount && user.sessionCount < 3) riskScore += 20;
+      else if (user.sessionCount && user.sessionCount < 10) riskScore += 10;
+      
+      // Cap at 100
+      riskScore = Math.min(100, riskScore);
+      
+      await ctx.db.patch(user._id, {
+        churnRiskScore: riskScore,
+        lastChurnRiskComputeAt: now,
+      });
+      processed++;
+    }
+    
+    return { success: true, processed };
   },
 });

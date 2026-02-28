@@ -29,7 +29,7 @@ import {
   AuditLog 
 } from "./types";
 import { MetricCard } from "./components/MetricCard";
-import { useGmvMetrics } from "./hooks";
+import { useGmvMetrics, useResponsive } from "./hooks";
 
 interface OverviewTabProps {
   /** Permission check function */
@@ -41,6 +41,7 @@ interface OverviewTabProps {
  * Displays high-level system health, analytics, and financial summaries.
  */
 export function OverviewTab({ hasPermission }: OverviewTabProps) {
+  const { isMobile } = useResponsive();
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [refreshKey, setRefreshKey] = useState(Date.now().toString());
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -168,12 +169,12 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
               <Text style={styles.sectionTitle}>Analytics</Text>
             </View>
             <View style={styles.metricsGrid}>
-              <MetricCard label="Total Users" value={analytics.totalUsers ?? 0} icon="account-group" />
-              <MetricCard label="New (Week)" value={analytics.newUsersThisWeek ?? 0} icon="account-plus" trend={12} />
-              <MetricCard label="Active (Week)" value={analytics.activeUsersThisWeek ?? 0} icon="account-check" trend={5} />
-              <MetricCard label="Total Lists" value={analytics.totalLists ?? 0} icon="clipboard-list" />
-              <MetricCard label="Completed" value={analytics.completedLists ?? 0} icon="check-circle" trend={-2} />
-              <MetricCard label="Receipts" value={analytics.totalReceipts ?? 0} icon="receipt" trend={8} />
+              <MetricCard label="Total Users" value={analytics.totalUsers ?? 0} icon="account-group" style={isMobile ? styles.mobileMetricCard : undefined} />
+              <MetricCard label="New (Week)" value={analytics.newUsersThisWeek ?? 0} icon="account-plus" trend={12} style={isMobile ? styles.mobileMetricCard : undefined} />
+              <MetricCard label="Active (Week)" value={analytics.activeUsersThisWeek ?? 0} icon="account-check" trend={5} style={isMobile ? styles.mobileMetricCard : undefined} />
+              <MetricCard label="Total Lists" value={analytics.totalLists ?? 0} icon="clipboard-list" style={isMobile ? styles.mobileMetricCard : undefined} />
+              <MetricCard label="Completed" value={analytics.completedLists ?? 0} icon="check-circle" trend={-2} style={isMobile ? styles.mobileMetricCard : undefined} />
+              <MetricCard label="Receipts" value={analytics.totalReceipts ?? 0} icon="receipt" trend={8} style={isMobile ? styles.mobileMetricCard : undefined} />
             </View>
 
             {/* GMV Section with Filters */}
@@ -213,7 +214,7 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
               <MaterialCommunityIcons name="cash-multiple" size={24} color={colors.semantic.success} />
               <Text style={styles.sectionTitle}>Revenue</Text>
             </View>
-            <View style={styles.revenueGrid}>
+            <View style={[styles.revenueGrid, isMobile && styles.mobileRevenueGrid]}>
               <View style={styles.revenueItem}>
                 <Text style={styles.revenueValueLarge}>£{(revenue.mrr ?? 0).toFixed(2)}</Text>
                 <Text style={styles.revenueLabel}>MRR (Monthly)</Text>
@@ -227,7 +228,7 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
               {revenue.monthlySubscribers ?? 0} monthly • {revenue.annualSubscribers ?? 0} annual • {revenue.trialsActive ?? 0} trials
             </Text>
             {financial && (
-              <View style={[styles.revenueGrid, { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border, paddingTop: spacing.md }]}>
+              <View style={[styles.revenueGrid, isMobile && styles.mobileRevenueGrid, { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border, paddingTop: spacing.md }]}>
                 <View style={styles.revenueItem}>
                   <Text style={[styles.revenueValue, { color: colors.accent.primary }]}>£{financial.netRevenue.toFixed(2)}</Text>
                   <Text style={styles.revenueLabel}>Est. Net (MRR)</Text>
