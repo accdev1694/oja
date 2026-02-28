@@ -18,6 +18,7 @@ const STORAGE_KEY = "oja:scannedProducts";
 export interface ScannedProduct {
   name: string;
   category: string;
+  quantity: number;
   size?: string;
   unit?: string;
   brand?: string;
@@ -148,6 +149,7 @@ export function useProductScanner(options?: UseProductScannerOptions) {
         {
           name: "",
           category: "",
+          quantity: 1,
           confidence: 0,
           imageStorageId: "",
           localImageUri: uri,
@@ -187,6 +189,7 @@ export function useProductScanner(options?: UseProductScannerOptions) {
         const product: ScannedProduct = {
           name: parsed.name as string,
           category: parsed.category as string,
+          quantity: typeof parsed.quantity === "number" ? parsed.quantity : 1,
           size: parsed.size as string | undefined,
           unit: parsed.unit as string | undefined,
           brand: parsed.brand as string | undefined,

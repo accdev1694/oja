@@ -74,6 +74,7 @@ export default function ScanScreen() {
     scannedItem: {
       name: string;
       category: string;
+      quantity: number;
       size?: string;
       unit?: string;
       brand?: string;
@@ -98,6 +99,10 @@ export default function ScanScreen() {
 
   const [animationKey, setAnimationKey] = useState(0);
   const [pageAnimationKey, setPageAnimationKey] = useState(0);
+
+  // ── Continuous scanning state ─────────────────────────────────────────
+  const [isContinuousMode, setIsContinuousMode] = useState(false);
+  const [isAddingAll, setIsAddingAll] = useState(false);
 
   // ── Edit scanned item modal state ─────────────────────────────────────
   const [editingProduct, setEditingProduct] = useState<ScannedProduct | null>(null);
@@ -387,6 +392,95 @@ export default function ScanScreen() {
     setSelectedImage(null);
   }
 
+  // ── Batch handlers ────────────────────────────────────────────────────────
+
+  async function handleBatchAddToList(listId: Id<"shoppingLists">) {
+    const readyItems = productScanner.scannedProducts.filter((p) => p.status === "ready");
+    if (readyItems.length === 0) return;
+
+    setIsAddingAll(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const result = await addBatchToList({
+        listId,
+        items: readyItems.map((item) => ({
+          name: item.name,
+          category: item.category,
+          size: item.size,
+          unit: item.unit,
+          quantity: item.quantity,
+          estimatedPrice: item.estimatedPrice,
+          brand: item.brand,
+          confidence: item.confidence,
+          imageStorageId: item.imageStorageId,
+        })),
+        forceAdd: false,
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      const parts: string[] = [];
+      if (result.count > 0) parts.push(`${result.count} added`);
+      if (result.skippedDuplicates && result.skippedDuplicates.length > 0) {
+        parts.push(`${result.skippedDuplicates.length} already on list`);
+      }
+
+      alert("List Updated", parts.join(". "));
+      
+      // Clear the scanned queue since they are all processed
+      productScanner.clearAll();
+      setShowProductListPicker(false);
+    } catch (error) {
+      console.error("Batch add to list failed:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert("Error", "Failed to add items to list");
+    } finally {
+      setIsAddingAll(false);
+    }
+  }
+
+  async function handleBatchAddToPantry() {
+    const readyItems = productScanner.scannedProducts.filter((p) => p.status === "ready");
+    if (readyItems.length === 0) return;
+
+    setIsAddingAll(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const result = await addBatchToPantry({
+        items: readyItems.map((item) => ({
+          name: item.name,
+          category: item.category,
+          size: item.size,
+          unit: item.unit,
+          quantity: item.quantity,
+          estimatedPrice: item.estimatedPrice,
+          brand: item.brand,
+          confidence: item.confidence,
+          imageStorageId: item.imageStorageId,
+        })),
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      const parts: string[] = [];
+      if (result.added > 0) parts.push(`${result.added} added`);
+      if (result.restocked > 0) parts.push(`${result.restocked} restocked`);
+
+      alert("Pantry Updated", `${parts.join(", ")}. Items marked as fully stocked.`);
+      
+      // Clear the scanned queue
+      productScanner.clearAll();
+    } catch (error) {
+      console.error("Batch add to pantry failed:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert("Error", "Failed to add items to pantry");
+    } finally {
+      setIsAddingAll(false);
+    }
+  }
+
   // ── Receipt mode handlers ─────────────────────────────────────────────────
 
   function handleCreateListFromReceipt() {
@@ -410,6 +504,7 @@ export default function ScanScreen() {
           category: item.category ?? "Other",
           size: item.size,
           unit: item.unit,
+          quantity: item.quantity,
           estimatedPrice: item.totalPrice,
           confidence: item.confidence,
         })),
@@ -452,6 +547,7 @@ export default function ScanScreen() {
           category: item.category,
           size: item.size,
           unit: item.unit,
+          quantity: item.quantity,
           estimatedPrice: item.estimatedPrice,
           brand: item.brand,
           confidence: item.confidence,
@@ -563,6 +659,7 @@ export default function ScanScreen() {
           category: item.category,
           size: item.size,
           unit: item.unit,
+          quantity: item.quantity,
           estimatedPrice: item.estimatedPrice,
           brand: item.brand,
           confidence: item.confidence,
@@ -1034,18 +1131,59 @@ export default function ScanScreen() {
                 {/* CTA */}
                 <AnimatedSection key={`btns-prod-${animationKey}`} animation="fadeInDown" duration={400} delay={200}>
                   <View style={styles.buttons}>
+                    <View style={styles.continuousToggleRow}>
+                      <MaterialCommunityIcons 
+                        name={isContinuousMode ? "camera-sync" : "camera"} 
+                        size={18} 
+                        color={isContinuousMode ? colors.accent.primary : colors.text.tertiary} 
+                      />
+                      <Text style={[styles.continuousToggleText, isContinuousMode && { color: colors.text.primary }]}>
+                        Continuous Scan
+                      </Text>
+                      <TouchableOpacity 
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setIsContinuousMode(!isContinuousMode);
+                        }}
+                      >
+                        <MaterialCommunityIcons 
+                          name={isContinuousMode ? "toggle-switch" : "toggle-switch-off-outline"} 
+                          size={32} 
+                          color={isContinuousMode ? colors.accent.primary : colors.text.tertiary} 
+                        />
+                      </TouchableOpacity>
+                    </View>
+
                     <GlassButton
                       variant="primary"
                       size="lg"
                       icon="shopping-outline"
                       onPress={async () => {
-                        const result = await productScanner.captureProduct();
-                        if (result) { setActiveProduct(result); setShowScanActionsModal(true); }
+                        let shouldCapture = true;
+                        while (shouldCapture) {
+                          const result = await productScanner.captureProduct();
+                          if (result) {
+                            if (!isContinuousMode) {
+                              setActiveProduct(result);
+                              setShowScanActionsModal(true);
+                              shouldCapture = false;
+                            } else {
+                              // In continuous mode, just haptic and loop back to camera
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                              // We loop by just calling captureProduct again, 
+                              // but ImagePicker returns after one photo.
+                              // So we stay in the while loop if continuous is on.
+                            }
+                          } else {
+                            // User cancelled or error
+                            shouldCapture = false;
+                          }
+                        }
                       }}
-                      loading={productScanner.isProcessing}
-                      disabled={productScanner.isProcessing}
+                      loading={productScanner.isProcessing && !isContinuousMode}
+                      disabled={productScanner.isProcessing && !isContinuousMode}
                     >
-                      {productScanner.isProcessing ? "Identifying..." : "Scan Product"}
+                      {productScanner.isProcessing && !isContinuousMode ? "Identifying..." : "Scan Product"}
                     </GlassButton>
 
                     <GlassButton
@@ -1197,6 +1335,37 @@ export default function ScanScreen() {
                             );
                           })}
                         </View>
+
+                        {/* Batch Action Buttons */}
+                        {productScanner.scannedProducts.filter(p => p.status === "ready").length > 0 && (
+                          <View style={styles.batchActions}>
+                            <GlassButton
+                              variant="primary"
+                              size="md"
+                              icon="clipboard-plus"
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setShowProductListPicker(true);
+                              }}
+                              style={styles.batchButton}
+                              loading={isAddingAll}
+                              disabled={isAddingAll}
+                            >
+                              Add All to List
+                            </GlassButton>
+                            <GlassButton
+                              variant="secondary"
+                              size="md"
+                              icon="fridge-outline"
+                              onPress={handleBatchAddToPantry}
+                              style={styles.batchButton}
+                              loading={isAddingAll}
+                              disabled={isAddingAll}
+                            >
+                              To Pantry
+                            </GlassButton>
+                          </View>
+                        )}
                       </>
                     )}
                   </View>
@@ -1830,6 +1999,31 @@ const styles = StyleSheet.create({
   listOptionBudget: {
     ...typography.bodySmall,
     color: colors.text.tertiary,
+  },
+
+  // Continuous Scan Toggle
+  continuousToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  continuousToggleText: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    fontWeight: "600",
+  },
+
+  // Batch actions
+  batchActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  batchButton: {
+    flex: 1,
   },
 
   // Buttons

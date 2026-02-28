@@ -46,7 +46,7 @@ export function EditScannedItemModal({ product, onClose, onConfirm }: EditScanne
   useEffect(() => {
     if (product) {
       setEditName(product.name);
-      setEditQuantity("1"); // Default to 1 for new items
+      setEditQuantity(String(product.quantity || "1"));
       setEditPrice(product.estimatedPrice ? String(product.estimatedPrice.toFixed(2)) : "");
       setEditSize(product.size || "");
       setEditBrand(product.brand || "");

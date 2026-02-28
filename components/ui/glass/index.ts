@@ -52,6 +52,11 @@ export {
   type GlassSearchInputProps,
 } from "./GlassInput";
 
+export {
+  GlassDropdown,
+  type DropdownOption,
+} from "./GlassDropdown";
+
 // Use safe wrapper until dev build is rebuilt with native date picker module
 export {
   SafeDateRangePicker as GlassDateRangePicker,

@@ -334,8 +334,8 @@ export function UsersTab({
 
             {/* Tags */}
             <View style={[styles.filterRow, { marginVertical: spacing.sm }]}>
-              {userTags?.map((tag) => (
-                <View key={tag} style={styles.tagBadge}>
+              {userTags?.map((tag, idx) => (
+                <View key={`${tag}-${idx}`} style={styles.tagBadge}>
                   <Text style={styles.tagBadgeText}>{tag}</Text>
                   <Pressable onPress={() => handleRemoveTag(tag)}>
                     <MaterialCommunityIcons name="close-circle" size={14} color={colors.text.tertiary} />

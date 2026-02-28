@@ -16,18 +16,42 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 /**
  * AI fallback wrapper: tries primary (Gemini) first, falls back to secondary (OpenAI).
  * Both providers fail → throws the fallback error.
+ * Includes simple retry logic for rate limits (429).
  */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 2,
+  delay = 1000
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    const isRateLimit = 
+      error?.status === 429 || 
+      error?.message?.includes("429") || 
+      error?.code === "insufficient_quota" ||
+      error?.message?.includes("quota");
+
+    if (retries > 0 && isRateLimit) {
+      console.warn(`AI Rate limit hit, retrying in ${delay}ms... (${retries} retries left)`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return withRetry(fn, retries - 1, delay * 2);
+    }
+    throw error;
+  }
+}
+
 async function withAIFallback<T>(
   primary: () => Promise<T>,
   fallback: () => Promise<T>,
   operationName: string
 ): Promise<T> {
   try {
-    return await primary();
+    return await withRetry(primary);
   } catch (primaryError) {
     console.warn(`[${operationName}] Primary AI (Gemini) failed, trying fallback (OpenAI):`, primaryError);
     try {
-      return await fallback();
+      return await withRetry(fallback);
     } catch (fallbackError) {
       console.error(`[${operationName}] Both AI providers failed:`, { primaryError, fallbackError });
       throw fallbackError;
@@ -688,18 +712,21 @@ export const scanProduct = action({
       }
       const base64Image = btoa(chunks.join(""));
 
-      const productPrompt = `You are a UK grocery product identifier. Analyse this photo of a physical product and extract its details.
+      const productPrompt = `You are a UK grocery product identifier. Analyse this photo of a physical product or group of the same unlabelled products (like loose fruit/veg) and extract details.
 
-Read the text on the packaging — product name, brand, size/weight, and any other relevant info. The photo may show any side of the packaging (front, back, top, side). 
+Read the text on the packaging (if any) — product name, brand, size/weight, and any other relevant info. The photo may show any side of the packaging (front, back, top, side). 
 
-CRITICAL: If the photo shows the BACK of the pack (nutritional info/barcode side), look for the product name and weight/volume declarations which are often printed in smaller text or near the barcode. Always identify the CANONICAL product name as it would appear on the front label, regardless of which side is visible.
+CRITICAL: If the photo shows the BACK of the pack (nutritional info/barcode side), look for the product name and weight/volume declarations. Always identify the CANONICAL product name as it would appear on the front label.
 
 Return a JSON object with these fields:
-- name: Concise but descriptive product name, MAX 30 CHARACTERS. FORMAT: "{quantity}{pk} {descriptor} {product type}". QUANTITY+pk COMES FIRST, then a key descriptor if useful, then WHAT THE PRODUCT IS. CRITICAL: NEVER use just a brand name — always describe what the product IS. DROP all brand/own-label names (Tesco, Asda, Aldi, Merevale, etc.) UNLESS the brand IS the product identity (e.g., "Coke Zero", "PG Tips", "Marmite"). KEEP useful descriptors like size (medium/large), type (whole/semi-skimmed), style (free-range/organic).
-  CONSISTENCY RULE: Always use the SAME canonical name regardless of which side of the packaging is photographed. Use "{N}pk" for multi-packs (not "{N} pack", "pack of {N}", "{N}x", or bare "{N}"). Use the product's common grocery name, not marketing text.
-  Examples: "12pk Medium Eggs", "2pt Semi-Skimmed Milk", "500g Chicken Breast", "400g Baked Beans", "80pk PG Tips Tea Bags", "2L Coke Zero", "6pk Free Range Eggs"
+- name: Concise but descriptive product name, MAX 30 CHARACTERS. FORMAT: "{quantity}{pk} {descriptor} {product type}". 
+  - For multi-packs (e.g. 6 cans of Coke), use "6pk Coke". 
+  - For loose/unlabelled items where you find a count > 1 (e.g. 5 bananas), INCLUDE the count in the name string: "5 Bananas", "12 Oranges", etc.
+  - DROP all brand/own-label names (Tesco, Asda, Aldi, etc.) UNLESS the brand IS the product identity (e.g., "Coke Zero", "PG Tips", "Marmite").
+  - Examples: "12pk Medium Eggs", "2pt Semi-Skimmed Milk", "5 Bananas", "12 Oranges", "Chicken Breast"
 - category: One of: "Dairy & Eggs", "Meat & Fish", "Fruits & Vegetables", "Bakery", "Drinks", "Snacks & Sweets", "Canned & Jarred", "Frozen", "Household", "Personal Care", "Condiments & Sauces", "Grains & Pasta", "Baking", "Baby & Kids", "Pet", "Other"
-- size: The size/weight value (e.g., "2L", "500g", "6 pack", "2pt"). Read from packaging (check back of pack for weight if front is not visible). If not visible, estimate the standard UK size.
+- quantity: number (The PURCHASE QUANTITY multiplier. For a single bunch or group of items in the image, ALWAYS use 1. Only use > 1 if you see multiple DISTINCT packages/bunches of the same product.)
+- size: The size/weight value (e.g., "2L", "500g", "6 pack", "2pt"). Read from packaging. If not visible (like loose fruit), use null or estimate the standard UK size if applicable.
 - unit: Unit of measurement (e.g., "L", "g", "pack", "pint", "ml", "kg")
 - brand: Brand name if visible (e.g., "Tesco", "Heinz", "PG Tips"). null if generic/unbranded.
 - estimatedPrice: Your best estimate of the UK retail price in GBP (number). Use typical UK supermarket pricing.
@@ -751,6 +778,7 @@ Return ONLY valid JSON, no markdown code blocks.`;
         success: true,
         name: typeof parsed.name === "string" ? toGroceryTitleCase(parsed.name.slice(0, 30)) : "Unknown Product",
         category: typeof parsed.category === "string" ? parsed.category : "Other",
+        quantity: typeof parsed.quantity === "number" ? parsed.quantity : 1,
         size: typeof parsed.size === "string" ? parsed.size : undefined,
         unit: typeof parsed.unit === "string" ? parsed.unit : undefined,
         brand: typeof parsed.brand === "string" ? parsed.brand : undefined,

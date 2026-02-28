@@ -1243,6 +1243,7 @@ export const addBatchFromScan = mutation({
         category: v.string(),
         size: v.optional(v.string()),
         unit: v.optional(v.string()),
+        quantity: v.optional(v.number()),
         estimatedPrice: v.optional(v.number()),
         brand: v.optional(v.string()),
         confidence: v.optional(v.number()),
@@ -1282,6 +1283,7 @@ export const addBatchFromScan = mutation({
           ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "receipt" as const } : {}),
           ...(item.size ? { defaultSize: item.size } : {}),
           ...(item.unit ? { defaultUnit: item.unit } : {}),
+          ...(item.quantity ? { quantity: (existingItem.quantity ?? 0) + item.quantity } : {}),
           purchaseCount: (existingItem.purchaseCount ?? 0) + 1,
           lastPurchasedAt: now,
           // Auto-resurface archived items
@@ -1310,6 +1312,7 @@ export const addBatchFromScan = mutation({
           lastPurchasedAt: now,
           ...(item.size ? { defaultSize: item.size } : {}),
           ...(item.unit ? { defaultUnit: item.unit } : {}),
+          ...(item.quantity ? { quantity: item.quantity } : {}),
           ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "ai_estimate" as const } : {}),
           createdAt: now,
           updatedAt: now,
@@ -1337,6 +1340,7 @@ export const replaceWithScan = mutation({
       category: v.string(),
       size: v.optional(v.string()),
       unit: v.optional(v.string()),
+      quantity: v.optional(v.number()),
       estimatedPrice: v.optional(v.number()),
       confidence: v.optional(v.number()),
       imageStorageId: v.optional(v.string()),
@@ -1365,6 +1369,7 @@ export const replaceWithScan = mutation({
       icon: getIconForItem(toGroceryTitleCase(scannedData.name), scannedData.category),
       ...(scannedData.size ? { defaultSize: scannedData.size } : {}),
       ...(scannedData.unit ? { defaultUnit: scannedData.unit } : {}),
+      ...(scannedData.quantity ? { quantity: scannedData.quantity } : {}),
       ...(scannedData.estimatedPrice != null
         ? { lastPrice: scannedData.estimatedPrice, priceSource: "ai_estimate" as const }
         : {}),

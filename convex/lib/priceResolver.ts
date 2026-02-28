@@ -134,6 +134,11 @@ export async function resolvePrice(
     .collect();
 
   if (currentPrices.length > 0) {
+    const user = userId ? await ctx.db.get(userId) : null;
+    const userRegion = user?.country || "UK"; // Fallback to country/UK for now
+    const now = Date.now();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+
     // Filter to matching variant
     const variantPrices = currentPrices.filter(
       (p) =>
@@ -141,32 +146,69 @@ export async function resolvePrice(
         p.size === variantSize
     );
 
-    // If store specified, prefer that store's price
-    if (normalizedStore && variantPrices.length > 0) {
-      const storeMatch = variantPrices.find(
-        (p) => p.storeName?.toLowerCase() === normalizedStore ||
-          p.normalizedStoreId === normalizedStore
-      );
-      if (storeMatch) {
+    if (variantPrices.length > 0) {
+      // Priority 1: Exact Store + Region Match
+      if (normalizedStore) {
+        const bestMatch = variantPrices.find(
+          (p) => (p.storeName?.toLowerCase() === normalizedStore || p.normalizedStoreId === normalizedStore) && 
+                 p.region === userRegion
+        );
+        if (bestMatch) {
+          const age = now - bestMatch.lastSeenDate;
+          const recencyMultiplier = Math.max(0.7, 1 - (age / (thirtyDaysMs * 3))); // Decay over 90 days
+          return {
+            price: bestMatch.averagePrice ?? bestMatch.unitPrice,
+            priceSource: "crowdsourced",
+            confidence: Math.min(0.95, (0.7 + (bestMatch.reportCount * 0.05)) * recencyMultiplier),
+            storeName: bestMatch.storeName,
+            reportCount: bestMatch.reportCount,
+          };
+        }
+      }
+
+      // Priority 2: Store Match (any region)
+      if (normalizedStore) {
+        const storeMatch = variantPrices.find(
+          (p) => p.storeName?.toLowerCase() === normalizedStore ||
+            p.normalizedStoreId === normalizedStore
+        );
+        if (storeMatch) {
+          const age = now - storeMatch.lastSeenDate;
+          const recencyMultiplier = Math.max(0.6, 1 - (age / (thirtyDaysMs * 3)));
+          return {
+            price: storeMatch.averagePrice ?? storeMatch.unitPrice,
+            priceSource: "crowdsourced",
+            confidence: Math.min(0.9, (0.6 + (storeMatch.reportCount * 0.05)) * recencyMultiplier),
+            storeName: storeMatch.storeName,
+            reportCount: storeMatch.reportCount,
+          };
+        }
+      }
+
+      // Priority 3: Region Match (any store) - e.g. "General price in London"
+      const regionMatch = variantPrices.find(p => p.region === userRegion);
+      if (regionMatch) {
+        const age = now - regionMatch.lastSeenDate;
+        const recencyMultiplier = Math.max(0.5, 1 - (age / (thirtyDaysMs * 3)));
         return {
-          price: storeMatch.averagePrice ?? storeMatch.unitPrice,
+          price: regionMatch.averagePrice ?? regionMatch.unitPrice,
           priceSource: "crowdsourced",
-          confidence: Math.min(0.9, 0.6 + (storeMatch.reportCount * 0.05)),
-          storeName: storeMatch.storeName,
-          reportCount: storeMatch.reportCount,
+          confidence: Math.min(0.85, (0.5 + (regionMatch.reportCount * 0.05)) * recencyMultiplier),
+          storeName: regionMatch.storeName,
+          reportCount: regionMatch.reportCount,
         };
       }
-    }
 
-    // Fallback to cheapest across any store
-    if (variantPrices.length > 0) {
+      // Priority 4: Cheapest across any store/region
       const sorted = [...variantPrices].sort(
         (a, b) => (a.averagePrice ?? a.unitPrice) - (b.averagePrice ?? b.unitPrice)
       );
+      const age = now - sorted[0].lastSeenDate;
+      const recencyMultiplier = Math.max(0.4, 1 - (age / (thirtyDaysMs * 3)));
       return {
         price: sorted[0].averagePrice ?? sorted[0].unitPrice,
         priceSource: "crowdsourced",
-        confidence: Math.min(0.9, 0.6 + (sorted[0].reportCount * 0.05)),
+        confidence: Math.min(0.8, (0.4 + (sorted[0].reportCount * 0.05)) * recencyMultiplier),
         storeName: sorted[0].storeName,
         reportCount: sorted[0].reportCount,
       };

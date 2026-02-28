@@ -393,7 +393,8 @@ export default defineSchema({
     lastSeenAt: v.optional(v.number()),   // Last time any user scanned/bought this variant
     region: v.optional(v.string()),       // Postcode area prefix (e.g., "SW", "M", "B") — Phase 3 prep
   })
-    .index("by_base_item", ["baseItem"]),
+    .index("by_base_item", ["baseItem"])
+    .index("by_base_item_region", ["baseItem", "region"]),
 
   // === Epic 4: Partner Mode & Collaboration ===
 

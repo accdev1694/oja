@@ -423,7 +423,11 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
       </GlassCard>
 
       {/* Render Sorted Widgets */}
-      {sortedWidgets.map(w => renderWidget(w.id))}
+      {sortedWidgets.map(w => (
+        <React.Fragment key={w.id}>
+          {renderWidget(w.id)}
+        </React.Fragment>
+      ))}
 
       {/* Fallback for new users or if widgets missing */}
       {sortedWidgets.length === 0 && (

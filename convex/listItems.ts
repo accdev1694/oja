@@ -1313,6 +1313,7 @@ export const addBatchFromScan = mutation({
       scannedItem: {
         name: string;
         category: string;
+        quantity: number;
         size?: string;
         unit?: string;
         brand?: string;
@@ -1337,7 +1338,7 @@ export const addBatchFromScan = mutation({
     const knownListItems: { name: string; size?: string; brand?: string }[] = existingListItems.map((i) => ({
       name: i.name,
       size: i.size,
-      brand: i.brand,
+      brand: i.brand as string | undefined,
     }));
     const knownPantryNames: string[] = existingPantryItems.map((p) => p.name);
 
@@ -1362,6 +1363,7 @@ export const addBatchFromScan = mutation({
             scannedItem: {
               name: item.name,
               category: item.category,
+              quantity: item.quantity ?? 1,
               size: item.size,
               unit: item.unit,
               brand: item.brand,

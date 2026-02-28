@@ -44,8 +44,9 @@ import {
   spacing,
   borderRadius,
   useGlassAlert,
+  GlassDropdown,
+  type DropdownOption,
 } from "@/components/ui/glass";
-import { CategoryFilter } from "@/components/ui/CategoryFilter";
 import { usePartnerRole } from "@/hooks/usePartnerRole";
 import {
   CommentThread,
@@ -73,6 +74,24 @@ import {
 import { ScanReceiptNudgeModal } from "@/components/list/modals/ScanReceiptNudgeModal";
 import type { TripStats } from "@/hooks/useTripSummary";
 import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
+
+// ─── Sectionalization Types ──────────────────────────────────────────────────
+type ListSectionHeader = {
+  _id: string;
+  isHeader: true;
+  title: string;
+};
+
+type CategorizedItem = ListItem | ListSectionHeader;
+
+function CategoryHeader({ title }: { title: string }) {
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionHeaderText}>{title.toUpperCase()}</Text>
+      <View style={styles.sectionHeaderLine} />
+    </View>
+  );
+}
 
 export default function ListDetailScreen() {
   const params = useLocalSearchParams();
@@ -284,15 +303,54 @@ export default function ListDetailScreen() {
   const miniBarLabel = isPlanning ? "planned" : "spent";
 
   // Memoized category data + display items
-  const { listCategories, listCategoryCounts, displayItems } = useMemo(() => {
-    const cats = [...new Set(safeItems.map((i) => i.category).filter(Boolean) as string[])].sort();
+  const { categoryOptions, displayItems } = useMemo(() => {
+    const safeItemsArr = items ?? [];
+    const cats = [...new Set(safeItemsArr.map((i) => i.category).filter(Boolean) as string[])].sort();
     const counts: Record<string, number> = {};
-    safeItems.forEach((i) => { if (i.category) counts[i.category] = (counts[i.category] || 0) + 1; });
+    safeItemsArr.forEach((i) => { if (i.category) counts[i.category] = (counts[i.category] || 0) + 1; });
+    
+    // Sort items by category first, then by name
+    const sortedItems = [...safeItemsArr].sort((a, b) => {
+      const catA = a.category || "Other";
+      const catB = b.category || "Other";
+      if (catA !== catB) return catA.localeCompare(catB);
+      return a.name.localeCompare(b.name);
+    });
+
     const filtered = listCategoryFilter
-      ? safeItems.filter((i) => i.category === listCategoryFilter)
-      : safeItems;
-    return { listCategories: cats, listCategoryCounts: counts, displayItems: filtered };
-  }, [safeItems, listCategoryFilter]);
+      ? sortedItems.filter((i) => i.category === listCategoryFilter)
+      : sortedItems;
+
+    // Build sectionalized array
+    const result: CategorizedItem[] = [];
+    let currentCat = "";
+
+    filtered.forEach((item) => {
+      const itemCat = item.category || "Other";
+      if (itemCat !== currentCat && !listCategoryFilter) {
+        result.push({
+          _id: `header-${itemCat}`,
+          isHeader: true,
+          title: itemCat,
+        });
+        currentCat = itemCat;
+      }
+      result.push(item);
+    });
+
+    // Build dropdown options
+    const options: DropdownOption[] = [
+      { label: "All Items", value: null, count: safeItemsArr.length, icon: "format-list-bulleted" },
+      ...cats.map((cat) => ({
+        label: cat,
+        value: cat,
+        count: counts[cat],
+        icon: "tag-outline",
+      })),
+    ];
+
+    return { categoryOptions: options, displayItems: result };
+  }, [items, listCategoryFilter]);
 
   const isShopping = listStatus === "shopping";
   const isPaused = listStatus === "active" && !!list?.shoppingStartedAt && !!list?.pausedAt;
@@ -693,25 +751,34 @@ export default function ListDetailScreen() {
   // ─── FlashList renderItem ────────────────────────────────────────────────────
   const selectionActive = selectedItemsRef.current.size > 0;
 
-  const renderItem = useCallback(({ item }: { item: ListItem }) => (
-    <ShoppingListItem
-      item={item}
-      onToggle={handleToggleItem}
-      onRemove={handleRemoveItem}
-      onEdit={handleEditItem}
-      onPriorityChange={handlePriorityChange}
-      isShopping={isShopping}
-      canEdit={canEdit}
-      isOwner={isOwner}
-      commentCount={commentCounts?.[item._id as string] ?? 0}
-      onOpenComments={stableOpenComments}
-      selectionActive={selectionActive}
-      isSelected={selectedItemsRef.current.has(item._id)}
-      onSelectToggle={toggleItemSelection}
-    />
-  ), [handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange,
+  const renderItem = useCallback(({ item }: { item: CategorizedItem }) => {
+    if ("isHeader" in item) {
+      return <CategoryHeader title={item.title} />;
+    }
+    return (
+      <ShoppingListItem
+        item={item}
+        onToggle={handleToggleItem}
+        onRemove={handleRemoveItem}
+        onEdit={handleEditItem}
+        onPriorityChange={handlePriorityChange}
+        isShopping={isShopping}
+        canEdit={canEdit}
+        isOwner={isOwner}
+        commentCount={commentCounts?.[item._id as string] ?? 0}
+        onOpenComments={stableOpenComments}
+        selectionActive={selectionActive}
+        isSelected={selectedItemsRef.current.has(item._id)}
+        onSelectToggle={toggleItemSelection}
+      />
+    );
+  }, [handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange,
       isShopping, canEdit, isOwner, commentCounts,
       stableOpenComments, selectionActive, selectionVersion, toggleItemSelection]);
+
+  const getItemType = useCallback((item: CategorizedItem) => {
+    return "isHeader" in item ? "header" : "item";
+  }, []);
 
   // ─── FlashList ListHeaderComponent ───────────────────────────────────────────
   const listHeader = useMemo(() => (
@@ -889,11 +956,13 @@ export default function ListDetailScreen() {
               </View>
             )}
           </View>
-          <CategoryFilter
-            categories={listCategories}
+          
+          <GlassDropdown
+            options={categoryOptions}
             selected={listCategoryFilter}
             onSelect={setListCategoryFilter}
-            counts={listCategoryCounts}
+            placeholder="Filter by category"
+            style={styles.categoryDropdown}
           />
         </View>
       )}
@@ -903,8 +972,7 @@ export default function ListDetailScreen() {
       list?.shoppingStartedAt, list?.pausedAt,
       hasPartners, id,
       isOwner, canEdit, items,
-      selectionVersion, listCategories, listCategoryFilter,
-      listCategoryCounts,
+      selectionVersion, categoryOptions, listCategoryFilter,
       isPaused, dialTransitioning, checkedCount, totalCount]);
 
   // ─── FlashList ListEmptyComponent ────────────────────────────────────────────
@@ -1038,6 +1106,7 @@ export default function ListDetailScreen() {
           ref={flashListRef}
           data={displayItems}
           renderItem={renderItem}
+          getItemType={getItemType}
           keyExtractor={keyExtractor}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={listEmpty}
@@ -1197,6 +1266,28 @@ const styles = StyleSheet.create({
   listHeaderContainer: {
     paddingTop: spacing.xs,
   },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  sectionHeaderText: {
+    ...typography.labelSmall,
+    fontSize: 10,
+    lineHeight: 14,
+    color: colors.accent.primary,
+    letterSpacing: 1.2,
+    fontWeight: "700",
+    marginRight: spacing.sm,
+  },
+  sectionHeaderLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.glass.border,
+    opacity: 0.5,
+  },
   bottomSpacer: {
     height: 140,
   },
@@ -1302,6 +1393,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.xs,
+  },
+  categoryDropdown: {
+    marginBottom: spacing.sm,
   },
   selectButton: {
     flexDirection: "row",

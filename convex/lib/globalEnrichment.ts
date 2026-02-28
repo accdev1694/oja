@@ -11,6 +11,7 @@
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { isValidProductName, variantKey } from "./communityHelpers";
+import { normalizeItemName } from "./fuzzyMatch";
 
 /**
  * Enrich global product DB from a scanned product.
@@ -160,6 +161,131 @@ export async function enrichGlobalFromProductScan(
         confidence: 0.05,
         lastSeenDate: now,
         lastReportedBy: userId,
+        updatedAt: now,
+        ...(item.size ? { size: item.size } : {}),
+        ...(item.unit ? { unit: item.unit } : {}),
+      });
+    }
+  }
+}
+
+/**
+ * Enrich global product DB from a processed receipt.
+ * This is the primary driver for "Communal Price Intelligence".
+ * Updates itemVariants and currentPrices with real-world store/region data.
+ */
+export async function enrichGlobalFromReceipt(
+  ctx: MutationCtx,
+  receipt: {
+    userId: Id<"users">;
+    storeName: string;
+    normalizedStoreId?: string;
+    purchaseDate: number;
+    items: {
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      category?: string;
+      size?: string;
+      unit?: string;
+    }[];
+  }
+): Promise<void> {
+  const user = await ctx.db.get(receipt.userId);
+  // In a real app, we might extract the region from user.postcodePrefix or similar.
+  // For now, we'll use a placeholder or country-level region if available.
+  const region = user?.country || "UK"; 
+
+  for (const item of receipt.items) {
+    const nameValid = isValidProductName(item.name);
+    if (!nameValid) continue;
+
+    const normalizedBase = item.name.toLowerCase().trim();
+    const now = Date.now();
+
+    // ── 1. Update/Create Item Variant ────────────────────────────────────────
+    // We reuse some logic but focus on receipt_discovered source
+    let existingVariants = await ctx.db
+      .query("itemVariants")
+      .withIndex("by_base_item", (q) => q.eq("baseItem", normalizedBase))
+      .collect();
+
+    const scanKey = variantKey(item.name, item.size || "");
+    const match = existingVariants.find(
+      (v) => variantKey(v.productName ?? v.variantName, v.size) === scanKey
+    );
+
+    if (match) {
+      await ctx.db.patch(match._id, {
+        scanCount: (match.scanCount ?? 0) + 1,
+        userCount: (match.userCount ?? 0) + 1,
+        lastSeenAt: now,
+        // If we found a real price, update the estimate
+        estimatedPrice: item.unitPrice,
+        source: "receipt_discovered",
+      });
+    } else {
+      const targetBase = existingVariants.length > 0 ? existingVariants[0].baseItem : normalizedBase;
+      await ctx.db.insert("itemVariants", {
+        baseItem: targetBase,
+        variantName: item.size ? `${item.name} ${item.size}` : item.name,
+        size: item.size || "Standard",
+        unit: item.unit || "unit",
+        category: item.category || "Other",
+        source: "receipt_discovered",
+        productName: item.name,
+        estimatedPrice: item.unitPrice,
+        scanCount: 1,
+        userCount: 1,
+        lastSeenAt: now,
+        region,
+      });
+    }
+
+    // ── 2. Update Communal Prices (The "Price Engine") ───────────────────────
+    const existingPrice = await ctx.db
+      .query("currentPrices")
+      .withIndex("by_item_store", (q) =>
+        q.eq("normalizedName", normalizedBase).eq("storeName", receipt.storeName)
+      )
+      .first();
+
+    if (existingPrice) {
+      const oldAverage = existingPrice.averagePrice ?? existingPrice.unitPrice;
+      const oldTotal = oldAverage * existingPrice.reportCount;
+      const newReportCount = existingPrice.reportCount + 1;
+      const newAverage = (oldTotal + item.unitPrice) / newReportCount;
+
+      await ctx.db.patch(existingPrice._id, {
+        unitPrice: item.unitPrice, // Freshest price
+        averagePrice: newAverage,
+        minPrice: Math.min(existingPrice.minPrice ?? item.unitPrice, item.unitPrice),
+        maxPrice: Math.max(existingPrice.maxPrice ?? item.unitPrice, item.unitPrice),
+        reportCount: newReportCount,
+        lastSeenDate: receipt.purchaseDate,
+        lastReportedBy: receipt.userId,
+        normalizedStoreId: receipt.normalizedStoreId,
+        region,
+        updatedAt: now,
+        // Update size/unit if provided
+        ...(item.size ? { size: item.size } : {}),
+        ...(item.unit ? { unit: item.unit } : {}),
+      });
+    } else {
+      await ctx.db.insert("currentPrices", {
+        normalizedName: normalizedBase,
+        itemName: item.name,
+        storeName: receipt.storeName,
+        normalizedStoreId: receipt.normalizedStoreId,
+        region,
+        unitPrice: item.unitPrice,
+        averagePrice: item.unitPrice,
+        minPrice: item.unitPrice,
+        maxPrice: item.unitPrice,
+        reportCount: 1,
+        confidence: 0.8, // Initial high confidence for receipt data
+        lastSeenDate: receipt.purchaseDate,
+        lastReportedBy: receipt.userId,
         updatedAt: now,
         ...(item.size ? { size: item.size } : {}),
         ...(item.unit ? { unit: item.unit } : {}),

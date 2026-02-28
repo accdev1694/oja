@@ -355,8 +355,8 @@ export default function ProfileScreen() {
                     Most shoppers save £30+ in their first month. Here's how to get there:
                   </Text>
                   <View style={styles.milestoneSteps}>
-                    {milestones.map((step, i) => (
-                      <View key={i} style={styles.milestoneStep}>
+                    {milestones.map((step) => (
+                      <View key={step.text} style={styles.milestoneStep}>
                         <MaterialCommunityIcons
                           name={step.done ? "check-circle" : step.icon}
                           size={18}

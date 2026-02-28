@@ -1,9 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { normalizeStoreName } from "./lib/storeNormalizer";
 import { pushReceiptId } from "./lib/receiptHelpers";
 import { toGroceryTitleCase } from "./lib/titleCase";
 import { trackFunnelEvent, trackActivity } from "./lib/analytics";
+import { enrichGlobalFromReceipt } from "./lib/globalEnrichment";
 
 /**
  * Generate a fingerprint for duplicate detection.
@@ -207,8 +209,19 @@ export const update = mutation({
 
     await ctx.db.patch(args.id, updates);
 
-    // Track successful scan
+    // Track successful scan and enrich global price DB
     if (args.processingStatus === "completed") {
+      const finalReceipt = await ctx.db.get(args.id);
+      if (finalReceipt && finalReceipt.items) {
+        await enrichGlobalFromReceipt(ctx as MutationCtx, {
+          userId: user._id,
+          storeName: finalReceipt.storeName,
+          normalizedStoreId: finalReceipt.normalizedStoreId,
+          purchaseDate: finalReceipt.purchaseDate,
+          items: finalReceipt.items,
+        });
+      }
+
       await trackFunnelEvent(ctx, user._id, "first_scan");
       await trackActivity(ctx, user._id, "receipt_processed", { 
         receiptId: args.id, 

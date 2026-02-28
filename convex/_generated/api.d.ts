@@ -16,6 +16,7 @@ import type * as analytics_advanced from "../analytics_advanced.js";
 import type * as cms from "../cms.js";
 import type * as crons from "../crons.js";
 import type * as currentPrices from "../currentPrices.js";
+import type * as debug from "../debug.js";
 import type * as experiments from "../experiments.js";
 import type * as http from "../http.js";
 import type * as iconMapping from "../iconMapping.js";
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   cms: typeof cms;
   crons: typeof crons;
   currentPrices: typeof currentPrices;
+  debug: typeof debug;
   experiments: typeof experiments;
   http: typeof http;
   iconMapping: typeof iconMapping;

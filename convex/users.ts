@@ -39,11 +39,28 @@ export const getOrCreate = mutation({
       throw new Error("Not authenticated");
     }
 
-    // Check if user already exists
-    const existingUser = await ctx.db
+    // 1. Check if user already exists by exact Clerk ID
+    let existingUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
+
+    // 2. If not found by Clerk ID, check by email (to prevent duplicates for same person)
+    if (!existingUser && identity.email) {
+      existingUser = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", identity.email))
+        .unique();
+      
+      // If found by email, migrate/link this new Clerk ID to the existing record
+      if (existingUser) {
+        console.log(`[Users] Migrating user ${existingUser._id} to new Clerk ID: ${identity.subject}`);
+        await ctx.db.patch(existingUser._id, {
+          clerkId: identity.subject,
+          updatedAt: Date.now(),
+        });
+      }
+    }
 
     if (existingUser) {
       // Track login activity
