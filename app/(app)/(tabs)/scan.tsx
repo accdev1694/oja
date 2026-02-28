@@ -8,9 +8,10 @@ import {
   ScrollView,
   Pressable,
 } from "react-native";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMutation, useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -37,6 +38,9 @@ import { GlassToast } from "@/components/ui/glass/GlassToast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
 import { useProductScanner, type ScannedProduct } from "@/hooks/useProductScanner";
+import { EditScannedItemModal } from "@/components/scan/EditScannedItemModal";
+
+const ONBOARDING_KEY = "oja:scan_onboarding_shown";
 
 type ScanMode = "receipt" | "product";
 
@@ -65,6 +69,26 @@ export default function ScanScreen() {
   const [dupToast, setDupToast] = useState({ visible: false, name: "" });
   const dismissDupToast = useCallback(() => setDupToast((prev) => ({ ...prev, visible: false })), []);
 
+  // Potential duplicate confirmation state (brand+size match but different name)
+  type PotentialDuplicate = {
+    scannedItem: {
+      name: string;
+      category: string;
+      size?: string;
+      unit?: string;
+      brand?: string;
+      estimatedPrice?: number;
+      confidence?: number;
+      imageStorageId?: string;
+    };
+    existingItem: { name: string; brand?: string; size?: string };
+  };
+  const [potentialDuplicateConfirm, setPotentialDuplicateConfirm] = useState<{
+    visible: boolean;
+    duplicate: PotentialDuplicate | null;
+    listId: Id<"shoppingLists"> | null;
+  }>({ visible: false, duplicate: null, listId: null });
+
   // ── Receipt state ─────────────────────────────────────────────────────
   type ReceiptItem = { _id: Id<"receipts">; storeName: string; normalizedStoreId?: string; total: number; purchaseDate: number; imageStorageId?: string; items: { name: string; quantity: number; unitPrice: number; totalPrice: number; category?: string; size?: string; unit?: string; confidence?: number }[] };
   const [viewingReceipt, setViewingReceipt] = useState<ReceiptItem | null>(null);
@@ -74,6 +98,31 @@ export default function ScanScreen() {
 
   const [animationKey, setAnimationKey] = useState(0);
   const [pageAnimationKey, setPageAnimationKey] = useState(0);
+
+  // ── Edit scanned item modal state ─────────────────────────────────────
+  const [editingProduct, setEditingProduct] = useState<ScannedProduct | null>(null);
+  const [selectedListForEdit, setSelectedListForEdit] = useState<Id<"shoppingLists"> | null>(null);
+
+  // ── Low-confidence toast state ────────────────────────────────────────
+  const [lowConfidenceToast, setLowConfidenceToast] = useState({ visible: false, name: "" });
+  const dismissLowConfidenceToast = useCallback(() => setLowConfidenceToast((prev) => ({ ...prev, visible: false })), []);
+
+  // ── First-time onboarding tooltip state ───────────────────────────────
+  const [showOnboardingTip, setShowOnboardingTip] = useState(false);
+
+  // Check if user has seen onboarding tip
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY).then((value) => {
+      if (!value) {
+        setShowOnboardingTip(true);
+      }
+    });
+  }, []);
+
+  const dismissOnboardingTip = useCallback(async () => {
+    setShowOnboardingTip(false);
+    await AsyncStorage.setItem(ONBOARDING_KEY, "true");
+  }, []);
 
   // Trigger animations every time this tab gains focus
   useFocusEffect(
@@ -391,7 +440,7 @@ export default function ScanScreen() {
 
   // ── Product mode handlers ──────────────────────────────────────────────────
 
-  async function handleAddProductsToList(listId: Id<"shoppingLists">) {
+  async function handleAddProductsToList(listId: Id<"shoppingLists">, forceAdd = false) {
     if (!activeProduct) return;
     const item = activeProduct;
     try {
@@ -408,7 +457,23 @@ export default function ScanScreen() {
           confidence: item.confidence,
           imageStorageId: item.imageStorageId,
         }],
+        forceAdd,
       });
+
+      // Check for potential duplicates (brand+size match but different name)
+      const potentialDups = result.potentialDuplicates ?? [];
+      if (potentialDups.length > 0 && !forceAdd) {
+        // Show confirmation modal for the first potential duplicate
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        setShowProductListPicker(false);
+        setPotentialDuplicateConfirm({
+          visible: true,
+          duplicate: potentialDups[0],
+          listId,
+        });
+        return;
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowProductListPicker(false);
 
@@ -437,6 +502,54 @@ export default function ScanScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert("Error", "Failed to add items to list");
     }
+  }
+
+  // Handle user confirming the potential duplicate is actually a different product
+  async function handleForceAddPotentialDuplicate() {
+    const { duplicate, listId } = potentialDuplicateConfirm;
+    if (!duplicate || !listId) return;
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const result = await addBatchToList({
+        listId,
+        items: [duplicate.scannedItem],
+        forceAdd: true,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setPotentialDuplicateConfirm({ visible: false, duplicate: null, listId: null });
+
+      if (result.count > 0) {
+        alert("Added to List", `"${duplicate.scannedItem.name}" added as a separate item.`);
+      }
+
+      // Close scan actions modal
+      setAddedToPantry(false);
+      setAddedToList(false);
+      setActiveProduct(null);
+      setShowScanActionsModal(false);
+    } catch (error) {
+      console.error("Failed to force add product:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert("Error", "Failed to add item to list");
+    }
+  }
+
+  // Handle user confirming the potential duplicate is the same product (skip it)
+  function handleSkipPotentialDuplicate() {
+    const { duplicate } = potentialDuplicateConfirm;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPotentialDuplicateConfirm({ visible: false, duplicate: null, listId: null });
+
+    if (duplicate) {
+      alert("Skipped", `"${duplicate.scannedItem.name}" was not added (same as "${duplicate.existingItem.name}").`);
+    }
+
+    // Close scan actions modal
+    setAddedToPantry(false);
+    setAddedToList(false);
+    setActiveProduct(null);
+    setShowScanActionsModal(false);
   }
 
   async function handleAddProductsToPantry() {
@@ -487,6 +600,100 @@ export default function ScanScreen() {
     setActiveProduct(null);
     setShowProductListPicker(false);
     setShowScanActionsModal(false);
+  }
+
+  // ── NEW: Handler for edit modal → opens list picker ───────────────────
+  function handleOpenEditModal(product: ScannedProduct) {
+    // Show low-confidence warning toast if applicable
+    if (product.confidence < 70) {
+      setLowConfidenceToast({ visible: true, name: product.name });
+    }
+    setEditingProduct(product);
+    setShowProductListPicker(true);
+  }
+
+  // ── NEW: Handler when list is selected → shows edit modal ─────────────
+  function handleSelectListForEdit(listId: Id<"shoppingLists">) {
+    setSelectedListForEdit(listId);
+    setShowProductListPicker(false);
+    // editingProduct is already set, modal will now show
+  }
+
+  // ── NEW: Handler when edit modal confirms → adds to list ──────────────
+  async function handleConfirmEditAndAdd(editedProduct: {
+    name: string;
+    category: string;
+    quantity: number;
+    size?: string;
+    unit?: string;
+    brand?: string;
+    estimatedPrice?: number;
+    confidence: number;
+    imageStorageId: string;
+  }) {
+    if (!selectedListForEdit) return;
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const result = await addBatchToList({
+        listId: selectedListForEdit,
+        items: [{
+          name: editedProduct.name,
+          category: editedProduct.category,
+          size: editedProduct.size,
+          unit: editedProduct.unit,
+          estimatedPrice: editedProduct.estimatedPrice,
+          brand: editedProduct.brand,
+          confidence: editedProduct.confidence,
+          imageStorageId: editedProduct.imageStorageId,
+          quantity: editedProduct.quantity,
+        }],
+      });
+
+      // Check for potential duplicates
+      const potentialDups = result.potentialDuplicates ?? [];
+      if (potentialDups.length > 0) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        setPotentialDuplicateConfirm({
+          visible: true,
+          duplicate: potentialDups[0],
+          listId: selectedListForEdit,
+        });
+        setEditingProduct(null);
+        setSelectedListForEdit(null);
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      const skipped = result.skippedDuplicates ?? [];
+      if (result.count > 0) {
+        alert("Added to List", `"${editedProduct.name}" added to your list.`);
+      } else if (skipped.length > 0) {
+        alert("Already on List", `"${editedProduct.name}" is already on your list.`);
+      }
+
+      // Remove the product from scanned queue
+      const productIndex = productScanner.scannedProducts.findIndex(
+        (p) => p.imageStorageId === editedProduct.imageStorageId
+      );
+      if (productIndex !== -1) {
+        productScanner.removeProduct(productIndex);
+      }
+
+      setEditingProduct(null);
+      setSelectedListForEdit(null);
+    } catch (error) {
+      console.error("Failed to add product to list:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert("Error", "Failed to add item to list");
+    }
+  }
+
+  // ── NEW: Close edit modal without adding ──────────────────────────────
+  function handleCloseEditModal() {
+    setEditingProduct(null);
+    setSelectedListForEdit(null);
   }
 
   // Parsing mode - AI processing receipt
@@ -543,7 +750,10 @@ export default function ScanScreen() {
   if (selectedImage) {
     return (
       <GlassScreen>
-        <SimpleHeader title="Review Receipt" subtitle="Make sure the receipt is clear" />
+        <SimpleHeader 
+          title={scanMode === "receipt" ? "Review Receipt" : "Review Product"} 
+          subtitle={scanMode === "receipt" ? "Make sure the receipt is clear" : "Ensure name and size are visible"} 
+        />
 
         <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
           <View style={styles.previewContent}>
@@ -554,6 +764,15 @@ export default function ScanScreen() {
                 resizeMode="contain"
               />
             </GlassCard>
+
+            <View style={styles.previewTip}>
+              <MaterialCommunityIcons name="information-outline" size={16} color={colors.text.tertiary} />
+              <Text style={styles.previewTipText}>
+                {scanMode === "receipt" 
+                  ? "Ensure all items and prices are legible" 
+                  : "Capture name and size/weight from any side (front or back)"}
+              </Text>
+            </View>
 
             <View style={styles.previewActions}>
               <GlassButton
@@ -636,7 +855,7 @@ export default function ScanScreen() {
 
                     <View style={styles.instructionsList}>
                       <InstructionItem number={1} text="Lay receipt on a flat surface" />
-                      <InstructionItem number={2} text="Ensure good lighting" />
+                      <InstructionItem number={2} text="Ensure name and size/weight are legible" />
                       <InstructionItem number={3} text="Capture the entire receipt" />
                       <InstructionItem number={4} text="Keep the image sharp and clear" />
                     </View>
@@ -804,8 +1023,8 @@ export default function ScanScreen() {
                       <Text style={styles.instructionsTitle}>How it works</Text>
                     </View>
                     <View style={styles.instructionsList}>
-                      <InstructionItem number={1} text="Point camera at a product" />
-                      <InstructionItem number={2} text="AI reads the label text" />
+                      <InstructionItem number={1} text="Point camera at a product (front or back)" />
+                      <InstructionItem number={2} text="AI reads name and size from any side" />
                       <InstructionItem number={3} text="Scan multiple products in a row" />
                       <InstructionItem number={4} text="Add all to a list or your pantry" />
                     </View>
@@ -913,6 +1132,8 @@ export default function ScanScreen() {
                             const imageUri = isPending
                               ? product.localImageUri
                               : storageUrls?.[product.imageStorageId];
+                            const isLowConfidence = !isPending && product.confidence < 70;
+                            const isMissingSize = !isPending && !product.size?.trim();
                             return (
                               <Pressable
                                 key={`${product.localImageUri ?? product.name}-${index}`}
@@ -920,7 +1141,7 @@ export default function ScanScreen() {
                                 onPress={() => {
                                   if (!isPending) {
                                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                    setViewingProduct({ product, index });
+                                    handleOpenEditModal(product);
                                   }
                                 }}
                               >
@@ -939,6 +1160,16 @@ export default function ScanScreen() {
                                   {isPending && (
                                     <View style={styles.gridPendingOverlay}>
                                       <ActivityIndicator size="small" color="#fff" />
+                                    </View>
+                                  )}
+                                  {/* Warning badges for low confidence or missing size */}
+                                  {!isPending && (isLowConfidence || isMissingSize) && (
+                                    <View style={styles.gridWarningBadge}>
+                                      <MaterialCommunityIcons
+                                        name={isLowConfidence ? "alert-circle" : "alert"}
+                                        size={12}
+                                        color={isLowConfidence ? colors.semantic.danger : colors.accent.warning}
+                                      />
                                     </View>
                                   )}
                                   {!isPending && (
@@ -981,7 +1212,7 @@ export default function ScanScreen() {
 
       {/* Duplicate product toast */}
       <GlassToast
-        message={`${dupToast.name} already scanned`}
+        message={`"${dupToast.name}" is already in your scan queue`}
         icon="content-duplicate"
         iconColor={colors.accent.warm}
         visible={dupToast.visible}
@@ -1300,6 +1531,191 @@ export default function ScanScreen() {
         )}
       </GlassModal>
 
+      {/* ── Low-confidence toast ────────────────────────────────────────────── */}
+      <GlassToast
+        message={`AI uncertain about "${lowConfidenceToast.name}" - please verify`}
+        icon="alert-circle-outline"
+        iconColor={colors.semantic.danger}
+        visible={lowConfidenceToast.visible}
+        duration={3500}
+        onDismiss={dismissLowConfidenceToast}
+      />
+
+      {/* ── Edit flow: List picker modal ──────────────────────────────────────── */}
+      <GlassModal
+        visible={!!editingProduct && showProductListPicker}
+        onClose={() => {
+          setShowProductListPicker(false);
+          setEditingProduct(null);
+        }}
+        position="bottom"
+      >
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Select List</Text>
+          <Text style={styles.modalSubtitle}>
+            Where would you like to add "{editingProduct?.name}"?
+          </Text>
+        </View>
+
+        {/* Onboarding tooltip for first-time users */}
+        {showOnboardingTip && (
+          <View style={styles.onboardingTip}>
+            <View style={styles.onboardingTipHeader}>
+              <MaterialCommunityIcons name="lightbulb-on" size={18} color={colors.accent.primary} />
+              <Text style={styles.onboardingTipTitle}>Tip for accurate scans</Text>
+              <Pressable onPress={dismissOnboardingTip} hitSlop={8}>
+                <MaterialCommunityIcons name="close" size={18} color={colors.text.tertiary} />
+              </Pressable>
+            </View>
+            <Text style={styles.onboardingTipText}>
+              Capture the <Text style={{ fontWeight: "700" }}>product name</Text> and{" "}
+              <Text style={{ fontWeight: "700" }}>size/weight</Text> clearly. You can scan{" "}
+              the front or back of the packaging — both work!
+            </Text>
+          </View>
+        )}
+
+        {shoppingLists && shoppingLists.length > 0 ? (
+          <GlassCard variant="standard" style={styles.modalListPicker}>
+            <ScrollView style={styles.listPickerScroll} nestedScrollEnabled>
+              {shoppingLists.map((list) => {
+                const created = new Date(list._creationTime);
+                const date = created.toLocaleDateString([], { day: "numeric", month: "short" });
+                const time = created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                const storesText = list.storeName ?? "";
+                return (
+                  <TouchableOpacity
+                    key={list._id}
+                    style={styles.listOption}
+                    onPress={() => handleSelectListForEdit(list._id)}
+                  >
+                    <MaterialCommunityIcons
+                      name="clipboard-text"
+                      size={18}
+                      color={colors.text.secondary}
+                    />
+                    <View style={styles.listOptionInfo}>
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                        <Text style={[styles.listOptionText, { flex: 1 }]} numberOfLines={1}>
+                          {list.name}
+                        </Text>
+                        {list.listNumber != null && (
+                          <Text style={[styles.listOptionBudget, { marginLeft: spacing.sm }]}>
+                            #{list.listNumber}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                        <Text style={styles.listOptionBudget}>
+                          {date} · {time}
+                        </Text>
+                        {storesText ? (
+                          <Text style={[styles.listOptionBudget, { marginLeft: spacing.sm }]} numberOfLines={1}>
+                            {storesText}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </GlassCard>
+        ) : (
+          <View style={styles.noListsMessage}>
+            <MaterialCommunityIcons name="clipboard-alert-outline" size={32} color={colors.text.tertiary} />
+            <Text style={styles.noListsText}>No active lists. Create a list first!</Text>
+          </View>
+        )}
+      </GlassModal>
+
+      {/* ── Edit scanned item modal ──────────────────────────────────────────── */}
+      <EditScannedItemModal
+        product={editingProduct && selectedListForEdit ? editingProduct : null}
+        onClose={handleCloseEditModal}
+        onConfirm={handleConfirmEditAndAdd}
+      />
+
+      {/* ── Potential Duplicate Confirmation Modal ────────────────────────── */}
+      <GlassModal
+        visible={potentialDuplicateConfirm.visible}
+        onClose={handleSkipPotentialDuplicate}
+      >
+        {potentialDuplicateConfirm.duplicate && (
+          <View style={styles.duplicateConfirmContent}>
+            <Text style={styles.duplicateConfirmTitle}>Same Product?</Text>
+            <Text style={styles.duplicateConfirmText}>
+              This looks like it might be the same product as:
+            </Text>
+
+            <View style={styles.duplicateCompareBox}>
+              <View style={styles.duplicateItem}>
+                <Text style={styles.duplicateLabel}>On your list:</Text>
+                <Text style={styles.duplicateName}>
+                  {potentialDuplicateConfirm.duplicate.existingItem.name}
+                </Text>
+                {potentialDuplicateConfirm.duplicate.existingItem.brand && (
+                  <Text style={styles.duplicateMeta}>
+                    {potentialDuplicateConfirm.duplicate.existingItem.brand}
+                    {potentialDuplicateConfirm.duplicate.existingItem.size
+                      ? ` • ${potentialDuplicateConfirm.duplicate.existingItem.size}`
+                      : ""}
+                  </Text>
+                )}
+              </View>
+
+              <View style={styles.duplicateDivider}>
+                <MaterialCommunityIcons
+                  name="approximately-equal"
+                  size={20}
+                  color={colors.text.secondary}
+                />
+              </View>
+
+              <View style={styles.duplicateItem}>
+                <Text style={styles.duplicateLabel}>Just scanned:</Text>
+                <Text style={styles.duplicateName}>
+                  {potentialDuplicateConfirm.duplicate.scannedItem.name}
+                </Text>
+                {potentialDuplicateConfirm.duplicate.scannedItem.brand && (
+                  <Text style={styles.duplicateMeta}>
+                    {potentialDuplicateConfirm.duplicate.scannedItem.brand}
+                    {potentialDuplicateConfirm.duplicate.scannedItem.size
+                      ? ` • ${potentialDuplicateConfirm.duplicate.scannedItem.size}`
+                      : ""}
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            <Text style={styles.duplicateHint}>
+              Same brand and size detected. Is this a different product?
+            </Text>
+
+            <View style={styles.duplicateActions}>
+              <GlassButton
+                variant="secondary"
+                size="md"
+                icon="check"
+                onPress={handleSkipPotentialDuplicate}
+                style={{ flex: 1, marginRight: spacing.sm }}
+              >
+                Same Product
+              </GlassButton>
+              <GlassButton
+                variant="primary"
+                size="md"
+                icon="plus"
+                onPress={handleForceAddPotentialDuplicate}
+                style={{ flex: 1 }}
+              >
+                Add Anyway
+              </GlassButton>
+            </View>
+          </View>
+        )}
+      </GlassModal>
+
     </GlassScreen>
   );
 }
@@ -1436,6 +1852,21 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     borderRadius: borderRadius.md,
+  },
+  previewTip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.glass.backgroundStrong,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+  },
+  previewTipText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    flex: 1,
   },
   previewActions: {
     flexDirection: "row",
@@ -1595,6 +2026,45 @@ const styles = StyleSheet.create({
     backgroundColor: colors.glass.background,
     borderRadius: borderRadius.full,
   },
+  gridWarningBadge: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 4,
+    padding: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Onboarding Tooltip
+  onboardingTip: {
+    backgroundColor: `${colors.accent.primary}15`,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: `${colors.accent.primary}30`,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  onboardingTipHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  onboardingTipTitle: {
+    ...typography.labelMedium,
+    color: colors.accent.primary,
+    fontWeight: "700",
+    flex: 1,
+  },
+  onboardingTipText: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    lineHeight: 18,
+  },
+
   // Scan actions modal
   modalHeader: {
     alignItems: "center",
@@ -1658,5 +2128,60 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "700",
     marginBottom: spacing.md,
+  },
+
+  // Duplicate confirmation modal
+  duplicateConfirmContent: {
+    paddingVertical: spacing.sm,
+  },
+  duplicateConfirmTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    textAlign: "center",
+    marginBottom: spacing.sm,
+  },
+  duplicateConfirmText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    textAlign: "center",
+    marginBottom: spacing.md,
+  },
+  duplicateCompareBox: {
+    backgroundColor: colors.glass.backgroundStrong,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  duplicateItem: {
+    paddingVertical: spacing.sm,
+  },
+  duplicateLabel: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    marginBottom: spacing.xs,
+  },
+  duplicateName: {
+    ...typography.bodyLarge,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  duplicateMeta: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+  },
+  duplicateDivider: {
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
+  duplicateHint: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    marginBottom: spacing.lg,
+  },
+  duplicateActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
   },
 });

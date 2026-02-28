@@ -195,6 +195,7 @@ export default defineSchema({
     // Size/Unit from variant selection (Zero-Blank: AI fills if not provided)
     size: v.optional(v.string()),   // "2pt", "500ml", "250g"
     unit: v.optional(v.string()),   // "pint", "ml", "g"
+    brand: v.optional(v.string()),  // "Heinz", "Tesco", "PG Tips" — for duplicate detection
 
     // Pricing
     estimatedPrice: v.optional(v.number()),

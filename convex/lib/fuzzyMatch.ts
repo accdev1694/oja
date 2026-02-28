@@ -293,3 +293,55 @@ export function isDuplicateItem(
 
   return normSize1 === normSize2;
 }
+
+/**
+ * Normalize brand name for comparison.
+ * Handles case, whitespace, and common variations.
+ */
+export function normalizeBrand(brand: string | undefined | null): string {
+  if (!brand || !brand.trim()) return "";
+  return brand
+    .toLowerCase()
+    .trim()
+    .replace(/['']/g, "'") // Normalize apostrophes
+    .replace(/\s+/g, " "); // Normalize whitespace
+}
+
+/**
+ * Check if two items are POTENTIALLY the same product based on brand + size match.
+ *
+ * This catches cases where the AI returns different product names when scanning
+ * the same product from different angles (front vs back), but brand and size
+ * remain consistent because they're printed identically on all sides.
+ *
+ * Returns true if:
+ * - Both have non-empty brands that match (case-insensitive)
+ * - Both have non-empty sizes that normalize to the same value
+ *
+ * This is a "soft" duplicate check — it flags potential duplicates for user
+ * confirmation rather than auto-skipping like isDuplicateItem().
+ */
+export function isPotentialDuplicateByBrandSize(
+  brand1: string | undefined | null,
+  size1: string | undefined | null,
+  brand2: string | undefined | null,
+  size2: string | undefined | null,
+): boolean {
+  const normBrand1 = normalizeBrand(brand1);
+  const normBrand2 = normalizeBrand(brand2);
+
+  // Both must have a brand
+  if (!normBrand1 || !normBrand2) return false;
+
+  // Brands must match
+  if (normBrand1 !== normBrand2) return false;
+
+  const normSize1 = normalizeSizeForDedup(size1);
+  const normSize2 = normalizeSizeForDedup(size2);
+
+  // Both must have a size
+  if (!normSize1 || !normSize2) return false;
+
+  // Sizes must match
+  return normSize1 === normSize2;
+}

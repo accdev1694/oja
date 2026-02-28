@@ -690,15 +690,16 @@ export const scanProduct = action({
 
       const productPrompt = `You are a UK grocery product identifier. Analyse this photo of a physical product and extract its details.
 
-Read the text on the packaging — product name, brand, size/weight, and any other relevant info. The photo may show any side of the packaging (front, back, top, side). Always identify the CANONICAL product name as it would appear on the front label, regardless of which side is visible.
+Read the text on the packaging — product name, brand, size/weight, and any other relevant info. The photo may show any side of the packaging (front, back, top, side). 
+
+CRITICAL: If the photo shows the BACK of the pack (nutritional info/barcode side), look for the product name and weight/volume declarations which are often printed in smaller text or near the barcode. Always identify the CANONICAL product name as it would appear on the front label, regardless of which side is visible.
 
 Return a JSON object with these fields:
 - name: Concise but descriptive product name, MAX 30 CHARACTERS. FORMAT: "{quantity}{pk} {descriptor} {product type}". QUANTITY+pk COMES FIRST, then a key descriptor if useful, then WHAT THE PRODUCT IS. CRITICAL: NEVER use just a brand name — always describe what the product IS. DROP all brand/own-label names (Tesco, Asda, Aldi, Merevale, etc.) UNLESS the brand IS the product identity (e.g., "Coke Zero", "PG Tips", "Marmite"). KEEP useful descriptors like size (medium/large), type (whole/semi-skimmed), style (free-range/organic).
   CONSISTENCY RULE: Always use the SAME canonical name regardless of which side of the packaging is photographed. Use "{N}pk" for multi-packs (not "{N} pack", "pack of {N}", "{N}x", or bare "{N}"). Use the product's common grocery name, not marketing text.
   Examples: "12pk Medium Eggs", "2pt Semi-Skimmed Milk", "500g Chicken Breast", "400g Baked Beans", "80pk PG Tips Tea Bags", "2L Coke Zero", "6pk Free Range Eggs"
-  WRONG: "12 Medium Free Range Eggs" then "12pk Free Range Eggs" for the same product — these MUST produce the same name.
 - category: One of: "Dairy & Eggs", "Meat & Fish", "Fruits & Vegetables", "Bakery", "Drinks", "Snacks & Sweets", "Canned & Jarred", "Frozen", "Household", "Personal Care", "Condiments & Sauces", "Grains & Pasta", "Baking", "Baby & Kids", "Pet", "Other"
-- size: The size/weight value (e.g., "2L", "500g", "6 pack", "2pt"). Read from packaging. If not visible, estimate the standard UK size.
+- size: The size/weight value (e.g., "2L", "500g", "6 pack", "2pt"). Read from packaging (check back of pack for weight if front is not visible). If not visible, estimate the standard UK size.
 - unit: Unit of measurement (e.g., "L", "g", "pack", "pint", "ml", "kg")
 - brand: Brand name if visible (e.g., "Tesco", "Heinz", "PG Tips"). null if generic/unbranded.
 - estimatedPrice: Your best estimate of the UK retail price in GBP (number). Use typical UK supermarket pricing.

@@ -7,7 +7,7 @@ import { getUserListPermissions } from "./partners";
 import { resolveVariantWithPrice } from "./lib/priceResolver";
 import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
-import { isDuplicateItem } from "./lib/fuzzyMatch";
+import { isDuplicateItem, isPotentialDuplicateByBrandSize } from "./lib/fuzzyMatch";
 import { enrichGlobalFromProductScan } from "./lib/globalEnrichment";
 import { toGroceryTitleCase } from "./lib/titleCase";
 
@@ -1265,6 +1265,11 @@ export const addAndSeedPantry = mutation({
 /**
  * Add multiple items from product scanning.
  * Creates list items + seeds pantry items (deduplicates by name).
+ *
+ * Duplicate detection has two layers:
+ * 1. Exact duplicates (name + size fuzzy match) → auto-skipped, returned in `skippedDuplicates`
+ * 2. Potential duplicates (brand + size match but different name) → NOT added, returned in
+ *    `potentialDuplicates` for user confirmation. Use `forceAdd: true` to bypass this check.
  */
 export const addBatchFromScan = mutation({
   args: {
@@ -1282,6 +1287,8 @@ export const addBatchFromScan = mutation({
         imageStorageId: v.optional(v.string()),
       })
     ),
+    /** If true, skip brand+size potential duplicate check (user confirmed it's a different product) */
+    forceAdd: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -1302,6 +1309,19 @@ export const addBatchFromScan = mutation({
     const now = Date.now();
     const itemIds: string[] = [];
     const skippedDuplicates: { name: string; existingName: string }[] = [];
+    const potentialDuplicates: {
+      scannedItem: {
+        name: string;
+        category: string;
+        size?: string;
+        unit?: string;
+        brand?: string;
+        estimatedPrice?: number;
+        confidence?: number;
+        imageStorageId?: string;
+      };
+      existingItem: { name: string; brand?: string; size?: string };
+    }[] = [];
 
     // Get existing pantry items for fuzzy dedup
     const existingPantryItems = await ctx.db
@@ -1309,22 +1329,54 @@ export const addBatchFromScan = mutation({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
-    // Get existing list items for fuzzy dedup
+    // Get existing list items for fuzzy dedup (include brand for potential duplicate check)
     const existingListItems = await ctx.db
       .query("listItems")
       .withIndex("by_list", (q) => q.eq("listId", args.listId))
       .collect();
-    const knownListItems: { name: string; size?: string }[] = existingListItems.map((i) => ({ name: i.name, size: i.size }));
+    const knownListItems: { name: string; size?: string; brand?: string }[] = existingListItems.map((i) => ({
+      name: i.name,
+      size: i.size,
+      brand: i.brand,
+    }));
     const knownPantryNames: string[] = existingPantryItems.map((p) => p.name);
 
     for (const item of args.items) {
       const name = toGroceryTitleCase(item.name);
 
-      // Fuzzy duplicate check — skip if already on this list (or matches a name we just added)
+      // Layer 1: Fuzzy duplicate check — skip if already on this list (name + size match)
       const matchedListItem = knownListItems.find((known) => isDuplicateItem(name, item.size, known.name, known.size));
       if (matchedListItem) {
         skippedDuplicates.push({ name: item.name, existingName: matchedListItem.name });
         continue;
+      }
+
+      // Layer 2: Brand + Size potential duplicate check (unless forceAdd is true)
+      // This catches same product scanned from different angles with different AI-extracted names
+      if (!args.forceAdd && item.brand) {
+        const potentialMatch = knownListItems.find((known) =>
+          isPotentialDuplicateByBrandSize(item.brand, item.size, known.brand, known.size)
+        );
+        if (potentialMatch) {
+          potentialDuplicates.push({
+            scannedItem: {
+              name: item.name,
+              category: item.category,
+              size: item.size,
+              unit: item.unit,
+              brand: item.brand,
+              estimatedPrice: item.estimatedPrice,
+              confidence: item.confidence,
+              imageStorageId: item.imageStorageId,
+            },
+            existingItem: {
+              name: potentialMatch.name,
+              brand: potentialMatch.brand,
+              size: potentialMatch.size,
+            },
+          });
+          continue; // Don't add — wait for user confirmation
+        }
       }
 
       // Fuzzy find or create pantry item
@@ -1372,6 +1424,7 @@ export const addBatchFromScan = mutation({
         quantity: item.quantity ?? 1,
         size: item.size,
         unit: item.unit,
+        brand: item.brand,
         estimatedPrice,
         priceSource: item.estimatedPrice != null ? "ai" : undefined,
         priority: "should-have",
@@ -1382,7 +1435,7 @@ export const addBatchFromScan = mutation({
       });
 
       itemIds.push(listItemId);
-      knownListItems.push({ name: item.name, size: item.size });
+      knownListItems.push({ name: item.name, size: item.size, brand: item.brand });
       knownPantryNames.push(item.name);
 
       // Global DB enrichment — update itemVariants + currentPrices
@@ -1393,7 +1446,7 @@ export const addBatchFromScan = mutation({
       await recalculateListTotal(ctx, args.listId);
     }
 
-    return { count: itemIds.length, itemIds, skippedDuplicates };
+    return { count: itemIds.length, itemIds, skippedDuplicates, potentialDuplicates };
   },
 });
 
