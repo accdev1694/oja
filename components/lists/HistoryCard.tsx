@@ -7,6 +7,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { Swipeable } from "react-native-gesture-handler";
 import { Id } from "@/convex/_generated/dataModel";
 import {
   GlassCard,
@@ -33,9 +34,15 @@ export interface HistoryCardProps {
   };
   onPress: (id: Id<"shoppingLists">) => void;
   formatDateTime: (timestamp: number) => string;
+  onUseAsTemplate?: (id: Id<"shoppingLists">, name: string) => void;
 }
 
-export const HistoryCard = React.memo(function HistoryCard({ list, onPress, formatDateTime }: HistoryCardProps) {
+export const HistoryCard = React.memo(function HistoryCard({
+  list,
+  onPress,
+  formatDateTime,
+  onUseAsTemplate,
+}: HistoryCardProps) {
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -84,89 +91,118 @@ export const HistoryCard = React.memo(function HistoryCard({ list, onPress, form
     storeNames.push(list.storeName);
   }
 
+  const renderRightActions = useCallback(() => {
+    if (!onUseAsTemplate) return null;
+    return (
+      <View style={styles.swipeAction}>
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            onUseAsTemplate(list._id, list.name);
+          }}
+          style={styles.swipeButton}
+        >
+          <MaterialCommunityIcons
+            name="content-copy"
+            size={20}
+            color="#fff"
+          />
+          <Text style={styles.swipeText}>Use as Template</Text>
+        </Pressable>
+      </View>
+    );
+  }, [list._id, list.name, onUseAsTemplate]);
+
   return (
-    <Animated.View style={animatedStyle}>
-      <Pressable
-        onPress={handlePress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-      >
-        <GlassCard variant="standard" style={styles.listCard}>
-          {/* Header row */}
-          <View style={styles.listHeader}>
-            <View style={styles.listTitleContainer}>
-              <MaterialCommunityIcons
-                name="clipboard-check"
-                size={24}
-                color={colors.text.tertiary}
-              />
-              <Text style={styles.listName} numberOfLines={1}>
-                {list.name}
-              </Text>
-            </View>
-            {list.listNumber != null && (
-              <Text style={styles.listNumberText}>#{list.listNumber}</Text>
-            )}
-          </View>
-
-          {/* Middle row: savings/spend + status badge */}
-          <View style={styles.middleRow}>
-            <View style={styles.middleLeft}>
-              {budget > 0 && actual > 0 ? (
-                <View style={styles.budgetInfo}>
-                  <MaterialCommunityIcons
-                    name={savedMoney ? "trending-down" : "trending-up"}
-                    size={16}
-                    color={savedMoney ? colors.semantic.success : colors.semantic.danger}
-                  />
-                  <Text
-                    style={[
-                      styles.budgetText,
-                      { color: savedMoney ? colors.semantic.success : colors.semantic.danger },
-                    ]}
-                  >
-                    {savedMoney
-                      ? `Saved £${Math.abs(diff).toFixed(2)}`
-                      : `Over by £${Math.abs(diff).toFixed(2)}`}
-                    {` • £${actual.toFixed(2)} spent`}
-                  </Text>
-                </View>
-              ) : (list.pointsEarned ?? 0) > 0 ? (
-                <View style={styles.budgetInfo}>
-                  <MaterialCommunityIcons name="star" size={14} color={colors.accent.secondary} />
-                  <Text style={[styles.metaText, { color: colors.accent.secondary }]}>
-                    +{list.pointsEarned} pts
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: "rgba(255, 255, 255, 0.13)" }]}>
-              <Text style={[styles.statusText, { color: colors.text.tertiary }]}>
-                {list.status === "archived" ? "Archived" : "Completed"}
-              </Text>
-            </View>
-          </View>
-
-          {/* Bottom row: number + stores + date */}
-          <View style={styles.bottomRow}>
-            <View style={styles.bottomLeft}>
-              {storeNames.length > 0 && (
-                <View style={styles.metaItem}>
-                  <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
-                  <Text style={styles.metaText} numberOfLines={1}>
-                    {storeNames.join(" • ")}
-                  </Text>
-                </View>
+    <Swipeable
+      renderRightActions={renderRightActions}
+      overshootRight={false}
+      friction={2}
+      enabled={!!onUseAsTemplate}
+    >
+      <Animated.View style={animatedStyle}>
+        <Pressable
+          onPress={handlePress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+        >
+          <GlassCard variant="standard" style={styles.listCard}>
+            {/* Header row */}
+            <View style={styles.listHeader}>
+              <View style={styles.listTitleContainer}>
+                <MaterialCommunityIcons
+                  name="clipboard-check"
+                  size={24}
+                  color={colors.text.tertiary}
+                />
+                <Text style={styles.listName} numberOfLines={1}>
+                  {list.name}
+                </Text>
+              </View>
+              {list.listNumber != null && (
+                <Text style={styles.listNumberText}>#{list.listNumber}</Text>
               )}
             </View>
-            <View style={styles.metaItem}>
-              <MaterialCommunityIcons name="calendar" size={14} color={colors.text.tertiary} />
-              <Text style={styles.metaText}>{completedDate}</Text>
+
+            {/* Middle row: savings/spend + status badge */}
+            <View style={styles.middleRow}>
+              <View style={styles.middleLeft}>
+                {budget > 0 && actual > 0 ? (
+                  <View style={styles.budgetInfo}>
+                    <MaterialCommunityIcons
+                      name={savedMoney ? "trending-down" : "trending-up"}
+                      size={16}
+                      color={savedMoney ? colors.semantic.success : colors.semantic.danger}
+                    />
+                    <Text
+                      style={[
+                        styles.budgetText,
+                        { color: savedMoney ? colors.semantic.success : colors.semantic.danger },
+                      ]}
+                    >
+                      {savedMoney
+                        ? `Saved £${Math.abs(diff).toFixed(2)}`
+                        : `Over by £${Math.abs(diff).toFixed(2)}`}
+                      {` • £${actual.toFixed(2)} spent`}
+                    </Text>
+                  </View>
+                ) : (list.pointsEarned ?? 0) > 0 ? (
+                  <View style={styles.budgetInfo}>
+                    <MaterialCommunityIcons name="star" size={14} color={colors.accent.secondary} />
+                    <Text style={[styles.metaText, { color: colors.accent.secondary }]}>
+                      +{list.pointsEarned} pts
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={[styles.statusBadge, { backgroundColor: "rgba(255, 255, 255, 0.13)" }]}>
+                <Text style={[styles.statusText, { color: colors.text.tertiary }]}>
+                  {list.status === "archived" ? "Archived" : "Completed"}
+                </Text>
+              </View>
             </View>
-          </View>
-        </GlassCard>
-      </Pressable>
-    </Animated.View>
+
+            {/* Bottom row: number + stores + date */}
+            <View style={styles.bottomRow}>
+              <View style={styles.bottomLeft}>
+                {storeNames.length > 0 && (
+                  <View style={styles.metaItem}>
+                    <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
+                    <Text style={styles.metaText} numberOfLines={1}>
+                      {storeNames.join(" • ")}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.metaItem}>
+                <MaterialCommunityIcons name="calendar" size={14} color={colors.text.tertiary} />
+                <Text style={styles.metaText}>{completedDate}</Text>
+              </View>
+            </View>
+          </GlassCard>
+        </Pressable>
+      </Animated.View>
+    </Swipeable>
   );
 }, (prev, next) => {
   return (
@@ -180,7 +216,8 @@ export const HistoryCard = React.memo(function HistoryCard({ list, onPress, form
     prev.list.name === next.list.name &&
     prev.list.listNumber === next.list.listNumber &&
     prev.onPress === next.onPress &&
-    prev.formatDateTime === next.formatDateTime
+    prev.formatDateTime === next.formatDateTime &&
+    prev.onUseAsTemplate === next.onUseAsTemplate
   );
 });
 
@@ -258,5 +295,26 @@ const styles = StyleSheet.create({
   metaText: {
     ...typography.bodySmall,
     color: colors.text.tertiary,
+  },
+  swipeAction: {
+    backgroundColor: colors.semantic.success,
+    justifyContent: "center",
+    alignItems: "center",
+    width: 120,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+  },
+  swipeButton: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+  },
+  swipeText: {
+    ...typography.labelSmall,
+    color: "#fff",
+    fontWeight: "600",
+    marginTop: spacing.xs,
+    textAlign: "center",
   },
 });

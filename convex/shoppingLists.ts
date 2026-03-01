@@ -1995,3 +1995,270 @@ async function findPriceForExactSize(
 
   return null;
 }
+
+// -----------------------------------------------------------------------------
+// Templates (Phase 1)
+// -----------------------------------------------------------------------------
+
+export const createFromTemplate = mutation({
+  args: {
+    sourceListId: v.id("shoppingLists"),
+    newListName: v.string(),
+    newBudget: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // 1. Verify source list exists and belongs to user
+    const sourceList = await ctx.db.get(args.sourceListId);
+    if (!sourceList || sourceList.userId !== user._id) {
+      throw new Error("List not found or unauthorized");
+    }
+
+    // 2. Get all items from source list
+    const sourceItems = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.sourceListId))
+      .collect();
+
+    // 3. Create new active list
+    const now = Date.now();
+    const listNumber = await getNextListNumber(ctx, user._id);
+    const newListId = await ctx.db.insert("shoppingLists", {
+      userId: user._id,
+      name: args.newListName,
+      budget: args.newBudget ?? sourceList.budget ?? 50,
+      status: "active",
+      normalizedStoreId: sourceList.normalizedStoreId,
+      storeName: sourceList.storeName,
+      listNumber,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Track funnel event: first_list
+    await trackFunnelEvent(ctx, user._id, "first_list");
+
+    // Track activity
+    await trackActivity(ctx, user._id, "create_list", { listId: newListId, name: args.newListName });
+
+    // 4. Copy all items to new list (unchecked)
+    for (const item of sourceItems) {
+      await ctx.db.insert("listItems", {
+        listId: newListId,
+        userId: user._id,
+        name: item.name,
+        category: item.category,
+        quantity: item.quantity,
+        size: item.size,
+        unit: item.unit,
+        estimatedPrice: item.estimatedPrice,
+        priceSource: item.priceSource,
+        priceConfidence: item.priceConfidence,
+        isChecked: false, // Important: start fresh
+        priority: item.priority,
+        autoAdded: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return {
+      listId: newListId,
+      itemCount: sourceItems.length,
+    };
+  },
+});
+
+export const getTemplatePreview = query({
+  args: { listId: v.id("shoppingLists") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      return null;
+    }
+
+    const list = await ctx.db.get(args.listId);
+    if (!list || list.userId !== user._id) {
+      return null;
+    }
+
+    const items = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.listId))
+      .collect();
+
+    const totalEstimated = items.reduce((sum, item) =>
+      sum + (item.estimatedPrice || 0) * item.quantity, 0
+    );
+
+    return {
+      list: {
+        _id: list._id,
+        name: list.name,
+        budget: list.budget,
+        storeName: list.storeName,
+        completedAt: list.completedAt,
+        createdAt: list.createdAt,
+      },
+      itemCount: items.length,
+      totalEstimated,
+      itemsByCategory: groupByCategory(items),
+    };
+  },
+});
+
+function groupByCategory(items: any[]) {
+  const grouped = new Map<string, number>();
+  for (const item of items) {
+    const cat = item.category || "Uncategorized";
+    grouped.set(cat, (grouped.get(cat) || 0) + 1);
+  }
+  return Array.from(grouped.entries()).map(([category, count]) => ({
+    category,
+    count,
+  }));
+}
+
+// -----------------------------------------------------------------------------
+// Templates (Phase 2)
+// -----------------------------------------------------------------------------
+
+import { deduplicateItems, ListItemInput } from "./lib/itemDeduplicator";
+
+export const createFromMultipleLists = mutation({
+  args: {
+    sourceListIds: v.array(v.id("shoppingLists")),
+    newListName: v.string(),
+    newBudget: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    if (args.sourceListIds.length === 0) {
+      throw new Error("Must provide at least one list");
+    }
+
+    // Check list limit
+    const access = await canCreateList(ctx, user._id);
+    if (!access.allowed) {
+      throw new Error(access.reason ?? "List limit reached");
+    }
+
+    // 1. Gather all items grouped by list
+    const itemsByList = new Map<string, { listName: string; items: ListItemInput[] }>();
+    let primaryStoreId: string | undefined;
+    let primaryStoreName: string | undefined;
+
+    for (const listId of args.sourceListIds) {
+      const list = await ctx.db.get(listId);
+      if (!list || list.userId !== user._id) {
+        throw new Error(`List ${listId} not found or unauthorized`);
+      }
+
+      // Use the first list's store as the primary store for the new list
+      if (!primaryStoreId && list.normalizedStoreId) {
+        primaryStoreId = list.normalizedStoreId;
+        primaryStoreName = list.storeName;
+      }
+
+      const items = await ctx.db
+        .query("listItems")
+        .withIndex("by_list", (q) => q.eq("listId", listId))
+        .collect();
+
+      itemsByList.set(listId, {
+        listName: list.name,
+        items: items.map(i => ({
+          name: i.name,
+          category: i.category,
+          quantity: i.quantity,
+          size: i.size,
+          unit: i.unit,
+          estimatedPrice: i.estimatedPrice,
+        })),
+      });
+    }
+
+    // 2. Deduplicate
+    const result = deduplicateItems(itemsByList);
+
+    // 3. Create new list
+    const now = Date.now();
+    const listNumber = await getNextListNumber(ctx, user._id);
+    const newListId = await ctx.db.insert("shoppingLists", {
+      userId: user._id,
+      name: args.newListName,
+      budget: args.newBudget ?? 50,
+      status: "active",
+      normalizedStoreId: primaryStoreId,
+      storeName: primaryStoreName,
+      listNumber,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Track activity
+    await trackActivity(ctx, user._id, "create_list", { listId: newListId, name: args.newListName });
+
+    // 4. Insert deduplicated items
+    for (const item of result.items) {
+      await ctx.db.insert("listItems", {
+        listId: newListId,
+        userId: user._id,
+        name: item.name,
+        category: item.category,
+        quantity: item.quantity,
+        size: item.size,
+        unit: item.unit,
+        estimatedPrice: item.estimatedPrice,
+        priceSource: "personal", // Simplified for merged items
+        priceConfidence: 1.0,
+        isChecked: false,
+        priority: "should-have",
+        autoAdded: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return {
+      listId: newListId,
+      itemCount: result.items.length,
+      duplicatesMerged: result.duplicates.length,
+    };
+  },
+});

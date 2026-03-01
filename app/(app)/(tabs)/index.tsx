@@ -34,6 +34,7 @@ import { EmptyLists } from "@/components/ui/glass/GlassErrorState";
 import { ListCard } from "@/components/lists/ListCard";
 import { SharedListCard } from "@/components/lists/SharedListCard";
 import { HistoryCard } from "@/components/lists/HistoryCard";
+import { CreateFromTemplateModal } from "@/components/lists/CreateFromTemplateModal";
 import { defaultListName } from "@/lib/list/helpers";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -54,12 +55,18 @@ export default function ListsScreen() {
   const sharedLists = useQuery(api.partners.getSharedLists, !isSwitchingUsers ? {} : "skip");
   const createList = useMutation(api.shoppingLists.create);
   const deleteList = useMutation(api.shoppingLists.remove);
+  const createFromTemplate = useMutation(api.shoppingLists.createFromTemplate);
 
   const [isCreating, setIsCreating] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const { unreadCount } = useNotifications();
   const [animationKey, setAnimationKey] = useState(0);
   const [pageAnimationKey, setPageAnimationKey] = useState(0);
+
+  // Template Modal State
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<Id<"shoppingLists"> | null>(null);
+  const [selectedTemplateName, setSelectedTemplateName] = useState("");
 
   // Trigger animations every time this tab gains focus
   useFocusEffect(
@@ -112,6 +119,45 @@ export default function ListsScreen() {
   const handleSharedPress = useCallback((id: Id<"shoppingLists">) => {
     router.push(`/list/${id}`);
   }, [router]);
+
+  const handleUseAsTemplate = useCallback((listId: Id<"shoppingLists">, listName: string) => {
+    setSelectedTemplateId(listId);
+    setSelectedTemplateName(listName);
+    setShowTemplateModal(true);
+  }, []);
+
+  const handleConfirmTemplate = useCallback(async (newName: string) => {
+    if (!selectedTemplateId) return;
+
+    try {
+      const result = await createFromTemplate({
+        sourceListId: selectedTemplateId,
+        newListName: newName,
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowTemplateModal(false);
+
+      // Navigate to new list
+      router.push(`/list/${result.listId}`);
+    } catch (error: unknown) {
+      console.error("Failed to create from template:", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        alert(
+          "List Limit Reached",
+          "Free plan allows up to 3 active lists. Upgrade to Premium for unlimited lists.",
+          [
+            { text: "Maybe Later", style: "cancel" },
+            { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
+          ]
+        );
+      } else {
+        alert("Error", "Failed to create list from template");
+      }
+    }
+  }, [selectedTemplateId, createFromTemplate, router, alert]);
 
   const stableFormatDateTime = useCallback((timestamp: number) => {
     const date = new Date(timestamp);
@@ -419,6 +465,7 @@ export default function ListsScreen() {
                         list={list}
                         onPress={handleHistoryPress}
                         formatDateTime={stableFormatDateTime}
+                        onUseAsTemplate={handleUseAsTemplate}
                       />
                     </View>
                   </AnimatedSection>
@@ -435,6 +482,15 @@ export default function ListsScreen() {
       <NotificationDropdown
         visible={showNotifications}
         onClose={() => setShowNotifications(false)}
+      />
+
+      {/* Template Modal */}
+      <CreateFromTemplateModal
+        visible={showTemplateModal}
+        sourceListId={selectedTemplateId}
+        sourceListName={selectedTemplateName}
+        onClose={() => setShowTemplateModal(false)}
+        onConfirm={handleConfirmTemplate}
       />
 
     </GlassScreen>
