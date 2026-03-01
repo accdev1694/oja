@@ -331,7 +331,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
 
                 {/* Item details: Two-line layout */}
                 <View style={itemStyles.itemDetailsColumn}>
-                  {/* Line 1: Item name + Edit/Delete buttons */}
+                  {/* Line 1: Item name + Edit button */}
                   <View style={itemStyles.nameRow}>
                     <Text
                       style={[itemStyles.itemName, item.isChecked && itemStyles.itemNameChecked]}
@@ -340,46 +340,24 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                       {displayName}
                     </Text>
 
-                    {/* Action buttons group */}
-                    <View style={itemStyles.actionButtonsRow}>
-                      {/* Edit button — visible in both shopping and planning modes (not in selection mode) */}
-                      {canEdit && !selectionActive && (
-                        <Pressable
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            onEdit(item);
-                          }}
-                          style={itemStyles.iconButton}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <MaterialCommunityIcons
-                            name="pencil-outline"
-                            size={18}
-                            color={colors.text.tertiary}
-                          />
-                        </Pressable>
-                      )}
-
-                      {/* Delete button — visible in both shopping and planning modes (not in selection mode) */}
-                      {canEdit && !selectionActive && (
-                        <Pressable
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            onRemove(item._id, item.name);
-                          }}
-                          style={itemStyles.iconButton}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <MaterialCommunityIcons
-                            name="trash-can-outline"
-                            size={18}
-                            color={colors.semantic.danger}
-                          />
-                        </Pressable>
-                      )}
-                    </View>
+                    {/* Edit button — visible in both shopping and planning modes (not in selection mode) */}
+                    {canEdit && !selectionActive && (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          onEdit(item);
+                        }}
+                        style={itemStyles.iconButton}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <MaterialCommunityIcons
+                          name="pencil-outline"
+                          size={18}
+                          color={colors.text.tertiary}
+                        />
+                      </Pressable>
+                    )}
                   </View>
 
                   {/* Line 2: Price info + Comment button */}
@@ -431,6 +409,25 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                             </View>
                           )}
                         </View>
+                      </Pressable>
+                    )}
+
+                    {/* Delete button — visible in both shopping and planning modes (not in selection mode) */}
+                    {canEdit && !selectionActive && (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          onRemove(item._id, item.name);
+                        }}
+                        style={itemStyles.iconButton}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <MaterialCommunityIcons
+                          name="trash-can-outline"
+                          size={18}
+                          color={colors.semantic.danger}
+                        />
                       </Pressable>
                     )}
                   </View>
@@ -538,11 +535,6 @@ const itemStyles = StyleSheet.create({
   priceInfo: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  actionButtonsRow: {
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 2,
   },
   iconButton: {
     padding: spacing.xs,
