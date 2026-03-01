@@ -320,10 +320,10 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                 onLongPress={handleLongPress}
                 delayLongPress={400}
               >
-                {/* Selection checkbox — visible when selection mode is active */}
-                {selectionActive && (
+                {/* Checkbox — visible in selection mode OR shopping mode (not in planning) */}
+                {(selectionActive || (isShopping && !selectionActive)) && (
                   <GlassCircularCheckbox
-                    checked={!!isSelected}
+                    checked={selectionActive ? !!isSelected : item.isChecked}
                     size="xs"
                     style={{ marginRight: spacing.xs }}
                   />
@@ -331,16 +331,8 @@ export const ShoppingListItem = memo(function ShoppingListItem({
 
                 {/* Item details: Two-line layout */}
                 <View style={itemStyles.itemDetailsColumn}>
-                  {/* Line 1: Checkbox + Item name + Edit/Delete buttons */}
+                  {/* Line 1: Item name + Edit/Delete buttons */}
                   <View style={itemStyles.nameRow}>
-                    {/* Shopping mode checkbox — only when not in selection mode */}
-                    {isShopping && !selectionActive && (
-                      <GlassCircularCheckbox
-                        checked={item.isChecked}
-                        size="xs"
-                        style={{ marginRight: spacing.xs }}
-                      />
-                    )}
                     <Text
                       style={[itemStyles.itemName, item.isChecked && itemStyles.itemNameChecked]}
                       numberOfLines={1}
@@ -350,8 +342,8 @@ export const ShoppingListItem = memo(function ShoppingListItem({
 
                     {/* Action buttons group */}
                     <View style={itemStyles.actionButtonsRow}>
-                      {/* Edit button — shopping mode (always visible, even when checked) */}
-                      {canEdit && isShopping && (
+                      {/* Edit button — visible in both shopping and planning modes (not in selection mode) */}
+                      {canEdit && !selectionActive && (
                         <Pressable
                           onPress={(e) => {
                             e.stopPropagation();
