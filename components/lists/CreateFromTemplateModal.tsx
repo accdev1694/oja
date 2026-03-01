@@ -32,7 +32,8 @@ export function CreateFromTemplateModal({
 }: CreateFromTemplateModalProps) {
   const [newName, setNewName] = useState(`${sourceListName} (Copy)`);
   const [isCreating, setIsCreating] = useState(false);
-  const { currency } = useCurrentUser();
+  const { user } = useCurrentUser();
+  const currency = user?.currency || "GBP";
 
   const preview = useQuery(
     api.shoppingLists.getTemplatePreview,

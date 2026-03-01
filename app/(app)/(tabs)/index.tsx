@@ -36,6 +36,8 @@ import { SharedListCard } from "@/components/lists/SharedListCard";
 import { HistoryCard } from "@/components/lists/HistoryCard";
 import { CreateFromTemplateModal } from "@/components/lists/CreateFromTemplateModal";
 import { CombineListsModal } from "@/components/lists/CombineListsModal";
+import { CreateListOptionsModal } from "@/components/lists/CreateListOptionsModal";
+import { TemplatePickerModal } from "@/components/lists/TemplatePickerModal";
 import { defaultListName } from "@/lib/list/helpers";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -64,6 +66,10 @@ export default function ListsScreen() {
   const { unreadCount } = useNotifications();
   const [animationKey, setAnimationKey] = useState(0);
   const [pageAnimationKey, setPageAnimationKey] = useState(0);
+
+  // Create List Flow State
+  const [showCreateOptionsModal, setShowCreateOptionsModal] = useState(false);
+  const [showTemplatePickerModal, setShowTemplatePickerModal] = useState(false);
 
   // Template Modal State
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -221,7 +227,13 @@ export default function ListsScreen() {
     });
   }, []);
 
-  async function handleCreateList() {
+  function handleCreateList() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowCreateOptionsModal(true);
+  }
+
+  const handleCreateFromScratch = useCallback(async () => {
+    setShowCreateOptionsModal(false);
     if (isCreating) return;
     setIsCreating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -251,7 +263,19 @@ export default function ListsScreen() {
     } finally {
       setIsCreating(false);
     }
-  }
+  }, [isCreating, createList, router, alert]);
+
+  const handleShowTemplatePicker = useCallback(() => {
+    setShowCreateOptionsModal(false);
+    setShowTemplatePickerModal(true);
+  }, []);
+
+  const handlePickTemplate = useCallback((listId: Id<"shoppingLists">, listName: string) => {
+    setShowTemplatePickerModal(false);
+    setSelectedTemplateId(listId);
+    setSelectedTemplateName(listName);
+    setShowTemplateModal(true);
+  }, []);
 
   const currentData = tabMode === "active" ? lists : history;
   const isLoaded = currentData !== undefined;
@@ -571,7 +595,24 @@ export default function ListsScreen() {
         onClose={() => setShowNotifications(false)}
       />
 
-      {/* Template Modal */}
+      {/* Create List Options Modal */}
+      <CreateListOptionsModal
+        visible={showCreateOptionsModal}
+        onClose={() => setShowCreateOptionsModal(false)}
+        onFromScratch={handleCreateFromScratch}
+        onUseTemplate={handleShowTemplatePicker}
+        hasHistory={(history?.length ?? 0) > 0}
+      />
+
+      {/* Template Picker Modal */}
+      <TemplatePickerModal
+        visible={showTemplatePickerModal}
+        onClose={() => setShowTemplatePickerModal(false)}
+        onSelectTemplate={handlePickTemplate}
+        historyLists={history || []}
+      />
+
+      {/* Template Preview Modal */}
       <CreateFromTemplateModal
         visible={showTemplateModal}
         sourceListId={selectedTemplateId}
