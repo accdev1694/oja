@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -12,6 +12,8 @@ import {
   typography,
   spacing,
 } from "@/components/ui/glass";
+import { formatPrice } from "@/lib/currency/currencyUtils";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 interface CreateFromTemplateModalProps {
   visible: boolean;
@@ -30,6 +32,7 @@ export function CreateFromTemplateModal({
 }: CreateFromTemplateModalProps) {
   const [newName, setNewName] = useState(`${sourceListName} (Copy)`);
   const [isCreating, setIsCreating] = useState(false);
+  const { currency } = useCurrentUser();
 
   const preview = useQuery(
     api.shoppingLists.getTemplatePreview,
@@ -48,8 +51,17 @@ export function CreateFromTemplateModal({
     }
   };
 
+  // Show loading state while preview loads
   if (!preview) {
-    return null;
+    return (
+      <GlassModal visible={visible} onClose={onClose}>
+        <Text style={styles.modalTitle}>Create from Template</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.accent.primary} />
+          <Text style={styles.loadingText}>Loading preview...</Text>
+        </View>
+      </GlassModal>
+    );
   }
 
   return (
@@ -76,7 +88,7 @@ export function CreateFromTemplateModal({
           </View>
           <View style={styles.stat}>
             <Text style={styles.statValue}>
-              £{preview.totalEstimated.toFixed(2)}
+              {formatPrice(preview.totalEstimated, currency || "GBP")}
             </Text>
             <Text style={styles.statLabel}>Estimated</Text>
           </View>
@@ -220,5 +232,14 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  loadingContainer: {
+    paddingVertical: spacing.xl,
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  loadingText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
   },
 });

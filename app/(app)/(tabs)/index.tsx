@@ -576,7 +576,11 @@ export default function ListsScreen() {
         visible={showTemplateModal}
         sourceListId={selectedTemplateId}
         sourceListName={selectedTemplateName}
-        onClose={() => setShowTemplateModal(false)}
+        onClose={() => {
+          setShowTemplateModal(false);
+          setSelectedTemplateId(null);
+          setSelectedTemplateName("");
+        }}
         onConfirm={handleConfirmTemplate}
       />
 
