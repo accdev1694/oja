@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useQuery } from "convex/react";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/glass";
 import { formatPrice } from "@/lib/currency/currencyUtils";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { defaultListName } from "@/lib/list/helpers";
 
 interface CreateFromTemplateModalProps {
   visible: boolean;
@@ -30,7 +31,7 @@ export function CreateFromTemplateModal({
   onClose,
   onConfirm,
 }: CreateFromTemplateModalProps) {
-  const [newName, setNewName] = useState(`${sourceListName} (Copy)`);
+  const [newName, setNewName] = useState(defaultListName());
   const [isCreating, setIsCreating] = useState(false);
   const { user } = useCurrentUser();
   const currency = user?.currency || "GBP";
@@ -39,6 +40,13 @@ export function CreateFromTemplateModal({
     api.shoppingLists.getTemplatePreview,
     sourceListId ? { listId: sourceListId } : "skip"
   );
+
+  // Reset name to current date format when modal opens
+  useEffect(() => {
+    if (visible) {
+      setNewName(defaultListName());
+    }
+  }, [visible]);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;

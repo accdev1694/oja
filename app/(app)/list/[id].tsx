@@ -73,6 +73,7 @@ import {
   TripSummaryModal,
 } from "@/components/list/modals";
 import { ScanReceiptNudgeModal } from "@/components/list/modals/ScanReceiptNudgeModal";
+import { EditListNameModal } from "@/components/lists/EditListNameModal";
 import type { TripStats } from "@/hooks/useTripSummary";
 import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
 
@@ -168,6 +169,8 @@ export default function ListDetailScreen() {
   // Edit budget modal state
   const [showEditBudgetModal, setShowEditBudgetModal] = useState(false);
 
+  // Edit list name modal state
+  const [showEditNameModal, setShowEditNameModal] = useState(false);
 
   // Trip summary modal state
   const [showTripSummary, setShowTripSummary] = useState(false);
@@ -385,6 +388,16 @@ export default function ListDetailScreen() {
 
   const handleSaveBudget = useCallback(async (newBudget: number | undefined) => {
     await updateList({ id, budget: newBudget });
+  }, [updateList, id]);
+
+  // Edit list name handlers
+  function handleOpenEditName() {
+    haptic("light");
+    setShowEditNameModal(true);
+  }
+
+  const handleSaveListName = useCallback(async (newName: string) => {
+    await updateList({ id, name: newName });
   }, [updateList, id]);
 
   const handleRefreshPrices = useCallback(async () => {
@@ -1130,6 +1143,19 @@ export default function ListDetailScreen() {
           titleStyle={{ fontSize: 20, lineHeight: 28 }}
           rightElement={
             <View style={styles.headerRightRow}>
+              {/* Edit list name button */}
+              <Pressable
+                onPress={handleOpenEditName}
+                hitSlop={8}
+                style={styles.headerIconButton}
+              >
+                <MaterialCommunityIcons
+                  name="pencil-outline"
+                  size={20}
+                  color={colors.text.secondary}
+                />
+              </Pressable>
+
               <NotificationBell onPress={() => setShowNotifications(true)} />
               {hasPartners && (
                 <Pressable
@@ -1211,6 +1237,14 @@ export default function ListDetailScreen() {
         budget={budget}
         onClose={() => setShowEditBudgetModal(false)}
         onSave={handleSaveBudget}
+      />
+
+      {/* Edit List Name Modal */}
+      <EditListNameModal
+        visible={showEditNameModal}
+        currentName={list.name}
+        onClose={() => setShowEditNameModal(false)}
+        onSave={handleSaveListName}
       />
 
       {/* Mid-Shop Add Flow Modal */}
