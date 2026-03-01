@@ -35,6 +35,7 @@ import { ListCard } from "@/components/lists/ListCard";
 import { SharedListCard } from "@/components/lists/SharedListCard";
 import { HistoryCard } from "@/components/lists/HistoryCard";
 import { CreateFromTemplateModal } from "@/components/lists/CreateFromTemplateModal";
+import { CombineListsModal } from "@/components/lists/CombineListsModal";
 import { defaultListName } from "@/lib/list/helpers";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -56,6 +57,7 @@ export default function ListsScreen() {
   const createList = useMutation(api.shoppingLists.create);
   const deleteList = useMutation(api.shoppingLists.remove);
   const createFromTemplate = useMutation(api.shoppingLists.createFromTemplate);
+  const createFromMultipleLists = useMutation(api.shoppingLists.createFromMultipleLists);
 
   const [isCreating, setIsCreating] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -67,6 +69,11 @@ export default function ListsScreen() {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<Id<"shoppingLists"> | null>(null);
   const [selectedTemplateName, setSelectedTemplateName] = useState("");
+
+  // Multi-Select Template State
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedHistoryLists, setSelectedHistoryLists] = useState<Set<Id<"shoppingLists">>>(new Set());
+  const [showCombineModal, setShowCombineModal] = useState(false);
 
   // Trigger animations every time this tab gains focus
   useFocusEffect(
@@ -80,6 +87,8 @@ export default function ListsScreen() {
     const mode: TabMode = index === 0 ? "active" : "history";
     if (mode === tabMode) return;
     setTabMode(mode);
+    setIsMultiSelectMode(false);
+    setSelectedHistoryLists(new Set());
     setAnimationKey((prev) => prev + 1);
   }, [tabMode]);
 
@@ -102,6 +111,51 @@ export default function ListsScreen() {
       },
     ]);
   }, [alert, deleteList]);
+
+  const handleToggleSelect = useCallback((id: Id<"shoppingLists">) => {
+    setSelectedHistoryLists(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleConfirmCombine = useCallback(async (newName: string, budget?: number) => {
+    if (selectedHistoryLists.size === 0) return;
+
+    try {
+      const result = await createFromMultipleLists({
+        sourceListIds: Array.from(selectedHistoryLists),
+        newListName: newName,
+        newBudget: budget,
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowCombineModal(false);
+      setIsMultiSelectMode(false);
+      setSelectedHistoryLists(new Set());
+
+      // Navigate to new list
+      router.push(`/list/${result.listId}`);
+    } catch (error: unknown) {
+      console.error("Failed to combine lists:", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        alert(
+          "List Limit Reached",
+          "Free plan allows up to 3 active lists. Upgrade to Premium for unlimited lists.",
+          [
+            { text: "Maybe Later", style: "cancel" },
+            { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
+          ]
+        );
+      } else {
+        alert("Error", "Failed to create combined list");
+      }
+    }
+  }, [selectedHistoryLists, createFromMultipleLists, router, alert]);
 
   // Stable callbacks for cards — avoids inline closures that defeat React.memo
   const handleListPress = useCallback((id: Id<"shoppingLists">) => {
@@ -236,7 +290,7 @@ export default function ListsScreen() {
         }
         rightElement={
           <View style={styles.headerActions}>
-            {tabMode === "active" && (
+            {tabMode === "active" ? (
               <Pressable
                 style={[styles.addButton, isCreating && { opacity: 0.5 }]}
                 onPress={handleCreateList}
@@ -244,6 +298,21 @@ export default function ListsScreen() {
               >
                 <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
               </Pressable>
+            ) : (
+              history && history.length > 0 && (
+                <Pressable
+                  style={styles.selectTextButton}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setIsMultiSelectMode(!isMultiSelectMode);
+                    if (isMultiSelectMode) setSelectedHistoryLists(new Set());
+                  }}
+                >
+                  <Text style={styles.selectTextButtonLabel}>
+                    {isMultiSelectMode ? "Cancel" : "Select"}
+                  </Text>
+                </Pressable>
+              )
             )}
             <Pressable
               onPress={() => {
@@ -466,6 +535,9 @@ export default function ListsScreen() {
                         onPress={handleHistoryPress}
                         formatDateTime={stableFormatDateTime}
                         onUseAsTemplate={handleUseAsTemplate}
+                        selectable={isMultiSelectMode}
+                        selected={selectedHistoryLists.has(list._id)}
+                        onToggleSelect={handleToggleSelect}
                       />
                     </View>
                   </AnimatedSection>
@@ -477,6 +549,21 @@ export default function ListsScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Multi-Select Combine Action */}
+      {isMultiSelectMode && selectedHistoryLists.size > 0 && (
+        <AnimatedSection animation="fadeInUp" duration={300} style={styles.combineActionContainer}>
+          <Pressable
+            style={styles.combineActionButton}
+            onPress={() => setShowCombineModal(true)}
+          >
+            <MaterialCommunityIcons name="layers-plus" size={20} color={colors.text.inverse} />
+            <Text style={styles.combineActionText}>
+              Combine {selectedHistoryLists.size} List{selectedHistoryLists.size > 1 ? "s" : ""}
+            </Text>
+          </Pressable>
+        </AnimatedSection>
+      )}
 
       {/* Notifications Dropdown */}
       <NotificationDropdown
@@ -491,6 +578,14 @@ export default function ListsScreen() {
         sourceListName={selectedTemplateName}
         onClose={() => setShowTemplateModal(false)}
         onConfirm={handleConfirmTemplate}
+      />
+
+      {/* Combine Lists Modal */}
+      <CombineListsModal
+        visible={showCombineModal}
+        sourceListIds={Array.from(selectedHistoryLists)}
+        onClose={() => setShowCombineModal(false)}
+        onConfirm={handleConfirmCombine}
       />
 
     </GlassScreen>
@@ -672,5 +767,41 @@ const styles = StyleSheet.create({
     ...typography.labelSmall,
     color: colors.text.inverse,
     fontSize: 10,
+  },
+  selectTextButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    justifyContent: "center",
+  },
+  selectTextButtonLabel: {
+    ...typography.labelMedium,
+    color: colors.accent.primary,
+    fontWeight: "600",
+  },
+  combineActionContainer: {
+    position: "absolute",
+    bottom: spacing.lg + 80, // Above bottom tabs
+    left: spacing.lg,
+    right: spacing.lg,
+    alignItems: "center",
+  },
+  combineActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.accent.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    gap: spacing.sm,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  combineActionText: {
+    ...typography.labelLarge,
+    color: colors.text.inverse,
+    fontWeight: "600",
   },
 });

@@ -35,6 +35,9 @@ export interface HistoryCardProps {
   onPress: (id: Id<"shoppingLists">) => void;
   formatDateTime: (timestamp: number) => string;
   onUseAsTemplate?: (id: Id<"shoppingLists">, name: string) => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: Id<"shoppingLists">) => void;
 }
 
 export const HistoryCard = React.memo(function HistoryCard({
@@ -42,6 +45,9 @@ export const HistoryCard = React.memo(function HistoryCard({
   onPress,
   formatDateTime,
   onUseAsTemplate,
+  selectable,
+  selected,
+  onToggleSelect,
 }: HistoryCardProps) {
   const scale = useSharedValue(1);
 
@@ -59,8 +65,12 @@ export const HistoryCard = React.memo(function HistoryCard({
 
   const handlePress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress(list._id);
-  }, [onPress, list._id]);
+    if (selectable && onToggleSelect) {
+      onToggleSelect(list._id);
+    } else {
+      onPress(list._id);
+    }
+  }, [onPress, list._id, selectable, onToggleSelect]);
 
   const budget = list.budget ?? 0;
   const actual = list.actualTotal ?? 0;
@@ -118,7 +128,7 @@ export const HistoryCard = React.memo(function HistoryCard({
       renderRightActions={renderRightActions}
       overshootRight={false}
       friction={2}
-      enabled={!!onUseAsTemplate}
+      enabled={!!onUseAsTemplate && !selectable}
     >
       <Animated.View style={animatedStyle}>
         <Pressable
@@ -126,15 +136,23 @@ export const HistoryCard = React.memo(function HistoryCard({
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
         >
-          <GlassCard variant="standard" style={styles.listCard}>
+          <GlassCard variant="standard" style={[styles.listCard, selected && styles.selectedCard]}>
             {/* Header row */}
             <View style={styles.listHeader}>
               <View style={styles.listTitleContainer}>
-                <MaterialCommunityIcons
-                  name="clipboard-check"
-                  size={24}
-                  color={colors.text.tertiary}
-                />
+                {selectable ? (
+                  <MaterialCommunityIcons
+                    name={selected ? "check-circle" : "checkbox-blank-circle-outline"}
+                    size={24}
+                    color={selected ? colors.accent.primary : colors.text.tertiary}
+                  />
+                ) : (
+                  <MaterialCommunityIcons
+                    name="clipboard-check"
+                    size={24}
+                    color={colors.text.tertiary}
+                  />
+                )}
                 <Text style={styles.listName} numberOfLines={1}>
                   {list.name}
                 </Text>
@@ -224,6 +242,11 @@ export const HistoryCard = React.memo(function HistoryCard({
 const styles = StyleSheet.create({
   listCard: {
     marginBottom: spacing.md,
+  },
+  selectedCard: {
+    borderColor: colors.accent.primary,
+    borderWidth: 1.5,
+    backgroundColor: `${colors.accent.primary}10`,
   },
   listHeader: {
     flexDirection: "row",
