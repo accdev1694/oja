@@ -511,7 +511,7 @@ const itemStyles = StyleSheet.create({
   },
   itemDetailsColumn: {
     flex: 1,
-    gap: 2,
+    gap: 0,
   },
   nameRow: {
     flexDirection: "row",
