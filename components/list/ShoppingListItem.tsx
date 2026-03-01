@@ -361,8 +361,8 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                         </Pressable>
                       )}
 
-                      {/* Delete button — both modes */}
-                      {canEdit && (
+                      {/* Delete button — visible in both shopping and planning modes (not in selection mode) */}
+                      {canEdit && !selectionActive && (
                         <Pressable
                           onPress={(e) => {
                             e.stopPropagation();
@@ -540,9 +540,9 @@ const itemStyles = StyleSheet.create({
     alignItems: "center",
   },
   actionButtonsRow: {
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
-    gap: spacing.xs,
+    gap: 2,
   },
   iconButton: {
     padding: spacing.xs,
