@@ -1,4 +1,4 @@
-import { memo, useRef, useEffect, useCallback } from "react";
+import { memo, useRef, useEffect, useCallback, useMemo } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import Animated, {
   useSharedValue,
@@ -18,6 +18,7 @@ import {
   spacing,
   borderRadius,
 } from "@/components/ui/glass";
+import { formatPrice } from "@/lib/currency/currencyUtils";
 
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -94,6 +95,8 @@ export interface ShoppingListItemProps {
   selectionActive?: boolean;
   isSelected?: boolean;
   onSelectToggle?: (itemId: Id<"listItems">) => void;
+  // Currency
+  currency?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -115,6 +118,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
   selectionActive,
   isSelected,
   onSelectToggle,
+  currency = "GBP",
 }: ShoppingListItemProps) {
   const translateX = useSharedValue(0);
   const checkFlash = useSharedValue(0);
@@ -223,7 +227,63 @@ export const ShoppingListItem = memo(function ShoppingListItem({
 
 
   // Name already includes size (AI embeds it). Use as-is.
-  const displayName = item.name;
+  // Build display name with size/weight at the end only (no duplicates)
+  const displayName = useMemo(() => {
+    if (!item.size) return item.name;
+
+    let cleanName = item.name;
+    const sizeLower = item.size.toLowerCase().trim();
+
+    // Extract the numeric part and unit separately
+    const sizeMatch = sizeLower.match(/^(\d+(?:\.\d+)?)\s*([a-z]+)?$/i);
+    if (!sizeMatch) {
+      // If size doesn't match expected pattern, just use as-is
+      return `${item.name} ${item.size}`;
+    }
+
+    const [_, sizeNum, sizeUnit] = sizeMatch;
+
+    // Build patterns to match all variations:
+    // 1. Exact size (e.g., "650g", "650 g")
+    // 2. Number alone (e.g., "650")
+    // 3. Number with typo units (e.g., "650ge")
+    // 4. Variations like "12pk" when size is "12"
+    // 5. Parenthetical sizes like "(6x124g)"
+
+    const patterns: RegExp[] = [];
+
+    // Pattern 1: Exact size with optional spaces
+    const escapedSize = sizeLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*');
+    patterns.push(new RegExp(`\\b${escapedSize}\\b`, 'gi'));
+
+    // Pattern 2: Number + optional trailing letters (catches typos like "650ge")
+    if (sizeUnit) {
+      patterns.push(new RegExp(`\\b${sizeNum}\\s*${sizeUnit}[a-z]*\\b`, 'gi'));
+    }
+
+    // Pattern 3: Number + "pk" or "pack" variations
+    patterns.push(new RegExp(`\\b${sizeNum}\\s*p[a-z]*\\b`, 'gi'));
+
+    // Pattern 4: Number alone at word boundaries
+    patterns.push(new RegExp(`\\b${sizeNum}\\b`, 'g'));
+
+    // Pattern 5: Parenthetical sizes (e.g., "(6x124g)")
+    patterns.push(new RegExp(`\\([^)]*${sizeNum}[^)]*\\)`, 'gi'));
+
+    // Apply all patterns to remove duplicates
+    for (const pattern of patterns) {
+      cleanName = cleanName.replace(pattern, '').trim();
+    }
+
+    // Clean up multiple spaces and extra separators
+    cleanName = cleanName.replace(/\s+/g, ' ').replace(/^[\s,.-]+|[\s,.-]+$/g, '').trim();
+
+    // If we ended up with an empty name, use original
+    if (!cleanName) return item.name;
+
+    // Always append the size at the end
+    return `${cleanName} ${item.size}`;
+  }, [item.name, item.size]);
 
 
   // Selected state background tint (planning mode)
@@ -269,98 +329,120 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                   />
                 )}
 
-                {/* Shopping mode checkbox — only when not in selection mode */}
-                {isShopping && !selectionActive && (
-                  <GlassCircularCheckbox
-                    checked={item.isChecked}
-                    size="xs"
-                    style={{ marginRight: spacing.xs }}
-                  />
-                )}
-
-                {/* Item name */}
-                <Text
-                  style={[itemStyles.itemName, item.isChecked && itemStyles.itemNameChecked]}
-                  numberOfLines={1}
-                >
-                  {displayName}
-                </Text>
-
-                {/* Qty × Price */}
-                <View style={itemStyles.qtyPriceRow}>
-                  <Text style={[itemStyles.itemQty, item.isChecked && itemStyles.itemPriceChecked]}>
-                    {item.quantity}x
-                  </Text>
-                  <Text style={[itemStyles.itemPrice, item.isChecked && itemStyles.itemPriceChecked]}>
-                    £{((item.actualPrice || item.estimatedPrice || 0) * item.quantity).toFixed(2)}
-                  </Text>
-                </View>
-
-                {/* Comment button — visible when partner mode is active */}
-                {onOpenComments && (
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      onOpenComments(item._id, item.name);
-                    }}
-                    style={itemStyles.iconButton}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <View>
-                      <MaterialCommunityIcons
-                        name="comment-outline"
-                        size={18}
-                        color={colors.text.tertiary}
+                {/* Item details: Two-line layout */}
+                <View style={itemStyles.itemDetailsColumn}>
+                  {/* Line 1: Checkbox + Item name + Edit/Delete buttons */}
+                  <View style={itemStyles.nameRow}>
+                    {/* Shopping mode checkbox — only when not in selection mode */}
+                    {isShopping && !selectionActive && (
+                      <GlassCircularCheckbox
+                        checked={item.isChecked}
+                        size="xs"
+                        style={{ marginRight: spacing.xs }}
                       />
-                      {(commentCount ?? 0) > 0 && (
-                        <View style={itemStyles.commentBadge}>
-                          <Text style={itemStyles.commentBadgeText}>
-                            {commentCount! > 9 ? "9+" : commentCount}
-                          </Text>
-                        </View>
+                    )}
+                    <Text
+                      style={[itemStyles.itemName, item.isChecked && itemStyles.itemNameChecked]}
+                      numberOfLines={1}
+                    >
+                      {displayName}
+                    </Text>
+
+                    {/* Action buttons group */}
+                    <View style={itemStyles.actionButtonsRow}>
+                      {/* Edit button — shopping mode (always visible, even when checked) */}
+                      {canEdit && isShopping && (
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            onEdit(item);
+                          }}
+                          style={itemStyles.iconButton}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <MaterialCommunityIcons
+                            name="pencil-outline"
+                            size={18}
+                            color={colors.text.tertiary}
+                          />
+                        </Pressable>
+                      )}
+
+                      {/* Delete button — both modes */}
+                      {canEdit && (
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            onRemove(item._id, item.name);
+                          }}
+                          style={itemStyles.iconButton}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <MaterialCommunityIcons
+                            name="trash-can-outline"
+                            size={18}
+                            color={colors.semantic.danger}
+                          />
+                        </Pressable>
                       )}
                     </View>
-                  </Pressable>
-                )}
+                  </View>
 
-                {/* Edit button — both modes */}
-                {canEdit && !item.isChecked && (
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      onEdit(item);
-                    }}
-                    style={itemStyles.iconButton}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <MaterialCommunityIcons
-                      name="pencil-outline"
-                      size={18}
-                      color={colors.text.tertiary}
-                    />
-                  </Pressable>
-                )}
+                  {/* Line 2: Price info + Comment button */}
+                  <View style={itemStyles.priceRowWithActions}>
+                    {/* Price info */}
+                    <View style={itemStyles.priceInfo}>
+                      <Text style={[itemStyles.itemQtyLabel, item.isChecked && itemStyles.itemPriceChecked]}>
+                        Qty {item.quantity}
+                      </Text>
+                      <Text style={[itemStyles.bulletSeparator, item.isChecked && itemStyles.itemPriceChecked]}>
+                        •
+                      </Text>
+                      <Text style={[itemStyles.itemQty, item.isChecked && itemStyles.itemPriceChecked]}>
+                        {formatPrice(item.actualPrice || item.estimatedPrice || 0, currency)} each
+                      </Text>
+                      <Text style={[itemStyles.bulletSeparator, item.isChecked && itemStyles.itemPriceChecked]}>
+                        •
+                      </Text>
+                      <Text style={[itemStyles.itemQtyLabel, item.isChecked && itemStyles.itemPriceChecked]}>
+                        Total
+                      </Text>
+                      <Text style={[itemStyles.itemPrice, item.isChecked && itemStyles.itemPriceChecked]}>
+                        {formatPrice((item.actualPrice || item.estimatedPrice || 0) * item.quantity, currency)}
+                      </Text>
+                    </View>
 
-                {/* Delete button — both modes */}
-                {canEdit && (
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      onRemove(item._id, item.name);
-                    }}
-                    style={itemStyles.iconButton}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <MaterialCommunityIcons
-                      name="trash-can-outline"
-                      size={18}
-                      color={colors.semantic.danger}
-                    />
-                  </Pressable>
-                )}
+                    {/* Comment button — visible when partner mode is active */}
+                    {onOpenComments && (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          onOpenComments(item._id, item.name);
+                        }}
+                        style={itemStyles.iconButton}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <View>
+                          <MaterialCommunityIcons
+                            name="comment-outline"
+                            size={18}
+                            color={colors.text.tertiary}
+                          />
+                          {(commentCount ?? 0) > 0 && (
+                            <View style={itemStyles.commentBadge}>
+                              <Text style={itemStyles.commentBadgeText}>
+                                {commentCount! > 9 ? "9+" : commentCount}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
               </Pressable>
             </GlassCard>
           </Animated.View>
@@ -396,7 +478,7 @@ const itemStyles = StyleSheet.create({
   // Swipe Container
   swipeContainer: {
     position: "relative",
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   swipeAction: {
     position: "absolute",
@@ -427,6 +509,8 @@ const itemStyles = StyleSheet.create({
   // Item Card
   itemCard: {
     // No marginBottom here, handled by swipeContainer
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   itemCardChecked: {
     opacity: 0.7,
@@ -435,6 +519,15 @@ const itemStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
+  },
+  itemDetailsColumn: {
+    flex: 1,
+    gap: 2,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
   },
   itemName: {
     ...typography.bodyMedium,
@@ -445,25 +538,46 @@ const itemStyles = StyleSheet.create({
     textDecorationLine: "line-through",
     color: colors.text.tertiary,
   },
-  iconButton: {
-    padding: spacing.xs,
-  },
-  qtyPriceRow: {
+  priceRowWithActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "space-between",
+  },
+  priceInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  actionButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  iconButton: {
+    padding: spacing.xs,
   },
   itemQty: {
     ...typography.bodySmall,
     color: colors.text.tertiary,
   },
+  itemQtyLabel: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  bulletSeparator: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginHorizontal: 6,
+  },
   itemPrice: {
     ...typography.bodySmall,
-    color: colors.text.secondary,
-    fontWeight: "600",
+    color: colors.accent.primary,
+    fontWeight: "800",
+    marginLeft: 4,
+    fontSize: 13,
   },
   itemPriceChecked: {
-    color: colors.text.tertiary,
+    color: colors.accent.primary,
+    opacity: 0.7,
   },
   commentBadge: {
     position: "absolute",

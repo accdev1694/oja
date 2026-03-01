@@ -7,7 +7,8 @@ import { getUserListPermissions } from "./partners";
 import { resolveVariantWithPrice } from "./lib/priceResolver";
 import { getIconForItem } from "./iconMapping";
 import { canAddPantryItem } from "./lib/featureGating";
-import { isDuplicateItem, isPotentialDuplicateByBrandSize } from "./lib/fuzzyMatch";
+import { isDuplicateItem, isPotentialDuplicateByBrandSize, isDuplicateItemName } from "./lib/fuzzyMatch";
+import { findLearnedMapping, tokenize, calculateTokenOverlap } from "./lib/itemMatcher";
 import { enrichGlobalFromProductScan } from "./lib/globalEnrichment";
 import { toGroceryTitleCase } from "./lib/titleCase";
 
@@ -66,16 +67,30 @@ async function findDuplicatePantryItem(
   name: string,
   size?: string | null,
 ) {
-  const items = await ctx.db
+  // Check active items first
+  const activeItems = await ctx.db
     .query("pantryItems")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "active"))
     .collect();
 
-  for (const item of items) {
+  for (const item of activeItems) {
     if (isDuplicateItem(name, size, item.name, item.defaultSize)) {
       return item;
     }
   }
+
+  // Then archived items
+  const archivedItems = await ctx.db
+    .query("pantryItems")
+    .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "archived"))
+    .collect();
+
+  for (const item of archivedItems) {
+    if (isDuplicateItem(name, size, item.name, item.defaultSize)) {
+      return item;
+    }
+  }
+
   return null;
 }
 
@@ -1324,10 +1339,10 @@ export const addBatchFromScan = mutation({
       existingItem: { name: string; brand?: string; size?: string };
     }[] = [];
 
-    // Get existing pantry items for fuzzy dedup
-    const existingPantryItems = await ctx.db
+    // Get existing active pantry items for fuzzy dedup
+    const activePantryItems = await ctx.db
       .query("pantryItems")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .withIndex("by_user_status", (q) => q.eq("userId", user._id).eq("status", "active"))
       .collect();
 
     // Get existing list items for fuzzy dedup (include brand for potential duplicate check)
@@ -1340,7 +1355,7 @@ export const addBatchFromScan = mutation({
       size: i.size,
       brand: i.brand as string | undefined,
     }));
-    const knownPantryNames: string[] = existingPantryItems.map((p) => p.name);
+    const knownPantryNames: string[] = activePantryItems.map((p) => p.name);
 
     for (const item of args.items) {
       const name = toGroceryTitleCase(item.name);
@@ -1383,9 +1398,20 @@ export const addBatchFromScan = mutation({
 
       // Fuzzy find or create pantry item
       let pantryItemId: Id<"pantryItems"> | undefined;
-      const existingPantryItem = existingPantryItems.find((p) =>
+      let existingPantryItem = activePantryItems.find((p) =>
         isDuplicateItem(item.name, item.size, p.name, p.defaultSize)
       );
+
+      // If no active match, check archived (more expensive but rare during scan)
+      if (!existingPantryItem) {
+        const archivedPantryItems = await ctx.db
+          .query("pantryItems")
+          .withIndex("by_user_status", (q) => q.eq("userId", user._id).eq("status", "archived"))
+          .collect();
+        existingPantryItem = archivedPantryItems.find((p) =>
+          isDuplicateItem(item.name, item.size, p.name, p.defaultSize)
+        );
+      }
 
       if (existingPantryItem) {
         pantryItemId = existingPantryItem._id;
@@ -1449,6 +1475,236 @@ export const addBatchFromScan = mutation({
     }
 
     return { count: itemIds.length, itemIds, skippedDuplicates, potentialDuplicates };
+  },
+});
+
+/**
+ * Refresh estimated prices on a shopping list using the latest learned prices.
+ *
+ * Price resolution cascade:
+ * 1. Personal price history (user's own receipts) - highest trust
+ * 2. Crowdsourced store-specific (currentPrices at same store)
+ * 3. Crowdsourced any store (currentPrices cheapest)
+ *
+ * Only updates unchecked items that don't have a manual price override.
+ * Returns count of items updated.
+ */
+export const refreshListPrices = mutation({
+  args: {
+    listId: v.id("shoppingLists"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const list = await ctx.db.get(args.listId);
+    if (!list) {
+      throw new Error("List not found");
+    }
+
+    // Check permissions
+    const perms = await getUserListPermissions(ctx, args.listId, user._id);
+    if (!perms.canEdit) {
+      throw new Error("You don't have permission to refresh prices on this list");
+    }
+
+    // Get all items on the list
+    const items = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.listId))
+      .collect();
+
+    const now = Date.now();
+    let updated = 0;
+    let unchanged = 0;
+    const storeName = list.storeName;
+    const normalizedStoreId = list.normalizedStoreId;
+
+    for (const item of items) {
+      // Skip checked items (already "purchased") and manually overridden prices
+      if (item.isChecked || item.priceOverride) {
+        unchanged++;
+        continue;
+      }
+
+      const normalizedName = item.name.toLowerCase().trim();
+      let newPrice: number | undefined;
+      let newSource: "personal" | "crowdsourced" | undefined;
+      let newConfidence: number | undefined;
+
+      // Priority 0: Check learned mappings (crowdsourced confirmations)
+      // This uses the itemMappings table to find previously confirmed matches
+      if (normalizedStoreId) {
+        const learnedMapping = await findLearnedMapping(ctx, normalizedStoreId, item.name);
+        if (learnedMapping && learnedMapping.confidence >= 50) {
+          // Found a learned mapping - look for this canonical name in price history
+          const canonicalNormalized = learnedMapping.canonicalName.toLowerCase().trim();
+
+          // Check personal history for the canonical name
+          const canonicalPersonal = await ctx.db
+            .query("priceHistory")
+            .withIndex("by_user_item", (q) =>
+              q.eq("userId", user._id).eq("normalizedName", canonicalNormalized)
+            )
+            .order("desc")
+            .first();
+
+          if (canonicalPersonal) {
+            newPrice = canonicalPersonal.unitPrice;
+            newSource = "personal";
+            newConfidence = 0.9 * (learnedMapping.confidence / 100);
+          } else {
+            // Check crowdsourced for the canonical name
+            const canonicalCrowd = await ctx.db
+              .query("currentPrices")
+              .withIndex("by_item_store", (q) =>
+                q.eq("normalizedName", canonicalNormalized).eq("storeName", storeName!)
+              )
+              .first();
+
+            if (canonicalCrowd) {
+              newPrice = canonicalCrowd.unitPrice;
+              newSource = "crowdsourced";
+              newConfidence = (canonicalCrowd.confidence ?? 0.7) * (learnedMapping.confidence / 100);
+            }
+          }
+        }
+      }
+
+      // Priority 1: Personal price history (user's own receipts)
+      // Skip if already found via learned mapping
+      if (newPrice === undefined) {
+        // First try exact match by normalized name
+        let personalPrices = await ctx.db
+          .query("priceHistory")
+          .withIndex("by_user_item", (q) =>
+            q.eq("userId", user._id).eq("normalizedName", normalizedName)
+          )
+          .order("desc")
+          .take(10);
+
+        // If no exact match, try fuzzy matching against user's recent price history
+        if (personalPrices.length === 0) {
+          const recentUserPrices = await ctx.db
+            .query("priceHistory")
+            .withIndex("by_user", (q) => q.eq("userId", user._id))
+            .order("desc")
+            .take(100); // Check recent 100 entries
+
+          personalPrices = recentUserPrices.filter((p) =>
+            isDuplicateItemName(item.name, p.itemName)
+          ).slice(0, 10);
+        }
+
+        // Prefer same-store personal price, fallback to any store
+        const sameStorePersonal = personalPrices.find(
+          (p) => normalizedStoreId && p.normalizedStoreId === normalizedStoreId
+        );
+        const anyStorePersonal = personalPrices[0];
+
+        if (sameStorePersonal) {
+          newPrice = sameStorePersonal.unitPrice;
+          newSource = "personal";
+          newConfidence = 0.95;
+        } else if (anyStorePersonal) {
+          newPrice = anyStorePersonal.unitPrice;
+          newSource = "personal";
+          newConfidence = 0.85;
+        }
+      }
+
+      // Priority 2: Crowdsourced store-specific (if no personal price)
+      if (newPrice === undefined && storeName) {
+        // First try exact match
+        let storePrice = await ctx.db
+          .query("currentPrices")
+          .withIndex("by_item_store", (q) =>
+            q.eq("normalizedName", normalizedName).eq("storeName", storeName)
+          )
+          .first();
+
+        // If no exact match, try fuzzy matching against store prices
+        if (!storePrice) {
+          const storePrices = await ctx.db
+            .query("currentPrices")
+            .withIndex("by_store", (q) => q.eq("storeName", storeName))
+            .take(200); // Check store's price catalog
+
+          storePrice = storePrices.find((p) =>
+            isDuplicateItemName(item.name, p.itemName)
+          ) ?? null;
+        }
+
+        if (storePrice) {
+          newPrice = storePrice.unitPrice;
+          newSource = "crowdsourced";
+          newConfidence = storePrice.confidence ?? 0.7;
+        }
+      }
+
+      // Priority 3: Crowdsourced any store (cheapest)
+      if (newPrice === undefined) {
+        // First try exact match
+        let allPrices = await ctx.db
+          .query("currentPrices")
+          .withIndex("by_item", (q) => q.eq("normalizedName", normalizedName))
+          .collect();
+
+        // If no exact match, try fuzzy matching
+        if (allPrices.length === 0) {
+          const recentPrices = await ctx.db
+            .query("currentPrices")
+            .order("desc")
+            .take(500); // Sample recent prices
+
+          allPrices = recentPrices.filter((p) =>
+            isDuplicateItemName(item.name, p.itemName)
+          );
+        }
+
+        if (allPrices.length > 0) {
+          // Pick cheapest
+          const cheapest = allPrices.reduce((min, p) =>
+            p.unitPrice < min.unitPrice ? p : min
+          );
+          newPrice = cheapest.unitPrice;
+          newSource = "crowdsourced";
+          newConfidence = (cheapest.confidence ?? 0.6) * 0.9; // Slightly lower confidence for cross-store
+        }
+      }
+
+      // Update if we found a different price
+      if (
+        newPrice !== undefined &&
+        newPrice !== item.estimatedPrice &&
+        newSource
+      ) {
+        await ctx.db.patch(item._id, {
+          estimatedPrice: newPrice,
+          priceSource: newSource,
+          priceConfidence: newConfidence,
+          updatedAt: now,
+        });
+        updated++;
+      } else {
+        unchanged++;
+      }
+    }
+
+    // Recalculate list total if any prices changed
+    if (updated > 0) {
+      await recalculateListTotal(ctx, args.listId);
+    }
+
+    return { updated, unchanged, total: items.length };
   },
 });
 

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMutation, useAction, useQuery } from "convex/react";
@@ -269,16 +270,26 @@ export default function ScanScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      // Step 1: Upload image to Convex storage
+      // Step 0: Optimize image before upload (Next.js-style optimization)
+      // Resize to 1600px max (receipts need higher res than products) and compress
+      const manipulated = await ImageManipulator.manipulateAsync(
+        selectedImage,
+        [{ resize: { width: 1600 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      const optimizedUri = manipulated.uri;
+
+      // Step 1: Upload optimized image to Convex storage
       const uploadUrl = await generateUploadUrl();
 
-      const response = await fetch(selectedImage);
+      const response = await fetch(optimizedUri);
       const blob = await response.blob();
 
       const uploadResponse = await fetch(uploadUrl, {
         method: "POST",
         headers: {
-          "Content-Type": blob.type,
+          "Content-Type": "image/jpeg",
         },
         body: blob,
       });
@@ -1132,10 +1143,10 @@ export default function ScanScreen() {
                 <AnimatedSection key={`btns-prod-${animationKey}`} animation="fadeInDown" duration={400} delay={200}>
                   <View style={styles.buttons}>
                     <View style={styles.continuousToggleRow}>
-                      <MaterialCommunityIcons 
-                        name={isContinuousMode ? "camera-sync" : "camera"} 
-                        size={18} 
-                        color={isContinuousMode ? colors.accent.primary : colors.text.tertiary} 
+                      <MaterialCommunityIcons
+                        name={isContinuousMode ? "camera-burst" : "camera"}
+                        size={18}
+                        color={isContinuousMode ? colors.accent.primary : colors.text.tertiary}
                       />
                       <Text style={[styles.continuousToggleText, isContinuousMode && { color: colors.text.primary }]}>
                         Continuous Scan
@@ -1279,13 +1290,16 @@ export default function ScanScreen() {
                                 onPress={() => {
                                   if (!isPending) {
                                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                    handleOpenEditModal(product);
+                                    setViewingProduct({ product, index });
                                   }
                                 }}
                               >
                                 <View style={styles.gridTileImageWrap}>
-                                  {imageUri ? (
-                                    <Image source={{ uri: imageUri }} style={styles.gridImage} />
+                                  {imageUri || product.localImageUri ? (
+                                    <Image 
+                                      source={{ uri: imageUri ?? product.localImageUri }} 
+                                      style={styles.gridImage} 
+                                    />
                                   ) : (
                                     <View style={styles.gridPlaceholder}>
                                       <MaterialCommunityIcons
@@ -2041,10 +2055,12 @@ const styles = StyleSheet.create({
     flex: 1,
     marginVertical: spacing.md,
     overflow: "hidden",
+    minHeight: 300,
   },
   previewImage: {
     width: "100%",
-    height: "100%",
+    flex: 1,
+    minHeight: 300,
     borderRadius: borderRadius.md,
   },
   previewTip: {
@@ -2322,6 +2338,18 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "700",
     marginBottom: spacing.md,
+  },
+
+  // No lists message
+  noListsMessage: {
+    alignItems: "center",
+    paddingVertical: spacing.xl,
+    gap: spacing.sm,
+  },
+  noListsText: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
+    textAlign: "center",
   },
 
   // Duplicate confirmation modal

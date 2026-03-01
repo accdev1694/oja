@@ -10,6 +10,7 @@ import {
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
+import * as ImageManipulator from "expo-image-manipulator";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   GlassCard,
@@ -72,6 +73,20 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
   const [isCleaning, setIsCleaning] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
+
+  // Image optimization migration state
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizeProgress, setOptimizeProgress] = useState({ processed: 0, total: 0, saved: 0 });
+
+  // Image migration queries/mutations
+  const imagesToOptimize = useQuery(api.migrations.optimizeImages.getImagesToOptimize);
+  const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);
+  const updateReceiptImage = useMutation(api.migrations.optimizeImages.updateReceiptImage);
+  const markMigrationComplete = useMutation(api.migrations.optimizeImages.markMigrationComplete);
+  const getStorageUrls = useQuery(
+    api.receipts.getStorageUrls,
+    imagesToOptimize?.total ? { storageIds: imagesToOptimize.receipts.map(r => r.imageStorageId) } : "skip"
+  );
 
   const handleClearSeedData = useCallback(async () => {
     showAlert("Clear Seed Data", "This will permanently remove all placeholder and testing data (receipts, prices, price history). Real scans will NOT be affected. Proceed?", [
@@ -225,6 +240,125 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
     ]);
   }, [forceLogout, showAlert, showToast]);
 
+  // Handle image optimization migration (receipts only)
+  const handleOptimizeImages = useCallback(async () => {
+    if (!imagesToOptimize || !getStorageUrls || isOptimizing) return;
+
+    // Only receipts have imageStorageId - listItems and pantryItems use itemVariants
+    const receiptImages = imagesToOptimize.receipts.map(r => ({ ...r, targetWidth: 1600 }));
+
+    if (receiptImages.length === 0) {
+      showToast("No images to optimize", "info");
+      return;
+    }
+
+    showAlert(
+      "Optimize Receipt Images",
+      `This will resize ${receiptImages.length} receipt images to reduce storage and improve load times. This may take several minutes. Continue?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Optimize",
+          onPress: async () => {
+            setIsOptimizing(true);
+            setOptimizeProgress({ processed: 0, total: receiptImages.length, saved: 0 });
+
+            let totalSaved = 0;
+            let processed = 0;
+
+            for (const record of receiptImages) {
+              const imageUrl = getStorageUrls[record.imageStorageId];
+              if (!imageUrl) {
+                processed++;
+                setOptimizeProgress(prev => ({ ...prev, processed }));
+                continue;
+              }
+
+              try {
+                // Fetch original to check size
+                const originalResponse = await fetch(imageUrl);
+                const originalBlob = await originalResponse.blob();
+                const originalSize = originalBlob.size;
+
+                // Skip if already small (< 500KB)
+                if (originalSize < 500 * 1024) {
+                  processed++;
+                  setOptimizeProgress(prev => ({ ...prev, processed }));
+                  continue;
+                }
+
+                // Optimize
+                const manipulated = await ImageManipulator.manipulateAsync(
+                  imageUrl,
+                  [{ resize: { width: record.targetWidth } }],
+                  { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+                );
+
+                // Upload optimized
+                const uploadUrl = await generateUploadUrl();
+                const optimizedResponse = await fetch(manipulated.uri);
+                const optimizedBlob = await optimizedResponse.blob();
+                const optimizedSize = optimizedBlob.size;
+
+                // Skip if no significant savings
+                if (optimizedSize >= originalSize * 0.9) {
+                  processed++;
+                  setOptimizeProgress(prev => ({ ...prev, processed }));
+                  continue;
+                }
+
+                const uploadResponse = await fetch(uploadUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "image/jpeg" },
+                  body: optimizedBlob,
+                });
+
+                if (!uploadResponse.ok) throw new Error("Upload failed");
+
+                const { storageId: newStorageId } = await uploadResponse.json();
+
+                // Update receipt with new optimized image
+                await updateReceiptImage({
+                  receiptId: record._id as Id<"receipts">,
+                  oldStorageId: record.imageStorageId,
+                  newStorageId,
+                });
+
+                totalSaved += originalSize - optimizedSize;
+              } catch (error) {
+                console.error(`Failed to optimize ${record._id}:`, error);
+              }
+
+              processed++;
+              setOptimizeProgress({ processed, total: receiptImages.length, saved: totalSaved });
+
+              // Small delay to avoid overwhelming
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            await markMigrationComplete({ imagesOptimized: processed, bytesFreed: totalSaved });
+
+            setIsOptimizing(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            showToast(
+              `Optimized ${processed} images, freed ${(totalSaved / 1024 / 1024).toFixed(1)} MB`,
+              "success"
+            );
+          },
+        },
+      ]
+    );
+  }, [
+    imagesToOptimize,
+    getStorageUrls,
+    isOptimizing,
+    generateUploadUrl,
+    updateReceiptImage,
+    markMigrationComplete,
+    showAlert,
+    showToast,
+  ]);
+
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       {/* Active Sessions */}
@@ -259,6 +393,32 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
         </GlassCard>
       </AnimatedSection>
 
+      {/* Image Optimization - Available to all admins */}
+      <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="image-sync" size={24} color={colors.accent.primary} />
+            <Text style={styles.sectionTitle}>Storage Optimization</Text>
+          </View>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View style={{ flex: 1, marginRight: spacing.md }}>
+              <Text style={styles.userName}>Optimize Receipt Images</Text>
+              <Text style={styles.userEmail}>
+                {imagesToOptimize?.total ?? 0} receipt images can be resized to reduce storage and improve load times.
+                {isOptimizing && ` (${optimizeProgress.processed}/${optimizeProgress.total} - ${(optimizeProgress.saved / 1024 / 1024).toFixed(1)} MB freed)`}
+              </Text>
+            </View>
+            <GlassButton
+              variant="secondary"
+              size="sm"
+              onPress={handleOptimizeImages}
+              loading={isOptimizing}
+              disabled={!imagesToOptimize?.total}
+            >{isOptimizing ? "Optimizing..." : "Optimize"}</GlassButton>
+          </View>
+        </GlassCard>
+      </AnimatedSection>
+
       {/* Maintenance & Data */}
       {hasPermission("bulk_operation") && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
@@ -273,9 +433,9 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
                   <Text style={styles.userName}>Clear Seed Data</Text>
                   <Text style={styles.userEmail}>Removes all placeholder receipts and testing data from the platform.</Text>
                 </View>
-                <GlassButton 
-                  variant="danger" 
-                  size="sm" 
+                <GlassButton
+                  variant="danger"
+                  size="sm"
                   onPress={handleClearSeedData}
                   loading={isCleaning}
                 >Clear</GlassButton>
@@ -288,9 +448,9 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
                   <Text style={styles.userName}>Archive Old Logs</Text>
                   <Text style={styles.userEmail}>Manually trigger archival of admin logs older than 90 days.</Text>
                 </View>
-                <GlassButton 
-                  variant="secondary" 
-                  size="sm" 
+                <GlassButton
+                  variant="secondary"
+                  size="sm"
                   onPress={handleArchiveLogs}
                   loading={isArchiving}
                 >Archive</GlassButton>
@@ -303,9 +463,9 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
                   <Text style={styles.userName}>Scale Testing</Text>
                   <Text style={styles.userEmail}>Simulate 50k users/100k receipts to verify dashboard performance.</Text>
                 </View>
-                <GlassButton 
-                  variant="secondary" 
-                  size="sm" 
+                <GlassButton
+                  variant="secondary"
+                  size="sm"
                   onPress={handleSimulateLoad}
                   loading={isSimulating}
                 >Run Test</GlassButton>

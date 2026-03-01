@@ -41,6 +41,12 @@ export default function ReconciliationScreen() {
     listId,
   }) : null;
 
+  // Smart unplanned items detection using multi-signal matcher
+  const unplannedData = listId ? useQuery(api.itemMatching.identifyUnplannedItems, {
+    receiptId,
+    listId,
+  }) : null;
+
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
   const archiveList = useMutation(api.shoppingLists.archiveList);
   const linkReceiptToList = useMutation(api.receipts.linkToList);
@@ -155,14 +161,10 @@ export default function ReconciliationScreen() {
   const plannedItemsCount = listItems.length;
   const actualItemsCount = receipt.items.length;
 
-  // Identify unplanned purchases (items in receipt but not in list)
-  const unplannedItems = receipt.items.filter((receiptItem) => {
-    return !listItems.some((listItem) =>
-      listItem.name.toLowerCase().trim() === receiptItem.name.toLowerCase().trim()
-    );
-  });
-
-  const unplannedItemsTotal = unplannedItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  // Use smart matching to identify truly unplanned purchases
+  // (items that don't match any list item even with fuzzy matching + learned patterns)
+  const unplannedItems = unplannedData?.unplannedItems || [];
+  const unplannedItemsTotal = unplannedData?.totalUnplanned || 0;
 
   // Handle complete trip
   async function handleCompleteTrip() {

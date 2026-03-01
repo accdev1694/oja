@@ -363,16 +363,27 @@ export default function PantryScreen() {
       grouped[item.category].push(item);
     });
 
-    const result: { title: string; data: typeof filteredItems }[] = [];
+    const result: { title: string; data: typeof filteredItems; sectionDelay: number }[] = [];
+
+    let totalItemsBefore = 0;
 
     // Essentials section first (only if items exist)
     if (essentials.length > 0) {
-      result.push({ title: ESSENTIALS_SECTION_TITLE, data: essentials });
+      result.push({
+        title: ESSENTIALS_SECTION_TITLE,
+        data: essentials,
+        sectionDelay: 300
+      });
+      totalItemsBefore += essentials.length;
     }
 
     // Then category sections
     Object.entries(grouped).forEach(([category, data]) => {
-      result.push({ title: category, data });
+      result.push({
+        title: category,
+        data,
+        sectionDelay: 300 + (result.length * 50)
+      });
     });
 
     return result;
@@ -962,9 +973,8 @@ export default function PantryScreen() {
                 if (collapsedCategories.has(section.title)) return null;
                 const isArchivedResult = item.status === "archived";
 
-                // Find the section index for staggered delay
-                const sectionIndex = sections.findIndex(s => s.title === section.title);
-                const delay = 300 + (sectionIndex * 50) + (index * 30);
+                // Use pre-calculated section delay + small item stagger
+                const delay = (section as any).sectionDelay + (index * 20);
 
                 return (
                   <AnimatedSection key={`${item._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={delay}>
@@ -981,8 +991,7 @@ export default function PantryScreen() {
                 );
               }}
               renderSectionHeader={({ section }) => {
-                const sectionIndex = sections.findIndex(s => s.title === section.title);
-                const delay = 250 + (sectionIndex * 50);
+                const delay = (section as any).sectionDelay - 50;
 
                 return (
                   <AnimatedSection key={`header-${section.title}-${animationKey}`} animation="fadeInDown" duration={400} delay={delay}>

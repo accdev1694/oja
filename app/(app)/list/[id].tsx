@@ -35,6 +35,7 @@ import {
 import {
   GlassScreen,
   GlassButton,
+  GlassSearchInput,
   SimpleHeader,
   CircularBudgetDial,
   OfflineBanner,
@@ -112,6 +113,7 @@ export default function ListDetailScreen() {
   const pauseShoppingMut = useMutation(api.shoppingLists.pauseShopping);
   const resumeShoppingMut = useMutation(api.shoppingLists.resumeShopping);
   const restockFromCheckedItems = useMutation(api.pantryItems.restockFromCheckedItems);
+  const refreshListPrices = useMutation(api.listItems.refreshListPrices);
 
   // Trip stats for completion summary (only fetch when shopping)
   const tripStats = useQuery(
@@ -186,6 +188,9 @@ export default function ListDetailScreen() {
   // Track dial transition animation
   const [dialTransitioning, setDialTransitioning] = useState(false);
 
+  // Refresh prices loading state
+  const [refreshingPrices, setRefreshingPrices] = useState(false);
+
   // Add Items modal state
   const [showAddItemsModal, setShowAddItemsModal] = useState(false);
 
@@ -203,6 +208,9 @@ export default function ListDetailScreen() {
 
   // Category filter for items list
   const [listCategoryFilter, setListCategoryFilter] = useState<string | null>(null);
+
+  // Search filter for items list
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Bulk selection state (ref + version counter to avoid full re-renders)
   const selectedItemsRef = useRef(new Set<Id<"listItems">>());
@@ -317,9 +325,16 @@ export default function ListDetailScreen() {
       return a.name.localeCompare(b.name);
     });
 
-    const filtered = listCategoryFilter
+    // Apply category filter
+    let filtered = listCategoryFilter
       ? sortedItems.filter((i) => i.category === listCategoryFilter)
       : sortedItems;
+
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter((i) => i.name.toLowerCase().includes(search));
+    }
 
     // Build sectionalized array
     const result: CategorizedItem[] = [];
@@ -350,7 +365,7 @@ export default function ListDetailScreen() {
     ];
 
     return { categoryOptions: options, displayItems: result };
-  }, [items, listCategoryFilter]);
+  }, [items, listCategoryFilter, searchTerm]);
 
   const isShopping = listStatus === "shopping";
   const isPaused = listStatus === "active" && !!list?.shoppingStartedAt && !!list?.pausedAt;
@@ -371,6 +386,34 @@ export default function ListDetailScreen() {
   const handleSaveBudget = useCallback(async (newBudget: number | undefined) => {
     await updateList({ id, budget: newBudget });
   }, [updateList, id]);
+
+  const handleRefreshPrices = useCallback(async () => {
+    if (refreshingPrices) return;
+
+    haptic("light");
+    setRefreshingPrices(true);
+
+    try {
+      const result = await refreshListPrices({ listId: id });
+      haptic("success");
+
+      if (result.updated > 0) {
+        showToast(
+          `Updated ${result.updated} price${result.updated === 1 ? "" : "s"}`,
+          "cash-sync",
+          colors.accent.primary
+        );
+      } else {
+        showToast("Prices are up to date", "check-circle", colors.semantic.success);
+      }
+    } catch (error) {
+      console.error("Failed to refresh prices:", error);
+      haptic("error");
+      showToast("Failed to refresh prices", "alert-circle", colors.accent.error);
+    } finally {
+      setRefreshingPrices(false);
+    }
+  }, [refreshListPrices, id, refreshingPrices, showToast]);
 
   const handleToggleItem = useCallback(async (itemId: Id<"listItems">) => {
     haptic("light");
@@ -770,11 +813,12 @@ export default function ListDetailScreen() {
         selectionActive={selectionActive}
         isSelected={selectedItemsRef.current.has(item._id)}
         onSelectToggle={toggleItemSelection}
+        currency={currentUser?.currency || "GBP"}
       />
     );
   }, [handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange,
       isShopping, canEdit, isOwner, commentCounts,
-      stableOpenComments, selectionActive, selectionVersion, toggleItemSelection]);
+      stableOpenComments, selectionActive, selectionVersion, toggleItemSelection, currentUser?.currency]);
 
   const getItemType = useCallback((item: CategorizedItem) => {
     return "isHeader" in item ? "header" : "item";
@@ -808,6 +852,42 @@ export default function ListDetailScreen() {
           storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
           transitioning={dialTransitioning}
         />
+      )}
+
+      {/* Refresh Prices button — planning mode only, when store is selected */}
+      {list?.status === "active" && list?.normalizedStoreId && canEdit && (items?.length ?? 0) > 0 && (
+        <Pressable
+          style={({ pressed }) => [
+            styles.refreshPricesButton,
+            pressed && styles.refreshPricesButtonPressed,
+            refreshingPrices && styles.refreshPricesButtonDisabled,
+          ]}
+          onPress={handleRefreshPrices}
+          disabled={refreshingPrices}
+          accessibilityLabel="Refresh prices from your receipts"
+          accessibilityRole="button"
+        >
+          {refreshingPrices ? (
+            <ActivityIndicator size="small" color={colors.accent.primary} />
+          ) : (
+            <MaterialCommunityIcons name="cash-sync" size={16} color={colors.accent.primary} />
+          )}
+          <Text style={styles.refreshPricesText}>
+            {refreshingPrices ? "Refreshing..." : "Refresh Prices"}
+          </Text>
+        </Pressable>
+      )}
+
+      {/* Search Bar — show when there are items */}
+      {(items?.length ?? 0) > 0 && (
+        <View style={styles.searchContainer}>
+          <GlassSearchInput
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+            onClear={() => setSearchTerm("")}
+            placeholder="Search items..."
+          />
+        </View>
       )}
 
       {/* Paused trip resume banner — owner only */}
@@ -971,9 +1051,13 @@ export default function ListDetailScreen() {
       list?.userId, list?.storeName, list?.normalizedStoreId,
       list?.shoppingStartedAt, list?.pausedAt,
       hasPartners, id,
-      isOwner, canEdit, items,
+      isOwner, canEdit, items, isPartner,
       selectionVersion, categoryOptions, listCategoryFilter,
-      isPaused, dialTransitioning, checkedCount, totalCount]);
+      isPaused, dialTransitioning, checkedCount, totalCount,
+      activeShopper?.name, goShoppingAnimStyle, handleBulkDelete,
+      handlePauseShopping, handleRefreshPrices, handleSelectStore,
+      handleStartShopping, isSomeoneElseShopping, refreshingPrices,
+      selectAllItems, userFavorites]);
 
   // ─── FlashList ListEmptyComponent ────────────────────────────────────────────
   const listEmpty = useMemo(() => (
@@ -1116,7 +1200,7 @@ export default function ListDetailScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
-          extraData={selectionVersion}
+          extraData={{ selectionVersion, itemsVersion: items?.length ?? 0, items }}
           drawDistance={250}
         />
       </Animated.View>
@@ -1445,6 +1529,40 @@ const styles = StyleSheet.create({
     color: colors.accent.primary,
     fontSize: typography.bodySmall.fontSize,
     fontWeight: "700" as const,
+  },
+
+  // Refresh prices button
+  refreshPricesButton: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    backgroundColor: "rgba(0, 212, 170, 0.08)",
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: "rgba(0, 212, 170, 0.2)",
+    alignSelf: "center" as const,
+    marginTop: spacing.xs,
+  },
+  refreshPricesButtonPressed: {
+    backgroundColor: "rgba(0, 212, 170, 0.15)",
+  },
+  refreshPricesButtonDisabled: {
+    opacity: 0.6,
+  },
+  refreshPricesText: {
+    ...typography.labelSmall,
+    color: colors.accent.primary,
+    fontWeight: "600" as const,
+  },
+
+  // Search bar
+  searchContainer: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
 
   // Header styles

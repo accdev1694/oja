@@ -124,6 +124,7 @@ export default defineSchema({
     .index("by_user_category", ["userId", "category"])
     .index("by_user_stock", ["userId", "stockLevel"])
     .index("by_user_status", ["userId", "status"])
+    .index("by_status_stock", ["status", "stockLevel"])
     .index("by_created", ["createdAt"]),
 
   // Shopping lists
@@ -1073,4 +1074,82 @@ export default defineSchema({
     status: v.union(v.literal("success"), v.literal("failed")),
     error: v.optional(v.string()),
   }).index("by_report", ["reportId"]),
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Item Mapping System - Matches receipt items to scanned/list items
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Store-specific learned mappings (crowdsourced)
+  // E.g., Primark receipt "socks black 35 38" → canonical "Socks"
+  itemMappings: defineTable({
+    // Store context
+    normalizedStoreId: v.string(),        // "primark", "tesco", etc.
+
+    // Receipt-side pattern (what appears on receipt)
+    receiptPattern: v.string(),           // Normalized receipt text (lowercase, trimmed)
+    receiptPatternTokens: v.array(v.string()), // Tokenized for partial matching ["socks", "black", "35", "38"]
+
+    // Canonical-side (what we map to)
+    canonicalName: v.string(),            // "Socks", "NFL Socks 2pk"
+    canonicalCategory: v.optional(v.string()), // "Clothing", "Food", etc.
+
+    // Confidence & learning
+    confirmationCount: v.number(),        // How many users confirmed this mapping
+    lastConfirmedAt: v.number(),          // Timestamp of last confirmation
+    lastConfirmedBy: v.optional(v.id("users")), // Last user who confirmed
+
+    // Price context (helps with matching)
+    typicalPriceMin: v.optional(v.number()), // Lowest confirmed price
+    typicalPriceMax: v.optional(v.number()), // Highest confirmed price
+
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_store_pattern", ["normalizedStoreId", "receiptPattern"])
+    .index("by_store", ["normalizedStoreId"])
+    .index("by_canonical", ["canonicalName"])
+    .index("by_confirmations", ["confirmationCount"]),
+
+  // Pending matches waiting for user confirmation
+  // Created when auto-matching fails during receipt processing
+  pendingItemMatches: defineTable({
+    userId: v.id("users"),
+    receiptId: v.id("receipts"),
+
+    // Receipt item info
+    receiptItemName: v.string(),          // "socks black 35 38 0502927"
+    receiptItemPrice: v.number(),         // Unit price from receipt
+    receiptItemQuantity: v.number(),
+
+    // Candidate matches (suggested by system)
+    candidateMatches: v.array(v.object({
+      listItemId: v.optional(v.id("listItems")),  // If from active list
+      pantryItemId: v.optional(v.id("pantryItems")), // If from pantry
+      scannedProductName: v.optional(v.string()), // Name from product scan
+      matchScore: v.number(),             // 0-100 confidence
+      matchReason: v.string(),            // "category_match", "price_match", "token_overlap"
+    })),
+
+    // Resolution
+    status: v.union(
+      v.literal("pending"),
+      v.literal("confirmed"),
+      v.literal("skipped"),
+      v.literal("no_match")
+    ),
+    confirmedMatch: v.optional(v.object({
+      type: v.union(v.literal("list_item"), v.literal("pantry_item"), v.literal("new_item")),
+      itemId: v.optional(v.string()),     // listItemId or pantryItemId
+      canonicalName: v.string(),          // The name user confirmed
+    })),
+
+    // Metadata
+    createdAt: v.number(),
+    resolvedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_receipt", ["receiptId"])
+    .index("by_user_status", ["userId", "status"])
+    .index("by_status", ["status"]),
 });

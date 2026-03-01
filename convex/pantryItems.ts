@@ -31,8 +31,7 @@ export function getItemTier(item: { pinned?: boolean; purchaseCount?: number; st
 async function enforceActiveCap(ctx: MutationCtx, userId: Id<"users">) {
   const activeItems = await ctx.db
     .query("pantryItems")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
-    .filter((q) => q.neq(q.field("status"), "archived"))
+    .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "active"))
     .collect();
 
   if (activeItems.length >= ACTIVE_PANTRY_CAP) {
@@ -67,11 +66,22 @@ async function findExistingPantryItem(
   name: string,
   size?: string | null,
 ) {
-  const items = await ctx.db
+  // 1. Check active items first (most likely case)
+  const activeItems = await ctx.db
     .query("pantryItems")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "active"))
     .collect();
-  return items.find((item) => isDuplicateItem(name, size, item.name, item.defaultSize)) ?? null;
+  
+  const activeMatch = activeItems.find((item) => isDuplicateItem(name, size, item.name, item.defaultSize));
+  if (activeMatch) return activeMatch;
+
+  // 2. If no active match, check archived items
+  const archivedItems = await ctx.db
+    .query("pantryItems")
+    .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "archived"))
+    .collect();
+    
+  return archivedItems.find((item) => isDuplicateItem(name, size, item.name, item.defaultSize)) ?? null;
 }
 
 /**
@@ -206,11 +216,10 @@ export const getByUser = query({
 
     const items = await ctx.db
       .query("pantryItems")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .withIndex("by_user_status", (q) => q.eq("userId", user._id).eq("status", "active"))
       .collect();
 
-    // Filter out archived items; treat missing status as "active" for backward compat
-    return items.filter((item) => item.status !== "archived");
+    return items;
   },
 });
 
@@ -1397,22 +1406,19 @@ export const archiveStaleItems = internalMutation({
   handler: async (ctx) => {
     const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
 
-    // Find items that are: active, not pinned, stockLevel "out", and not purchased in 90 days
-    const staleItems = await ctx.db
+    // Optimized: Only fetch active, out-of-stock items using the global index
+    const candidateItems = await ctx.db
       .query("pantryItems")
-      .filter((q) =>
-        q.and(
-          q.neq(q.field("status"), "archived"),
-          q.neq(q.field("pinned"), true),
-          q.eq(q.field("stockLevel"), "out"),
-        )
-      )
+      .withIndex("by_status_stock", (q) => q.eq("status", "active").eq("stockLevel", "out"))
       .collect();
 
     const now = Date.now();
     let archived = 0;
 
-    for (const item of staleItems) {
+    for (const item of candidateItems) {
+      // Skip pinned items as they are "Essentials" and should stay active
+      if (item.pinned) continue;
+
       const lastActivity = item.lastPurchasedAt ?? item.updatedAt;
       if (lastActivity < ninetyDaysAgo) {
         await ctx.db.patch(item._id, {

@@ -30,6 +30,7 @@ import {
   spacing,
   useGlassAlert,
 } from "@/components/ui/glass";
+import { UnmatchedItemsModal } from "@/components/receipt/UnmatchedItemsModal";
 
 // Tier progress helper for toast messages
 function getTierProgress(lifetimeScans: number, currentTier: string): string | null {
@@ -71,6 +72,8 @@ export default function ConfirmReceiptScreen() {
   const checkDuplicate = useMutation(api.receipts.checkDuplicate);
   const upsertCurrentPrices = useMutation(api.currentPrices.upsertFromReceipt);
   const improveArchivedPrices = useMutation(api.currentPrices.improveArchivedListPrices);
+  const refreshActiveListPrices = useMutation(api.currentPrices.refreshActiveListsFromReceipt);
+  const processReceiptMatching = useMutation(api.itemMatching.processReceiptMatching);
 
   // Gamification mutations
   const earnScanCredit = useMutation(api.subscriptions.earnScanCredit);
@@ -108,6 +111,10 @@ export default function ConfirmReceiptScreen() {
   const [receiptSaved, setReceiptSaved] = useState(false);
   const [addedToPantry, setAddedToPantry] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+
+  // Unmatched items modal state
+  const [showUnmatchedModal, setShowUnmatchedModal] = useState(false);
+  const [pendingMatchCount, setPendingMatchCount] = useState(0);
 
   // All hooks must be above early returns to satisfy Rules of Hooks
   const lowConfidenceItems = useMemo(
@@ -294,6 +301,28 @@ export default function ConfirmReceiptScreen() {
         // Non-critical — don't block receipt save
       }
 
+      // Step 3c: Auto-refresh prices on active shopping lists (same store)
+      let activeListPricesUpdated = 0;
+      let learnedMappings = 0;
+      try {
+        const refreshResult = await refreshActiveListPrices({ receiptId });
+        activeListPricesUpdated = refreshResult.updated;
+        learnedMappings = refreshResult.learned ?? 0;
+      } catch {
+        // Non-critical — don't block receipt save
+      }
+
+      // Step 3d: Process item matching for unmatched receipt items
+      let pendingMatches = 0;
+      try {
+        const matchingResult = await processReceiptMatching({ receiptId });
+        pendingMatches = matchingResult.pendingCount;
+        activeListPricesUpdated += matchingResult.autoMatched;
+        setPendingMatchCount(pendingMatches);
+      } catch {
+        // Non-critical — don't block receipt save
+      }
+
       // Step 4: Check for price alerts
       const alerts = await checkPriceAlerts({ receiptId });
 
@@ -318,8 +347,20 @@ export default function ConfirmReceiptScreen() {
 
       // Build reward message
       let suffix = "";
+      const parts: string[] = [];
+
+      // Active list prices updated
+      if (activeListPricesUpdated > 0) {
+        parts.push(`${activeListPricesUpdated} list price${activeListPricesUpdated === 1 ? "" : "s"} updated`);
+      }
+
+      // Pending matches to review
+      if (pendingMatches > 0) {
+        parts.push(`${pendingMatches} item${pendingMatches === 1 ? "" : "s"} to match`);
+      }
+
+      // Gamification rewards
       if (scanResult?.success) {
-        const parts: string[] = [];
         if (creditEarned > 0) parts.push(`+£${creditEarned.toFixed(2)} credit`);
         if (scanResult.tierUpgrade) {
           const tierLabel = scanResult.tier.charAt(0).toUpperCase() + scanResult.tier.slice(1);
@@ -328,8 +369,9 @@ export default function ConfirmReceiptScreen() {
           const tierConfig = getTierProgress(scanResult.lifetimeScans, scanResult.tier);
           if (tierConfig) parts.push(tierConfig);
         }
-        if (parts.length > 0) suffix = parts.join(", ");
       }
+
+      if (parts.length > 0) suffix = parts.join(", ");
       setSaveMessage(suffix);
 
       // Show price alerts if any, then transition to saved state
@@ -343,10 +385,25 @@ export default function ConfirmReceiptScreen() {
         });
 
         alert("Price Alerts", alertMessages.join("\n\n"), [
-          { text: "OK", onPress: () => setReceiptSaved(true) },
+          {
+            text: "OK",
+            onPress: () => {
+              // Show unmatched modal if there are pending matches, otherwise go to saved state
+              if (pendingMatches > 0) {
+                setShowUnmatchedModal(true);
+              } else {
+                setReceiptSaved(true);
+              }
+            },
+          },
         ]);
       } else {
-        setReceiptSaved(true);
+        // Show unmatched modal if there are pending matches, otherwise go to saved state
+        if (pendingMatches > 0) {
+          setShowUnmatchedModal(true);
+        } else {
+          setReceiptSaved(true);
+        }
       }
     } catch (error) {
       console.error("Save error:", error);
@@ -798,6 +855,20 @@ export default function ConfirmReceiptScreen() {
           </GlassButton>
         </View>
       </GlassModal>
+
+      {/* Unmatched Items Modal */}
+      <UnmatchedItemsModal
+        visible={showUnmatchedModal}
+        onClose={() => {
+          setShowUnmatchedModal(false);
+          setReceiptSaved(true);
+        }}
+        receiptId={receiptId}
+        onComplete={(matchedCount) => {
+          setShowUnmatchedModal(false);
+          setReceiptSaved(true);
+        }}
+      />
     </GlassScreen>
   );
 }
