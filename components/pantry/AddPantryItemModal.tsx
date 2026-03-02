@@ -80,7 +80,7 @@ export const AddPantryItemModal = React.memo(function AddPantryItemModal({
         notificationAsync(NotificationFeedbackType.Warning);
         alert(
           "Pantry Limit Reached",
-          "Free plan allows up to 50 pantry items. Upgrade to Premium for unlimited items.",
+          "Free plan allows up to 30 pantry items. Upgrade to Premium for unlimited items.",
           [
             { text: "Maybe Later", style: "cancel" },
             { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },

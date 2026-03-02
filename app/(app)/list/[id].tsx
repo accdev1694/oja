@@ -218,7 +218,7 @@ export default function ListDetailScreen() {
   // Bulk selection state (ref + version counter to avoid full re-renders)
   const selectedItemsRef = useRef(new Set<Id<"listItems">>());
   const [selectionVersion, setSelectionVersion] = useState(0);
-  const flashListRef = useRef<FlashListRef<ListItem>>(null);
+  const flashListRef = useRef<FlashListRef<CategorizedItem>>(null);
 
   // Keyboard tracking via react-native-keyboard-controller — reports full IME frame including toolbar
   const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
@@ -1096,7 +1096,7 @@ export default function ListDetailScreen() {
     );
   }, []);
 
-  const keyExtractor = useCallback((item: ListItem) => item._id, []);
+  const keyExtractor = useCallback((item: CategorizedItem) => item._id, []);
 
   // Loading state -- after all hooks to satisfy Rules of Hooks
   if (list === undefined || items === undefined) {

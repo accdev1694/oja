@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
@@ -24,83 +24,140 @@ interface PointsTabProps {
 }
 
 export function PointsTab({ hasPermission }: PointsTabProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  
-  // These queries would need to be added to convex/admin.ts
-  // For now, we'll use placeholder data or existing queries if they fit
-  const pointsBalance = useQuery(api.points.getPointsBalance); 
+  const econ = useQuery(api.admin.getPointsEconomics);
+
+  if (econ === undefined) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={colors.accent.primary} />
+      </View>
+    );
+  }
+
+  if (econ === null) return null;
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
-        <Text style={styles.title}>Points Management</Text>
+        <Text style={styles.title}>Points Economy</Text>
+        <Text style={styles.lastUpdated}>
+          Last updated: {new Date(econ.updatedAt).toLocaleTimeString()}
+        </Text>
       </View>
 
-      {/* Stats Overview */}
+      {/* Main Metrics */}
       <View style={styles.metricsGrid}>
-        <GlassCard style={[styles.card, { width: "100%" }]}>
-          <Text style={styles.label}>Feature Note</Text>
-          <Text style={styles.value}>Points Economy</Text>
-          <Text style={styles.subtext}>
-            Manage user point balances, adjust for fraud, and track total reward liability.
-          </Text>
-        </GlassCard>
+        <View style={styles.metricsRow}>
+          <GlassCard style={styles.metricCard}>
+            <Text style={styles.label}>Outstanding Balance</Text>
+            <Text style={styles.value}>{econ.totalPointsOutstanding.toLocaleString()}</Text>
+            <Text style={styles.subtext}>pts across {econ.userCount} users</Text>
+          </GlassCard>
+          
+          <GlassCard style={styles.metricCard}>
+            <Text style={styles.label}>Total Liability</Text>
+            <Text style={[styles.value, { color: colors.semantic.warning }]}>
+              £{econ.liabilityGBP.toFixed(2)}
+            </Text>
+            <Text style={styles.subtext}>at 1,000pts = £1.00</Text>
+          </GlassCard>
+        </View>
+
+        <View style={styles.metricsRow}>
+          <GlassCard style={styles.metricCard}>
+            <Text style={styles.label}>Earned (30d)</Text>
+            <Text style={[styles.value, { color: colors.semantic.success }]}>
+              +{econ.pointsEarned30d.toLocaleString()}
+            </Text>
+            <Text style={styles.subtext}>New points issued</Text>
+          </GlassCard>
+          
+          <GlassCard style={styles.metricCard}>
+            <Text style={styles.label}>Redeemed (30d)</Text>
+            <Text style={[styles.value, { color: colors.accent.secondary }]}>
+              -{econ.pointsRedeemed30d.toLocaleString()}
+            </Text>
+            <Text style={styles.subtext}>Points used for credit</Text>
+          </GlassCard>
+        </View>
       </View>
 
-      {/* Search Section */}
-      <GlassCard style={styles.card}>
-        <View style={styles.searchBar}>
-          <MaterialCommunityIcons name="magnify" size={20} color={colors.text.tertiary} />
-          <TextInput
-            style={styles.input}
-            placeholder="Search user by ID or Email..."
-            placeholderTextColor={colors.text.tertiary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
+      {/* Distribution Section */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Earning Sources (30d)</Text>
+      </View>
+      
+      <GlassCard style={styles.distributionCard}>
+        {Object.entries(econ.earnDistribution).length === 0 ? (
+          <Text style={styles.emptyText}>No transactions in the last 30 days</Text>
+        ) : (
+          Object.entries(econ.earnDistribution)
+            .sort((a, b) => b[1] - a[1])
+            .map(([source, amount]) => (
+              <View key={source} style={styles.distributionRow}>
+                <View style={styles.sourceInfo}>
+                  <Text style={styles.sourceName}>{source.replace(/_/g, " ")}</Text>
+                  <Text style={styles.sourceAmount}>{amount.toLocaleString()} pts</Text>
+                </View>
+                <View style={styles.barTrack}>
+                  <View 
+                    style={[
+                      styles.barFill, 
+                      { width: `${Math.min(100, (amount / econ.pointsEarned30d) * 100)}%` }
+                    ]} 
+                  />
+                </View>
+              </View>
+            ))
+        )}
       </GlassCard>
 
-      {/* Info Box */}
-      <GlassCard variant="standard" style={{ marginTop: spacing.md }}>
+      {/* Audit Note */}
+      <GlassCard variant="standard" style={styles.infoBox}>
         <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center" }}>
-          <MaterialCommunityIcons name="information-outline" size={24} color={colors.accent.primary} />
+          <MaterialCommunityIcons name="shield-check-outline" size={24} color={colors.accent.primary} />
           <View style={{ flex: 1 }}>
-            <Text style={{ ...typography.bodyMedium, color: colors.text.primary, fontWeight: "600" }}>
-              Admin Point Adjustments
-            </Text>
-            <Text style={{ ...typography.bodySmall, color: colors.text.secondary }}>
-              Use the Users tab to find a specific user and manage their points balance from their profile view.
+            <Text style={styles.infoTitle}>Financial Integrity</Text>
+            <Text style={styles.infoText}>
+              Points are reconciled daily with Stripe invoices. Outstanding liability is tracked as potential future discounts.
             </Text>
           </View>
         </View>
       </GlassCard>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Economics Dashboard (Coming Soon)</Text>
-      </View>
-      
-      <GlassCard style={{ padding: spacing.xl, alignItems: "center" }}>
-        <MaterialCommunityIcons name="chart-line" size={48} color={colors.text.tertiary} />
-        <Text style={{ ...typography.bodyMedium, color: colors.text.tertiary, marginTop: spacing.md }}>
-          Point earn/burn analytics are being precomputed.
-        </Text>
-      </GlassCard>
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: spacing.md },
+  loading: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: { marginBottom: spacing.lg },
   title: { ...typography.headlineSmall, color: colors.text.primary, fontWeight: "700" },
-  metricsGrid: { marginBottom: spacing.md },
-  card: { padding: spacing.md, marginBottom: spacing.md },
+  lastUpdated: { ...typography.bodySmall, color: colors.text.tertiary, marginTop: 4 },
+  
+  metricsGrid: { gap: spacing.md, marginBottom: spacing.md },
+  metricsRow: { flexDirection: "row", gap: spacing.md },
+  metricCard: { flex: 1, padding: spacing.md },
+  
   label: { ...typography.labelSmall, color: colors.text.tertiary, textTransform: "uppercase" },
   value: { ...typography.headlineSmall, color: colors.accent.primary, marginVertical: 4, fontWeight: "700" },
-  subtext: { ...typography.bodySmall, color: colors.text.secondary },
-  searchBar: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: "rgba(255,255,255,0.05)", padding: spacing.sm, borderRadius: borderRadius.md },
-  input: { flex: 1, ...typography.bodyMedium, color: colors.text.primary, padding: 0 },
-  sectionHeader: { marginTop: spacing.xl, marginBottom: spacing.md },
+  subtext: { ...typography.bodySmall, color: colors.text.tertiary },
+  
+  sectionHeader: { marginTop: spacing.md, marginBottom: spacing.md },
   sectionTitle: { ...typography.labelLarge, color: colors.text.primary, fontWeight: "600" },
+  
+  distributionCard: { padding: spacing.md },
+  distributionRow: { marginBottom: spacing.md },
+  sourceInfo: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
+  sourceName: { ...typography.bodyMedium, color: colors.text.primary, textTransform: "capitalize" },
+  sourceAmount: { ...typography.bodySmall, color: colors.text.secondary },
+  barTrack: { height: 6, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" },
+  barFill: { height: "100%", backgroundColor: colors.accent.primary, borderRadius: 3 },
+  emptyText: { ...typography.bodyMedium, color: colors.text.tertiary, textAlign: "center", padding: spacing.md },
+  
+  infoBox: { marginTop: spacing.lg, padding: spacing.md },
+  infoTitle: { ...typography.bodyMedium, color: colors.text.primary, fontWeight: "600" },
+  infoText: { ...typography.bodySmall, color: colors.text.secondary },
 });

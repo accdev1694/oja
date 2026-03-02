@@ -218,3 +218,10 @@ export function getAILimit(plan: string, feature: keyof typeof AI_LIMITS): numbe
   const planKey = plan as keyof typeof limits;
   return limits[planKey] ?? limits.free;
 }
+
+export function getStartOfMonth(timestamp: number) {
+  const d = new Date(timestamp);
+  d.setUTCDate(1);
+  d.setUTCHours(0, 0, 0, 0);
+  return d.getTime();
+}

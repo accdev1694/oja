@@ -17,6 +17,7 @@ import type * as cms from "../cms.js";
 import type * as crons from "../crons.js";
 import type * as currentPrices from "../currentPrices.js";
 import type * as debug from "../debug.js";
+import type * as events from "../events.js";
 import type * as experiments from "../experiments.js";
 import type * as http from "../http.js";
 import type * as iconMapping from "../iconMapping.js";
@@ -48,6 +49,7 @@ import type * as migrations_backfillListNumbers from "../migrations/backfillList
 import type * as migrations_backfillListStores from "../migrations/backfillListStores.js";
 import type * as migrations_grantAdminAccess from "../migrations/grantAdminAccess.js";
 import type * as migrations_migrateAdminsToRBAC from "../migrations/migrateAdminsToRBAC.js";
+import type * as migrations_migrateToPoints from "../migrations/migrateToPoints.js";
 import type * as migrations_optimizeImages from "../migrations/optimizeImages.js";
 import type * as migrations_pantryStatusBackfill from "../migrations/pantryStatusBackfill.js";
 import type * as migrations_removeSeedReceipts from "../migrations/removeSeedReceipts.js";
@@ -65,6 +67,7 @@ import type * as points from "../points.js";
 import type * as priceHistory from "../priceHistory.js";
 import type * as pricingConfig from "../pricingConfig.js";
 import type * as receipts from "../receipts.js";
+import type * as referrals from "../referrals.js";
 import type * as shoppingLists from "../shoppingLists.js";
 import type * as stores from "../stores.js";
 import type * as stripe from "../stripe.js";
@@ -91,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   currentPrices: typeof currentPrices;
   debug: typeof debug;
+  events: typeof events;
   experiments: typeof experiments;
   http: typeof http;
   iconMapping: typeof iconMapping;
@@ -122,6 +126,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/backfillListStores": typeof migrations_backfillListStores;
   "migrations/grantAdminAccess": typeof migrations_grantAdminAccess;
   "migrations/migrateAdminsToRBAC": typeof migrations_migrateAdminsToRBAC;
+  "migrations/migrateToPoints": typeof migrations_migrateToPoints;
   "migrations/optimizeImages": typeof migrations_optimizeImages;
   "migrations/pantryStatusBackfill": typeof migrations_pantryStatusBackfill;
   "migrations/removeSeedReceipts": typeof migrations_removeSeedReceipts;
@@ -139,6 +144,7 @@ declare const fullApi: ApiFromModules<{
   priceHistory: typeof priceHistory;
   pricingConfig: typeof pricingConfig;
   receipts: typeof receipts;
+  referrals: typeof referrals;
   shoppingLists: typeof shoppingLists;
   stores: typeof stores;
   stripe: typeof stripe;

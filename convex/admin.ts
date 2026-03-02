@@ -1874,14 +1874,121 @@ export const getUserDetail = query({
       .order("desc")
       .first();
 
+    // Find points balance
+    const pointsBalance = await ctx.db
+      .query("pointsBalance")
+      .withIndex("by_user", q => q.eq("userId", u._id))
+      .first();
+
     return { 
       ...u, 
       receiptCount: r.length, 
       listCount: l.length, 
       totalSpent: Math.round(r.reduce((s, x) => s + (x.total || 0), 0) * 100) / 100, 
-      scanRewards: { lifetimeScans: 0 }, 
+      scanRewards: { 
+        lifetimeScans: pointsBalance?.tierProgress ?? r.length,
+        points: pointsBalance?.availablePoints ?? 0,
+        tier: pointsBalance?.tier ?? "bronze"
+      }, 
       subscription: subscription || { plan: "free", status: "active" } 
     };
+  },
+});
+
+/**
+ * Get aggregate points system analytics for the Economics Dashboard
+ */
+export const getPointsEconomics = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+
+    // 1. Fetch all balances (may need pagination/precomputation at scale)
+    const balances = await ctx.db.query("pointsBalance").collect();
+    
+    // 2. Aggregate core metrics
+    const totalPointsIssued = balances.reduce((sum, b) => sum + (b.totalPoints || 0), 0);
+    const totalPointsRedeemed = balances.reduce((sum, b) => sum + (b.pointsUsed || 0), 0);
+    const totalPointsOutstanding = balances.reduce((sum, b) => sum + (b.availablePoints || 0), 0);
+    
+    // £1.00 = 1,000 points
+    const liabilityGBP = totalPointsOutstanding / 1000;
+
+    // 3. Get recent transaction volume (last 30 days)
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    const recentTxns = await ctx.db
+      .query("pointsTransactions")
+      .withIndex("by_created", (q) => q.gte("createdAt", thirtyDaysAgo))
+      .collect();
+
+    const pointsEarned30d = recentTxns
+      .filter(t => t.type === "earn" || t.type === "bonus")
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const pointsRedeemed30d = Math.abs(recentTxns
+      .filter(t => t.type === "redeem")
+      .reduce((sum, t) => sum + t.amount, 0));
+
+    // 4. Group by source for distribution chart
+    const earnDistribution: Record<string, number> = {};
+    recentTxns.filter(t => t.type === "earn" || t.type === "bonus").forEach(t => {
+      const source = t.source || "unknown";
+      earnDistribution[source] = (earnDistribution[source] || 0) + t.amount;
+    });
+
+    return {
+      totalPointsIssued,
+      totalPointsRedeemed,
+      totalPointsOutstanding,
+      liabilityGBP,
+      pointsEarned30d,
+      pointsRedeemed30d,
+      earnDistribution,
+      userCount: balances.length,
+      avgBalance: balances.length > 0 ? totalPointsOutstanding / balances.length : 0,
+      updatedAt: Date.now(),
+    };
+  },
+});
+
+/**
+ * Manually adjust a user's points balance (for support or fraud correction)
+ */
+export const adjustPoints = mutation({
+  args: {
+    userId: v.id("users"),
+    amount: v.number(), // Positive to add, negative to deduct
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "edit_users");
+    
+    // Use the awardBonusPoints/processExpirePoints logic via internal mutations
+    if (args.amount > 0) {
+      await ctx.runMutation(internal.points.awardBonusPoints, {
+        userId: args.userId,
+        amount: args.amount,
+        source: `admin_adjustment: ${args.reason}`,
+        metadata: { adminId: admin._id }
+      });
+    } else if (args.amount < 0) {
+      await ctx.runMutation(internal.points.expirePoints, {
+        userId: args.userId,
+        points: Math.abs(args.amount),
+        reason: `admin_adjustment: ${args.reason}`
+      });
+    }
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "adjust_points",
+      targetType: "user",
+      targetId: args.userId,
+      details: `Adjusted points by ${args.amount}. Reason: ${args.reason}`,
+      createdAt: Date.now(),
+    });
+
+    return { success: true };
   },
 });
 

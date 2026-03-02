@@ -41,6 +41,7 @@ import { TemplatePickerModal } from "@/components/lists/TemplatePickerModal";
 import { EditListNameModal } from "@/components/lists/EditListNameModal";
 import { defaultListName } from "@/lib/list/helpers";
 import { TipBanner } from "@/components/ui/TipBanner";
+import { SeasonalEventBanner } from "@/components/ui/SeasonalEventBanner";
 import { useNotifications } from "@/hooks/useNotifications";
 import { NotificationDropdown } from "@/components/partners/NotificationDropdown";
 
@@ -158,7 +159,7 @@ export default function ListsScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         alert(
           "List Limit Reached",
-          "Free plan allows up to 3 active lists. Upgrade to Premium for unlimited lists.",
+          "Free plan allows up to 2 active lists. Upgrade to Premium for unlimited lists.",
           [
             { text: "Maybe Later", style: "cancel" },
             { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
@@ -225,7 +226,7 @@ export default function ListsScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         alert(
           "List Limit Reached",
-          "Free plan allows up to 3 active lists. Upgrade to Premium for unlimited lists.",
+          "Free plan allows up to 2 active lists. Upgrade to Premium for unlimited lists.",
           [
             { text: "Maybe Later", style: "cancel" },
             { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
@@ -269,7 +270,7 @@ export default function ListsScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         alert(
           "List Limit Reached",
-          "Free plan allows up to 3 active lists. Upgrade to Premium for unlimited lists.",
+          "Free plan allows up to 2 active lists. Upgrade to Premium for unlimited lists.",
           [
             { text: "Maybe Later", style: "cancel" },
             { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
@@ -415,6 +416,11 @@ export default function ListsScreen() {
           {/* Trial Nudge Banner */}
           <AnimatedSection key={`nudge-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={50}>
             <TrialNudgeBanner />
+          </AnimatedSection>
+
+          {/* Seasonal Event Banner */}
+          <AnimatedSection key={`event-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={75}>
+            <SeasonalEventBanner />
           </AnimatedSection>
 
           {/* Contextual Tips */}

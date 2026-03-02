@@ -99,6 +99,7 @@ export function UsersTab({
   const toggleAdmin = useMutation(api.admin.toggleAdmin);
   const extendTrial = useMutation(api.admin.extendTrial);
   const bulkExtendTrial = useMutation(api.admin.bulkExtendTrial);
+  const adjustPoints = useMutation(api.admin.adjustPoints);
   const grantAccess = useMutation(api.admin.grantComplimentaryAccess);
   const toggleSuspension = useMutation(api.admin.toggleSuspension);
   const generateToken = useMutation(api.impersonation.generateImpersonationToken);
@@ -235,6 +236,30 @@ export function UsersTab({
       },
     ]);
   }, [extendTrial, showAlert, showToast]);
+
+  const handleAdjustPoints = useCallback(async (userId: string) => {
+    showAlert("Adjust Points", "Add or remove points for this user:", [
+      { text: "Cancel", style: "cancel" },
+      { 
+        text: "+500 pts", 
+        onPress: async () => {
+          try {
+            await adjustPoints({ userId: userId as Id<"users">, amount: 500, reason: "Customer goodwill" });
+            showToast("Added 500 points", "success");
+          } catch (e) { showToast((e as Error).message, "error"); }
+        }
+      },
+      { 
+        text: "-500 pts", 
+        onPress: async () => {
+          try {
+            await adjustPoints({ userId: userId as Id<"users">, amount: -500, reason: "Fraud correction" });
+            showToast("Removed 500 points", "success");
+          } catch (e) { showToast((e as Error).message, "error"); }
+        }
+      }
+    ]);
+  }, [adjustPoints, showAlert, showToast]);
 
   const handleGrantAccess = useCallback(async (userId: string) => {
     showAlert("Grant Premium", "Give free premium annual access?", [
@@ -386,13 +411,13 @@ export function UsersTab({
                     <Text style={styles.detailLabel}>Spent</Text>
                   </View>
                   <View style={styles.detailItem}>
-                    <Text style={styles.detailValue}>{userDetail.lastActiveAt ? new Date(userDetail.lastActiveAt).toLocaleDateString() : "Never"}</Text>
-                    <Text style={styles.detailLabel}>Last Active</Text>
+                    <Text style={styles.detailValue}>{userDetail.scanRewards?.points?.toLocaleString() ?? 0}</Text>
+                    <Text style={styles.detailLabel}>Points</Text>
                   </View>
                 </View>
                 {userDetail.subscription && (
                   <Text style={styles.metricText}>
-                    Plan: {userDetail.subscription.plan} • Status: {userDetail.subscription.status}
+                    Plan: {userDetail.subscription.plan} • Status: {userDetail.subscription.status} • Tier: {userDetail.scanRewards?.tier || "bronze"} ({userDetail.scanRewards?.lifetimeScans || 0} scans)
                   </Text>
                 )}
                 {canEdit && (
@@ -400,6 +425,10 @@ export function UsersTab({
                     <Pressable style={styles.actionBtn} onPress={() => handleExtendTrial(selectedUser)}>
                       <MaterialCommunityIcons name="clock-plus-outline" size={16} color={colors.accent.primary} />
                       <Text style={styles.actionBtnText}>+14d Trial</Text>
+                    </Pressable>
+                    <Pressable style={styles.actionBtn} onPress={() => handleAdjustPoints(selectedUser)}>
+                      <MaterialCommunityIcons name="star-plus-outline" size={16} color={colors.accent.secondary} />
+                      <Text style={styles.actionBtnText}>Adjust Pts</Text>
                     </Pressable>
                     <Pressable style={styles.actionBtn} onPress={() => handleGrantAccess(selectedUser)}>
                       <MaterialCommunityIcons name="crown" size={16} color={colors.semantic.warning} />

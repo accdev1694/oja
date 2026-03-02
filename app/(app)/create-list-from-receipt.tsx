@@ -140,7 +140,7 @@ export default function CreateListFromReceiptScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         alert(
           "List Limit Reached",
-          "Free plan allows up to 3 active lists. Upgrade to Premium for unlimited lists.",
+          "Free plan allows up to 2 active lists. Upgrade to Premium for unlimited lists.",
           [
             { text: "Maybe Later", style: "cancel" },
             { text: "Upgrade", onPress: () => router.push("/(app)/subscription" as never) },

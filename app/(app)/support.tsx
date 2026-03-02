@@ -18,6 +18,7 @@ import {
   GlassCard,
   GlassButton,
   SimpleHeader,
+  GlassCapsuleSwitcher,
   AnimatedSection,
   colors,
   typography,
@@ -87,22 +88,24 @@ export default function SupportScreen() {
         onBack={() => router.back()} 
       />
 
-      <View style={styles.viewSwitcher}>
-        <Pressable 
-          style={[styles.switchBtn, view === "form" && styles.switchBtnActive]} 
-          onPress={() => setView("form")}
-        >
-          <Text style={[styles.switchText, view === "form" && styles.switchTextActive]}>New Ticket</Text>
-        </Pressable>
-        <Pressable 
-          style={[styles.switchBtn, view === "list" && styles.switchBtnActive]} 
-          onPress={() => setView("list")}
-        >
-          <Text style={[styles.switchText, view === "list" && styles.switchTextActive]}>
-            My Tickets {myTickets && myTickets.length > 0 && `(${myTickets.length})`}
-          </Text>
-        </Pressable>
-      </View>
+      <GlassCapsuleSwitcher
+        tabs={[
+          {
+            label: "New Ticket",
+            activeColor: colors.accent.primary,
+            icon: "plus-circle-outline",
+          },
+          {
+            label: "My Tickets",
+            activeColor: colors.accent.primary,
+            icon: "ticket-outline",
+            badge: myTickets && myTickets.length > 0 ? myTickets.length : undefined,
+          },
+        ]}
+        activeIndex={view === "form" ? 0 : 1}
+        onTabChange={(index) => setView(index === 0 ? "form" : "list")}
+        style={styles.viewSwitcher}
+      />
 
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -207,29 +210,8 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   scrollContent: { padding: spacing.lg, paddingBottom: 100 },
   viewSwitcher: {
-    flexDirection: "row",
     marginHorizontal: spacing.lg,
     marginVertical: spacing.md,
-    backgroundColor: `${colors.glass.border}20`,
-    borderRadius: 12,
-    padding: 4,
-  },
-  switchBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: "center",
-    borderRadius: 8,
-  },
-  switchBtnActive: {
-    backgroundColor: colors.glass.background,
-  },
-  switchText: {
-    ...typography.labelSmall,
-    color: colors.text.tertiary,
-  },
-  switchTextActive: {
-    color: colors.accent.primary,
-    fontWeight: "700",
   },
   formCard: { padding: spacing.lg },
   label: {
