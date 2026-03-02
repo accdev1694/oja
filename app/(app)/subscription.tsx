@@ -23,6 +23,7 @@ import {
   colors,
   typography,
   spacing,
+  borderRadius,
   useGlassAlert,
 } from "@/components/ui/glass";
 
@@ -421,13 +422,49 @@ export default function SubscriptionScreen() {
                 size={40}
                 color={colors.accent.secondary}
               />
-              <Text style={styles.trialCtaTitle}>All Features Included</Text>
+              <Text style={styles.trialCtaTitle}>Premium Pays for Itself</Text>
               <Text style={styles.trialCtaSubtext}>
-                You have full access to every feature — insights, price history, partner mode, and more. Upgrade to remove limits on lists and pantry items.
+                Unlock high-value rewards, unlimited storage, and advanced insights. Most users save more than the subscription cost!
               </Text>
+              
+              <View style={styles.savingsGrid}>
+                <View style={styles.savingsItem}>
+                  <Text style={styles.savingsValue}>£1.50</Text>
+                  <Text style={styles.savingsLabel}>Monthly Reward</Text>
+                </View>
+                <View style={styles.savingsItem}>
+                  <Text style={styles.savingsValue}>12%</Text>
+                  <Text style={styles.savingsLabel}>Avg. Savings</Text>
+                </View>
+              </View>
             </GlassCard>
           </AnimatedSection>
         )}
+
+        {/* Feature Comparison */}
+        <AnimatedSection animation="fadeInUp" duration={400} delay={250}>
+          <Text style={styles.sectionTitle}>Rewards & Benefits</Text>
+          <GlassCard variant="standard" style={styles.featuresCard}>
+            {[
+              { icon: "camera-burst", text: "Up to 6 point-earning scans/mo", premium: true },
+              { icon: "star-shooting", text: "Higher points per scan (Platinum tier)", premium: true },
+              { icon: "account-group", text: "Shared lists with family", premium: true },
+              { icon: "infinity", text: "Unlimited active lists & items", premium: true },
+              { icon: "chart-bell-curve", text: "Advanced price trends & insights", premium: true },
+              { icon: "shield-check", text: "Priority support access", premium: true },
+            ].map((item, idx) => (
+              <View key={idx} style={styles.featureBenefitRow}>
+                <MaterialCommunityIcons name={item.icon as any} size={20} color={colors.accent.primary} />
+                <Text style={styles.featureBenefitText}>{item.text}</Text>
+                {item.premium && (
+                  <View style={styles.premiumOnlyBadge}>
+                    <Text style={styles.premiumOnlyText}>PREMIUM</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </GlassCard>
+        </AnimatedSection>
 
         {/* Plans — hide for admins */}
         {plans && !isAdmin && (
@@ -523,7 +560,7 @@ export default function SubscriptionScreen() {
         />
         <Text style={styles.modalTitle}>Cancel Subscription?</Text>
         <Text style={styles.modalBody}>
-          You'll keep all features but go back to 3 lists and 50 pantry items.
+          You'll keep all features but go back to 2 lists and 30 pantry items.
           Your scan rewards tier will be kept.
         </Text>
         <View style={styles.modalActions}>
@@ -878,6 +915,63 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.text.tertiary,
     fontStyle: "italic",
+  },
+
+  // Savings Grid
+  savingsGrid: {
+    flexDirection: "row",
+    gap: spacing.lg,
+    marginTop: spacing.md,
+    width: "100%",
+  },
+  savingsItem: {
+    flex: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+  },
+  savingsValue: {
+    ...typography.headlineSmall,
+    color: colors.accent.primary,
+    fontWeight: "700",
+  },
+  savingsLabel: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    marginTop: 4,
+  },
+
+  // Feature Comparison
+  featuresCard: {
+    padding: 0,
+    overflow: "hidden",
+  },
+  featureBenefitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.05)",
+    gap: spacing.md,
+  },
+  featureBenefitText: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  premiumOnlyBadge: {
+    backgroundColor: `${colors.accent.secondary}20`,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: `${colors.accent.secondary}40`,
+  },
+  premiumOnlyText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: colors.accent.secondary,
   },
 
   // Modal

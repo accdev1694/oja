@@ -1,8 +1,9 @@
 import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { getTierFromScans, getNextTierInfo, getMaxEarningScans, getPointsPerScan, checkFeatureAccess } from "./lib/featureGating";
+import { getTierFromScans, getNextTierInfo, getMaxEarningScans, getPointsPerScan, checkFeatureAccess, getStartOfMonth } from "./lib/featureGating";
 
 /**
  * Helper to get or initialize a points balance
@@ -49,13 +50,6 @@ async function getOrCreatePointsBalance(ctx: any, userId: any) {
   return balance;
 }
 
-function getStartOfMonth(timestamp: number) {
-  const d = new Date(timestamp);
-  d.setUTCDate(1);
-  d.setUTCHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
 function getWeekNumber(timestamp: number) {
   const d = new Date(timestamp);
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -83,10 +77,32 @@ export async function processEarnPoints(ctx: any, userId: Id<"users">, receiptId
     return { earned: false, reason: "monthly_limit_reached" };
   }
 
-  const pointsAmount = getPointsPerScan(currentTier, isPremium);
+  let pointsAmount = getPointsPerScan(currentTier, isPremium);
   
-  // Check streak
+  // Phase 5.3.1: Apply seasonal events
   const now = Date.now();
+  const activeEvent = await ctx.db
+    .query("seasonalEvents")
+    .withIndex("by_active", (q: any) => q.eq("isActive", true))
+    .filter((q: any) => q.and(
+      q.lte(q.field("startDate"), now),
+      q.gte(q.field("endDate"), now)
+    ))
+    .first();
+
+  let eventBonus = 0;
+  if (activeEvent) {
+    if (activeEvent.type === "points_multiplier" && activeEvent.multiplier) {
+      const multiplied = Math.round(pointsAmount * activeEvent.multiplier);
+      eventBonus = multiplied - pointsAmount;
+      pointsAmount = multiplied;
+    } else if (activeEvent.type === "bonus_points" && activeEvent.bonusAmount) {
+      eventBonus = activeEvent.bonusAmount;
+      pointsAmount += eventBonus;
+    }
+  }
+
+  // Check streak
   const currentWeek = getWeekNumber(now);
   const lastWeek = balance.lastStreakScan > 0 ? getWeekNumber(balance.lastStreakScan) : 0;
   
@@ -100,19 +116,21 @@ export async function processEarnPoints(ctx: any, userId: Id<"users">, receiptId
   }
 
   // Award streak bonuses
-  let bonusPoints = 0;
-  if (newStreakCount === 3 && currentWeek !== lastWeek) bonusPoints = 50;
-  if (newStreakCount === 4 && currentWeek !== lastWeek) bonusPoints = 100;
-  if (newStreakCount === 8 && currentWeek !== lastWeek) bonusPoints = 250;
-  if (newStreakCount === 12 && currentWeek !== lastWeek) bonusPoints = 500;
+  let streakBonus = 0;
+  if (newStreakCount === 3 && currentWeek !== lastWeek) streakBonus = 50;
+  if (newStreakCount === 4 && currentWeek !== lastWeek) streakBonus = 100;
+  if (newStreakCount === 8 && currentWeek !== lastWeek) streakBonus = 250;
+  if (newStreakCount === 12 && currentWeek !== lastWeek) streakBonus = 500;
+
+  const totalEarnedThisScan = pointsAmount + streakBonus;
 
   const newTierProgress = balance.tierProgress + 1;
   const newTierInfo = getTierFromScans(newTierProgress);
 
   // Update balance
   await ctx.db.patch(balance._id, {
-    totalPoints: balance.totalPoints + pointsAmount + bonusPoints,
-    availablePoints: balance.availablePoints + pointsAmount + bonusPoints,
+    totalPoints: balance.totalPoints + totalEarnedThisScan,
+    availablePoints: balance.availablePoints + totalEarnedThisScan,
     tier: newTierInfo.tier,
     tierProgress: newTierProgress,
     earningScansThisMonth: balance.earningScansThisMonth + 1,
@@ -122,29 +140,36 @@ export async function processEarnPoints(ctx: any, userId: Id<"users">, receiptId
     updatedAt: now,
   });
 
-  // Create transaction for base points
+  // Phase 5.1: Check points achievements
+  await ctx.runMutation(internal.insights.checkPointsAchievements, {
+    userId,
+    totalPoints: balance.totalPoints + totalEarnedThisScan,
+    currentTier: newTierInfo.tier,
+  });
+
+  // Create transaction for base points (including event bonus)
   await ctx.db.insert("pointsTransactions", {
     userId: userId,
     type: "earn",
     amount: pointsAmount,
-    source: "receipt_scan",
+    source: activeEvent ? `receipt_scan_${activeEvent.name}` : "receipt_scan",
     receiptId: receiptId,
     balanceBefore: balance.availablePoints,
     balanceAfter: balance.availablePoints + pointsAmount,
-    metadata: { tierAtEarn: currentTier.tier },
+    metadata: { tierAtEarn: currentTier.tier, eventId: activeEvent?._id },
     createdAt: now,
   });
 
-  // Create transaction for bonus if applicable
-  if (bonusPoints > 0) {
+  // Create transaction for streak bonus if applicable
+  if (streakBonus > 0) {
     await ctx.db.insert("pointsTransactions", {
       userId: userId,
       type: "bonus",
-      amount: bonusPoints,
+      amount: streakBonus,
       source: `streak_bonus_${newStreakCount}_weeks`,
       receiptId: receiptId,
       balanceBefore: balance.availablePoints + pointsAmount,
-      balanceAfter: balance.availablePoints + pointsAmount + bonusPoints,
+      balanceAfter: balance.availablePoints + totalEarnedThisScan,
       metadata: { streakCount: newStreakCount },
       createdAt: now,
     });
@@ -153,7 +178,8 @@ export async function processEarnPoints(ctx: any, userId: Id<"users">, receiptId
   return { 
     earned: true, 
     pointsAmount, 
-    bonusPoints, 
+    bonusPoints: streakBonus, 
+    eventBonus,
     newTier: newTierInfo.tier,
     newStreakCount
   };
@@ -278,6 +304,45 @@ export const getPointsHistory = query({
   },
 });
 
+export const awardBonusPoints = internalMutation({
+  args: {
+    userId: v.id("users"),
+    amount: v.number(),
+    source: v.string(),
+    metadata: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const balance = await getOrCreatePointsBalance(ctx, args.userId);
+    const now = Date.now();
+
+    await ctx.db.patch(balance._id, {
+      totalPoints: balance.totalPoints + args.amount,
+      availablePoints: balance.availablePoints + args.amount,
+      updatedAt: now,
+    });
+
+    // Phase 5.1: Check points achievements
+    await ctx.runMutation(internal.insights.checkPointsAchievements, {
+      userId: args.userId,
+      totalPoints: balance.totalPoints + args.amount,
+      currentTier: balance.tier,
+    });
+
+    await ctx.db.insert("pointsTransactions", {
+      userId: args.userId,
+      type: "bonus",
+      amount: args.amount,
+      source: args.source,
+      balanceBefore: balance.availablePoints,
+      balanceAfter: balance.availablePoints + args.amount,
+      metadata: args.metadata,
+      createdAt: now,
+    });
+
+    return { success: true, newBalance: balance.availablePoints + args.amount };
+  },
+});
+
 export const refundPoints = internalMutation({
   args: {
     userId: v.id("users"),
@@ -391,4 +456,84 @@ export const expireOldPoints = internalMutation({
 
     return { usersAffected, totalExpired };
   }
+});
+
+/**
+ * Phase 6.4: Automated Fraud Alerts
+ * Runs periodically to flag unusual activity
+ */
+export const checkFraudAlerts = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
+    
+    // Get recently flagged receipts
+    const flaggedReceipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_created", (q) => q.gt("createdAt", sixHoursAgo))
+      .filter((q) => q.neq(q.field("fraudFlags"), undefined))
+      .collect();
+
+    if (flaggedReceipts.length > 10) {
+      // Create admin alert
+      await ctx.db.insert("adminAlerts", {
+        alertType: "high_fraud_activity",
+        message: `${flaggedReceipts.length} flagged receipts in last 6 hours`,
+        severity: "warning",
+        isResolved: false,
+        createdAt: Date.now(),
+      });
+    }
+
+    return { flaggedCount: flaggedReceipts.length };
+  }
+});
+
+/**
+ * Phase 6.3: Manual Points Adjustment (Admin)
+ */
+export const adjustUserPoints = mutation({
+  args: {
+    userId: v.id("users"),
+    amount: v.number(),
+    reason: v.string(),
+    adminNotes: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    
+    const admin = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+      
+    if (!admin?.isAdmin) throw new Error("Unauthorized");
+
+    const balance = await getOrCreatePointsBalance(ctx, args.userId);
+    const now = Date.now();
+
+    await ctx.db.patch(balance._id, {
+      availablePoints: balance.availablePoints + args.amount,
+      totalPoints: balance.totalPoints + Math.max(0, args.amount),
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("pointsTransactions", {
+      userId: args.userId,
+      type: args.amount > 0 ? "bonus" : "refund",
+      amount: args.amount,
+      source: "admin_adjustment",
+      balanceBefore: balance.availablePoints,
+      balanceAfter: balance.availablePoints + args.amount,
+      metadata: {
+        adminId: admin._id,
+        reason: args.reason,
+        notes: args.adminNotes,
+      },
+      createdAt: now,
+    });
+
+    return { success: true };
+  },
 });

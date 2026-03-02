@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { MutationCtx } from "./_generated/server";
 import { normalizeStoreName } from "./lib/storeNormalizer";
 import { pushReceiptId } from "./lib/receiptHelpers";
@@ -310,6 +311,15 @@ export const remove = mutation({
 
     if (!user || receipt.userId !== user._id) {
       throw new Error("Unauthorized");
+    }
+
+    // Phase 2.4.2: If receipt earned points, refund them
+    if (receipt.earnedPoints && receipt.pointsEarned && receipt.pointsEarned > 0) {
+      await ctx.runMutation(internal.points.refundPoints, {
+        userId: user._id,
+        receiptId: args.id,
+        points: receipt.pointsEarned,
+      });
     }
 
     await ctx.db.patch(args.id, { isHidden: true });

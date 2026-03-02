@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
+  Linking,
 } from "react-native";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
@@ -68,6 +69,11 @@ export default function ProfileScreen() {
     api.insights.getActiveChallenge,
     !isSwitchingUsers ? {} : "skip"
   );
+  const referralInfo = useQuery(
+    api.referrals.getMyReferralInfo,
+    !isSwitchingUsers ? {} : "skip"
+  );
+  const generateReferralCode = useMutation(api.referrals.generateReferralCode);
   const generateChallenge = useMutation(api.insights.generateChallenge);
   const resetMyAccount = useMutation(api.users.resetMyAccount);
   const deleteMyAccount = useMutation(api.users.deleteMyAccount);
@@ -94,6 +100,24 @@ export default function ProfileScreen() {
       setAnimationKey((prev) => prev + 1);
     }, [])
   );
+
+  // Auto-generate referral code if missing
+  useEffect(() => {
+    if (convexUser?._id && referralInfo === null) {
+      generateReferralCode({ userId: convexUser._id });
+    }
+  }, [convexUser?._id, referralInfo, generateReferralCode]);
+
+  const handleShareReferral = async () => {
+    if (!referralInfo?.code) return;
+    try {
+      const message = `Join me on Oja and get 500 bonus points! Use my code ${referralInfo.code} to save on your groceries. https://oja.app/download`;
+      await Linking.openURL(`sms:?&body=${encodeURIComponent(message)}`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      console.error("Sharing failed:", e);
+    }
+  };
 
   const handleSupportPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -313,7 +337,7 @@ export default function ProfileScreen() {
         <AnimatedSection animation="fadeInDown" duration={400} delay={isAdmin ? 200 : 0}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Account</Text>
-            <GlassCard variant="bordered" accentColor={colors.semantic.profile}>
+            <GlassCard variant="bordered" accentColor={colors.semantic.profile} style={{ marginBottom: spacing.sm }}>
               <View style={styles.accountRow}>
                 <View style={styles.avatarContainer}>
                   <MaterialCommunityIcons
@@ -331,6 +355,38 @@ export default function ProfileScreen() {
                   </Text>
                 </View>
               </View>
+            </GlassCard>
+
+            {/* Referrals Section */}
+            <GlassCard variant="standard" style={styles.referralCard}>
+              <View style={styles.referralHeader}>
+                <MaterialCommunityIcons name="gift-outline" size={24} color={colors.accent.primary} />
+                <Text style={styles.referralTitle}>Invite Friends, Get Points</Text>
+              </View>
+              <Text style={styles.referralSubtitle}>
+                Get 500 pts (£0.50) for every friend who joins. They'll get 500 pts too!
+              </Text>
+              
+              <View style={styles.referralCodeBox}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.referralCodeLabel}>YOUR CODE</Text>
+                  <Text style={styles.referralCodeText}>{referralInfo?.code || "GENERATING..."}</Text>
+                </View>
+                <GlassButton
+                  variant="primary"
+                  size="sm"
+                  onPress={handleShareReferral}
+                  disabled={!referralInfo?.code}
+                >
+                  Invite
+                </GlassButton>
+              </View>
+              
+              {referralInfo?.referredUsers && referralInfo.referredUsers.length > 0 && (
+                <Text style={styles.referralStats}>
+                  {referralInfo.referredUsers.length} friend{referralInfo.referredUsers.length !== 1 ? "s" : ""} joined · {referralInfo.pointsEarned} pts earned
+                </Text>
+              )}
             </GlassCard>
           </View>
         </AnimatedSection>
@@ -406,6 +462,26 @@ export default function ProfileScreen() {
         {/* Navigation Links */}
         <AnimatedSection animation="fadeInDown" duration={400} delay={150}>
           <View style={styles.section}>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/(app)/points-history" as any);
+            }}
+          >
+            <GlassCard variant="standard" style={styles.navCard}>
+              <View style={styles.navRow}>
+                <View style={[styles.navIcon, { backgroundColor: `${colors.accent.primary}20` }]}>
+                  <MaterialCommunityIcons name="star-circle-outline" size={20} color={colors.accent.primary} />
+                </View>
+                <View style={styles.navInfo}>
+                  <Text style={styles.navTitle}>Points History</Text>
+                  <Text style={styles.navSubtitle}>Detailed log of your rewards</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.tertiary} />
+              </View>
+            </GlassCard>
+          </Pressable>
+
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -900,4 +976,53 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
+  // Referrals
+  referralCard: {
+    marginTop: spacing.sm,
+    padding: spacing.md,
+  },
+  referralHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: 4,
+  },
+  referralTitle: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: "700",
+  },
+  referralSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+  referralCodeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    padding: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  referralCodeLabel: {
+    fontSize: 9,
+    color: colors.text.tertiary,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  referralCodeText: {
+    ...typography.headlineSmall,
+    color: colors.accent.primary,
+    fontWeight: "800",
+    letterSpacing: 2,
+  },
+  referralStats: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    marginTop: spacing.sm,
+    textAlign: "center",
+  },
 });

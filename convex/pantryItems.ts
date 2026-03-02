@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { MutationCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getIconForItem } from "./iconMapping";
@@ -165,6 +166,11 @@ export const bulkCreate = mutation({
     );
 
     await Promise.all(promises);
+
+    // Phase 1.2: Check pantry achievements
+    if (newItems.length > 0) {
+      await ctx.runMutation(internal.insights.checkPantryAchievements, { userId: user._id });
+    }
 
     // Gamification: progress "add_items" challenge if active
     if (newItems.length > 0) {
@@ -345,6 +351,9 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // Phase 1.2: Check pantry achievements
+    await ctx.runMutation(internal.insights.checkPantryAchievements, { userId: user._id });
 
     // Gamification: progress "add_items" challenge if active
     try {
@@ -1331,6 +1340,11 @@ export const addBatchFromScan = mutation({
 
       // Global DB enrichment — update itemVariants + currentPrices
       await enrichGlobalFromProductScan(ctx, item, user._id);
+    }
+
+    // Phase 1.2: Check pantry achievements
+    if (added > 0 || restocked > 0) {
+      await ctx.runMutation(internal.insights.checkPantryAchievements, { userId: user._id });
     }
 
     return { added, restocked, skippedDuplicates };

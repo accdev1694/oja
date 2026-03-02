@@ -148,4 +148,10 @@ crons.daily(
   internal.stripe.reconcilePointRedemptions
 );
 
+crons.hourly(
+  "check-fraud-alerts",
+  { minuteUTC: 0 },
+  internal.points.checkFraudAlerts
+);
+
 export default crons;

@@ -1,6 +1,8 @@
 import { useSignUp, useOAuth } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
 import { useState, useCallback } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import {
   View,
   Text,
@@ -33,11 +35,13 @@ export default function SignUpScreen() {
   const { signUp, setActive, isLoaded } = useSignUp();
   const { startOAuthFlow: startGoogleOAuth } = useOAuth({ strategy: "oauth_google" });
   const { startOAuthFlow: startAppleOAuth } = useOAuth({ strategy: "oauth_apple" });
+  const applyReferralCode = useMutation(api.referrals.applyReferralCode);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
+  const [referralCode, setReferralCode] = useState("");
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -55,6 +59,16 @@ export default function SignUpScreen() {
 
       if (createdSessionId) {
         await setActiveSession!({ session: createdSessionId });
+        
+        // Try to apply referral if present
+        if (referralCode.trim()) {
+          try {
+            await applyReferralCode({ code: referralCode.trim() });
+          } catch (refErr) {
+            console.warn("Referral application failed after OAuth:", refErr);
+          }
+        }
+
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.replace("/onboarding/welcome");
       }
@@ -65,7 +79,7 @@ export default function SignUpScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [startGoogleOAuth, startAppleOAuth, router]);
+  }, [startGoogleOAuth, startAppleOAuth, router, referralCode, applyReferralCode]);
 
   const onSignUpPress = useCallback(async () => {
     if (!isLoaded) return;
@@ -104,6 +118,17 @@ export default function SignUpScreen() {
 
       if (signUpAttempt.status === "complete") {
         await setActive({ session: signUpAttempt.createdSessionId });
+
+        // Apply referral code if present
+        if (referralCode.trim()) {
+          try {
+            await applyReferralCode({ code: referralCode.trim() });
+          } catch (refErr) {
+            console.warn("Referral application failed:", refErr);
+            // Don't block signup if referral fails
+          }
+        }
+
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.replace("/onboarding/welcome");
       } else {
@@ -117,7 +142,7 @@ export default function SignUpScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoaded, code]);
+  }, [isLoaded, code, referralCode, applyReferralCode]);
 
   if (pendingVerification) {
     return (
@@ -201,6 +226,16 @@ export default function SignUpScreen() {
             keyboardType="email-address"
             autoComplete="email"
             iconLeft="email-outline"
+          />
+
+          <View style={{ height: spacing.sm }} />
+
+          <GlassInput
+            placeholder="Referral Code (Optional)"
+            value={referralCode}
+            onChangeText={setReferralCode}
+            autoCapitalize="characters"
+            iconLeft="gift-outline"
           />
 
           <View style={{ height: spacing.sm }} />

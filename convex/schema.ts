@@ -576,6 +576,36 @@ export default defineSchema({
     .index("by_user_and_date", ["userId", "receiptDate"])
     .index("by_flags", ["flags"]),
 
+  // Phase 5.2.1: Referral Program
+  referralCodes: defineTable({
+    userId: v.id("users"),
+    code: v.string(),           // Unique 8-char code
+    referredUsers: v.array(v.id("users")), // Who they referred
+    pointsEarned: v.number(),   // Total bonus points from referrals
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_code", ["code"]),
+
+  // Phase 5.3.1: Seasonal Events
+  seasonalEvents: defineTable({
+    name: v.string(),           // "Double Points December"
+    description: v.string(),
+    type: v.union(
+      v.literal("points_multiplier"),  // 2x points
+      v.literal("bonus_points"),       // +X bonus per scan
+      v.literal("tier_boost"),         // Temporary tier upgrade
+    ),
+    multiplier: v.optional(v.number()),  // 2.0 for double points
+    bonusAmount: v.optional(v.number()), // +50 per scan
+    isActive: v.boolean(),
+    startDate: v.number(),
+    endDate: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_active", ["isActive"])
+    .index("by_dates", ["startDate", "endDate"]),
+
   // User subscriptions
   subscriptions: defineTable({
     userId: v.id("users"),

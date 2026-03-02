@@ -8,9 +8,10 @@
 import { v } from "convex/values";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import { Id } from "./_generated/dataModel";
 import { getTierFromScans } from "./lib/featureGating";
 import { trackFunnelEvent, trackActivity } from "./lib/analytics";
+import { processExpirePoints } from "./points";
 
 // =============================================================================
 // STRIPE CHECKOUT SESSION
@@ -330,8 +331,15 @@ export const handleCheckoutCompleted = internalMutation({
     // Track activity
     await trackActivity(ctx, userId, "subscribed", { plan: args.planId });
 
-    // Note: Points balance is now created/updated dynamically when a user earns points.
-    // No need to create billing-period specific records anymore.
+    // Phase 3.1.2: Grant welcome bonus for new annual subscribers (500 points)
+    if (plan === "premium_annual") {
+      await ctx.runMutation(internal.points.awardBonusPoints, {
+        userId,
+        amount: 500,
+        source: "annual_subscription_bonus",
+        metadata: { stripeSubscriptionId: args.stripeSubscriptionId }
+      });
+    }
   },
 });
 
@@ -398,6 +406,16 @@ export const handleSubscriptionDeleted = internalMutation({
       read: false,
       createdAt: Date.now(),
     });
+
+    // Phase 3.1.3: Expire all remaining points on cancellation
+    const balance = await ctx.db
+      .query("pointsBalance")
+      .withIndex("by_user", (q: any) => q.eq("userId", sub.userId))
+      .first();
+
+    if (balance && balance.availablePoints > 0) {
+      await processExpirePoints(ctx, sub.userId, balance.availablePoints, "subscription_cancelled");
+    }
   },
 });
 
@@ -435,12 +453,11 @@ export const getAndMarkPoints = internalMutation({
     // They are applied in increments of 500.
     const pointsToApply = Math.floor(balance.availablePoints / 500) * 500;
     
-    // We shouldn't discount more than the subscription price. 
-    // The base price is £1.99 = 1990 points.
-    // Let's cap at 1500 points (£1.50) to ensure there's still a small charge or just cap at 1500 per month.
-    // Or we can apply up to the invoice amount, but we don't know the exact invoice amount here easily without querying Stripe.
-    // For simplicity, let's cap at 1500 points.
-    const maxPoints = 1500;
+    // Phase 1.1: Redemption caps
+    // Monthly max: 1,500pts (£1.50)
+    // Annual max: 5,000pts (£5.00)
+    const isAnnual = sub.plan === "premium_annual";
+    const maxPoints = isAnnual ? 5000 : 1500;
     const finalPoints = Math.min(pointsToApply, maxPoints);
 
     if (finalPoints === 0) return null;

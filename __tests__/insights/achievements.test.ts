@@ -15,7 +15,9 @@ describe("Achievements", () => {
     | "challenge_accepted"
     | "savings_milestone"
     | "pantry_pro"
-    | "social_shopper";
+    | "social_shopper"
+    | "rewards_pioneer"
+    | "top_tier";
 
   interface AchievementDefinition {
     type: AchievementType;
@@ -33,6 +35,8 @@ describe("Achievements", () => {
     totalSaved: number;
     pantryItemsTracked: number;
     partnersInvited: number;
+    totalPointsEarned: number;
+    currentScanTier: string;
   }
 
   const ACHIEVEMENTS: AchievementDefinition[] = [
@@ -75,14 +79,26 @@ describe("Achievements", () => {
     {
       type: "pantry_pro",
       name: "Pantry Pro",
-      description: "Track 50 items in your pantry",
-      checkUnlock: (s) => s.pantryItemsTracked >= 50,
+      description: "Track 30 items in your pantry",
+      checkUnlock: (s) => s.pantryItemsTracked >= 30,
     },
     {
       type: "social_shopper",
       name: "Social Shopper",
       description: "Invited a partner to a list",
       checkUnlock: (s) => s.partnersInvited >= 1,
+    },
+    {
+      type: "rewards_pioneer",
+      name: "Rewards Pioneer",
+      description: "Earned your first points",
+      checkUnlock: (s) => s.totalPointsEarned >= 1,
+    },
+    {
+      type: "top_tier",
+      name: "Top Tier",
+      description: "Reached Platinum scan tier",
+      checkUnlock: (s) => s.currentScanTier === "platinum",
     },
   ];
 
@@ -104,6 +120,8 @@ describe("Achievements", () => {
     totalSaved: 0,
     pantryItemsTracked: 0,
     partnersInvited: 0,
+    totalPointsEarned: 0,
+    currentScanTier: "bronze",
   };
 
   describe("Individual achievement unlock conditions", () => {
@@ -149,8 +167,8 @@ describe("Achievements", () => {
       expect(unlocked).toContain("savings_milestone");
     });
 
-    it("pantry_pro unlocks at 50 pantry items", () => {
-      const stats = { ...emptyStats, pantryItemsTracked: 50 };
+    it("pantry_pro unlocks at 30 pantry items", () => {
+      const stats = { ...emptyStats, pantryItemsTracked: 30 };
       const unlocked = checkNewAchievements(stats, []);
       expect(unlocked).toContain("pantry_pro");
     });
@@ -159,6 +177,18 @@ describe("Achievements", () => {
       const stats = { ...emptyStats, partnersInvited: 1 };
       const unlocked = checkNewAchievements(stats, []);
       expect(unlocked).toContain("social_shopper");
+    });
+
+    it("rewards_pioneer unlocks at first point", () => {
+      const stats = { ...emptyStats, totalPointsEarned: 1 };
+      const unlocked = checkNewAchievements(stats, []);
+      expect(unlocked).toContain("rewards_pioneer");
+    });
+
+    it("top_tier unlocks at platinum tier", () => {
+      const stats = { ...emptyStats, currentScanTier: "platinum" };
+      const unlocked = checkNewAchievements(stats, []);
+      expect(unlocked).toContain("top_tier");
     });
   });
 
@@ -200,6 +230,8 @@ describe("Achievements", () => {
         totalSaved: 1000,
         pantryItemsTracked: 100,
         partnersInvited: 100,
+        totalPointsEarned: 1000,
+        currentScanTier: "platinum",
       };
       const unlocked = checkNewAchievements(stats, allTypes);
       expect(unlocked).toEqual([]);

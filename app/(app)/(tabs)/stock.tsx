@@ -45,6 +45,7 @@ import {
   SkeletonPantryItem,
   EmptyPantry,
   TrialNudgeBanner,
+  SeasonalEventBanner,
   AnimatedSection,
   colors,
   typography,

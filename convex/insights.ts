@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 
 async function requireUser(ctx: any) {
   const identity = await ctx.auth.getUserIdentity();
@@ -649,7 +649,7 @@ const STORE_ACHIEVEMENTS = {
     type: "store_explorer",
     title: "Store Explorer",
     description: "Shop at 5 different stores",
-    icon: "map-marker-multiple", // map-marker-multiple exists in MaterialCommunityIcons
+    icon: "map-marker-multiple",
     tier: "bronze",
     threshold: 5,
   },
@@ -657,7 +657,7 @@ const STORE_ACHIEVEMENTS = {
     type: "price_detective",
     title: "Price Detective",
     description: "Find 10 items cheaper elsewhere",
-    icon: "magnify", // magnify exists in MaterialCommunityIcons
+    icon: "magnify",
     tier: "silver",
     threshold: 10,
   },
@@ -665,7 +665,7 @@ const STORE_ACHIEVEMENTS = {
     type: "loyal_shopper",
     title: "Loyal Shopper",
     description: "Make 10 trips to the same store",
-    icon: "heart-circle", // heart-circle exists in MaterialCommunityIcons
+    icon: "heart-circle",
     tier: "bronze",
     threshold: 10,
   },
@@ -673,11 +673,120 @@ const STORE_ACHIEVEMENTS = {
     type: "budget_champion",
     title: "Budget Champion",
     description: "Save £50 by switching stores",
-    icon: "trophy-award", // trophy-award exists in MaterialCommunityIcons
+    icon: "trophy-award",
     tier: "gold",
     threshold: 50,
   },
+  pantry_pro: {
+    type: "pantry_pro",
+    title: "Pantry Pro",
+    description: "Track 30 items in your pantry",
+    icon: "fridge",
+    tier: "bronze",
+    threshold: 30,
+  },
+  rewards_pioneer: {
+    type: "rewards_pioneer",
+    title: "Rewards Pioneer",
+    description: "Earned your first points",
+    icon: "star-circle",
+    tier: "bronze",
+    threshold: 1,
+  },
+  top_tier: {
+    type: "top_tier",
+    title: "Top Tier",
+    description: "Reached Platinum scan tier",
+    icon: "crown",
+    tier: "platinum",
+    threshold: 1,
+  },
 } as const;
+
+/**
+ * Internal helper to unlock an achievement and notify user
+ */
+async function processUnlockAchievement(ctx: any, userId: any, achievement: any) {
+  const existing = await ctx.db
+    .query("achievements")
+    .withIndex("by_user_type", (q: any) =>
+      q.eq("userId", userId).eq("type", achievement.type)
+    )
+    .unique();
+
+  if (!existing) {
+    const now = Date.now();
+    await ctx.db.insert("achievements", {
+      userId,
+      type: achievement.type,
+      title: achievement.title,
+      description: achievement.description,
+      icon: achievement.icon,
+      unlockedAt: now,
+    });
+    await ctx.db.insert("notifications", {
+      userId,
+      type: "achievement_unlocked",
+      title: "Achievement Unlocked!",
+      body: `${achievement.title}: ${achievement.description}`,
+      data: { achievementType: achievement.type },
+      read: false,
+      createdAt: now,
+    });
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Phase 5.1: Check and unlock points-related achievements
+ */
+export const checkPointsAchievements = internalMutation({
+  args: {
+    userId: v.id("users"),
+    totalPoints: v.number(),
+    currentTier: v.string(),
+  },
+  handler: async (ctx: any, args: any) => {
+    const unlocked: string[] = [];
+
+    // Rewards Pioneer
+    if (args.totalPoints >= STORE_ACHIEVEMENTS.rewards_pioneer.threshold) {
+      if (await processUnlockAchievement(ctx, args.userId, STORE_ACHIEVEMENTS.rewards_pioneer)) {
+        unlocked.push(STORE_ACHIEVEMENTS.rewards_pioneer.type);
+      }
+    }
+
+    // Top Tier
+    if (args.currentTier === "platinum") {
+      if (await processUnlockAchievement(ctx, args.userId, STORE_ACHIEVEMENTS.top_tier)) {
+        unlocked.push(STORE_ACHIEVEMENTS.top_tier.type);
+      }
+    }
+
+    return { unlocked };
+  },
+});
+
+/**
+ * Phase 1.2: Check and unlock pantry-related achievements
+ */
+export const checkPantryAchievements = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx: any, args: any) => {
+    const items = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+      .collect();
+
+    if (items.length >= STORE_ACHIEVEMENTS.pantry_pro.threshold) {
+      if (await processUnlockAchievement(ctx, args.userId, STORE_ACHIEVEMENTS.pantry_pro)) {
+        return { unlocked: [STORE_ACHIEVEMENTS.pantry_pro.type] };
+      }
+    }
+    return { unlocked: [] };
+  },
+});
 
 /**
  * Check and unlock store-related achievements for a user
