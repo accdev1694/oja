@@ -3,13 +3,8 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import {
-  GlassCard,
-  colors,
-  typography,
-  spacing,
-  borderRadius,
-} from "./glass";
+import { GlassCard } from "./glass/GlassCard";
+import { colors, typography, spacing } from "@/lib/design/glassTokens";
 
 export function SeasonalEventBanner() {
   const activeEvent = useQuery(api.events.getActiveEvent);

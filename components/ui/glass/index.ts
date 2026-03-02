@@ -9,6 +9,29 @@
  */
 
 // =============================================================================
+// DESIGN TOKENS (Exported first for safety with circular deps)
+// =============================================================================
+
+export {
+  colors,
+  gradients,
+  typography,
+  spacing,
+  borderRadius,
+  layout,
+  shadows,
+  glassCardStyles,
+  blur,
+  animations,
+  hapticTypes,
+  type GlassColors,
+  type GlassGradients,
+  type GlassTypography,
+  type GlassSpacing,
+  type GlassBorderRadius as BorderRadiusScale,
+} from "@/lib/design/glassTokens";
+
+// =============================================================================
 // CARD COMPONENTS
 // =============================================================================
 
@@ -243,29 +266,6 @@ export {
 } from "./GlassToast";
 
 // =============================================================================
-// DESIGN TOKENS
-// =============================================================================
-
-export {
-  colors,
-  gradients,
-  typography,
-  spacing,
-  borderRadius,
-  layout,
-  shadows,
-  glassCardStyles,
-  blur,
-  animations,
-  hapticTypes,
-  type GlassColors,
-  type GlassGradients,
-  type GlassTypography,
-  type GlassSpacing,
-  type GlassBorderRadius as BorderRadiusScale,
-} from "@/lib/design/glassTokens";
-
-// =============================================================================
 // NETWORK STATUS COMPONENTS
 // =============================================================================
 
@@ -273,4 +273,3 @@ export {
   OfflineBanner,
   type OfflineBannerProps,
 } from "./OfflineBanner";
-
