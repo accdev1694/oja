@@ -46,6 +46,7 @@ export interface ListCardProps {
   };
   onPress: (id: Id<"shoppingLists">) => void;
   onDelete: (id: Id<"shoppingLists">, name: string) => void;
+  onEditName?: (id: Id<"shoppingLists">, currentName: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +148,7 @@ export const ListCard = React.memo(function ListCard({
   list,
   onPress,
   onDelete,
+  onEditName,
 }: ListCardProps) {
   const scale = useSharedValue(1);
 
@@ -170,6 +172,13 @@ export const ListCard = React.memo(function ListCard({
   const handleDelete = useCallback(() => {
     onDelete(list._id, list.name);
   }, [onDelete, list._id, list.name]);
+
+  const handleEditName = useCallback(() => {
+    if (onEditName) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onEditName(list._id, list.name);
+    }
+  }, [onEditName, list._id, list.name]);
 
   const displayName = getRelativeListName(list.createdAt, list.name);
 
@@ -332,6 +341,21 @@ export const ListCard = React.memo(function ListCard({
           </View>
         </GlassCard>
       </Pressable>
+
+      {/* Floating edit badge */}
+      {onEditName && (
+        <Pressable
+          onPress={handleEditName}
+          style={styles.editBadge}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialCommunityIcons
+            name="pencil"
+            size={14}
+            color={colors.text.secondary}
+          />
+        </Pressable>
+      )}
     </Animated.View>
   );
 }, (prev, next) => {
@@ -351,7 +375,8 @@ export const ListCard = React.memo(function ListCard({
     prev.list.storeName === next.list.storeName &&
     prev.list.storeSegments?.length === next.list.storeSegments?.length &&
     prev.onPress === next.onPress &&
-    prev.onDelete === next.onDelete
+    prev.onDelete === next.onDelete &&
+    prev.onEditName === next.onEditName
   );
 });
 
@@ -452,5 +477,18 @@ const styles = StyleSheet.create({
   metaText: {
     ...typography.bodySmall,
     color: colors.text.tertiary,
+  },
+  editBadge: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.25)",
   },
 });

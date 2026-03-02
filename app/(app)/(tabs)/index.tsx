@@ -38,6 +38,7 @@ import { CreateFromTemplateModal } from "@/components/lists/CreateFromTemplateMo
 import { CombineListsModal } from "@/components/lists/CombineListsModal";
 import { CreateListOptionsModal } from "@/components/lists/CreateListOptionsModal";
 import { TemplatePickerModal } from "@/components/lists/TemplatePickerModal";
+import { EditListNameModal } from "@/components/lists/EditListNameModal";
 import { defaultListName } from "@/lib/list/helpers";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -58,6 +59,7 @@ export default function ListsScreen() {
   const sharedLists = useQuery(api.partners.getSharedLists, !isSwitchingUsers ? {} : "skip");
   const createList = useMutation(api.shoppingLists.create);
   const deleteList = useMutation(api.shoppingLists.remove);
+  const updateList = useMutation(api.shoppingLists.update);
   const createFromTemplate = useMutation(api.shoppingLists.createFromTemplate);
   const createFromMultipleLists = useMutation(api.shoppingLists.createFromMultipleLists);
 
@@ -80,6 +82,11 @@ export default function ListsScreen() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedHistoryLists, setSelectedHistoryLists] = useState<Set<Id<"shoppingLists">>>(new Set());
   const [showCombineModal, setShowCombineModal] = useState(false);
+
+  // Edit List Name State
+  const [showEditNameModal, setShowEditNameModal] = useState(false);
+  const [editingListId, setEditingListId] = useState<Id<"shoppingLists"> | null>(null);
+  const [editingListName, setEditingListName] = useState("");
 
   // Trigger animations every time this tab gains focus
   useFocusEffect(
@@ -171,6 +178,17 @@ export default function ListsScreen() {
   const handleDeletePress = useCallback((id: Id<"shoppingLists">, name: string) => {
     handleDeleteList(id, name);
   }, [handleDeleteList]);
+
+  const handleEditName = useCallback((id: Id<"shoppingLists">, currentName: string) => {
+    setEditingListId(id);
+    setEditingListName(currentName);
+    setShowEditNameModal(true);
+  }, []);
+
+  const handleSaveListName = useCallback(async (newName: string) => {
+    if (!editingListId) return;
+    await updateList({ id: editingListId, name: newName });
+  }, [updateList, editingListId]);
 
   const handleHistoryPress = useCallback((id: Id<"shoppingLists">) => {
     router.push(`/trip-summary?id=${id}`);
@@ -487,6 +505,7 @@ export default function ListsScreen() {
                         list={list}
                         onPress={handleListPress}
                         onDelete={handleDeletePress}
+                        onEditName={handleEditName}
                       />
                     </View>
                   </AnimatedSection>
@@ -559,6 +578,7 @@ export default function ListsScreen() {
                         onPress={handleHistoryPress}
                         formatDateTime={stableFormatDateTime}
                         onUseAsTemplate={handleUseAsTemplate}
+                        onEditName={handleEditName}
                         selectable={isMultiSelectMode}
                         selected={selectedHistoryLists.has(list._id)}
                         onToggleSelect={handleToggleSelect}
@@ -631,6 +651,14 @@ export default function ListsScreen() {
         sourceListIds={Array.from(selectedHistoryLists)}
         onClose={() => setShowCombineModal(false)}
         onConfirm={handleConfirmCombine}
+      />
+
+      {/* Edit List Name Modal */}
+      <EditListNameModal
+        visible={showEditNameModal}
+        currentName={editingListName}
+        onClose={() => setShowEditNameModal(false)}
+        onSave={handleSaveListName}
       />
 
     </GlassScreen>

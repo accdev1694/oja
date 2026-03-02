@@ -1138,6 +1138,7 @@ export default function ListDetailScreen() {
         {/* Header */}
         <SimpleHeader
           title={list.name}
+          onTitlePress={handleOpenEditName}
           subtitle={`${list.listNumber != null ? `#${list.listNumber} \u00B7 ` : ""}${checkedCount}/${totalCount} items`}
           showBack
           titleStyle={{ fontSize: 20, lineHeight: 28 }}

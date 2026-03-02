@@ -35,6 +35,7 @@ export interface HistoryCardProps {
   onPress: (id: Id<"shoppingLists">) => void;
   formatDateTime: (timestamp: number) => string;
   onUseAsTemplate?: (id: Id<"shoppingLists">, name: string) => void;
+  onEditName?: (id: Id<"shoppingLists">, currentName: string) => void;
   selectable?: boolean;
   selected?: boolean;
   onToggleSelect?: (id: Id<"shoppingLists">) => void;
@@ -45,6 +46,7 @@ export const HistoryCard = React.memo(function HistoryCard({
   onPress,
   formatDateTime,
   onUseAsTemplate,
+  onEditName,
   selectable,
   selected,
   onToggleSelect,
@@ -71,6 +73,13 @@ export const HistoryCard = React.memo(function HistoryCard({
       onPress(list._id);
     }
   }, [onPress, list._id, selectable, onToggleSelect]);
+
+  const handleEditName = useCallback(() => {
+    if (onEditName) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onEditName(list._id, list.name);
+    }
+  }, [onEditName, list._id, list.name]);
 
   const budget = list.budget ?? 0;
   const actual = list.actualTotal ?? 0;
@@ -219,6 +228,21 @@ export const HistoryCard = React.memo(function HistoryCard({
             </View>
           </GlassCard>
         </Pressable>
+
+        {/* Floating edit badge */}
+        {onEditName && !selectable && (
+          <Pressable
+            onPress={handleEditName}
+            style={styles.editBadge}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons
+              name="pencil"
+              size={14}
+              color={colors.text.secondary}
+            />
+          </Pressable>
+        )}
       </Animated.View>
     </Swipeable>
   );
@@ -235,7 +259,11 @@ export const HistoryCard = React.memo(function HistoryCard({
     prev.list.listNumber === next.list.listNumber &&
     prev.onPress === next.onPress &&
     prev.formatDateTime === next.formatDateTime &&
-    prev.onUseAsTemplate === next.onUseAsTemplate
+    prev.onUseAsTemplate === next.onUseAsTemplate &&
+    prev.onEditName === next.onEditName &&
+    prev.selectable === next.selectable &&
+    prev.selected === next.selected &&
+    prev.onToggleSelect === next.onToggleSelect
   );
 });
 
@@ -339,5 +367,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: spacing.xs,
     textAlign: "center",
+  },
+  editBadge: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.25)",
   },
 });

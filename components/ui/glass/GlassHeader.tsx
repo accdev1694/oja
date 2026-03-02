@@ -363,6 +363,8 @@ export interface SimpleHeaderProps {
   /** Override title text styles */
   titleStyle?: StyleProp<import("react-native").TextStyle>;
   style?: StyleProp<ViewStyle>;
+  /** Optional title press handler */
+  onTitlePress?: () => void;
 }
 
 export function SimpleHeader({
@@ -376,6 +378,7 @@ export function SimpleHeader({
   accentColor,
   titleStyle,
   style,
+  onTitlePress,
 }: SimpleHeaderProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -385,6 +388,13 @@ export function SimpleHeader({
       onBack();
     } else {
       router.back();
+    }
+  };
+
+  const handleTitlePress = () => {
+    if (onTitlePress) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onTitlePress();
     }
   };
 
@@ -405,7 +415,13 @@ export function SimpleHeader({
       {/* Row 1: Back button (optional) + Title (flex: 1, left-aligned) */}
       <View style={headerLayout.topRow}>
         {showBack && <BackButton onPress={handleBack} />}
-        <Text style={[simpleHeaderStyles.title, { flex: 1 }, titleStyle]}>{title}</Text>
+        <Pressable 
+          onPress={handleTitlePress} 
+          disabled={!onTitlePress}
+          style={{ flex: 1 }}
+        >
+          <Text style={[simpleHeaderStyles.title, { flex: 1 }, titleStyle]}>{title}</Text>
+        </Pressable>
       </View>
 
       {/* Row 2: [Left container] ← space-between → [Right container] */}
