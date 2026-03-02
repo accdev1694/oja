@@ -1,4 +1,4 @@
-export type AdminTab = "overview" | "users" | "analytics" | "support" | "monitoring" | "receipts" | "catalog" | "settings" | "webhooks";
+export type AdminTab = "overview" | "users" | "analytics" | "support" | "monitoring" | "receipts" | "catalog" | "settings" | "webhooks" | "points";
 
 export interface AnalyticsData {
   totalUsers: number;

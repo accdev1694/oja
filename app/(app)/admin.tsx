@@ -30,6 +30,7 @@ import { ReceiptsTab } from "./admin/ReceiptsTab";
 import { CatalogTab } from "./admin/CatalogTab";
 import { SettingsTab } from "./admin/SettingsTab";
 import { WebhooksTab } from "./admin/WebhooksTab";
+import { PointsTab } from "./admin/PointsTab";
 import { AdminTabBar } from "./admin/components/AdminTabBar";
 import { ToastProvider } from "./admin/components/ToastProvider";
 import { GlobalSearchModal } from "./admin/components/GlobalSearchModal";
@@ -89,6 +90,7 @@ function AdminScreenInner() {
     { key: "analytics", label: "Analytics", icon: "chart-bar", permission: "view_analytics" },
     { key: "receipts", label: "Receipts", icon: "receipt", permission: "view_receipts" },
     { key: "catalog", label: "Catalog", icon: "database", permission: "manage_catalog" },
+    { key: "points", label: "Points", icon: "star-circle", permission: "view_analytics" },
     { key: "support", label: "Support", icon: "help-circle", permission: "view_support" },
     { key: "monitoring", label: "Monitoring", icon: "pulse", permission: "view_analytics" },
     { key: "webhooks", label: "Webhooks", icon: "webhook", permission: "manage_flags" },
@@ -96,7 +98,7 @@ function AdminScreenInner() {
   ], []);
 
   useEffect(() => {
-    if (tab && ["overview", "users", "analytics", "support", "monitoring", "receipts", "catalog", "settings", "webhooks"].includes(tab)) {
+    if (tab && ["overview", "users", "analytics", "support", "monitoring", "receipts", "catalog", "settings", "webhooks", "points"].includes(tab)) {
       setActiveTab(tab as AdminTab);
     }
   }, [tab]);
@@ -269,6 +271,7 @@ function AdminScreenInner() {
             onSelectionChange={setSelectionLabel}
           />
         )}
+        {activeTab === "points" && <PointsTab hasPermission={hasPermission} />}
         {activeTab === "catalog" && <CatalogTab hasPermission={hasPermission} />}
         {activeTab === "webhooks" && <WebhooksTab hasPermission={hasPermission} />}
         {activeTab === "settings" && <SettingsTab hasPermission={hasPermission} />}

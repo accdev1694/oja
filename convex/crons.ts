@@ -135,4 +135,17 @@ crons.monthly(
   { type: "monthly_financial" }
 );
 
+// Points System — Phase 2
+crons.monthly(
+  "expire-old-points",
+  { day: 1, hourUTC: 1, minuteUTC: 0 },
+  internal.points.expireOldPoints
+);
+
+crons.daily(
+  "reconcile-stripe-points",
+  { hourUTC: 2, minuteUTC: 30 },
+  internal.stripe.reconcilePointRedemptions
+);
+
 export default crons;

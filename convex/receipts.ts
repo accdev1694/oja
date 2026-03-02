@@ -131,7 +131,7 @@ export const create = mutation({
 });
 
 import { validateReceiptData } from "./lib/receiptValidation";
-import { earnPointsInternal } from "./points";
+import { earnPointsInternal, processEarnPoints } from "./points";
 
 /**
  * Update receipt with parsed data
@@ -244,10 +244,18 @@ export const update = mutation({
       updates.fraudFlags = fraudFlags;
 
       if (validation.isValid && !receipt.earnedPoints) {
-        // Validation passed. Points will be awarded when the user confirms the receipt.
-        // We just save the hash and flags for now.
+        // Award points using processEarnPoints helper
+        const pointsResult = await processEarnPoints(ctx, user._id, args.id);
+
+        if (pointsResult && pointsResult.earned) {
+          updates.earnedPoints = true;
+          updates.pointsEarned = (pointsResult.pointsAmount ?? 0) + (pointsResult.bonusPoints || 0);
+        } else {
+          updates.earnedPoints = false;
+        }
       } else if (!validation.isValid && validation.reason) {
         console.warn(`Receipt ${args.id} failed validation: ${validation.reason}`);
+        updates.earnedPoints = false;
       }
     }
 

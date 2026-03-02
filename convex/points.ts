@@ -312,6 +312,30 @@ export const refundPoints = internalMutation({
   }
 });
 
+export async function processExpirePoints(ctx: any, userId: Id<"users">, points: number, reason: string) {
+  const balance = await getOrCreatePointsBalance(ctx, userId);
+  
+  const expireAmount = Math.min(balance.availablePoints, points);
+  if (expireAmount <= 0) return;
+
+  const now = Date.now();
+
+  await ctx.db.patch(balance._id, {
+    availablePoints: balance.availablePoints - expireAmount,
+    updatedAt: now,
+  });
+
+  await ctx.db.insert("pointsTransactions", {
+    userId: userId,
+    type: "expire",
+    amount: -expireAmount,
+    source: reason,
+    balanceBefore: balance.availablePoints,
+    balanceAfter: balance.availablePoints - expireAmount,
+    createdAt: now,
+  });
+}
+
 export const expirePoints = internalMutation({
   args: {
     userId: v.id("users"),
@@ -319,26 +343,52 @@ export const expirePoints = internalMutation({
     reason: v.string(),
   },
   handler: async (ctx, args) => {
-    const balance = await getOrCreatePointsBalance(ctx, args.userId);
-    
-    const expireAmount = Math.min(balance.availablePoints, args.points);
-    if (expireAmount <= 0) return;
+    await processExpirePoints(ctx, args.userId, args.points, args.reason);
+  }
+});
 
-    const now = Date.now();
+export const expireOldPoints = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
 
-    await ctx.db.patch(balance._id, {
-      availablePoints: balance.availablePoints - expireAmount,
-      updatedAt: now,
-    });
+    // Find "earn" transactions older than 12 months
+    const oldTransactions = await ctx.db
+      .query("pointsTransactions")
+      .withIndex("by_created", (q) => q.lt("createdAt", oneYearAgo))
+      .collect();
 
-    await ctx.db.insert("pointsTransactions", {
-      userId: args.userId,
-      type: "expire",
-      amount: -expireAmount,
-      source: args.reason,
-      balanceBefore: balance.availablePoints,
-      balanceAfter: balance.availablePoints - expireAmount,
-      createdAt: now,
-    });
+    // Filter for "earn" types (since the index doesn't include type)
+    const earnTransactions = oldTransactions.filter(tx => tx.type === "earn" || tx.type === "bonus");
+
+    // Group by userId and sum points
+    const expiryMap = new Map<string, number>();
+    for (const tx of earnTransactions) {
+      const current = expiryMap.get(tx.userId) || 0;
+      expiryMap.set(tx.userId, current + tx.amount);
+    }
+
+    // Call expirePoints for each user
+    let usersAffected = 0;
+    let totalExpired = 0;
+
+    for (const [userId, points] of expiryMap.entries()) {
+      // Check if user still has available points to expire
+      const balance = await ctx.db
+        .query("pointsBalance")
+        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .first();
+
+      if (balance && balance.availablePoints > 0) {
+        const toExpire = Math.min(balance.availablePoints, points);
+        if (toExpire > 0) {
+          await processExpirePoints(ctx, userId as any, toExpire, "12_month_expiration");
+          usersAffected++;
+          totalExpired += toExpire;
+        }
+      }
+    }
+
+    return { usersAffected, totalExpired };
   }
 });
