@@ -467,6 +467,11 @@ export const parseReceipt = action({
       }
       const base64Image = btoa(chunks.join(""));
 
+      // Generate SHA-256 hash for fraud prevention
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const imageHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
       const receiptPrompt = `You are a receipt parser for a UK grocery shopping app. Analyse this receipt image and honestly assess what you can and cannot read.
 
 FIRST: Assess image quality STRICTLY. Score "imageQuality" from 0-100:
@@ -587,6 +592,7 @@ IMPORTANT RULES:
           total: typeof parsed.total === "number" ? parsed.total : 0,
           imageQuality,
           rejection: parsed.rejection || "Image too blurry or unclear to read reliably",
+          imageHash,
         };
       }
 
@@ -639,6 +645,7 @@ IMPORTANT RULES:
             total,
             imageQuality: Math.min(imageQuality, 40),
             rejection: "Most items could not be read confidently. Please retake with a clearer image.",
+            imageHash,
           };
         }
       }
@@ -655,6 +662,7 @@ IMPORTANT RULES:
           total,
           imageQuality: Math.min(imageQuality, 40),
           rejection: "Could not identify any items. Please retake with a clearer image.",
+          imageHash,
         };
       }
 
@@ -667,6 +675,7 @@ IMPORTANT RULES:
         tax: typeof parsed.tax === "number" ? parsed.tax : 0,
         total,
         imageQuality,
+        imageHash,
       };
     } catch (error) {
       console.error("Receipt parsing failed:", error);

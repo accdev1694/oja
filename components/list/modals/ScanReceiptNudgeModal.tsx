@@ -43,16 +43,15 @@ export interface ScanReceiptNudgeModalProps {
   onScanReceipt: () => void;
   onDismiss: () => void;
   storeName?: string;
-  /** Scan credit data (from api.subscriptions.getScanCredits) */
-  scanCredits: {
+  /** Scan credit data (from api.points.getPointsBalance) */
+  pointsBalance: {
     tier: string;
-    tierInfo: {
+    nextTierInfo: {
       nextTier: string | null;
       scansToNextTier: number;
-      creditPerScan: number;
     };
-    lifetimeScans: number;
-    creditsEarned: number;
+    tierProgress: number;
+    availablePoints: number;
     isPremium: boolean;
   } | null;
   /** Current scanning streak count */
@@ -154,7 +153,7 @@ export function ScanReceiptNudgeModal({
   onScanReceipt,
   onDismiss,
   storeName,
-  scanCredits,
+  pointsBalance,
   streakCount,
 }: ScanReceiptNudgeModalProps) {
   // Internal render state — keeps component mounted during exit animation
@@ -248,11 +247,11 @@ export function ScanReceiptNudgeModal({
     const items: BenefitBulletProps[] = [];
 
     // 1. Price tracking / scan credits
-    if (scanCredits?.isPremium) {
+    if (pointsBalance?.isPremium) {
       items.push({
         icon: "cash-plus",
         iconColor: colors.accent.primary,
-        text: `Earn \u00A3${scanCredits.tierInfo.creditPerScan.toFixed(2)} scan credit`,
+        text: `Earn points on this scan`,
       });
     } else {
       items.push({
@@ -278,12 +277,12 @@ export function ScanReceiptNudgeModal({
     }
 
     // 3. Tier progression
-    if (scanCredits) {
-      if (scanCredits.tierInfo.nextTier != null) {
+    if (pointsBalance) {
+      if (pointsBalance.nextTierInfo?.nextTier != null) {
         items.push({
           icon: "arrow-up-circle",
           iconColor: colors.accent.secondary,
-          text: `${scanCredits.tierInfo.scansToNextTier} scans to ${scanCredits.tierInfo.nextTier} tier!`,
+          text: `${pointsBalance.nextTierInfo.scansToNextTier} scans to ${pointsBalance.nextTierInfo.nextTier} tier!`,
         });
       } else {
         items.push({
@@ -304,13 +303,13 @@ export function ScanReceiptNudgeModal({
     }
 
     return items.slice(0, 4);
-  }, [scanCredits, streakCount, storeName]);
+  }, [pointsBalance, streakCount, storeName]);
 
   // Capitalise tier name
   const tierDisplay = useMemo(() => {
-    if (!scanCredits?.tier) return "";
-    return scanCredits.tier.charAt(0).toUpperCase() + scanCredits.tier.slice(1);
-  }, [scanCredits?.tier]);
+    if (!pointsBalance?.tier) return "";
+    return pointsBalance.tier.charAt(0).toUpperCase() + pointsBalance.tier.slice(1);
+  }, [pointsBalance?.tier]);
 
   if (!shouldRender) return null;
 
@@ -377,8 +376,8 @@ export function ScanReceiptNudgeModal({
             ))}
           </Animated.View>
 
-          {/* Stats Card (only if scanCredits exists) */}
-          {scanCredits !== null && (
+          {/* Stats Card (only if pointsBalance exists) */}
+          {pointsBalance !== null && (
             <Animated.View
               entering={FadeIn.delay(550)}
               style={styles.glassCard}
@@ -389,13 +388,12 @@ export function ScanReceiptNudgeModal({
                   <Text style={styles.tierBadgeText}>{tierDisplay}</Text>
                 </View>
                 <Text style={styles.statsText}>
-                  {"\u2022"} {scanCredits.lifetimeScans} lifetime scans
+                  {"\u2022"} {pointsBalance.tierProgress} lifetime scans
                 </Text>
               </View>
-              {scanCredits.isPremium && scanCredits.creditsEarned > 0 && (
+              {pointsBalance.isPremium && pointsBalance.availablePoints > 0 && (
                 <Text style={styles.creditsEarnedText}>
-                  {"\u00A3"}{scanCredits.creditsEarned.toFixed(2)} earned this
-                  month
+                  {pointsBalance.availablePoints} points available
                 </Text>
               )}
             </Animated.View>

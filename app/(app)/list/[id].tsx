@@ -179,7 +179,7 @@ export default function ListDetailScreen() {
   const [showScanNudge, setShowScanNudge] = useState(false);
 
   // Scan credit info for receipt nudge modal
-  const scanCredits = useQuery(api.subscriptions.getScanCredits);
+  const pointsBalance = useQuery(api.points.getPointsBalance);
 
   // Streaks for receipt nudge modal (receipt_scanner streak)
   const streaks = useQuery(api.insights.getStreaks);
@@ -1328,7 +1328,7 @@ export default function ListDetailScreen() {
         onScanReceipt={handleScanReceipt}
         onDismiss={handleDismissNudge}
         storeName={list?.storeName}
-        scanCredits={scanCredits ?? null}
+        pointsBalance={pointsBalance ?? null}
         streakCount={receiptStreakCount}
       />
 

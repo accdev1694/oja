@@ -76,7 +76,7 @@ export default function ConfirmReceiptScreen() {
   const processReceiptMatching = useMutation(api.itemMatching.processReceiptMatching);
 
   // Gamification mutations
-  const earnScanCredit = useMutation(api.subscriptions.earnScanCredit);
+  const earnPoints = useMutation(api.points.earnPoints);
   const updateStreak = useMutation(api.insights.updateStreak);
   const activeChallenge = useQuery(api.insights.getActiveChallenge);
   const updateChallengeProgress = useMutation(api.insights.updateChallengeProgress);
@@ -326,14 +326,8 @@ export default function ConfirmReceiptScreen() {
       // Step 4: Check for price alerts
       const alerts = await checkPriceAlerts({ receiptId });
 
-      // Step 5: Gamification — earn scan credit + tier progress, update streak, progress challenge
-      let creditEarned = 0;
-      let scanResult: any = null;
+      // Step 5: Gamification — update streak, progress challenge
       try {
-        scanResult = await earnScanCredit({ receiptId });
-        if (scanResult.success) {
-          creditEarned = scanResult.creditEarned;
-        }
         await updateStreak({ type: "receipt_scanner" });
         if (activeChallenge && activeChallenge.type === "scan_receipts" && !activeChallenge.completedAt) {
           await updateChallengeProgress({ challengeId: activeChallenge._id, increment: 1 });
@@ -359,16 +353,9 @@ export default function ConfirmReceiptScreen() {
         parts.push(`${pendingMatches} item${pendingMatches === 1 ? "" : "s"} to match`);
       }
 
-      // Gamification rewards
-      if (scanResult?.success) {
-        if (creditEarned > 0) parts.push(`+£${creditEarned.toFixed(2)} credit`);
-        if (scanResult.tierUpgrade) {
-          const tierLabel = scanResult.tier.charAt(0).toUpperCase() + scanResult.tier.slice(1);
-          parts.push(`${tierLabel} tier!`);
-        } else if (scanResult.lifetimeScans) {
-          const tierConfig = getTierProgress(scanResult.lifetimeScans, scanResult.tier);
-          if (tierConfig) parts.push(tierConfig);
-        }
+      // Gamification rewards (already awarded during AI parse)
+      if (receipt && receipt.earnedPoints && receipt.pointsEarned) {
+        parts.push(`+${receipt.pointsEarned} points`);
       }
 
       if (parts.length > 0) suffix = parts.join(", ");

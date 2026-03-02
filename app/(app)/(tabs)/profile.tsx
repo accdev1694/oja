@@ -48,8 +48,8 @@ export default function ProfileScreen() {
     api.pantryItems.getByUser,
     !isSwitchingUsers ? {} : "skip"
   );
-  const scanCredits = useQuery(
-    api.subscriptions.getScanCredits,
+  const pointsBalance = useQuery(
+    api.points.getPointsBalance,
     !isSwitchingUsers ? {} : "skip"
   );
   const subscription = useQuery(
@@ -342,7 +342,7 @@ export default function ProfileScreen() {
             { icon: "package-variant" as const, text: "Add items to your stock", done: pantryItems.length > 0 },
             { icon: "clipboard-list-outline" as const, text: "Create your first list", done: allLists.length > 0 },
             { icon: "camera" as const, text: "Scan a receipt", done: (receipts?.filter((r) => r.processingStatus === "completed").length ?? 0) > 0 },
-            { icon: "trophy-outline" as const, text: "Earn your first credit", done: (scanCredits?.creditsEarned ?? 0) > 0 },
+            { icon: "trophy-outline" as const, text: "Earn your first points", done: (pointsBalance?.totalPoints ?? 0) > 0 },
           ];
           const allDone = milestones.every((m) => m.done);
           if (allDone) return null;
@@ -395,7 +395,7 @@ export default function ProfileScreen() {
             <View style={styles.quickStatDivider} />
             <View style={styles.quickStat}>
               <Text style={[styles.quickStatValue, { color: colors.accent.primary }]}>
-                {scanCredits?.lifetimeScans ?? 0}
+                {pointsBalance?.tierProgress ?? 0}
               </Text>
               <Text style={styles.quickStatLabel}>scans</Text>
             </View>
@@ -521,7 +521,7 @@ export default function ProfileScreen() {
                       : subscription?.status === "expired"
                         ? "Trial ended · "
                         : ""}
-                    {(scanCredits?.tier || "bronze").charAt(0).toUpperCase() + (scanCredits?.tier || "bronze").slice(1)} tier · {scanCredits?.lifetimeScans ?? 0} scans
+                    {(pointsBalance?.tier || "bronze").charAt(0).toUpperCase() + (pointsBalance?.tier || "bronze").slice(1)} tier · {pointsBalance?.tierProgress ?? 0} scans
                   </Text>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text.tertiary} />

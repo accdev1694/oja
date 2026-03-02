@@ -45,7 +45,7 @@ export default function SubscriptionScreen() {
   const { alert } = useGlassAlert();
   const subscription = useQuery(api.subscriptions.getCurrentSubscription);
   const plans = useQuery(api.subscriptions.getPlans);
-  const scanCredits = useQuery(api.subscriptions.getScanCredits);
+  const pointsBalance = useQuery(api.points.getPointsBalance);
 
   const cancelSub = useMutation(api.subscriptions.cancelSubscription);
   const createCheckout = useAction(api.stripe.createCheckoutSession);
@@ -274,53 +274,53 @@ export default function SubscriptionScreen() {
         </AnimatedSection>
 
         {/* Scan Rewards — unified tier + credits */}
-        {scanCredits && (
+        {pointsBalance && (
           <AnimatedSection animation="fadeInDown" duration={400} delay={150}>
             <GlassCard style={styles.scanCreditsCard}>
               {/* Tier Header */}
               <View style={styles.sectionHeader}>
-                <View style={[styles.tierIconCircle, { backgroundColor: `${tierColors[scanCredits.tier] || tierColors.bronze}20` }]}>
+                <View style={[styles.tierIconCircle, { backgroundColor: `${tierColors[pointsBalance.tier] || tierColors.bronze}20` }]}>
                   <MaterialCommunityIcons
-                    name={(tierIcons[scanCredits.tier] || "shield-outline") as any}
+                    name={(tierIcons[pointsBalance.tier] || "shield-outline") as any}
                     size={24}
-                    color={tierColors[scanCredits.tier] || tierColors.bronze}
+                    color={tierColors[pointsBalance.tier] || tierColors.bronze}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.scanCreditsTitle}>Scan Rewards</Text>
-                  <Text style={[styles.tierBadge, { color: tierColors[scanCredits.tier] || tierColors.bronze }]}>
-                    {scanCredits.tier.charAt(0).toUpperCase() + scanCredits.tier.slice(1)} Tier
+                  <Text style={[styles.tierBadge, { color: tierColors[pointsBalance.tier] || tierColors.bronze }]}>
+                    {pointsBalance.tier.charAt(0).toUpperCase() + pointsBalance.tier.slice(1)} Tier
                   </Text>
                 </View>
                 <View style={styles.lifetimeScansChip}>
                   <MaterialCommunityIcons name="barcode-scan" size={14} color={colors.text.tertiary} />
                   <Text style={styles.lifetimeScansText}>
-                    {scanCredits.lifetimeScans} scanned
+                    {pointsBalance.tierProgress} scanned
                   </Text>
                 </View>
               </View>
 
               {/* Tier Progress */}
-              {scanCredits.tierInfo.nextTier && scanCredits.tierInfo.scansToNextTier > 0 && (
+              {pointsBalance.nextTierInfo?.nextTier && pointsBalance.nextTierInfo.scansToNextTier > 0 && (
                 <View style={styles.tierProgress}>
                   <View style={styles.tierProgressBar}>
                     <View
                       style={[
                         styles.tierProgressFill,
                         {
-                          width: `${Math.min(100, (scanCredits.lifetimeScans / (scanCredits.lifetimeScans + scanCredits.tierInfo.scansToNextTier)) * 100)}%`,
-                          backgroundColor: tierColors[scanCredits.tier] || tierColors.bronze,
+                          width: `${Math.min(100, (pointsBalance.tierProgress / (pointsBalance.tierProgress + pointsBalance.nextTierInfo.scansToNextTier)) * 100)}%`,
+                          backgroundColor: tierColors[pointsBalance.tier] || tierColors.bronze,
                         },
                       ]}
                     />
                   </View>
                   <Text style={styles.nextTierText}>
-                    {scanCredits.tierInfo.scansToNextTier} more scan{scanCredits.tierInfo.scansToNextTier !== 1 ? "s" : ""} to{" "}
-                    {scanCredits.tierInfo.nextTier.charAt(0).toUpperCase() + scanCredits.tierInfo.nextTier.slice(1)}
+                    {pointsBalance.nextTierInfo.scansToNextTier} more scan{pointsBalance.nextTierInfo.scansToNextTier !== 1 ? "s" : ""} to{" "}
+                    {pointsBalance.nextTierInfo.nextTier.charAt(0).toUpperCase() + pointsBalance.nextTierInfo.nextTier.slice(1)}
                   </Text>
                 </View>
               )}
-              {!scanCredits.tierInfo.nextTier && (
+              {!pointsBalance.nextTierInfo?.nextTier && (
                 <View style={styles.scanMaxedRow}>
                   <MaterialCommunityIcons name="trophy" size={16} color={tierColors.platinum} />
                   <Text style={[styles.scanMaxedText, { color: tierColors.platinum }]}>
@@ -329,106 +329,81 @@ export default function SubscriptionScreen() {
                 </View>
               )}
 
-              {/* Credit Progress (premium/admin only) */}
-              {scanCredits.isPremium && (
-                <>
-                  <View style={styles.creditDivider} />
+              {/* Points Progress */}
+              <>
+                <View style={styles.creditDivider} />
 
-                  {/* Scan progress dots */}
-                  <View style={styles.scanDotsRow}>
-                    {Array.from({ length: scanCredits.maxScans > 8 ? 4 : scanCredits.maxScans }).map((_, i) => {
-                      const filled = i < (scanCredits.maxScans > 8
-                        ? Math.ceil(scanCredits.scansThisPeriod / (scanCredits.maxScans / 4))
-                        : scanCredits.scansThisPeriod);
-                      return (
-                        <View
-                          key={i}
-                          style={[
-                            styles.scanDot,
-                            filled ? styles.scanDotFilled : styles.scanDotEmpty,
-                          ]}
-                        >
-                          {filled ? (
-                            <MaterialCommunityIcons name="check" size={14} color="#fff" />
-                          ) : (
-                            <MaterialCommunityIcons name="camera-outline" size={14} color={colors.text.tertiary} />
-                          )}
-                        </View>
-                      );
-                    })}
-                  </View>
-
-                  {/* Credit progress bar */}
-                  <View style={styles.creditProgressContainer}>
-                    <View style={styles.creditProgressTrack}>
+                {/* Scan progress dots */}
+                <View style={styles.scanDotsRow}>
+                  {Array.from({ length: pointsBalance.maxEarningScans > 8 ? 4 : pointsBalance.maxEarningScans }).map((_, i) => {
+                    const filled = i < (pointsBalance.maxEarningScans > 8
+                      ? Math.ceil(pointsBalance.earningScansThisMonth / (pointsBalance.maxEarningScans / 4))
+                      : pointsBalance.earningScansThisMonth);
+                    return (
                       <View
+                        key={i}
                         style={[
-                          styles.creditProgressFill,
-                          { width: `${Math.min(100, (scanCredits.creditsEarned / scanCredits.maxCredits) * 100)}%` },
+                          styles.scanDot,
+                          filled ? styles.scanDotFilled : styles.scanDotEmpty,
                         ]}
-                      />
-                    </View>
-                    <View style={styles.creditAmountRow}>
-                      <Text style={styles.creditEarned}>
-                        £{scanCredits.creditsEarned.toFixed(2)} earned
-                      </Text>
-                      <Text style={styles.creditMax}>
-                        of £{scanCredits.maxCredits.toFixed(2)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Effective price (hide for admins, show cashback branding) */}
-                  {scanCredits.creditsEarned > 0 && !isAdmin && (
-                    <View style={styles.effectivePriceRow}>
-                      <Text style={styles.effectivePriceLabel}>Next renewal:</Text>
-                      <View style={styles.effectivePriceValues}>
-                        <Text style={styles.effectivePriceStrike}>
-                          £{scanCredits.basePrice.toFixed(2)}
-                        </Text>
-                        <Text style={styles.effectivePriceValue}>
-                          £{scanCredits.effectivePrice.toFixed(2)}
-                        </Text>
+                      >
+                        {filled ? (
+                          <MaterialCommunityIcons name="check" size={14} color="#fff" />
+                        ) : (
+                          <MaterialCommunityIcons name="camera-outline" size={14} color={colors.text.tertiary} />
+                        )}
                       </View>
-                    </View>
-                  )}
-                  {scanCredits.creditsEarned > 0 && isAdmin && (
-                    <View style={styles.effectivePriceRow}>
-                      <Text style={styles.effectivePriceLabel}>Cashback reward:</Text>
-                      <View style={styles.effectivePriceValues}>
-                        <Text style={[styles.effectivePriceValue, { color: colors.accent.primary }]}>
-                          £{scanCredits.creditsEarned.toFixed(2)}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
+                    );
+                  })}
+                </View>
 
-                  {/* Encouragement */}
-                  {scanCredits.scansThisPeriod < scanCredits.maxScans ? (
-                    <Text style={styles.scanEncouragement}>
-                      Scan {scanCredits.maxScans - scanCredits.scansThisPeriod} more receipt
-                      {scanCredits.maxScans - scanCredits.scansThisPeriod !== 1 ? "s" : ""} to
-                      {isAdmin ? " earn " : " save "}£{(scanCredits.maxCredits - scanCredits.creditsEarned).toFixed(2)} more
+                {/* Points amount */}
+                <View style={styles.creditProgressContainer}>
+                  <View style={styles.creditAmountRow}>
+                    <Text style={styles.creditEarned}>
+                      {pointsBalance.availablePoints.toLocaleString()} points available
                     </Text>
-                  ) : (
-                    <View style={styles.scanMaxedRow}>
-                      <MaterialCommunityIcons name="check-circle" size={16} color={colors.semantic.success} />
-                      <Text style={styles.scanMaxedText}>
-                        Maximum credits earned this period!
-                      </Text>
-                    </View>
-                  )}
-                </>
-              )}
+                    <Text style={styles.creditMax}>
+                      (Value: £{(pointsBalance.availablePoints / 1000).toFixed(2)})
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Points History Link */}
+                <Pressable 
+                  style={{ marginTop: spacing.md, alignSelf: "center" }}
+                  onPress={() => router.push("/(app)/points-history" as any)}
+                >
+                  <Text style={{ color: colors.accent.primary, ...typography.labelMedium }}>
+                    View Points History
+                  </Text>
+                </Pressable>
+
+                {/* Encouragement */}
+                {pointsBalance.earningScansThisMonth < pointsBalance.maxEarningScans ? (
+                  <Text style={styles.scanEncouragement}>
+                    Scan {pointsBalance.maxEarningScans - pointsBalance.earningScansThisMonth} more receipt
+                    {pointsBalance.maxEarningScans - pointsBalance.earningScansThisMonth !== 1 ? "s" : ""} to
+                    earn up to {pointsBalance.monthlyEarningCap} more points this month
+                  </Text>
+                ) : (
+                  <View style={styles.scanMaxedRow}>
+                    <MaterialCommunityIcons name="check-circle" size={16} color={colors.semantic.success} />
+                    <Text style={styles.scanMaxedText}>
+                      Maximum points earning scans reached for this month!
+                    </Text>
+                  </View>
+                )}
+              </>
 
               {/* Free user CTA */}
-              {!scanCredits.isPremium && !isAdmin && (
+              {!pointsBalance.isPremium && !isAdmin && (
                 <>
                   <View style={styles.creditDivider} />
                   <View style={styles.freeUserCta}>
-                    <MaterialCommunityIcons name="cash-multiple" size={18} color={colors.accent.primary} />
+                    <MaterialCommunityIcons name="star-circle-outline" size={18} color={colors.accent.primary} />
                     <Text style={styles.freeUserCtaText}>
-                      Upgrade to earn up to £{scanCredits.tierInfo.maxCredits.toFixed(2)}/mo back from your scans
+                      Upgrade to unlock more earning scans per month and get higher points per scan.
                     </Text>
                   </View>
                 </>

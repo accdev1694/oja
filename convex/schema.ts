@@ -302,6 +302,12 @@ export default defineSchema({
 
     // Duplicate detection fingerprint: storeName|total|purchaseDate
     fingerprint: v.optional(v.string()),
+
+    // Fraud prevention and points
+    imageHash: v.optional(v.string()),      // Link to receiptHashes
+    pointsEarned: v.optional(v.number()),   // Points earned from this scan
+    earnedPoints: v.optional(v.boolean()),  // Did this scan earn points?
+    fraudFlags: v.optional(v.array(v.string())), // Validation warnings
   })
     .index("by_user", ["userId"])
     .index("by_user_date", ["userId", "purchaseDate"])
@@ -311,6 +317,7 @@ export default defineSchema({
     .index("by_created", ["createdAt"])
     .index("by_store_status", ["storeName", "processingStatus"])
     .index("by_status_created", ["processingStatus", "createdAt"])
+    .index("by_hash", ["imageHash"]) // Deduplication
     .searchIndex("search_store", { searchField: "storeName" }),
 
   // Current best-known prices (freshest price per item per store)
@@ -508,6 +515,66 @@ export default defineSchema({
     .index("by_user_active", ["userId", "endDate"]),
 
   // === Epic 7: Subscriptions & Loyalty ===
+
+  // New Points System (Phase 2)
+  pointsBalance: defineTable({
+    userId: v.id("users"),
+    totalPoints: v.number(),        // Lifetime earned
+    availablePoints: v.number(),    // Current balance (redeemable)
+    pendingPoints: v.number(),      // Awaiting next billing cycle
+    pointsUsed: v.number(),         // Historical redemptions
+    tier: v.string(),               // bronze/silver/gold/platinum
+    tierProgress: v.number(),       // Lifetime scans (for tier calc)
+    earningScansThisMonth: v.number(), // Count of scans that earned points this month
+    monthStart: v.number(),         // Timestamp of current earning period start
+    lastEarnedAt: v.number(),       // Timestamp of last points earned
+    streakCount: v.number(),        // Consecutive weeks with scans
+    lastStreakScan: v.number(),     // Week number of last scan (for streak tracking)
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_tier", ["tier"]),
+
+  pointsTransactions: defineTable({
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("earn"),        // Earned from scan
+      v.literal("bonus"),       // Streak/referral bonus
+      v.literal("redeem"),      // Applied to invoice
+      v.literal("expire"),      // Points expired (12mo)
+      v.literal("refund"),      // Scan deleted/fraudulent
+    ),
+    amount: v.number(),          // Points (positive or negative)
+    source: v.string(),          // "receipt_scan", "referral", "streak_bonus", "invoice_XXX"
+    receiptId: v.optional(v.id("receipts")),
+    invoiceId: v.optional(v.string()), // Stripe invoice ID
+    stripeInvoiceItemId: v.optional(v.string()), // Stripe invoice item ID
+    balanceBefore: v.number(),
+    balanceAfter: v.number(),
+    metadata: v.optional(v.any()),  // Extra data (e.g., tier at time of earn)
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_and_type", ["userId", "type"])
+    .index("by_receipt", ["receiptId"])
+    .index("by_created", ["createdAt"]),
+
+  receiptHashes: defineTable({
+    userId: v.id("users"),
+    imageHash: v.string(),          // SHA-256 of receipt image
+    receiptId: v.id("receipts"),
+    storeName: v.optional(v.string()),
+    receiptDate: v.optional(v.number()), // Parsed from OCR
+    totalAmount: v.optional(v.number()),
+    ocrConfidence: v.optional(v.number()), // 0-100
+    flags: v.optional(v.array(v.string())), // ["duplicate", "low_confidence", etc]
+    firstSeenAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_hash", ["imageHash"])
+    .index("by_user_and_date", ["userId", "receiptDate"])
+    .index("by_flags", ["flags"]),
 
   // User subscriptions
   subscriptions: defineTable({

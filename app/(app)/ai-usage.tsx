@@ -25,7 +25,7 @@ export default function AIUsageScreen() {
   const router = useRouter();
   const { user: convexUser } = useCurrentUser();
   const usageSummary = useQuery(api.aiUsage.getUsageSummary);
-  const scanCredits = useQuery(api.subscriptions.getScanCredits);
+  const pointsBalance = useQuery(api.points.getPointsBalance);
   const updateAiSettings = useMutation(api.aiUsage.updateAiSettings);
 
   const isAdmin = !!convexUser?.isAdmin;
@@ -216,7 +216,7 @@ export default function AIUsageScreen() {
         </View>
 
         {/* Tier Progress */}
-        {scanCredits && (
+        {pointsBalance && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Scan Tier</Text>
             <GlassCard variant="standard">
@@ -226,11 +226,11 @@ export default function AIUsageScreen() {
                     name="shield-star"
                     size={28}
                     color={
-                      scanCredits.tier === "platinum"
+                      pointsBalance.tier === "platinum"
                         ? "#E5E4E2"
-                        : scanCredits.tier === "gold"
+                        : pointsBalance.tier === "gold"
                           ? "#FFD700"
-                          : scanCredits.tier === "silver"
+                          : pointsBalance.tier === "silver"
                             ? "#C0C0C0"
                             : "#CD7F32"
                     }
@@ -238,16 +238,16 @@ export default function AIUsageScreen() {
                 </View>
                 <View style={styles.tierInfo}>
                   <Text style={styles.tierName}>
-                    {scanCredits.tier.charAt(0).toUpperCase() + scanCredits.tier.slice(1)} Tier
+                    {pointsBalance.tier.charAt(0).toUpperCase() + pointsBalance.tier.slice(1)} Tier
                   </Text>
                   <Text style={styles.tierSubtitle}>
-                    £{scanCredits.tierInfo?.creditPerScan?.toFixed(2) ?? "0.25"} per scan
+                    Earn up to {pointsBalance.monthlyEarningCap} pts/mo
                   </Text>
                 </View>
-                {scanCredits.tierInfo?.scansToNextTier && scanCredits.tierInfo.scansToNextTier > 0 && (
+                {pointsBalance.nextTierInfo?.scansToNextTier && pointsBalance.nextTierInfo.scansToNextTier > 0 && (
                   <View style={styles.nextTierBadge}>
                     <Text style={styles.nextTierText}>
-                      {scanCredits.tierInfo.scansToNextTier} to {scanCredits.tierInfo.nextTier}
+                      {pointsBalance.nextTierInfo.scansToNextTier} to {pointsBalance.nextTierInfo.nextTier}
                     </Text>
                   </View>
                 )}

@@ -6,13 +6,13 @@
 // AI feature limits by plan (monthly)
 export const AI_LIMITS = {
   voice: {
-    free: 20,
+    free: 10, // Down from 20
     premium_monthly: 200,
     premium_annual: 200,
   },
-  // Receipts: free users get 3/mo, paid users unlimited (they earn sub discount)
+  // Receipts: free users get unlimited for tracking, but point-earning scans are limited to 1/mo
   receipt: {
-    free: 3,
+    free: -1, // Unlimited receipt scanning for tracking
     premium_monthly: -1, // unlimited
     premium_annual: -1, // unlimited
   },
@@ -20,8 +20,8 @@ export const AI_LIMITS = {
 
 export function getFreeFeatures() {
   return {
-    maxLists: 3,
-    maxPantryItems: 50,
+    maxLists: 2, // Down from 3
+    maxPantryItems: 30, // Down from 50
     maxReceiptScans: AI_LIMITS.receipt.free,
     maxVoiceRequests: AI_LIMITS.voice.free,
     receiptScanning: true,
@@ -64,24 +64,25 @@ export function isEffectivelyPremium(sub: any): boolean {
 }
 
 // ============================================================================
-// TIER SYSTEM — Scan-based tiers with credit rates
+// TIER SYSTEM — Scan-based tiers with points rates
 // ============================================================================
 
 export type TierName = "bronze" | "silver" | "gold" | "platinum";
 
 export interface TierConfig {
   tier: TierName;
-  creditPerScan: number;
-  maxScans: number;     // monthly cap
-  maxCredits: number;   // monthly max credit (£)
-  threshold: number;    // lifetime scans to reach
+  pointsPerScan: number;
+  maxEarningScans: number; // monthly cap for earning points
+  maxPoints: number;       // monthly max points
+  threshold: number;       // lifetime scans to reach
 }
 
+// These are the rates for PREMIUM users. Free users are capped separately (1 scan, 100pts)
 export const TIER_TABLE: TierConfig[] = [
-  { tier: "bronze",   threshold: 0,   creditPerScan: 0.25, maxScans: 4, maxCredits: 1.00 },
-  { tier: "silver",   threshold: 20,  creditPerScan: 0.25, maxScans: 5, maxCredits: 1.25 },
-  { tier: "gold",     threshold: 50,  creditPerScan: 0.30, maxScans: 5, maxCredits: 1.50 },
-  { tier: "platinum", threshold: 100, creditPerScan: 0.30, maxScans: 6, maxCredits: 1.79 },
+  { tier: "bronze",   threshold: 0,   pointsPerScan: 150, maxEarningScans: 4, maxPoints: 600 },
+  { tier: "silver",   threshold: 20,  pointsPerScan: 175, maxEarningScans: 5, maxPoints: 875 },
+  { tier: "gold",     threshold: 50,  pointsPerScan: 200, maxEarningScans: 5, maxPoints: 1000 },
+  { tier: "platinum", threshold: 100, pointsPerScan: 225, maxEarningScans: 6, maxPoints: 1350 },
 ];
 
 export function getTierFromScans(lifetimeScans: number): TierConfig {
@@ -102,6 +103,16 @@ export function getNextTierInfo(lifetimeScans: number) {
     nextTier: next.tier,
     scansToNextTier: Math.max(0, next.threshold - lifetimeScans),
   };
+}
+
+export function getMaxEarningScans(tier: TierConfig, isPremium: boolean): number {
+  if (!isPremium) return 1;
+  return tier.maxEarningScans;
+}
+
+export function getPointsPerScan(tier: TierConfig, isPremium: boolean): number {
+  if (!isPremium) return 100;
+  return tier.pointsPerScan;
 }
 
 /**

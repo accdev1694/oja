@@ -130,6 +130,9 @@ export const create = mutation({
   },
 });
 
+import { validateReceiptData } from "./lib/receiptValidation";
+import { earnPointsInternal } from "./points";
+
 /**
  * Update receipt with parsed data
  */
@@ -163,6 +166,7 @@ export const update = mutation({
       )
     ),
     imageQuality: v.optional(v.number()),
+    imageHash: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -206,6 +210,46 @@ export const update = mutation({
       name: toGroceryTitleCase(item.name),
     }));
     if (args.imageQuality !== undefined) updates.imageQuality = args.imageQuality;
+    if (args.imageHash !== undefined) updates.imageHash = args.imageHash;
+
+    // Phase 2: Fraud Prevention and Points Awaring
+    let earnedPoints = false;
+    let pointsAmount = 0;
+    let fraudFlags: string[] = [];
+    
+    if (args.processingStatus === "completed" && args.imageHash) {
+      // 1. Save the receipt hash for future duplicate checks
+      await ctx.db.insert("receiptHashes", {
+        userId: user._id,
+        imageHash: args.imageHash,
+        receiptId: args.id,
+        storeName: args.storeName,
+        receiptDate: args.purchaseDate,
+        totalAmount: args.total,
+        ocrConfidence: args.imageQuality,
+        firstSeenAt: Date.now(),
+        createdAt: Date.now(),
+      });
+
+      // 2. Validate the receipt
+      const validation = await validateReceiptData(ctx, user._id, args.imageHash, {
+        storeName: args.storeName,
+        total: args.total,
+        purchaseDate: args.purchaseDate,
+        items: args.items,
+        imageQuality: args.imageQuality
+      });
+
+      fraudFlags = validation.flags;
+      updates.fraudFlags = fraudFlags;
+
+      if (validation.isValid && !receipt.earnedPoints) {
+        // Validation passed. Points will be awarded when the user confirms the receipt.
+        // We just save the hash and flags for now.
+      } else if (!validation.isValid && validation.reason) {
+        console.warn(`Receipt ${args.id} failed validation: ${validation.reason}`);
+      }
+    }
 
     await ctx.db.patch(args.id, updates);
 

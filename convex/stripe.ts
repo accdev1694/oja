@@ -168,29 +168,31 @@ export const processWebhookEvent = action({
       }
 
       case "invoice.created": {
-        // Apply scan credits as a discount before the invoice is finalized
+        // Apply points as a discount before the invoice is finalized
         // Handles both first subscription and renewals
         const isSubscriptionInvoice =
           data.billing_reason === "subscription_cycle" ||
           data.billing_reason === "subscription_create";
         if (isSubscriptionInvoice && data.status === "draft") {
           const creditResult: any = await ctx.runMutation(
-            internal.stripe.getAndMarkScanCredits,
+            internal.stripe.getAndMarkPoints,
             {
               stripeCustomerId: data.customer,
               stripeInvoiceId: data.id,
             }
           );
-          if (creditResult && creditResult.creditsToApply > 0) {
+          if (creditResult && creditResult.pointsApplied > 0) {
             const stripe = await getStripeClient();
             // Add a negative invoice item (credit) to the draft invoice
-            const creditAmountPence = Math.round(creditResult.creditsToApply * 100);
+            // 1000 points = £1.00 = 100 pence. So points / 10 = pence.
+            const creditAmountPence = Math.round(creditResult.pointsApplied / 10);
+            
             await stripe.invoiceItems.create({
               customer: data.customer,
               invoice: data.id,
               amount: -creditAmountPence,
               currency: "gbp",
-              description: `Scan credit reward (${creditResult.tier} tier, ${creditResult.scansThisPeriod} scans)`,
+              description: `Oja Points redemption (${creditResult.pointsApplied} pts applied)`,
             });
           }
         }
@@ -328,45 +330,8 @@ export const handleCheckoutCompleted = internalMutation({
     // Track activity
     await trackActivity(ctx, userId, "subscribed", { plan: args.planId });
 
-    // Create initial scanCredits record for the first billing period
-    // Carry forward lifetime scans from trial period if they exist
-    const prevCredit = await ctx.db
-      .query("scanCredits")
-      .withIndex("by_user", (q: any) => q.eq("userId", userId))
-      .order("desc")
-      .first();
-
-    const lifetimeScans = prevCredit?.lifetimeScans ?? 0;
-    const tier = prevCredit?.tier ?? "bronze";
-    const isAnnual = plan === "premium_annual";
-    const tierConfig = getTierFromScans(lifetimeScans);
-
-    const periodStart = existing?.currentPeriodStart ?? now;
-    const periodEnd = existing?.currentPeriodEnd ?? now + 30 * 24 * 60 * 60 * 1000;
-    const maxScans = isAnnual ? tierConfig.maxScans * 12 : tierConfig.maxScans;
-    const maxCredits = isAnnual
-      ? parseFloat((tierConfig.maxCredits * 12).toFixed(2))
-      : tierConfig.maxCredits;
-
-    // Only create if no active-period record exists
-    const hasActiveCreditRecord = prevCredit && prevCredit.periodEnd > now && !prevCredit.appliedToInvoice;
-    if (!hasActiveCreditRecord) {
-      await ctx.db.insert("scanCredits", {
-        userId,
-        periodStart,
-        periodEnd,
-        scansThisPeriod: 0,
-        creditsEarned: 0,
-        maxScans,
-        maxCredits,
-        creditPerScan: tierConfig.creditPerScan,
-        appliedToInvoice: false,
-        lifetimeScans,
-        tier: tier as "bronze" | "silver" | "gold" | "platinum",
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
+    // Note: Points balance is now created/updated dynamically when a user earns points.
+    // No need to create billing-period specific records anymore.
   },
 });
 
@@ -393,7 +358,7 @@ export const handleSubscriptionUpdated = internalMutation({
 
     if (!sub) return;
 
-    // Detect billing period change → reset scan credits
+    // Detect billing period change
     const periodChanged = sub.currentPeriodStart !== args.currentPeriodStart;
 
     await ctx.db.patch(sub._id, {
@@ -404,44 +369,7 @@ export const handleSubscriptionUpdated = internalMutation({
       updatedAt: Date.now(),
     });
 
-    // Create fresh scan credits record for new billing period (tier-aware)
-    if (periodChanged && (args.status === "active" || args.status === "trial")) {
-      const isAnnual = sub.plan === "premium_annual";
-
-      // Carry forward lifetimeScans and tier from previous record
-      const prevCredit = await ctx.db
-        .query("scanCredits")
-        .withIndex("by_user", (q: any) => q.eq("userId", sub.userId))
-        .order("desc")
-        .first();
-
-      const lifetimeScans = prevCredit?.lifetimeScans ?? 0;
-      const tier = prevCredit?.tier ?? "bronze";
-
-      // Tier-aware caps (using shared tier config)
-      const tierConfig = getTierFromScans(lifetimeScans);
-
-      const maxScans = isAnnual ? tierConfig.maxScans * 12 : tierConfig.maxScans;
-      const maxCredits = isAnnual
-        ? parseFloat((tierConfig.maxCredits * 12).toFixed(2))
-        : tierConfig.maxCredits;
-
-      await ctx.db.insert("scanCredits", {
-        userId: sub.userId,
-        periodStart: args.currentPeriodStart,
-        periodEnd: args.currentPeriodEnd,
-        scansThisPeriod: 0,
-        creditsEarned: 0,
-        maxScans,
-        maxCredits,
-        creditPerScan: tierConfig.creditPerScan,
-        appliedToInvoice: false,
-        lifetimeScans,
-        tier: tier as any,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-    }
+    // Note: Points balance is handled dynamically. No period-specific record needed.
   },
 });
 
@@ -474,10 +402,10 @@ export const handleSubscriptionDeleted = internalMutation({
 });
 
 /**
- * Get unapplied scan credits for a Stripe customer and mark them as applied.
- * Called during invoice.created to apply credits as a discount.
+ * Get unapplied points for a Stripe customer and mark them as applied.
+ * Called during invoice.created to apply points as a discount.
  */
-export const getAndMarkScanCredits = internalMutation({
+export const getAndMarkPoints = internalMutation({
   args: {
     stripeCustomerId: v.string(),
     stripeInvoiceId: v.optional(v.string()),
@@ -493,28 +421,52 @@ export const getAndMarkScanCredits = internalMutation({
 
     if (!sub) return null;
 
-    // Find the latest unapplied scan credit record for this user
-    const credit = await ctx.db
-      .query("scanCredits")
+    // Find points balance
+    const balance = await ctx.db
+      .query("pointsBalance")
       .withIndex("by_user", (q: any) => q.eq("userId", sub.userId))
-      .order("desc")
       .first();
 
-    if (!credit || credit.appliedToInvoice || credit.creditsEarned <= 0) {
+    if (!balance || balance.availablePoints < 500) {
       return null;
     }
 
-    // Mark as applied with invoice ID for audit trail
-    await ctx.db.patch(credit._id, {
-      appliedToInvoice: true,
-      stripeInvoiceId: args.stripeInvoiceId,
-      updatedAt: Date.now(),
+    // Determine how many points to apply. 
+    // They are applied in increments of 500.
+    const pointsToApply = Math.floor(balance.availablePoints / 500) * 500;
+    
+    // We shouldn't discount more than the subscription price. 
+    // The base price is £1.99 = 1990 points.
+    // Let's cap at 1500 points (£1.50) to ensure there's still a small charge or just cap at 1500 per month.
+    // Or we can apply up to the invoice amount, but we don't know the exact invoice amount here easily without querying Stripe.
+    // For simplicity, let's cap at 1500 points.
+    const maxPoints = 1500;
+    const finalPoints = Math.min(pointsToApply, maxPoints);
+
+    if (finalPoints === 0) return null;
+
+    // Deduct points
+    const now = Date.now();
+    await ctx.db.patch(balance._id, {
+      availablePoints: balance.availablePoints - finalPoints,
+      pointsUsed: balance.pointsUsed + finalPoints,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("pointsTransactions", {
+      userId: sub.userId,
+      type: "redeem",
+      amount: -finalPoints,
+      source: "invoice_credit",
+      invoiceId: args.stripeInvoiceId,
+      balanceBefore: balance.availablePoints,
+      balanceAfter: balance.availablePoints - finalPoints,
+      createdAt: now,
     });
 
     return {
-      creditsToApply: credit.creditsEarned,
-      scansThisPeriod: credit.scansThisPeriod,
-      tier: credit.tier ?? "bronze",
+      pointsApplied: finalPoints,
+      tier: balance.tier ?? "bronze",
     };
   },
 });

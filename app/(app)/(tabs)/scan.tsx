@@ -345,6 +345,7 @@ export default function ScanScreen() {
           total: parsedData.total,
           processingStatus: "completed",
           imageQuality: parsedData.imageQuality,
+          imageHash: parsedData.imageHash,
           items: parsedData.items.map((item: Record<string, unknown>) => ({
             name: item.name as string,
             quantity: item.quantity as number,
