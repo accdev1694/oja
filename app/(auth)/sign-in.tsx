@@ -118,7 +118,6 @@ export default function SignInScreen() {
         // Handle 2FA if needed
         setError("Two-factor authentication required. Please check your authenticator app.");
       } else {
-        console.log("[SignIn] Unexpected status:", signInAttempt.status);
         setError(`Sign in incomplete (${signInAttempt.status}). Please try again.`);
       }
     } catch (err: any) {
@@ -313,7 +312,7 @@ export default function SignInScreen() {
 
           {/* Footer */}
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
+            <Text style={styles.footerText}>Don&apos;t have an account? </Text>
             <Link href="/(auth)/sign-up" asChild>
               <Pressable>
                 <Text style={styles.linkText}>Sign up</Text>

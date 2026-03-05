@@ -323,7 +323,8 @@ GEMINI_API_KEY, OPENAI_API_KEY, STRIPE_SECRET_KEY, CLERK_SECRET_KEY
 ### Before Going Live — Checklist
 - [ ] Enable `invoice.created` event in Stripe Dashboard webhook settings
 - [ ] Verify `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL` in Convex Dashboard
-- [ ] Live test: signup → trial → scan receipts → subscribe → verify first invoice has credit discount
+- [ ] **Stripe setup:** Complete end-to-end live testing (signup → trial → scan → subscribe → credit discount)
+- [ ] **Ice-Box Review:** Review `MARKETING_ICEBOX.md` to prioritize viral growth and sharing features
 - [ ] Live test: monthly renewal → verify credits reset and apply to next invoice
 - [ ] Live test: cancel → verify features drop to free tier
 - [ ] Consider: trial-period credits — currently they accumulate but only apply if user subscribes before trial ends and `invoice.created` fires
@@ -332,6 +333,20 @@ GEMINI_API_KEY, OPENAI_API_KEY, STRIPE_SECRET_KEY, CLERK_SECRET_KEY
 
 ## Subscription System (PINNED — Revisit Later)
 
+
+## Data Retention & Scaling Policy (Concise)
+
+### Currently Implemented
+- **Pantry Limits:** Free users capped at 30 items; all users capped at 150 active items (LIFO archiving).
+- **Auto-Archiving:** Daily cron archives non-pinned "out of stock" items idle for 90 days.
+- **Deduplication:** Fuzzy name matching (85% Levenshtein) + unit normalization (e.g., 1L = 1000ml) on creation.
+- **Pruning:** Notifications deleted after 30 days; admin logs archived weekly.
+
+### Future Scaling Steps
+- **Semantic Matching:** Move from fuzzy text to AI vector embeddings for better variant merging.
+- **Price Compression:** Aggregate data >1 year old into monthly averages to shrink `priceHistory`.
+- **Image Lifecycle:** Delete or move receipt images to cold storage 6 months after successful parsing.
+- **Community Cleanup:** Implement "Report Duplicate" tools for users to flag global catalog bloat.
 
 ## BMAD Workflow
 

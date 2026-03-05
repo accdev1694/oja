@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
+
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -30,7 +31,6 @@ import {
 } from "@/components/ui/glass";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
-import { haptic } from "@/lib/haptics/safeHaptics";
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
@@ -39,7 +39,11 @@ export default function ProfileScreen() {
   const { alert } = useGlassAlert();
   const { firstName, user: convexUser } = useCurrentUser();
   const isSwitchingUsers = useIsSwitchingUsers();
-
+  
+  const cancelAllSubs = useAction(api.stripe.cancelAllUserSubscriptions);
+  const resetMyAccount = useMutation(api.users.resetMyAccount);
+  const deleteMyAccount = useMutation(api.users.deleteMyAccount);
+  
   // Skip all queries during user switching to prevent cache leakage
   const allLists = useQuery(
     api.shoppingLists.getByUser,
@@ -75,8 +79,7 @@ export default function ProfileScreen() {
   );
   const generateReferralCode = useMutation(api.referrals.generateReferralCode);
   const generateChallenge = useMutation(api.insights.generateChallenge);
-  const resetMyAccount = useMutation(api.users.resetMyAccount);
-  const deleteMyAccount = useMutation(api.users.deleteMyAccount);
+  
   const [isResetting, setIsResetting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [animationKey, setAnimationKey] = useState(0);
@@ -91,6 +94,10 @@ export default function ProfileScreen() {
   );
   const systemHealth = useQuery(
     api.admin.getSystemHealth,
+    isAdmin ? {} : "skip"
+  );
+  const platformAIUsage = useQuery(
+    api.admin.getPlatformAIUsage,
     isAdmin ? {} : "skip"
   );
 
@@ -168,14 +175,21 @@ export default function ProfileScreen() {
   const handleDeleteAccount = () => {
     confirmAction(
       "Delete Account",
-      "This permanently deletes EVERYTHING — Convex data AND your Clerk login. You'll need to sign up with a fresh email. Are you sure?",
+      "This permanently deletes EVERYTHING — Convex data AND your Clerk login. You&apos;ll need to sign up with a fresh email. Are you sure?",
       async () => {
         setIsDeleting(true);
         try {
-          // 1. Delete all Convex data + user doc
+          // 1. Cancel all Stripe subscriptions (Crucial for End-to-End)
+          try {
+            await cancelAllSubs();
+          } catch (stripeErr) {
+            console.error("Stripe cancellation failed (ignoring for account deletion):", stripeErr);
+          }
+
+          // 2. Delete all Convex data + user doc
           await deleteMyAccount();
 
-          // 2. Delete Clerk account (removes email from auth system)
+          // 3. Delete Clerk account (removes email from auth system)
           if (user) {
             try {
               await user.delete();
@@ -227,6 +241,14 @@ export default function ProfileScreen() {
     );
   }
 
+  // Improved name resolution
+  const userDisplayName = 
+    convexUser?.name || 
+    user?.firstName || 
+    user?.username || 
+    user?.primaryEmailAddress?.emailAddress?.split("@")[0] || 
+    "Shopper";
+
   // Calculate stats
   const completedLists = allLists.filter((list) => list.status === "completed");
   const outOfStockItems = pantryItems.filter((item) => item.stockLevel === "out").length;
@@ -235,7 +257,7 @@ export default function ProfileScreen() {
   return (
     <GlassScreen>
       <SimpleHeader
-        title={firstName ? `Hey, ${firstName}` : "Profile"}
+        title={userDisplayName ? `Hey, ${userDisplayName}` : "Profile"}
         accentColor={colors.semantic.profile}
         subtitle="Your insights & settings"
       />
@@ -250,14 +272,14 @@ export default function ProfileScreen() {
         {/* Admin Control Center - TOP PRIORITY FOR ADMINS */}
         {isAdmin && (
           <View style={{ gap: spacing.lg, marginBottom: spacing.lg }}>
-            {/* 1. Platform Vitals (GMV + Health) */}
+            {/* 1. Platform Vitals (GMV + Health + AI) */}
             <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Platform Overview</Text>
+                <Text style={styles.sectionTitle}>Global Platform Overview (Admin)</Text>
                 <GlassCard variant="bordered" accentColor={colors.accent.primary} style={styles.adminHeroCard}>
                   <View style={styles.gmvRow}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.adminLabel}>Gross Volume</Text>
+                      <Text style={styles.adminLabel}>Global GMV</Text>
                       <Text style={styles.gmvValueHero}>
                         £{((gmvFilter === "week" ? adminAnalytics?.gmvThisWeek : 
                            gmvFilter === "month" ? adminAnalytics?.gmvThisMonth : 
@@ -290,9 +312,39 @@ export default function ProfileScreen() {
                       </Text>
                     </View>
                     <Text style={styles.healthSubtext}>
-                      {systemHealth?.receiptProcessing?.successRate ?? 100}% Extract Rate
+                      {platformAIUsage?.activeProvider || "Gemini 2.0"}
                     </Text>
                   </View>
+
+                  <View style={styles.healthDivider} />
+
+                  <View style={styles.aiUsageRow}>
+                    <View style={styles.aiUsageItem}>
+                      <Text style={styles.adminLabel}>Global Tokens</Text>
+                      <Text style={styles.aiUsageValue}>{(platformAIUsage?.totalTokens ?? 0).toLocaleString()}</Text>
+                    </View>
+                    <View style={styles.aiUsageItem}>
+                      <Text style={styles.adminLabel}>Global Req</Text>
+                      <Text style={styles.aiUsageValue}>{(platformAIUsage?.totalRequests ?? 0).toLocaleString()}</Text>
+                    </View>
+                    <View style={styles.aiUsageItem}>
+                      <Text style={styles.adminLabel}>Voice (All)</Text>
+                      <Text style={styles.aiUsageValue}>{(platformAIUsage?.summary?.voice?.requests ?? 0).toLocaleString()}</Text>
+                    </View>
+                  </View>
+
+                  {platformAIUsage?.alert && (
+                    <View style={[styles.adminAlertBox, { backgroundColor: platformAIUsage.alert.level === "critical" ? `${colors.semantic.danger}15` : `${colors.semantic.warning}15`, borderColor: platformAIUsage.alert.level === "critical" ? colors.semantic.danger : colors.semantic.warning }]}>
+                      <MaterialCommunityIcons 
+                        name={platformAIUsage.alert.level === "critical" ? "alert-octagon" : "alert-circle"} 
+                        size={16} 
+                        color={platformAIUsage.alert.level === "critical" ? colors.semantic.danger : colors.semantic.warning} 
+                      />
+                      <Text style={[styles.adminAlertText, { color: platformAIUsage.alert.level === "critical" ? colors.semantic.danger : colors.semantic.warning }]}>
+                        {platformAIUsage.alert.message}
+                      </Text>
+                    </View>
+                  )}
                 </GlassCard>
               </View>
             </AnimatedSection>
@@ -348,7 +400,7 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.accountInfo}>
                   <Text style={styles.accountName}>
-                    {user?.firstName || user?.username || "User"}
+                    {userDisplayName}
                   </Text>
                   <Text style={styles.accountEmail}>
                     {user?.primaryEmailAddress?.emailAddress || "Not set"}
@@ -364,7 +416,7 @@ export default function ProfileScreen() {
                 <Text style={styles.referralTitle}>Invite Friends, Get Points</Text>
               </View>
               <Text style={styles.referralSubtitle}>
-                Get 500 pts (£0.50) for every friend who joins. They'll get 500 pts too!
+                Get 500 pts (£0.50) for every friend who joins. They&apos;ll get 500 pts too!
               </Text>
               
               <View style={styles.referralCodeBox}>
@@ -408,7 +460,7 @@ export default function ProfileScreen() {
                 <GlassCard variant="standard" style={styles.milestonePath}>
                   <Text style={styles.milestoneTitle}>Your journey starts here</Text>
                   <Text style={styles.milestoneSubtitle}>
-                    Most shoppers save £30+ in their first month. Here's how to get there:
+                    Most shoppers save £30+ in their first month. Here&apos;s how to get there:
                   </Text>
                   <View style={styles.milestoneSteps}>
                     {milestones.map((step) => (
@@ -668,30 +720,36 @@ export default function ProfileScreen() {
           </View>
         </AnimatedSection>
 
-        {/* Dev Tools — Reset & Delete */}
+        {/* Danger Zone - For all users (Legal Requirement) */}
         <AnimatedSection animation="fadeInDown" duration={400} delay={250}>
           <View style={styles.devToolsSection}>
-          <Text style={styles.devToolsLabel}>Dev Tools</Text>
-          <GlassButton
-            variant="secondary"
-            size="md"
-            icon="refresh"
-            onPress={handleResetAccount}
-            disabled={isResetting}
-          >
-            {isResetting ? "Resetting..." : "Reset Account (re-onboard)"}
-          </GlassButton>
-          <View style={{ height: spacing.sm }} />
-          <GlassButton
-            variant="danger"
-            size="md"
-            icon="delete-forever"
-            onPress={handleDeleteAccount}
-            disabled={isDeleting}
-          >
-            {isDeleting ? "Deleting..." : "Delete Account"}
-          </GlassButton>
-        </View>
+            <Text style={styles.devToolsLabel}>Danger Zone</Text>
+            <GlassButton
+              variant="danger"
+              size="md"
+              icon="delete-forever"
+              onPress={handleDeleteAccount}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete Account"}
+            </GlassButton>
+            
+            {isAdmin && (
+              <>
+                <View style={{ height: spacing.sm, marginTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border, paddingTop: spacing.md }} />
+                <Text style={styles.devToolsLabel}>Admin Dev Tools</Text>
+                <GlassButton
+                  variant="secondary"
+                  size="md"
+                  icon="refresh"
+                  onPress={handleResetAccount}
+                  disabled={isResetting}
+                >
+                  {isResetting ? "Resetting..." : "Reset Account (re-onboard)"}
+                </GlassButton>
+              </>
+            )}
+          </View>
         </AnimatedSection>
         </View>
 
@@ -701,10 +759,6 @@ export default function ProfileScreen() {
     </GlassScreen>
   );
 }
-
-// =============================================================================
-// STYLES
-// =============================================================================
 
 const styles = StyleSheet.create({
   scrollView: {
@@ -817,6 +871,35 @@ const styles = StyleSheet.create({
   },
   mainAdminBtn: {
     marginBottom: spacing.md,
+  },
+  aiUsageRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  aiUsageItem: {
+    flex: 1,
+  },
+  aiUsageValue: {
+    ...typography.labelSmall,
+    color: colors.text.primary,
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  adminAlertBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    marginTop: spacing.md,
+  },
+  adminAlertText: {
+    ...typography.labelSmall,
+    flex: 1,
+    fontWeight: "700",
   },
   quickActionRow: {
     flexDirection: "row",

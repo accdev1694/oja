@@ -166,7 +166,7 @@ export default function SupportScreen() {
               ) : myTickets.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <MaterialCommunityIcons name="ticket-outline" size={64} color={colors.text.tertiary} />
-                  <Text style={styles.emptyText}>You haven't created any support tickets yet.</Text>
+                  <Text style={styles.emptyText}>You haven&apos;t created any support tickets yet.</Text>
                   <GlassButton onPress={() => setView("form")} variant="ghost" size="sm">
                     Create New Ticket
                   </GlassButton>

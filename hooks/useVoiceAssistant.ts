@@ -38,7 +38,6 @@ try {
 }
 
 const AUDIO_AVAILABLE = AudioModule != null;
-console.log("[Voice] expo-av available:", AUDIO_AVAILABLE);
 
 // ── Safe dynamic import of expo-speech-recognition ──────────────────
 // The native module crashes in Expo Go, so we try/catch the require.
@@ -140,7 +139,6 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
 
   const speakText = useCallback(
     async (text: string, onDone?: () => void) => {
-      console.log("[Voice] speakText called with:", text.substring(0, 50) + "...");
 
       // Gap 5: Truncate TTS text to stay within cloud TTS character limits (5000 chars)
       const MAX_TTS_CHARS = 4500;
@@ -158,11 +156,9 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
 
       // Only try neural TTS if expo-av is available
       if (AUDIO_AVAILABLE) {
-        console.log("[Voice] Trying neural TTS...");
         try {
           // Try Google Cloud / Azure Neural TTS first
           const result = await textToSpeech({ text: ttsText, voiceGender: "MALE" });
-          console.log("[Voice] TTS result:", result.provider, result.error ? `Error: ${result.error}` : "Success");
 
           if (result.audioBase64) {
             // Play the neural voice audio
@@ -188,10 +184,8 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
       }
 
       // Fallback to device TTS (expo-speech) — try to find best voice
-      console.log("[Voice] Using device TTS fallback...");
       try {
         const voices = await Speech.getAvailableVoicesAsync();
-        console.log("[Voice] Available voices count:", voices.length);
         // Prefer enhanced/premium British voices
         const britishVoice = voices.find(
           (v) =>
@@ -243,7 +237,6 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
   // ── Speech Recognition Events ──────────────────────────────────────
 
   useSpeechEvent("start", () => {
-    console.log("[Voice] Speech recognition started");
     setState((s: VoiceAssistantState) => ({ ...s, isListening: true, error: null }));
   });
 
@@ -253,7 +246,6 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
 
   useSpeechEvent("result", (event: any) => {
     const transcript = event.results[0]?.transcript || "";
-    console.log("[Voice] Result:", { transcript, isFinal: event.isFinal });
     if (event.isFinal) {
       setState((s: VoiceAssistantState) => ({ ...s, transcript, partialTranscript: "" }));
       processTranscript(transcript);
@@ -289,7 +281,6 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
   // ── Core Actions ───────────────────────────────────────────────────
 
   const startListening = useCallback(async (isAutoResume = false) => {
-    console.log("[Voice] startListening called, STT_AVAILABLE:", STT_AVAILABLE);
 
     if (!STT_AVAILABLE) {
       setState((s) => ({
@@ -301,7 +292,6 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
 
     // Gap 6: Don't start listening while Tobi is still speaking (prevents echo)
     if (isSpeakingRef.current && isAutoResume) {
-      console.log("[Voice] Skipping auto-resume — still speaking");
       return;
     }
 
@@ -314,7 +304,6 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
 
     const permResult =
       await SpeechRecognitionModule.requestPermissionsAsync();
-    console.log("[Voice] Permission result:", permResult);
 
     if (!permResult.granted) {
       setState((s) => ({
@@ -332,7 +321,6 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
       error: null,
     }));
 
-    console.log("[Voice] Starting speech recognition...");
     SpeechRecognitionModule.start({
       lang: "en-GB",
       interimResults: true,
@@ -402,7 +390,6 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
         }
 
         // TTS with auto-resume listening when done
-        console.log("[Voice] TTS check:", { ttsEnabled, hasText: !!result.text });
         if (ttsEnabled && result.text) {
           speakText(result.text, () => {
             // Auto-resume listening if sheet is open and no pending action

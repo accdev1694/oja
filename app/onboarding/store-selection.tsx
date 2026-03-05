@@ -134,7 +134,7 @@ export default function StoreSelectionScreen() {
         {/* Section Header */}
         <View style={styles.sectionHeader}>
           <Text style={styles.description}>
-            Select your favorite stores - we'll track prices and show you the best deals
+            Select your favorite stores - we&apos;ll track prices and show you the best deals
           </Text>
         </View>
 

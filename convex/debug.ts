@@ -1,7 +1,22 @@
 
+import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+
+/**
+ * Debug: Check if AI API keys are configured in the Convex environment.
+ * Does not return the actual keys (for security), only confirms presence.
+ */
+export const checkAIConfig = query({
+  args: {},
+  handler: async () => {
+    return {
+      gemini: !!process.env.GEMINI_API_KEY,
+      openai: !!process.env.OPENAI_API_KEY,
+      stripe: !!process.env.STRIPE_SECRET_KEY,
+      clerk: !!process.env.CLERK_SECRET_KEY,
+    };
+  },
+});
 
 export const findDuplicates = mutation({
   args: {},

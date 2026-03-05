@@ -365,11 +365,28 @@ async function getRateLimitStatus(ctx: QueryCtx, userId: Id<"users">, action: st
 // ============================================================================
 
 /**
+ * Defined admin permissions for type safety
+ */
+export type AdminPermission = 
+  | "view_users" 
+  | "edit_users" 
+  | "manage_flags" 
+  | "view_analytics" 
+  | "manage_catalog" 
+  | "view_support" 
+  | "manage_announcements" 
+  | "manage_pricing"
+  | "delete_receipts"
+  | "view_receipts"
+  | "view_audit_logs"
+  | "bulk_operation";
+
+/**
  * RBAC Authorization Helper
  * Checks if user has a specific permission via their assigned role
  * Also enforces rate limiting on mutations
  */
-async function requirePermission(ctx: MutationCtx, permission: string, options?: { skipRateLimit?: boolean }): Promise<Doc<"users">> {
+async function requirePermission(ctx: MutationCtx, permission: AdminPermission, options?: { skipRateLimit?: boolean }): Promise<Doc<"users">> {
   const user = await requireAdmin(ctx);
 
   // Enforce rate limiting
@@ -443,7 +460,7 @@ async function requirePermission(ctx: MutationCtx, permission: string, options?:
 /**
  * Permission check for queries (no rate limiting, read-only)
  */
-async function requirePermissionQuery(ctx: QueryCtx, permission: string): Promise<Doc<"users">> {
+async function requirePermissionQuery(ctx: QueryCtx, permission: AdminPermission): Promise<Doc<"users">> {
   const user = await requireAdmin(ctx);
 
   // Super admins (via legacy isAdmin) get all permissions
@@ -1095,6 +1112,74 @@ async function getLiveAnalytics(ctx: QueryCtx, dateFrom?: number, dateTo?: numbe
   });
 }
 
+/**
+ * Get platform-wide AI usage for admin monitoring
+ */
+export const getPlatformAIUsage = query({
+  args: { refreshKey: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requirePermissionQuery(ctx, "view_analytics");
+
+    const now = Date.now();
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+
+    const cacheKey = `platform_ai_usage_${monthStart}`;
+    return await getCachedOrCompute(cacheKey, 30 * 60 * 1000, async () => {
+      const usageRecords = await ctx.db
+        .query("aiUsage")
+        .filter((q) => q.gte(q.field("periodStart"), monthStart))
+        .collect();
+
+      const summary: Record<string, { requests: number; tokens: number }> = {
+        voice: { requests: 0, tokens: 0 },
+        price_estimate: { requests: 0, tokens: 0 },
+        list_suggestions: { requests: 0, tokens: 0 },
+        item_variants: { requests: 0, tokens: 0 },
+        pantry_seed: { requests: 0, tokens: 0 },
+      };
+
+      let totalRequests = 0;
+      let totalTokens = 0;
+
+      for (const record of usageRecords) {
+        if (!summary[record.feature]) {
+          summary[record.feature] = { requests: 0, tokens: 0 };
+        }
+        summary[record.feature].requests += record.requestCount;
+        summary[record.feature].tokens += (record.tokenCount ?? 0);
+        totalRequests += record.requestCount;
+        totalTokens += (record.tokenCount ?? 0);
+      }
+
+      // Admin Alert Logic (Thresholds: 1M tokens, 5k requests)
+      const TOKEN_ALERT_THRESHOLD = 1000000;
+      const REQ_ALERT_THRESHOLD = 5000;
+      let alert: { level: "info" | "warning" | "critical"; message: string } | null = null;
+
+      if (totalTokens > TOKEN_ALERT_THRESHOLD * 0.9 || totalRequests > REQ_ALERT_THRESHOLD * 0.9) {
+        alert = {
+          level: "critical",
+          message: `CRITICAL: Platform usage approaching limits (${totalTokens.toLocaleString()} tokens used). Review provider quotas.`,
+        };
+      } else if (totalTokens > TOKEN_ALERT_THRESHOLD * 0.7 || totalRequests > REQ_ALERT_THRESHOLD * 0.7) {
+        alert = {
+          level: "warning",
+          message: "WARNING: High platform AI consumption. Monitor usage patterns.",
+        };
+      }
+
+      return {
+        summary,
+        totalRequests,
+        totalTokens,
+        activeProvider: "Gemini 2.0 Flash",
+        alert,
+        computedAt: now,
+      };
+    });
+  },
+});
+
 export const getRevenueReport = query({
   args: { refreshKey: v.optional(v.string()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
   handler: async (ctx, args) => {
@@ -1640,9 +1725,10 @@ export const getRecentReceipts = query({
 
     const enriched = receipts.map(receipt => {
       const u = userMap.get(receipt.userId);
+      const fallbackName = u?.email ? u.email.split("@")[0] : "Shopper";
       return {
         ...receipt,
-        userName: u?.name || "User",
+        userName: u?.name || fallbackName,
         userEmail: u?.email || ""
       };
     });
@@ -2991,6 +3077,68 @@ export const createExperiment = mutation({
     });
 
     return { success: true, experimentId };
+  },
+});
+
+export const manuallyArchiveOldAdminLogs = mutation({
+  args: { daysToKeep: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+      
+    if (!user?.isAdmin) throw new Error("Unauthorized");
+
+    const daysToKeep = args.daysToKeep ?? 30;
+    const cutoffDate = Date.now() - (daysToKeep * 24 * 60 * 60 * 1000);
+
+    const oldLogs = await ctx.db
+      .query("adminLogs")
+      .withIndex("by_created", (q) => q.lt("createdAt", cutoffDate))
+      .collect();
+
+    let archivedCount = 0;
+    for (const log of oldLogs) {
+      await ctx.db.insert("archivedAdminLogs", {
+        ...log,
+        archivedAt: Date.now(),
+      });
+      await ctx.db.delete(log._id);
+      archivedCount++;
+    }
+
+    return { success: true, archivedCount };
+  },
+});
+
+export const simulateSystemLoad = mutation({
+  args: { intensity: v.number() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+      
+    if (!user?.isAdmin) throw new Error("Unauthorized");
+
+    for (let i = 0; i < args.intensity; i++) {
+      await ctx.db.insert("adminAlerts", {
+        alertType: "simulated_load_test",
+        message: `System load simulation active (Instance ${i+1})`,
+        severity: i % 2 === 0 ? "warning" : "critical",
+        isResolved: false,
+        createdAt: Date.now(),
+      });
+    }
+
+    return { success: true, alertsGenerated: args.intensity };
   },
 });
 

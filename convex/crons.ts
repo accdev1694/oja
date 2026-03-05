@@ -154,4 +154,19 @@ crons.hourly(
   internal.points.checkFraudAlerts
 );
 
+// Stock Update Reminders — Wednesdays and Fridays at 6pm UTC
+crons.weekly(
+  "stock-reminder-wednesday",
+  { dayOfWeek: "wednesday", hourUTC: 18, minuteUTC: 0 },
+  internal.pantryReminders.sendStockUpdateReminders,
+  { day: "wednesday" }
+);
+
+crons.weekly(
+  "stock-reminder-friday",
+  { dayOfWeek: "friday", hourUTC: 18, minuteUTC: 0 },
+  internal.pantryReminders.sendStockUpdateReminders,
+  { day: "friday" }
+);
+
 export default crons;

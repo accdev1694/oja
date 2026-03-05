@@ -398,7 +398,7 @@ export default function TripSummaryScreen() {
           </View>
           {(() => {
             const segments = (list as Record<string, unknown>).storeSegments as
-              | Array<{ storeName: string }> | undefined;
+              | { storeName: string }[] | undefined;
             const names: string[] = [];
             if (segments && segments.length > 0) {
               for (const seg of segments) {

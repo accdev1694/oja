@@ -9,7 +9,13 @@ import {
   calculateSimilarity,
 } from "@/lib/text/fuzzyMatch";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
 const STORAGE_KEY = "oja:scannedProducts";
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit for security and cost control
+const QUEUE_DEDUP_THRESHOLD = 92;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -39,8 +45,6 @@ export interface UseProductScannerOptions {
 // ─────────────────────────────────────────────────────────────────────────────
 // Client-side dedup helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-const QUEUE_DEDUP_THRESHOLD = 92;
 
 /** Two products match if normalised names are exact or ≥92% similar, and sizes agree. */
 function isSameQueueProduct(a: ScannedProduct, b: ScannedProduct): boolean {
@@ -162,6 +166,11 @@ export function useProductScanner(options?: UseProductScannerOptions) {
         const uploadUrl = await generateUploadUrl();
         const imageResponse = await fetch(uri);
         const blob = await imageResponse.blob();
+
+        // Security/Cost Control: Validate file size before upload
+        if (blob.size > MAX_FILE_SIZE) {
+          throw new Error("Image too large. Please take a closer photo (max 5MB).");
+        }
 
         const uploadResponse = await fetch(uploadUrl, {
           method: "POST",

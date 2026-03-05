@@ -48,6 +48,8 @@ import type { VariantOption } from "@/components/items/VariantPicker";
 import { useVariantPrefetch } from "@/hooks/useVariantPrefetch";
 import { getIconForItem } from "@/lib/icons/iconMatcher";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { isDuplicateItem } from "@/convex/lib/fuzzyMatch";
+import { PersonalizedSuggestions } from "@/components/lists/PersonalizedSuggestions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -59,7 +61,8 @@ export interface AddItemsModalProps {
   listId: Id<"shoppingLists">;
   listStoreName?: string;
   listNormalizedStoreId?: string;
-  existingItems?: { name: string }[];
+  existingItems?: { name: string; size?: string }[];
+  listStatus?: "active" | "shopping";
 }
 
 interface SelectedItem {
@@ -193,6 +196,7 @@ export function AddItemsModal({
   listStoreName,
   listNormalizedStoreId,
   existingItems,
+  listStatus = "active",
 }: AddItemsModalProps) {
   const insets = useSafeAreaInsets();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -201,6 +205,13 @@ export function AddItemsModal({
     const hideSub = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
+
+  // Clear product scanner session when modal opens to prevent cross-session duplicates
+  useEffect(() => {
+    if (visible) {
+      productScanner.clearAll();
+    }
+  }, [visible, productScanner]);
 
   // ── State ───────────────────────────────────────────────────────────────────
   const [itemName, setItemName] = useState("");
@@ -309,21 +320,16 @@ export function AddItemsModal({
   const pantryItems = useQuery(api.pantryItems.getByUser);
   const createItem = useMutation(api.listItems.create);
   const addAndSeedPantry = useMutation(api.listItems.addAndSeedPantry);
+  const addItemMidShop = useMutation(api.shoppingLists.addItemMidShop);
+  const updateItem = useMutation(api.listItems.update);
 
   // ── Derived data ────────────────────────────────────────────────────────────
-  const existingItemNames = useMemo(() => {
-    const names = new Set<string>();
-    if (existingItems) {
-      for (const item of existingItems) {
-        names.add(item.name.toLowerCase().trim());
-      }
-    }
-    return names;
-  }, [existingItems]);
-
   const isItemOnList = useCallback(
-    (name: string) => existingItemNames.has(name.toLowerCase().trim()),
-    [existingItemNames]
+    (name: string, size?: string) => {
+      if (!existingItems) return false;
+      return existingItems.some((item) => isDuplicateItem(name, size, item.name, item.size));
+    },
+    [existingItems]
   );
 
   // Pantry items split into sections
@@ -443,8 +449,19 @@ export function AddItemsModal({
       try {
         let result: { status: string; existingName?: string; existingQuantity?: number } | undefined;
 
-        if (!item.category && !item.pantryItemId) {
-          // Custom item without category → seed pantry
+        // In shopping mode, always use addItemMidShop
+        if (listStatus === "shopping") {
+          result = await addItemMidShop({
+            listId,
+            name: item.name,
+            estimatedPrice: item.estimatedPrice,
+            quantity: item.quantity,
+            size: item.size,
+            source: "add",
+            force,
+          }) as typeof result;
+        } else if (!item.category && !item.pantryItemId) {
+          // Planning mode: Custom item without category → seed pantry
           result = await addAndSeedPantry({
             listId,
             name: item.name,
@@ -456,7 +473,7 @@ export function AddItemsModal({
             force,
           }) as typeof result;
         } else {
-          // Has category or pantryItemId → standard create
+          // Planning mode: Has category or pantryItemId → standard create
           result = await createItem({
             listId,
             name: item.name,
@@ -472,17 +489,38 @@ export function AddItemsModal({
 
         // Handle duplicate response
         if (result && typeof result === "object" && "status" in result && result.status === "duplicate") {
+          const existingItemId = (result as Record<string, unknown>).existingItemId as Id<"listItems"> | undefined;
           const existingName = result.existingName ?? item.name;
           const existingQty = result.existingQuantity ?? 1;
           const existingSize = (result as Record<string, unknown>).existingSize as string | undefined;
+          const isChecked = (result as Record<string, unknown>).isChecked as boolean | undefined;
           const sizeLabel = existingSize ? ` (${existingSize})` : "";
+
+          const locationMsg = isChecked ? "in your Checked section" : "on your list";
+          const newQty = existingQty + item.quantity;
+
           alert(
             "Already on List",
-            `"${existingName}"${sizeLabel} (\u00D7${existingQty}) is already on your list. Add again?`,
+            `"${existingName}"${sizeLabel} (\u00D7${existingQty}) is already ${locationMsg}. What would you like to do?`,
             [
-              { text: "Skip", style: "cancel" },
+              { text: "Cancel", style: "cancel" },
               {
-                text: "Add Anyway",
+                text: `Increment to \u00D7${newQty}`,
+                onPress: async () => {
+                  if (existingItemId) {
+                    try {
+                      await updateItem({ id: existingItemId, quantity: newQty });
+                      haptic("success");
+                      showAddedFeedback(existingName, existingSize, item.estimatedPrice);
+                    } catch (err) {
+                      console.error("Failed to increment:", err);
+                      alert("Error", "Failed to update quantity");
+                    }
+                  }
+                },
+              },
+              {
+                text: "Add Separate",
                 onPress: () => { addItemToList(item, true); },
               },
             ]
@@ -499,7 +537,7 @@ export function AddItemsModal({
         setIsAdding(false);
       }
     },
-    [listId, createItem, addAndSeedPantry, alert, showAddedFeedback]
+    [listId, listStatus, createItem, addAndSeedPantry, addItemMidShop, updateItem, alert, showAddedFeedback]
   );
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -766,8 +804,9 @@ export function AddItemsModal({
     setActiveView("search");
     setPantryFilter("low");
     clearSuggestions();
+    productScanner.clearAll(); // Clear scanner session to prevent cross-session duplicates
     onClose();
-  }, [onClose, clearSuggestions]);
+  }, [onClose, clearSuggestions, productScanner]);
 
   // ── Render helpers ──────────────────────────────────────────────────────────
 
@@ -1196,12 +1235,18 @@ export function AddItemsModal({
             keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
           >
-            {itemName.trim().length < 2 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyHint}>
-                  Search above or add from pantry
-                </Text>
-              </View>
+            {itemName.trim().length === 0 ? (
+              <>
+                <PersonalizedSuggestions 
+                  activeListId={listId} 
+                  onItemAdded={() => showAddedFeedback("Item", undefined, undefined)}
+                />
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyHint}>
+                    Search above or add from pantry
+                  </Text>
+                </View>
+              </>
             ) : isSuggestionsLoading && !selectedSuggestion ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color={colors.accent.primary} />

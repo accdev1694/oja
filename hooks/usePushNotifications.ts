@@ -48,7 +48,6 @@ export function usePushNotifications() {
     // Listen for incoming notifications while app is foregrounded
     notificationListener.current = Notifications.addNotificationReceivedListener(
       (notification) => {
-        console.log("[Push] Received:", notification.request.content.title);
       }
     );
 
@@ -56,7 +55,6 @@ export function usePushNotifications() {
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data;
-        console.log("[Push] Tapped:", data);
 
         // Navigate based on notification type
         if (data?.screen) {
@@ -89,7 +87,6 @@ export function usePushNotifications() {
 async function registerForPushNotificationsAsync(): Promise<string | null> {
   // Must be a physical device
   if (!Device.isDevice) {
-    console.log("[Push] Must use physical device for push notifications");
     return null;
   }
 
@@ -120,7 +117,6 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
     }
 
     if (finalStatus !== "granted") {
-      console.log("[Push] Permission not granted");
       return null;
     }
   } catch (error) {
@@ -137,7 +133,6 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
     const tokenData = await Notifications.getExpoPushTokenAsync({
       projectId,
     });
-    console.log("[Push] Token:", tokenData.data);
     return tokenData.data;
   } catch (error: any) {
     // Handle Firebase not initialized error gracefully

@@ -42,6 +42,7 @@ export function MonitoringTab({ hasPermission }: MonitoringTabProps) {
   const { showToast } = useAdminToast();
   
   const summary = useQuery(api.admin.getMonitoringSummary) as MonitoringSummary | undefined;
+  const platformAIUsage = useQuery(api.admin.getPlatformAIUsage, {});
   const experiments = useQuery(api.admin.getExperiments) as Experiment[] | undefined;
   const workflows = useQuery(api.admin.getWorkflows) as Workflow[] | undefined;
 
@@ -102,6 +103,68 @@ export function MonitoringTab({ hasPermission }: MonitoringTabProps) {
 
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      {/* Platform AI Consumption */}
+      <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+        <GlassCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="robot-muffler" size={24} color={colors.accent.primary} />
+            <Text style={styles.sectionTitle}>AI Consumption (Global)</Text>
+          </View>
+          
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.md }}>
+            <View>
+              <Text style={styles.userEmail}>Active Provider</Text>
+              <Text style={[styles.userName, { color: colors.accent.primary }]}>
+                {platformAIUsage?.activeProvider || "Gemini 2.0 Flash"}
+              </Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={styles.userEmail}>Total Tokens</Text>
+              <Text style={styles.userName}>
+                {(platformAIUsage?.totalTokens ?? 0).toLocaleString()}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: "row", gap: spacing.md }}>
+            <View style={{ flex: 1, backgroundColor: `${colors.glass.border}20`, padding: spacing.sm, borderRadius: borderRadius.md }}>
+              <Text style={styles.userEmail}>Global Requests</Text>
+              <Text style={styles.userName}>{(platformAIUsage?.totalRequests ?? 0).toLocaleString()}</Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: `${colors.glass.border}20`, padding: spacing.sm, borderRadius: borderRadius.md }}>
+              <Text style={styles.userEmail}>Voice Usage</Text>
+              <Text style={styles.userName}>{(platformAIUsage?.summary?.voice?.requests ?? 0).toLocaleString()}</Text>
+            </View>
+          </View>
+
+          {platformAIUsage?.alert && (
+            <View style={{ 
+              marginTop: spacing.md, 
+              padding: spacing.sm, 
+              borderRadius: borderRadius.md, 
+              backgroundColor: platformAIUsage.alert.level === "critical" ? `${colors.semantic.danger}20` : `${colors.semantic.warning}20`,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.sm
+            }}>
+              <MaterialCommunityIcons 
+                name="alert-decagram" 
+                size={20} 
+                color={platformAIUsage.alert.level === "critical" ? colors.semantic.danger : colors.semantic.warning} 
+              />
+              <Text style={{ 
+                color: platformAIUsage.alert.level === "critical" ? colors.semantic.danger : colors.semantic.warning,
+                ...typography.bodySmall,
+                fontWeight: "700",
+                flex: 1
+              }}>
+                {platformAIUsage.alert.message}
+              </Text>
+            </View>
+          )}
+        </GlassCard>
+      </AnimatedSection>
+
       {/* Active Alerts */}
       <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
         <GlassCard style={styles.section}>

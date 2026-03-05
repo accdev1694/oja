@@ -28,8 +28,12 @@ import {
   borderRadius,
   useGlassAlert,
 } from "@/components/ui/glass";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
+import {
+  useCurrentUser,
+  useIsSwitchingUsers,
+  useNotifications,
+  useShoppingList,
+} from "@/hooks";
 import { EmptyLists } from "@/components/ui/glass/GlassErrorState";
 import { ListCard } from "@/components/lists/ListCard";
 import { SharedListCard } from "@/components/lists/SharedListCard";
@@ -42,8 +46,8 @@ import { EditListNameModal } from "@/components/lists/EditListNameModal";
 import { defaultListName } from "@/lib/list/helpers";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { SeasonalEventBanner } from "@/components/ui/SeasonalEventBanner";
-import { useNotifications } from "@/hooks/useNotifications";
 import { NotificationDropdown } from "@/components/partners/NotificationDropdown";
+import { PersonalizedSuggestions } from "@/components/lists/PersonalizedSuggestions";
 
 type TabMode = "active" | "history";
 
@@ -51,18 +55,19 @@ export default function ListsScreen() {
   const router = useRouter();
   const { alert } = useGlassAlert();
   const { firstName } = useCurrentUser();
-  const isSwitchingUsers = useIsSwitchingUsers();
   const [tabMode, setTabMode] = useState<TabMode>("active");
 
-  // Data Hooks
-  const lists = useQuery(api.shoppingLists.getActive, !isSwitchingUsers ? {} : "skip");
-  const history = useQuery(api.shoppingLists.getHistory, !isSwitchingUsers ? {} : "skip");
-  const sharedLists = useQuery(api.partners.getSharedLists, !isSwitchingUsers ? {} : "skip");
-  const createList = useMutation(api.shoppingLists.create);
-  const deleteList = useMutation(api.shoppingLists.remove);
-  const updateList = useMutation(api.shoppingLists.update);
-  const createFromTemplate = useMutation(api.shoppingLists.createFromTemplate);
-  const createFromMultipleLists = useMutation(api.shoppingLists.createFromMultipleLists);
+  const {
+    activeLists: lists,
+    historyLists: history,
+    sharedLists,
+    isLoading,
+    createList,
+    deleteList,
+    updateListName,
+    createFromMultiple,
+    createFromTemplate,
+  } = useShoppingList();
 
   const [isCreating, setIsCreating] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -106,26 +111,6 @@ export default function ListsScreen() {
     setAnimationKey((prev) => prev + 1);
   }, [tabMode]);
 
-  const handleDeleteList = useCallback((listId: Id<"shoppingLists">, listName: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    alert("Delete List", `Are you sure you want to delete "${listName}"?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteList({ id: listId });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch (error) {
-            console.error("Failed to delete list:", error);
-            alert("Error", "Failed to delete shopping list");
-          }
-        },
-      },
-    ]);
-  }, [alert, deleteList]);
-
   const handleToggleSelect = useCallback((id: Id<"shoppingLists">) => {
     setSelectedHistoryLists(prev => {
       const next = new Set(prev);
@@ -139,13 +124,12 @@ export default function ListsScreen() {
     if (selectedHistoryLists.size === 0) return;
 
     try {
-      const result = await createFromMultipleLists({
-        sourceListIds: Array.from(selectedHistoryLists),
-        newListName: newName,
-        newBudget: budget,
-      });
+      const result = await createFromMultiple(
+        Array.from(selectedHistoryLists),
+        newName,
+        budget
+      );
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowCombineModal(false);
       setIsMultiSelectMode(false);
       setSelectedHistoryLists(new Set());
@@ -153,7 +137,6 @@ export default function ListsScreen() {
       // Navigate to new list
       router.push(`/list/${result.listId}`);
     } catch (error: unknown) {
-      console.error("Failed to combine lists:", error);
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -165,11 +148,9 @@ export default function ListsScreen() {
             { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
           ]
         );
-      } else {
-        alert("Error", "Failed to create combined list");
       }
     }
-  }, [selectedHistoryLists, createFromMultipleLists, router, alert]);
+  }, [selectedHistoryLists, createFromMultiple, router, alert]);
 
   // Stable callbacks for cards — avoids inline closures that defeat React.memo
   const handleListPress = useCallback((id: Id<"shoppingLists">) => {
@@ -177,8 +158,8 @@ export default function ListsScreen() {
   }, [router]);
 
   const handleDeletePress = useCallback((id: Id<"shoppingLists">, name: string) => {
-    handleDeleteList(id, name);
-  }, [handleDeleteList]);
+    deleteList(id, name);
+  }, [deleteList]);
 
   const handleEditName = useCallback((id: Id<"shoppingLists">, currentName: string) => {
     setEditingListId(id);
@@ -188,8 +169,9 @@ export default function ListsScreen() {
 
   const handleSaveListName = useCallback(async (newName: string) => {
     if (!editingListId) return;
-    await updateList({ id: editingListId, name: newName });
-  }, [updateList, editingListId]);
+    const success = await updateListName(editingListId, newName);
+    if (success) setShowEditNameModal(false);
+  }, [updateListName, editingListId]);
 
   const handleHistoryPress = useCallback((id: Id<"shoppingLists">) => {
     router.push(`/trip-summary?id=${id}`);
@@ -209,18 +191,10 @@ export default function ListsScreen() {
     if (!selectedTemplateId) return;
 
     try {
-      const result = await createFromTemplate({
-        sourceListId: selectedTemplateId,
-        newListName: newName,
-      });
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const result = await createFromTemplate(selectedTemplateId, newName);
       setShowTemplateModal(false);
-
-      // Navigate to new list
       router.push(`/list/${result.listId}`);
     } catch (error: unknown) {
-      console.error("Failed to create from template:", error);
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -232,8 +206,6 @@ export default function ListsScreen() {
             { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
           ]
         );
-      } else {
-        alert("Error", "Failed to create list from template");
       }
     }
   }, [selectedTemplateId, createFromTemplate, router, alert]);
@@ -246,7 +218,7 @@ export default function ListsScreen() {
     });
   }, []);
 
-  function handleCreateList() {
+  function handleCreateListFlow() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowCreateOptionsModal(true);
   }
@@ -336,7 +308,7 @@ export default function ListsScreen() {
             {tabMode === "active" ? (
               <Pressable
                 style={[styles.addButton, isCreating && { opacity: 0.5 }]}
-                onPress={handleCreateList}
+                onPress={handleCreateListFlow}
                 disabled={isCreating}
               >
                 <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
@@ -434,7 +406,7 @@ export default function ListsScreen() {
               <AnimatedSection key={`empty-${animationKey}`} animation="fadeInDown" duration={400} delay={150}>
                 <View style={styles.emptyScrollContentInner}>
                   <EmptyLists
-                    onAction={handleCreateList}
+                    onAction={handleCreateListFlow}
                     actionText="Create a New List"
                   />
                   {/* Join a shared list — always visible even with no lists */}
@@ -483,7 +455,7 @@ export default function ListsScreen() {
                 {/* Inline create-list card — always visible as first item */}
                 <AnimatedSection key={`create-${animationKey}`} animation="fadeInDown" duration={400} delay={150}>
                   <Pressable
-                    onPress={handleCreateList}
+                    onPress={handleCreateListFlow}
                     disabled={isCreating}
                     style={({ pressed }) => [
                       styles.createCard,

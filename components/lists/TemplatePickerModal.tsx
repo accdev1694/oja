@@ -22,16 +22,16 @@ interface TemplatePickerModalProps {
   visible: boolean;
   onClose: () => void;
   onSelectTemplate: (id: Id<"shoppingLists">, name: string) => void;
-  historyLists: Array<{
+  historyLists: {
     _id: Id<"shoppingLists">;
     name: string;
     status: string;
     completedAt?: number;
     createdAt: number;
     storeName?: string;
-    storeSegments?: Array<{ storeId: string; storeName: string; switchedAt: number }>;
+    storeSegments?: { storeId: string; storeName: string; switchedAt: number }[];
     listNumber?: number;
-  }>;
+  }[];
 }
 
 interface TemplateCardProps {

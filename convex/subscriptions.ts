@@ -259,13 +259,14 @@ export const requirePremium = query({
 export const getPlans = query({
   args: {},
   handler: async (ctx) => {
-    // Get dynamic pricing from config
+    // Get dynamic pricing from config, fallback to hard-coded values if unseeded
     const pricing = await ctx.db.query("pricingConfig")
       .withIndex("by_active", (q: any) => q.eq("isActive", true))
       .collect();
 
-    const monthlyPrice = pricing.find((p: any) => p.planId === "premium_monthly")?.priceAmount ?? 0;
-    const annualPrice = pricing.find((p: any) => p.planId === "premium_annual")?.priceAmount ?? 0;
+    // Fallbacks: £2.99/mo, £21.99/yr
+    const monthlyPrice = pricing.find((p: any) => p.planId === "premium_monthly")?.priceAmount ?? 2.99;
+    const annualPrice = pricing.find((p: any) => p.planId === "premium_annual")?.priceAmount ?? 21.99;
 
     // Calculate savings
     const yearlyIfMonthly = monthlyPrice * 12;

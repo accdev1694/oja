@@ -8,6 +8,7 @@ import {
   Pressable,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useUser } from "@clerk/clerk-expo";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { detectLocation } from "@/lib/location/detectLocation";
@@ -52,6 +53,7 @@ const CUISINES = [
 export default function CuisineSelectionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user: clerkUser } = useUser();
   const getOrCreateUser = useMutation(api.users.getOrCreate);
   const setOnboardingData = useMutation(api.users.setOnboardingData);
 
@@ -102,8 +104,12 @@ export default function CuisineSelectionScreen() {
     setIsSaving(true);
 
     try {
+      // Use Clerk name if available, otherwise fallback to email prefix or "Shopper"
+      const fallbackName = clerkUser?.primaryEmailAddress?.emailAddress?.split("@")[0] || "Shopper";
+      const displayName = clerkUser?.firstName || clerkUser?.fullName || fallbackName;
+
       await setOnboardingData({
-        name: "User",
+        name: displayName,
         country,
         cuisinePreferences: selectedCuisines,
       });
@@ -172,7 +178,7 @@ export default function CuisineSelectionScreen() {
               />
             </View>
             <View style={styles.locationInfo}>
-              <Text style={styles.locationText}>You're in {country}</Text>
+              <Text style={styles.locationText}>You&apos;re in {country}</Text>
               <Text style={styles.currencyText}>Prices shown in {currency}</Text>
             </View>
           </View>
@@ -182,7 +188,7 @@ export default function CuisineSelectionScreen() {
         <View style={styles.sectionHeader}>
           <Text style={styles.subtitle}>What cuisines do you cook?</Text>
           <Text style={styles.description}>
-            Select all that apply - we'll seed your stock with items you'll actually use
+            Select all that apply - we&apos;ll seed your stock with items you&apos;ll actually use
           </Text>
         </View>
 

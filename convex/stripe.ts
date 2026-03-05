@@ -115,6 +115,53 @@ export const createPortalSession = action({
 });
 
 // =============================================================================
+// STRIPE CANCELLATION (for Account Deletion)
+// =============================================================================
+
+export const cancelAllUserSubscriptions = action({
+  args: {},
+  handler: async (ctx): Promise<{ success: boolean; count: number }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const stripe = await getStripeClient();
+
+    const user: any = await ctx.runQuery(internal.stripe.getUserByClerkId, {
+      clerkId: identity.subject,
+    });
+    if (!user) throw new Error("User not found");
+
+    const subscription: any = await ctx.runQuery(
+      internal.stripe.getSubscriptionByUser,
+      { userId: user._id }
+    );
+
+    if (!subscription?.stripeCustomerId) {
+      return { success: true, count: 0 };
+    }
+
+    // List all active/trialling subscriptions for this customer
+    const stripeSubs = await stripe.subscriptions.list({
+      customer: subscription.stripeCustomerId,
+      status: "active",
+    });
+
+    const trialSubs = await stripe.subscriptions.list({
+      customer: subscription.stripeCustomerId,
+      status: "trialing",
+    });
+
+    const allSubs = [...stripeSubs.data, ...trialSubs.data];
+
+    for (const sub of allSubs) {
+      await stripe.subscriptions.cancel(sub.id);
+    }
+
+    return { success: true, count: allSubs.length };
+  },
+});
+
+// =============================================================================
 // WEBHOOK PROCESSING
 // =============================================================================
 

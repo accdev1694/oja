@@ -60,8 +60,8 @@ export default function WelcomeScreen() {
             />
             <FeatureCard
               icon="barcode-scan"
-              title="Scan It"
-              description="Snap a product or receipt and we handle the rest"
+              title="Scan & Earn"
+              description="Snap receipts to earn points. 1,000 points = £1.00 off your next bill"
             />
             <FeatureCard
               icon="microphone-outline"
@@ -69,9 +69,9 @@ export default function WelcomeScreen() {
               description="Create shopping lists by just speaking naturally"
             />
             <FeatureCard
-              icon="chart-timeline-variant-shimmer"
-              title="Personal Insights"
-              description="Spending trends, savings tips, and weekly digests"
+              icon="star-shooting"
+              title="Rewards & Tiers"
+              description="Level up from Bronze to Platinum to earn points even faster"
             />
           </View>
         </View>

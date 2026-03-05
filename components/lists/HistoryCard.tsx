@@ -29,7 +29,7 @@ export interface HistoryCardProps {
     completedAt?: number;
     createdAt: number;
     storeName?: string;
-    storeSegments?: Array<{ storeId: string; storeName: string; switchedAt: number }>;
+    storeSegments?: { storeId: string; storeName: string; switchedAt: number }[];
     listNumber?: number;
   };
   onPress: (id: Id<"shoppingLists">) => void;

@@ -1,7 +1,11 @@
-import { internalAction } from "../_generated/server";
+import { internalAction , internalQuery, internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// ─── Helper queries/mutations (internal only) ────────────────────────────────
+
+
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -68,7 +72,7 @@ export const run = internalAction({
     const dryRun = args.dryRun ?? true;
 
     // ── Step 1: Collect all unique item names from listItems ──────────────
-    const allListItems: Array<{ _id: string; name: string }> = await ctx.runQuery(
+    const allListItems: { _id: string; name: string }[] = await ctx.runQuery(
       internal.migrations.rephraseItemNames.getAllListItemNames
     );
 
@@ -83,7 +87,7 @@ export const run = internalAction({
       unit?: string;
       confidence?: number;
     };
-    const allReceipts: Array<{ _id: string; items: ReceiptItem[] }> = await ctx.runQuery(
+    const allReceipts: { _id: string; items: ReceiptItem[] }[] = await ctx.runQuery(
       internal.migrations.rephraseItemNames.getAllReceiptItemNames
     );
 
@@ -199,10 +203,6 @@ export const run = internalAction({
     };
   },
 });
-
-// ─── Helper queries/mutations (internal only) ────────────────────────────────
-
-import { internalQuery, internalMutation } from "../_generated/server";
 
 /** Get all listItem IDs and names */
 export const getAllListItemNames = internalQuery({

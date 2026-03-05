@@ -160,7 +160,7 @@ export default function InsightsScreen() {
   return (
     <GlassScreen>
       <SimpleHeader
-        title={firstName ? `${firstName}'s Insights` : "Insights"}
+        title={firstName ? `${firstName}&apos;s Insights` : "Insights"}
         subtitle={
           savingsJar && savingsJar.totalSaved > 0
             ? `You've saved £${savingsJar.totalSaved.toFixed(2)} so far!`
@@ -353,12 +353,12 @@ export default function InsightsScreen() {
                 </Text>
                 {savingsJar.totalSaved === 0 ? (
                   <Text style={styles.savingsSubtext}>
-                    Your first savings are just one trip away. Create a list with a budget and we'll track the difference.
+                    Your first savings are just one trip away. Create a list with a budget and we&apos;ll track the difference.
                   </Text>
                 ) : (
                   <Text style={styles.savingsSubtext}>
                     {savingsJar.totalSaved >= 100
-                      ? "Triple digits! You're a budgeting pro."
+                      ? "Triple digits! You&apos;re a budgeting pro."
                       : savingsJar.totalSaved >= 50
                         ? "Halfway to £100 — keep the momentum going!"
                         : savingsJar.totalSaved >= 25
@@ -940,9 +940,9 @@ function generateWeeklyNarrative(digest: {
   // Comparison with last week
   if (digest.lastWeekTotal > 0 && digest.tripsCount > 0) {
     if (digest.percentChange < -10) {
-      parts.push(`That's ${Math.abs(digest.percentChange).toFixed(0)}% less than last week — nice restraint.`);
+      parts.push(`That&apos;s ${Math.abs(digest.percentChange).toFixed(0)}% less than last week — nice restraint.`);
     } else if (digest.percentChange > 10) {
-      parts.push(`That's ${digest.percentChange.toFixed(0)}% more than last week.`);
+      parts.push(`That&apos;s ${digest.percentChange.toFixed(0)}% more than last week.`);
     } else if (digest.tripsCount > 0) {
       parts.push("Pretty consistent with last week.");
     }

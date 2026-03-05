@@ -80,6 +80,11 @@ export interface User {
   receiptCount?: number;
   listCount?: number;
   totalSpent?: number;
+  scanRewards?: {
+    points: number;
+    tier: string;
+    lifetimeScans: number;
+  };
   subscription?: {
     plan: string;
     status: string;

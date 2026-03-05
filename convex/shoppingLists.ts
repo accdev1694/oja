@@ -11,6 +11,12 @@ import { toGroceryTitleCase } from "./lib/titleCase";
 import { trackFunnelEvent, trackActivity } from "./lib/analytics";
 import { getUserListPermissions } from "./partners";
 
+// -----------------------------------------------------------------------------
+// Templates (Phase 2)
+// -----------------------------------------------------------------------------
+
+import { deduplicateItems, ListItemInput } from "./lib/itemDeduplicator";
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -2140,12 +2146,6 @@ function groupByCategory(items: any[]) {
     count,
   }));
 }
-
-// -----------------------------------------------------------------------------
-// Templates (Phase 2)
-// -----------------------------------------------------------------------------
-
-import { deduplicateItems, ListItemInput } from "./lib/itemDeduplicator";
 
 export const createFromMultipleLists = mutation({
   args: {

@@ -1,5 +1,5 @@
 import React, { ComponentProps } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, ViewStyle, StyleProp } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "@/components/ui/glass";
 import { adminStyles as styles } from "../styles";
@@ -10,13 +10,14 @@ interface MetricCardProps {
   icon: ComponentProps<typeof MaterialCommunityIcons>["name"];
   /** Optional trend percentage (e.g. 12 for +12%, -5 for -5%) */
   trend?: number;
+  style?: StyleProp<ViewStyle>;
 }
 
-export function MetricCard({ label, value, icon, trend }: MetricCardProps) {
+export function MetricCard({ label, value, icon, trend, style }: MetricCardProps) {
   const safeValue = typeof value === "number" ? value : 0;
   
   return (
-    <View style={styles.metricCard}>
+    <View style={[styles.metricCard, style]}>
       <MaterialCommunityIcons name={icon} size={20} color={colors.accent.primary} />
       <Text style={styles.metricValue}>{safeValue.toLocaleString()}</Text>
       

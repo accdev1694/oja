@@ -51,7 +51,10 @@ async function findDuplicateListItem(
 
   for (const item of items) {
     if (isDuplicateItem(name, size, item.name, item.size)) {
-      return item;
+      return {
+        ...item,
+        isChecked: item.isChecked,
+      };
     }
   }
   return null;
@@ -188,9 +191,11 @@ export const create = mutation({
         // Return duplicate info without modifying DB — let the UI confirm
         return {
           status: "duplicate" as const,
+          existingItemId: existingItem._id,
           existingName: existingItem.name,
           existingQuantity: existingItem.quantity,
           existingSize: existingItem.size,
+          isChecked: existingItem.isChecked,
         };
       }
       // force=true: user confirmed — bump quantity
@@ -894,9 +899,11 @@ export const addItemMidShop = mutation({
         if (!args.force) {
           return {
             status: "duplicate" as const,
+            existingItemId: existingItem._id,
             existingName: existingItem.name,
             existingQuantity: existingItem.quantity,
             existingSize: existingItem.size,
+            isChecked: existingItem.isChecked,
             source: "add" as const,
           };
         }
@@ -1181,9 +1188,11 @@ export const addAndSeedPantry = mutation({
         // Return duplicate info without modifying DB — let the UI confirm
         return {
           status: "duplicate" as const,
+          existingItemId: existingListItem._id,
           existingName: existingListItem.name,
           existingQuantity: existingListItem.quantity,
           existingSize: existingListItem.size,
+          isChecked: existingListItem.isChecked,
         };
       }
       // force=true: user confirmed — bump quantity

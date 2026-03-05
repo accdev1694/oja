@@ -1948,7 +1948,7 @@ async function executeWriteTool(
       let targetList = lists[0];
       if (args.listName) {
         const match = lists.find(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           (l: any) => l.name.toLowerCase().includes((args.listName as string).toLowerCase())
         );
         if (match) targetList = match;
@@ -1998,7 +1998,7 @@ async function executeWriteTool(
           };
         }
         // Pick the in-progress/shopping list, or first active
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const shopping = lists.find((l: any) => l.status === "shopping");
         listId = (shopping || lists[0])._id;
       }
@@ -2009,7 +2009,7 @@ async function executeWriteTool(
 
       // Fuzzy match item by name
       const nameLower = (args.itemName as string).toLowerCase();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const matchItem = listItems.find((i: any) =>
         i.name.toLowerCase().includes(nameLower)
       );
@@ -2022,7 +2022,7 @@ async function executeWriteTool(
       }
 
       // Build update payload
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const updates: Record<string, any> = {};
       const changes: string[] = [];
 
@@ -2045,7 +2045,7 @@ async function executeWriteTool(
           store: storeName,
         });
         const newSizeLower = (args.newSize as string).toLowerCase().replace(/\s+/g, "");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const matchingSize = sizesResult.sizes.find((s: any) => {
           const sizeLower = (s.size || "").toLowerCase().replace(/\s+/g, "");
           const sizeNormLower = (s.sizeNormalized || "").toLowerCase().replace(/\s+/g, "");

@@ -86,15 +86,6 @@ type ListSectionHeader = {
 
 type CategorizedItem = ListItem | ListSectionHeader;
 
-function CategoryHeader({ title }: { title: string }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionHeaderText}>{title.toUpperCase()}</Text>
-      <View style={styles.sectionHeaderLine} />
-    </View>
-  );
-}
-
 export default function ListDetailScreen() {
   const params = useLocalSearchParams();
   const id = params.id as string as Id<"shoppingLists">;
@@ -123,6 +114,7 @@ export default function ListDetailScreen() {
   ) as TripStats | null | undefined;
 
   const updateList = useMutation(api.shoppingLists.update);
+  const removeList = useMutation(api.shoppingLists.remove);
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
   const setStore = useMutation(api.shoppingLists.setStore);
   const switchStoreMidShop = useMutation(api.shoppingLists.switchStoreMidShop);
@@ -313,37 +305,42 @@ export default function ListDetailScreen() {
   const miniBarRemaining = budget - miniBarActiveValue;
   const miniBarLabel = isPlanning ? "planned" : "spent";
 
+  // Track if checked section is expanded
+  const [showCheckedItems, setShowCheckedItems] = useState(false);
+
   // Memoized category data + display items
   const { categoryOptions, displayItems } = useMemo(() => {
     const safeItemsArr = items ?? [];
+    
+    // Split items into unchecked and checked
+    const uncheckedItems = safeItemsArr.filter(i => !i.isChecked);
+    const checkedItems = safeItemsArr.filter(i => i.isChecked);
+
     const cats = [...new Set(safeItemsArr.map((i) => i.category).filter(Boolean) as string[])].sort();
     const counts: Record<string, number> = {};
     safeItemsArr.forEach((i) => { if (i.category) counts[i.category] = (counts[i.category] || 0) + 1; });
     
-    // Sort items by category first, then by name
-    const sortedItems = [...safeItemsArr].sort((a, b) => {
+    const result: CategorizedItem[] = [];
+
+    // 1. Build Unchecked Items by Category
+    const sortedUnchecked = [...uncheckedItems].sort((a, b) => {
       const catA = a.category || "Other";
       const catB = b.category || "Other";
       if (catA !== catB) return catA.localeCompare(catB);
       return a.name.localeCompare(b.name);
     });
 
-    // Apply category filter
-    let filtered = listCategoryFilter
-      ? sortedItems.filter((i) => i.category === listCategoryFilter)
-      : sortedItems;
+    let filteredUnchecked = listCategoryFilter
+      ? sortedUnchecked.filter((i) => i.category === listCategoryFilter)
+      : sortedUnchecked;
 
-    // Apply search filter
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase().trim();
-      filtered = filtered.filter((i) => i.name.toLowerCase().includes(search));
+      filteredUnchecked = filteredUnchecked.filter((i) => i.name.toLowerCase().includes(search));
     }
 
-    // Build sectionalized array
-    const result: CategorizedItem[] = [];
     let currentCat = "";
-
-    filtered.forEach((item) => {
+    filteredUnchecked.forEach((item) => {
       const itemCat = item.category || "Other";
       if (itemCat !== currentCat && !listCategoryFilter) {
         result.push({
@@ -355,6 +352,31 @@ export default function ListDetailScreen() {
       }
       result.push(item);
     });
+
+    // 2. Build Checked Items section (at the bottom)
+    if (checkedItems.length > 0) {
+      // Apply search filter to checked items too
+      let filteredChecked = checkedItems;
+      if (searchTerm.trim()) {
+        const search = searchTerm.toLowerCase().trim();
+        filteredChecked = checkedItems.filter((i) => i.name.toLowerCase().includes(search));
+      }
+
+      if (filteredChecked.length > 0) {
+        result.push({
+          _id: "header-checked",
+          isHeader: true,
+          title: `Checked Items (${filteredChecked.length})`,
+        });
+
+        // Only show items if expanded
+        if (showCheckedItems || searchTerm.trim()) {
+          filteredChecked.sort((a, b) => a.name.localeCompare(b.name)).forEach(item => {
+            result.push(item);
+          });
+        }
+      }
+    }
 
     // Build dropdown options
     const options: DropdownOption[] = [
@@ -368,7 +390,7 @@ export default function ListDetailScreen() {
     ];
 
     return { categoryOptions: options, displayItems: result };
-  }, [items, listCategoryFilter, searchTerm]);
+  }, [items, listCategoryFilter, searchTerm, showCheckedItems]);
 
   const isShopping = listStatus === "shopping";
   const isPaused = listStatus === "active" && !!list?.shoppingStartedAt && !!list?.pausedAt;
@@ -399,6 +421,31 @@ export default function ListDetailScreen() {
   const handleSaveListName = useCallback(async (newName: string) => {
     await updateList({ id, name: newName });
   }, [updateList, id]);
+
+  const handleDeleteList = useCallback(() => {
+    haptic("warning");
+    alert(
+      "Delete List",
+      "Are you sure you want to permanently delete this list and all its items?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await removeList({ id });
+              haptic("success");
+              router.replace("/(app)/(tabs)/" as any);
+            } catch (error) {
+              console.error("Failed to delete list:", error);
+              alert("Error", "Failed to delete list. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  }, [removeList, id, alert, router]);
 
   const handleRefreshPrices = useCallback(async () => {
     if (refreshingPrices) return;
@@ -458,21 +505,42 @@ export default function ListDetailScreen() {
 
       // Check if mutation returned a duplicate indicator
       if (result && typeof result === "object" && "status" in result && result.status === "duplicate") {
+        const existingItemId = "existingItemId" in result ? result.existingItemId as Id<"listItems"> : undefined;
         const existingName = "existingName" in result ? result.existingName as string : midShopState.name;
         const existingQty = "existingQuantity" in result ? result.existingQuantity as number : 0;
         const existingSize = "existingSize" in result ? result.existingSize as string | undefined : undefined;
+        const isChecked = "isChecked" in result ? result.isChecked as boolean : false;
         const sizeLabel = existingSize ? ` (${existingSize})` : "";
         const itemName = midShopState.name;
         const itemPrice = midShopState.price;
         const itemQty = midShopState.quantity;
+        const newQty = existingQty + itemQty;
+
+        const locationMsg = isChecked ? "in your Checked section" : "on your list";
+
         closeMidShopModal();
         alert(
-          "Item Already on List",
-          `"${existingName}"${sizeLabel} (\u00D7${existingQty}) is already on your list. Add again?`,
+          "Already on List",
+          `"${existingName}"${sizeLabel} (\u00D7${existingQty}) is already ${locationMsg}. What would you like to do?`,
           [
             { text: "Cancel", style: "cancel" },
             {
-              text: "Add Anyway",
+              text: `Increment to \u00D7${newQty}`,
+              onPress: async () => {
+                if (existingItemId) {
+                  try {
+                    await updateItem({ id: existingItemId, quantity: newQty });
+                    haptic("success");
+                    showToast(`Updated to \u00D7${newQty}`, "check-circle", colors.semantic.success);
+                  } catch (err) {
+                    console.error("Failed to increment:", err);
+                    alert("Error", "Failed to update quantity");
+                  }
+                }
+              },
+            },
+            {
+              text: "Add Separate",
               onPress: async () => {
                 try {
                   await addItemMidShop({
@@ -509,7 +577,7 @@ export default function ListDetailScreen() {
       console.error("Failed to add mid-shop item:", error);
       alert("Error", "Failed to add item");
     }
-  }, [addItemMidShop, id, midShopState, alert, showToast]);
+  }, [addItemMidShop, id, midShopState, updateItem, alert, showToast]);
 
   const handleRemoveItem = useCallback(async (itemId: Id<"listItems">, itemName: string) => {
     haptic("medium");
@@ -809,7 +877,26 @@ export default function ListDetailScreen() {
 
   const renderItem = useCallback(({ item }: { item: CategorizedItem }) => {
     if ("isHeader" in item) {
-      return <CategoryHeader title={item.title} />;
+      const isCheckedHeader = item._id === "header-checked";
+      return (
+        <Pressable 
+          onPress={() => isCheckedHeader && setShowCheckedItems(!showCheckedItems)}
+          style={[styles.sectionHeader, isCheckedHeader && styles.checkedHeader]}
+        >
+          <Text style={[styles.sectionHeaderText, isCheckedHeader && styles.checkedHeaderText]}>
+            {item.title.toUpperCase()}
+          </Text>
+          {isCheckedHeader ? (
+            <MaterialCommunityIcons 
+              name={showCheckedItems ? "chevron-up" : "chevron-down"} 
+              size={18} 
+              color={colors.text.tertiary} 
+            />
+          ) : (
+            <View style={styles.sectionHeaderLine} />
+          )}
+        </Pressable>
+      );
     }
     return (
       <ShoppingListItem
@@ -831,7 +918,8 @@ export default function ListDetailScreen() {
     );
   }, [handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange,
       isShopping, canEdit, isOwner, commentCounts,
-      stableOpenComments, selectionActive, selectionVersion, toggleItemSelection, currentUser?.currency]);
+      stableOpenComments, selectionActive, selectionVersion, toggleItemSelection, 
+      currentUser?.currency, showCheckedItems]);
 
   const getItemType = useCallback((item: CategorizedItem) => {
     return "isHeader" in item ? "header" : "item";
@@ -867,8 +955,8 @@ export default function ListDetailScreen() {
         />
       )}
 
-      {/* Refresh Prices button — planning mode only, when store is selected */}
-      {list?.status === "active" && list?.normalizedStoreId && canEdit && (items?.length ?? 0) > 0 && (
+      {/* Refresh Prices button — available in both modes when store is selected */}
+      {list?.normalizedStoreId && canEdit && (items?.length ?? 0) > 0 && (
         <Pressable
           style={({ pressed }) => [
             styles.refreshPricesButton,
@@ -1140,10 +1228,32 @@ export default function ListDetailScreen() {
           title={list.name}
           onTitlePress={handleOpenEditName}
           subtitle={`${list.listNumber != null ? `#${list.listNumber} \u00B7 ` : ""}${checkedCount}/${totalCount} items`}
-          showBack
+          showBack={true}
+          onBack={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(app)/(tabs)/" as any);
+            }
+          }}
           titleStyle={{ fontSize: 20, lineHeight: 28 }}
           rightElement={
             <View style={styles.headerRightRow}>
+              {/* Delete list button */}
+              {canEdit && (
+                <Pressable
+                  onPress={handleDeleteList}
+                  hitSlop={8}
+                  style={styles.headerIconButton}
+                >
+                  <MaterialCommunityIcons
+                    name="delete-outline"
+                    size={24}
+                    color={colors.semantic.danger}
+                  />
+                </Pressable>
+              )}
+
               {/* Edit list name button */}
               <Pressable
                 onPress={handleOpenEditName}
@@ -1307,7 +1417,8 @@ export default function ListDetailScreen() {
         listId={id}
         listStoreName={list.storeName}
         listNormalizedStoreId={list.normalizedStoreId}
-        existingItems={items?.map((i) => ({ name: i.name })) ?? []}
+        existingItems={items ?? []}
+        listStatus={list.status}
       />
 
       {/* Trip Summary Modal */}
@@ -1406,6 +1517,17 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.glass.border,
     opacity: 0.5,
+  },
+  checkedHeader: {
+    backgroundColor: "rgba(0, 0, 0, 0.05)",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.lg,
+    justifyContent: "space-between",
+  },
+  checkedHeaderText: {
+    color: colors.text.tertiary,
   },
   bottomSpacer: {
     height: 140,

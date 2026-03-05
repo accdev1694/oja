@@ -60,8 +60,8 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
   const updatePricing = useMutation(api.admin.updatePricing);
   const forceLogout = useMutation(api.admin.forceLogoutSession);
   const clearSeedDataMutation = useMutation(api.admin.clearSeedData);
-  const archiveLogs = useMutation(api.admin.archiveOldAdminLogs);
-  const simulateLoad = useMutation(api.admin.simulateHighLoad);
+  const archiveLogs = useMutation(api.admin.manuallyArchiveOldAdminLogs);
+  const simulateLoad = useMutation(api.admin.simulateSystemLoad);
 
   const [showNewAnnouncement, setShowNewAnnouncement] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
@@ -115,7 +115,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
     try {
       const result = await archiveLogs({});
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast(`Archived ${result.archived} old logs`, "success");
+      showToast(`Archived ${result.archivedCount} old logs`, "success");
     } catch (e) {
       showToast((e as Error).message || "Failed to archive logs", "error");
     } finally {
@@ -132,7 +132,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
         onPress: async () => {
           setIsSimulating(true);
           try {
-            const result = await simulateLoad({ userCount: 50000, receiptCount: 100000 });
+            const result = await simulateLoad({ intensity: 50 });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             showToast("Scale test complete", "success");
           } catch (e) {

@@ -65,6 +65,10 @@ export default function ConfirmReceiptScreen() {
   const receiptId = id as Id<"receipts">;
 
   const receipt = useQuery(api.receipts.getById, { id: receiptId });
+  const shoppingList = useQuery(
+    api.shoppingLists.getById, 
+    receipt?.listId ? { id: receipt.listId } : "skip"
+  );
   const pantryItems = useQuery(api.pantryItems.getByUser, {});
   const updateReceipt = useMutation(api.receipts.update);
   const savePriceHistory = useMutation(api.priceHistory.savePriceHistoryFromReceipt);
@@ -371,7 +375,7 @@ export default function ConfirmReceiptScreen() {
           }
         });
 
-        alert("Price Alerts", alertMessages.join("\n\n"), [
+        alert("Receipt Saved", alertMessages.join("\n\n"), [
           {
             text: "OK",
             onPress: () => {
@@ -380,16 +384,19 @@ export default function ConfirmReceiptScreen() {
                 setShowUnmatchedModal(true);
               } else {
                 setReceiptSaved(true);
+                setIsInitialized(false); // Force re-sync from server to clear "dirty" state
               }
             },
           },
         ]);
       } else {
-        // Show unmatched modal if there are pending matches, otherwise go to saved state
+        // Show unmatched modal if there are pending matches, otherwise show success
         if (pendingMatches > 0) {
           setShowUnmatchedModal(true);
         } else {
           setReceiptSaved(true);
+          setIsInitialized(false); // Force re-sync from server to clear "dirty" state
+          alert("Success", "Receipt updated and price history synced!");
         }
       }
     } catch (error) {
@@ -448,9 +455,17 @@ export default function ConfirmReceiptScreen() {
 
   return (
     <GlassScreen>
-      <SimpleHeader
-        title="Confirm Receipt"
-        subtitle={`${editedItems.length} items • £${total.toFixed(2)}`}
+      <SimpleHeader 
+        title="Confirm Receipt" 
+        subtitle={`${editedItems.length} items \u00B7 \u00A3${total.toFixed(2)}`}
+        showBack={true}
+        onBack={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace("/(app)/(tabs)/scan" as any);
+          }
+        }}
       />
 
       <ScrollView
@@ -478,6 +493,30 @@ export default function ConfirmReceiptScreen() {
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Address:</Text>
               <Text style={styles.infoValue}>{receipt.storeAddress}</Text>
+            </View>
+          )}
+
+          {/* Multi-store trip info */}
+          {shoppingList?.storeSegments && shoppingList.storeSegments.length > 1 && (
+            <View style={styles.multiStoreContainer}>
+              <Text style={styles.multiStoreTitle}>Multi-Store Shopping Trip:</Text>
+              {shoppingList.storeSegments.map((segment, idx) => (
+                <View key={idx} style={styles.segmentRow}>
+                  <View style={[
+                    styles.segmentDot, 
+                    segment.storeName === receipt.storeName && styles.activeSegmentDot
+                  ]} />
+                  <Text style={[
+                    styles.segmentText,
+                    segment.storeName === receipt.storeName && styles.activeSegmentText
+                  ]}>
+                    {segment.storeName}
+                  </Text>
+                  <Text style={styles.segmentTime}>
+                    {new Date(segment.visitedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </Text>
+                </View>
+              ))}
             </View>
           )}
 
@@ -605,78 +644,76 @@ export default function ConfirmReceiptScreen() {
           </View>
         </GlassCard>
 
-        {receiptSaved ? (
-          /* ── Post-save CTAs ────────────────────────────────── */
-          <GlassCard variant="bordered" accentColor={colors.accent.primary} style={styles.postSaveCard}>
-            <View style={styles.postSaveHeader}>
-              <MaterialCommunityIcons name="check-circle" size={28} color={colors.accent.primary} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.postSaveTitle}>Receipt Saved!</Text>
-                {saveMessage ? (
-                  <Text style={styles.postSaveSubtitle}>{saveMessage}</Text>
-                ) : null}
-              </View>
-            </View>
-
-            <Text style={styles.postSavePrompt}>
-              What would you like to do with these items?
-            </Text>
-
-            <View style={styles.postSaveActions}>
-              <View style={{ flex: 1 }}>
-                <GlassButton
-                  variant="primary"
-                  size="md"
-                  icon="clipboard-plus"
-                  onPress={handleCreateListFromReceipt}
-                >
-                  Create List
-                </GlassButton>
-              </View>
-              <View style={{ flex: 1 }}>
-                <GlassButton
-                  variant="secondary"
-                  size="md"
-                  icon={addedToPantry ? "check-circle" : "fridge-outline"}
-                  disabled={addedToPantry}
-                  onPress={handlePostSaveUpdatePantry}
-                >
-                  {addedToPantry ? "In Pantry" : "Update Pantry"}
-                </GlassButton>
-              </View>
-            </View>
-
-            <GlassButton
-              variant="secondary"
-              size="sm"
-              icon="check"
-              onPress={handleDoneNavigation}
-              style={{ marginTop: spacing.sm }}
-            >
-              Done
-            </GlassButton>
-          </GlassCard>
-        ) : (
-          <>
-            {/* Community contribution nudge */}
-            <View style={styles.contributionRow}>
-              <MaterialCommunityIcons name="heart-outline" size={14} color={colors.text.tertiary} />
-              <Text style={styles.contributionText}>
-                Your prices help build better data for shoppers everywhere.
-              </Text>
-            </View>
-
-            {/* Save Button */}
+        {/* ── Action Footer ────────────────────────────────── */}
+        <View style={styles.footerActions}>
+          {receipt.processingStatus === "pending" || (isInitialized && editedItems !== receipt.items) ? (
             <GlassButton
               variant="primary"
               size="lg"
               icon="content-save"
               onPress={handleSaveReceipt}
+              style={styles.mainActionButton}
             >
-              Save Receipt
+              {receipt.processingStatus === "pending" ? "Save Receipt & Sync Prices" : "Save Changes"}
             </GlassButton>
-          </>
-        )}
+          ) : (
+            <GlassButton
+              variant="primary"
+              size="lg"
+              icon="clipboard-plus"
+              onPress={handleCreateListFromReceipt}
+              style={styles.mainActionButton}
+            >
+              Create List from Receipt
+            </GlassButton>
+          )}
+
+          <View style={styles.secondaryActionsRow}>
+            <View style={{ flex: 1 }}>
+              <GlassButton
+                variant="secondary"
+                size="md"
+                icon={addedToPantry ? "check-circle" : "fridge-outline"}
+                disabled={addedToPantry}
+                onPress={handlePostSaveUpdatePantry}
+              >
+                {addedToPantry ? "In Pantry" : "Add to Pantry"}
+              </GlassButton>
+            </View>
+            <View style={{ flex: 1 }}>
+              <GlassButton
+                variant="secondary"
+                size="md"
+                icon="check"
+                onPress={handleDoneNavigation}
+              >
+                Done
+              </GlassButton>
+            </View>
+          </View>
+
+          <GlassButton
+            variant="secondary"
+            size="md"
+            icon="delete-outline"
+            onPress={() => {
+              alert("Delete Receipt", "Are you sure? This cannot be undone.", [
+                { text: "Cancel", style: "cancel" },
+                { 
+                  text: "Delete", 
+                  style: "destructive", 
+                  onPress: async () => {
+                    await deleteReceipt({ id: receiptId });
+                    router.replace("/(app)/(tabs)/scan" as any);
+                  } 
+                }
+              ]);
+            }}
+            style={{ marginTop: spacing.sm }}
+          >
+            Delete Receipt
+          </GlassButton>
+        </View>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -967,6 +1004,56 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+  // Multi-store trip
+  multiStoreContainer: {
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    backgroundColor: `${colors.accent.primary}08`,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: `${colors.accent.primary}20`,
+  },
+  multiStoreTitle: {
+    ...typography.labelSmall,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  segmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+    gap: spacing.sm,
+  },
+  segmentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.glass.borderStrong,
+  },
+  activeSegmentDot: {
+    backgroundColor: colors.accent.primary,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  segmentText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    flex: 1,
+  },
+  activeSegmentText: {
+    color: colors.text.primary,
+    fontWeight: "700",
+  },
+  segmentTime: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    fontSize: 10,
+  },
+
   // Warning
   warningHeader: {
     flexDirection: "row",
@@ -1099,6 +1186,19 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 140,
+  },
+
+  // Footer Actions
+  footerActions: {
+    marginTop: spacing.xl,
+    gap: spacing.md,
+  },
+  mainActionButton: {
+    width: "100%",
+  },
+  secondaryActionsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
   },
 
   // Post-save CTAs

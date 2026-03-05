@@ -4,11 +4,13 @@ import { api } from "../convex/_generated/api";
 
 /**
  * Extract first name from full name.
- * Handles "John Smith" → "John", "Mary-Jane" → "Mary-Jane"
- * Ignores placeholder names like "User"
+ * Handles "John Smith" -> "John", "Mary-Jane" -> "Mary-Jane"
+ * Ignores placeholder names like "User" or "Shopper"
  */
 function getFirstName(fullName?: string | null): string | undefined {
-  if (!fullName || fullName === "User") return undefined;
+  if (!fullName) return undefined;
+  const genericPlaceholders = ["User", "Shopper", "Anonymous"];
+  if (genericPlaceholders.includes(fullName)) return undefined;
   return fullName.split(" ")[0];
 }
 

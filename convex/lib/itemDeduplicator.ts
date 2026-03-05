@@ -11,12 +11,12 @@ export interface ListItemInput {
 
 export interface DeduplicationResult {
   items: ListItemInput[];
-  duplicates: Array<{
+  duplicates: {
     name: string;
     sources: string[];
     keptFrom: string;
     reason: string;
-  }>;
+  }[];
 }
 
 export function deduplicateItems(

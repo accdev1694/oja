@@ -9,16 +9,32 @@ import {
   GlassScreen,
   GlassCard,
   SimpleHeader,
+  GlassCollapsible,
   colors,
   typography,
   spacing,
   borderRadius,
 } from "@/components/ui/glass";
 
+function GuideItem({ icon, title, desc }: { icon: any, title: string, desc: string }) {
+  return (
+    <View style={styles.guideItem}>
+      <View style={styles.guideIconContainer}>
+        <MaterialCommunityIcons name={icon} size={18} color={colors.accent.primary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.guideItemTitle}>{title}</Text>
+        <Text style={styles.guideItemDesc}>{desc}</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function PointsHistoryScreen() {
   const router = useRouter();
   const history = useQuery(api.points.getPointsHistory, { limit: 100 });
   const pointsBalance = useQuery(api.points.getPointsBalance);
+  const expiringPoints = useQuery(api.points.getExpiringPoints);
 
   const groupedHistory = useMemo(() => {
     if (!history) return [];
@@ -80,19 +96,62 @@ export default function PointsHistoryScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Expiring Soon Banner */}
+        {expiringPoints && (
+          <GlassCard variant="bordered" accentColor={colors.semantic.warning} style={styles.expiringBanner}>
+            <View style={styles.expiringHeader}>
+              <MaterialCommunityIcons name="clock-alert-outline" size={20} color={colors.semantic.warning} />
+              <Text style={styles.expiringTitle}>Points Expiring Soon</Text>
+            </View>
+            <Text style={styles.expiringText}>
+              {expiringPoints.amount.toLocaleString()} points will expire on {new Date(expiringPoints.expiresAt).toLocaleDateString()}.
+            </Text>
+          </GlassCard>
+        )}
+
         {/* Lifetime Stats */}
         {pointsBalance && (
           <View style={styles.statsRow}>
             <GlassCard variant="standard" style={styles.statCard}>
-              <Text style={styles.statLabel}>Lifetime Earned</Text>
-              <Text style={styles.statValue}>{pointsBalance.totalPoints.toLocaleString()}</Text>
+              <Text style={styles.statLabel}>Available</Text>
+              <Text style={styles.statValue}>{pointsBalance.availablePoints.toLocaleString()}</Text>
+              <Text style={styles.statSubValue}>≈ £{(pointsBalance.availablePoints / 1000).toFixed(2)}</Text>
             </GlassCard>
             <GlassCard variant="standard" style={styles.statCard}>
-              <Text style={styles.statLabel}>Total Redeemed</Text>
-              <Text style={styles.statValue}>{pointsBalance.pointsUsed.toLocaleString()}</Text>
+              <Text style={styles.statLabel}>Lifetime Earned</Text>
+              <Text style={styles.statValue}>{pointsBalance.totalPoints.toLocaleString()}</Text>
+              <Text style={styles.statSubValue}>Total value</Text>
             </GlassCard>
           </View>
         )}
+
+        {/* How it Works Guide */}
+        <View style={{ marginBottom: spacing.md }}>
+          <GlassCollapsible title="How do Points work?" icon="help-circle-outline">
+            <View style={styles.guideContent}>
+              <GuideItem 
+                icon="cash-multiple" 
+                title="Conversion" 
+                desc="1,000 points = £1.00. Points are used as credit toward your next subscription renewal." 
+              />
+              <GuideItem 
+                icon="auto-fix" 
+                title="Automatic Redemption" 
+                desc="Once you have at least 500 points, they're automatically applied to your next bill." 
+              />
+              <GuideItem 
+                icon="trending-up" 
+                title="Earning More" 
+                desc="Higher tiers (Silver, Gold, Platinum) earn more points per scan. Premium users get a 25% bonus!" 
+              />
+              <GuideItem 
+                icon="clock-outline" 
+                title="Expiration" 
+                desc="Points expire 12 months after they are earned. Use them or lose them!" 
+              />
+            </View>
+          </GlassCollapsible>
+        </View>
 
         {!history ? (
           <Text style={styles.loadingText}>Loading history...</Text>
@@ -151,6 +210,20 @@ const styles = StyleSheet.create({
   statCard: { flex: 1, padding: spacing.md, alignItems: "center" },
   statLabel: { ...typography.labelSmall, color: colors.text.tertiary, textTransform: "uppercase" },
   statValue: { ...typography.headlineSmall, color: colors.accent.primary, fontWeight: "700", marginTop: 4 },
+  statSubValue: { ...typography.labelSmall, color: colors.text.tertiary, marginTop: 2 },
+
+  // Expiring Banner
+  expiringBanner: { marginBottom: spacing.md, padding: spacing.md },
+  expiringHeader: { flexDirection: "row", alignItems: "center", gap: spacing.xs, marginBottom: spacing.xs },
+  expiringTitle: { ...typography.labelMedium, color: colors.semantic.warning, fontWeight: "700" },
+  expiringText: { ...typography.bodySmall, color: colors.text.secondary },
+
+  // Guide
+  guideContent: { paddingVertical: spacing.sm, gap: spacing.md },
+  guideItem: { flexDirection: "row", gap: spacing.md, alignItems: "flex-start" },
+  guideIconContainer: { width: 32, height: 32, borderRadius: 16, backgroundColor: `${colors.accent.primary}15`, justifyContent: "center", alignItems: "center" },
+  guideItemTitle: { ...typography.bodyMedium, color: colors.text.primary, fontWeight: "600", marginBottom: 2 },
+  guideItemDesc: { ...typography.bodySmall, color: colors.text.secondary, lineHeight: 18 },
 
   // History
   monthGroup: { gap: spacing.sm },

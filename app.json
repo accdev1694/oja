@@ -6,8 +6,17 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "jsEngine": "hermes",
     "newArchEnabled": true,
     "scheme": "oja",
+    "android": {
+      "package": "com.oja.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "enableProguardInReleaseBuilds": true
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",

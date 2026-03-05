@@ -8,6 +8,9 @@ import { toGroceryTitleCase } from "./lib/titleCase";
 import { trackFunnelEvent, trackActivity } from "./lib/analytics";
 import { enrichGlobalFromReceipt } from "./lib/globalEnrichment";
 
+import { validateReceiptData } from "./lib/receiptValidation";
+import { earnPointsInternal, processEarnPoints } from "./points";
+
 /**
  * Generate a fingerprint for duplicate detection.
  * Based on storeName + total + purchaseDate (day-level granularity).
@@ -80,13 +83,37 @@ export const getById = query({
 });
 
 /**
- * Create a new receipt (after photo upload)
+ * Create a new receipt (after photo upload or AI parsing)
  */
 export const create = mutation({
   args: {
     imageStorageId: v.string(), // Convex file storage ID
     listId: v.optional(v.id("shoppingLists")),
     isAdminSeed: v.optional(v.boolean()),
+    
+    // Optional parsed data (allows single-transaction save)
+    storeName: v.optional(v.string()),
+    storeAddress: v.optional(v.string()),
+    purchaseDate: v.optional(v.number()),
+    subtotal: v.optional(v.number()),
+    tax: v.optional(v.number()),
+    total: v.optional(v.number()),
+    items: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          quantity: v.number(),
+          unitPrice: v.number(),
+          totalPrice: v.number(),
+          category: v.optional(v.string()),
+          size: v.optional(v.string()),
+          unit: v.optional(v.string()),
+          confidence: v.optional(v.number()),
+        })
+      )
+    ),
+    imageQuality: v.optional(v.number()),
+    imageHash: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -104,19 +131,25 @@ export const create = mutation({
     }
 
     const now = Date.now();
-    const initialStoreName = "Unknown Store"; // Will be filled by AI parsing
+    const finalStoreName = args.storeName || "Unknown Store";
 
     const receiptId = await ctx.db.insert("receipts", {
       userId: user._id,
       listId: args.listId,
       imageStorageId: args.imageStorageId,
-      storeName: initialStoreName,
-      // normalizedStoreId will be set when storeName is updated via AI parsing
-      subtotal: 0,
-      total: 0,
-      items: [],
-      processingStatus: "pending",
-      purchaseDate: now,
+      storeName: finalStoreName,
+      normalizedStoreId: args.storeName ? (normalizeStoreName(args.storeName) ?? undefined) : undefined,
+      subtotal: args.subtotal || 0,
+      tax: args.tax,
+      total: args.total || 0,
+      items: (args.items || []).map(item => ({
+        ...item,
+        name: toGroceryTitleCase(item.name)
+      })),
+      processingStatus: args.items ? "completed" : "pending",
+      purchaseDate: args.purchaseDate || now,
+      imageQuality: args.imageQuality,
+      imageHash: args.imageHash,
       createdAt: now,
       ...(args.isAdminSeed && { isAdminSeed: true }),
     });
@@ -130,9 +163,6 @@ export const create = mutation({
     return receiptId;
   },
 });
-
-import { validateReceiptData } from "./lib/receiptValidation";
-import { earnPointsInternal, processEarnPoints } from "./points";
 
 /**
  * Update receipt with parsed data
@@ -162,6 +192,8 @@ export const update = mutation({
           unitPrice: v.number(),
           totalPrice: v.number(),
           category: v.optional(v.string()),
+          size: v.optional(v.string()),
+          unit: v.optional(v.string()),
           confidence: v.optional(v.number()),
         })
       )

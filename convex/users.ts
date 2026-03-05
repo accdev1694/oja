@@ -79,9 +79,14 @@ export const getOrCreate = mutation({
 
     // Create new user
     const now = Date.now();
+    
+    // Improved name extraction: Name -> Given Name -> Email Prefix -> "Shopper"
+    const fallbackName = identity.email ? identity.email.split("@")[0] : "Shopper";
+    const displayName = identity.name || identity.givenName || fallbackName;
+
     const userId = await ctx.db.insert("users", {
       clerkId: identity.subject,
-      name: identity.name ?? "User",
+      name: displayName,
       email: identity.email,
       avatarUrl: identity.pictureUrl,
       currency: "GBP", // Default for UK
@@ -503,13 +508,20 @@ export const resetMyAccount = mutation({
       "pantryItems", "shoppingLists", "receipts", "priceHistory",
       "listPartners", "itemComments",
       "notifications", "achievements", "streaks", "weeklyChallenges",
-      "subscriptions", "loyaltyPoints", "pointTransactions",
-      "scanCredits", "scanCreditTransactions",
+      "nurtureMessages", "tipsDismissed", "supportTickets", "activityEvents"
     ];
     for (const table of tables) {
       counts[table] = await deleteByUser(table);
     }
     counts.listItems = deletedListItems;
+
+    // Tables specifically EXCLUDED from reset to preserve Identity & Economy:
+    // - "subscriptions" (Prevents trial abuse)
+    // - "pointsBalance", "pointsTransactions" (Preserves earned rewards)
+    // - "loyaltyPoints", "pointTransactions" (Legacy/Duplicate rewards tables)
+    // - "scanCredits", "scanCreditTransactions" (Preserves scan progress)
+    // - "referralCodes" (Preserves referral identity)
+    // - "aiUsage" (Preserves usage limits)
 
     // inviteCodes uses createdBy, not userId
     const inviteCodes = await ctx.db.query("inviteCodes").collect();
@@ -562,7 +574,22 @@ export const deleteMyAccount = mutation({
       return docs.length;
     };
 
-    // Delete list items via their lists
+    // 1. Delete all receipt images from storage
+    const receipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const receipt of receipts) {
+      if (receipt.imageStorageId) {
+        try {
+          await ctx.storage.delete(receipt.imageStorageId);
+        } catch (e) {
+          console.error(`Failed to delete storage for receipt ${receipt._id}:`, e);
+        }
+      }
+    }
+
+    // 2. Delete list items via their lists
     const shoppingLists = await ctx.db
       .query("shoppingLists")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
@@ -577,7 +604,7 @@ export const deleteMyAccount = mutation({
       }
     }
 
-    // Delete from all user-owned tables (must have by_user index on userId)
+    // 3. Delete from all user-owned tables (must have by_user index on userId)
     const tables = [
       "pantryItems", "shoppingLists", "receipts", "priceHistory",
       "listPartners", "itemComments",
@@ -596,6 +623,12 @@ export const deleteMyAccount = mutation({
         await ctx.db.delete(code._id);
       }
     }
+
+    // 4. Log the deletion before purging the user record (for forensics)
+    await trackActivity(ctx, user._id, "account_deleted", { 
+      reason: "user_request",
+      email: user.email 
+    });
 
     // Delete user doc itself
     await ctx.db.delete(user._id);

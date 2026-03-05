@@ -89,6 +89,20 @@ export default function SubscriptionScreen() {
   // Handle Stripe checkout
   const handleCheckout = useCallback(
     async (planId: "premium_monthly" | "premium_annual") => {
+      // If already premium (and not in trial), redirect to portal instead of checkout
+      // to prevent duplicate subscriptions.
+      if (isPremium && !isTrial && !isAdmin) {
+        alert(
+          "Manage Subscription",
+          "You already have an active subscription. To switch plans, please use the 'Manage Subscription' portal.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Portal", onPress: handleManageSubscription }
+          ]
+        );
+        return;
+      }
+
       setCheckoutLoading(planId);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       try {
@@ -102,7 +116,7 @@ export default function SubscriptionScreen() {
         setCheckoutLoading(null);
       }
     },
-    [createCheckout]
+    [isPremium, isTrial, isAdmin, alert, handleManageSubscription, createCheckout]
   );
 
   // Handle manage subscription (Stripe portal)
@@ -560,7 +574,7 @@ export default function SubscriptionScreen() {
         />
         <Text style={styles.modalTitle}>Cancel Subscription?</Text>
         <Text style={styles.modalBody}>
-          You'll keep all features but go back to 2 lists and 30 pantry items.
+          You&apos;ll keep all features but go back to 2 lists and 30 pantry items.
           Your scan rewards tier will be kept.
         </Text>
         <View style={styles.modalActions}>

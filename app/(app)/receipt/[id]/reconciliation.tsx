@@ -32,20 +32,26 @@ export default function ReconciliationScreen() {
   const { alert } = useGlassAlert();
 
   const receipt = useQuery(api.receipts.getById, { id: receiptId });
-  const list = listId ? useQuery(api.shoppingLists.getById, { id: listId }) : null;
-  const listItems = listId ? useQuery(api.listItems.getByList, { listId }) : null;
+  const list = useQuery(
+    api.shoppingLists.getById,
+    listId ? { id: listId } : "skip"
+  );
+  const listItems = useQuery(
+    api.listItems.getByList,
+    listId ? { listId } : "skip"
+  );
 
   // Multi-store: detect receipt/list store mismatch
-  const mismatchInfo = listId ? useQuery(api.receipts.detectStoreMismatch, {
-    receiptId,
-    listId,
-  }) : null;
+  const mismatchInfo = useQuery(
+    api.receipts.detectStoreMismatch,
+    listId ? { receiptId, listId } : "skip"
+  );
 
   // Smart unplanned items detection using multi-signal matcher
-  const unplannedData = listId ? useQuery(api.itemMatching.identifyUnplannedItems, {
-    receiptId,
-    listId,
-  }) : null;
+  const unplannedData = useQuery(
+    api.itemMatching.identifyUnplannedItems,
+    listId ? { receiptId, listId } : "skip"
+  );
 
   const completeShopping = useMutation(api.shoppingLists.completeShopping);
   const archiveList = useMutation(api.shoppingLists.archiveList);
@@ -101,8 +107,15 @@ export default function ReconciliationScreen() {
         <SimpleHeader
           title="Receipt Saved"
           subtitle={receipt.storeName}
-        />
-        <ScrollView
+          showBack={true}
+          onBack={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(app)/(tabs)/scan" as any);
+            }
+          }}
+        />        <ScrollView
           style={styles.container}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -130,18 +143,118 @@ export default function ReconciliationScreen() {
               <Text style={styles.summaryLabel}>Items</Text>
               <Text style={styles.summaryValue}>{receipt.items.length}</Text>
             </View>
+
+            {/* Multi-store trip info */}
+            {list?.storeSegments && list.storeSegments.length > 1 && (
+              <View style={styles.multiStoreContainer}>
+                <Text style={styles.multiStoreTitle}>Multi-Store Shopping Trip:</Text>
+                {list.storeSegments.map((segment, idx) => (
+                  <View key={idx} style={styles.segmentRow}>
+                    <View style={[
+                      styles.segmentDot, 
+                      segment.storeName === receipt.storeName && styles.activeSegmentDot
+                    ]} />
+                    <Text style={[
+                      styles.segmentText,
+                      segment.storeName === receipt.storeName && styles.activeSegmentText
+                    ]}>
+                      {segment.storeName}
+                    </Text>
+                    <Text style={styles.segmentTime}>
+                      {new Date(segment.visitedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </GlassCard>
+
+          {/* Itemized List */}
+          <GlassCard variant="standard" style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons name="format-list-bulleted" size={20} color={colors.accent.primary} />
+              <Text style={styles.sectionTitle}>Itemized Details</Text>
+            </View>
+            
+            {receipt.items.map((item, idx) => (
+              <View key={idx} style={styles.receiptItemRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.receiptItemName}>{item.name}</Text>
+                  <Text style={styles.receiptItemQty}>Qty: {item.quantity}</Text>
+                </View>
+                <Text style={styles.receiptItemPrice}>£{item.totalPrice.toFixed(2)}</Text>
+              </View>
+            ))}
           </GlassCard>
 
           <GlassButton
             variant="primary"
             size="lg"
-            icon="check"
-            onPress={async () => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              router.push("/(app)/(tabs)/" as any);
-            }}
+            icon="clipboard-plus"
+            onPress={() => router.push(`/(app)/create-list-from-receipt?receiptId=${receiptId}` as never)}
+            style={{ marginBottom: spacing.md }}
           >
-            Done
+            Create List from Receipt
+          </GlassButton>
+
+          <View style={styles.secondaryActionsRow}>
+            <View style={{ flex: 1 }}>
+              <GlassButton
+                variant="secondary"
+                size="md"
+                icon="fridge-outline"
+                onPress={async () => {
+                  try {
+                    const items = receipt.items.map((item: any) => ({
+                      name: item.name,
+                      category: item.category ?? "Uncategorised",
+                      estimatedPrice: item.quantity > 1 ? item.unitPrice : item.totalPrice,
+                    }));
+                    await autoRestock({ receiptId }); // Using existing mutation for consistency
+                    alert("Pantry Updated", "Items from this receipt have been added to your pantry.");
+                  } catch (e) {
+                    alert("Error", "Failed to update pantry");
+                  }
+                }}
+              >
+                Add to Pantry
+              </GlassButton>
+            </View>
+            <View style={{ flex: 1 }}>
+              <GlassButton
+                variant="secondary"
+                size="md"
+                icon="check"
+                onPress={async () => {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  router.push("/(app)/(tabs)/" as any);
+                }}
+              >
+                Done
+              </GlassButton>
+            </View>
+          </View>
+
+          <GlassButton
+            variant="secondary"
+            size="md"
+            icon="delete-outline"
+            onPress={() => {
+              alert("Delete Receipt", "Are you sure? This cannot be undone.", [
+                { text: "Cancel", style: "cancel" },
+                { 
+                  text: "Delete", 
+                  style: "destructive", 
+                  onPress: async () => {
+                    await deleteReceipt({ id: receiptId });
+                    router.replace("/(app)/(tabs)/scan" as any);
+                  } 
+                }
+              ]);
+            }}
+            style={{ marginTop: spacing.sm }}
+          >
+            Delete Receipt
           </GlassButton>
 
           <View style={styles.bottomSpacer} />
@@ -642,6 +755,62 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+  // Multi-store trip
+  multiStoreContainer: {
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+    padding: spacing.md,
+    backgroundColor: `${colors.accent.primary}08`,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: `${colors.accent.primary}20`,
+  },
+  multiStoreTitle: {
+    ...typography.labelSmall,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  segmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+    gap: spacing.sm,
+  },
+  segmentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.glass.borderStrong,
+  },
+  activeSegmentDot: {
+    backgroundColor: colors.accent.primary,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  segmentText: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    flex: 1,
+  },
+  activeSegmentText: {
+    color: colors.text.primary,
+    fontWeight: "700",
+  },
+  segmentTime: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    fontSize: 10,
+  },
+
+  // Footer Actions
+  secondaryActionsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+
   // Budget Comparison
   comparisonGrid: {
     gap: spacing.md,
@@ -781,5 +950,27 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 140,
+  },
+  receiptItemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.glass.border,
+  },
+  receiptItemName: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  receiptItemQty: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+  },
+  receiptItemPrice: {
+    ...typography.labelMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
   },
 });

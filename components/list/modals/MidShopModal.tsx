@@ -71,7 +71,7 @@ export function MidShopModal({
           />
         </View>
         <View style={styles.headerText}>
-          <Text style={styles.title}>Add "{itemName}"?</Text>
+          <Text style={styles.title}>Add &quot;{itemName}&quot;?</Text>
           <Text style={styles.subtitle}>
             {itemPrice > 0
               ? `Est. \u00A3${(itemPrice * itemQuantity).toFixed(2)}`

@@ -37,11 +37,11 @@ export interface MatchResult {
   bestMatch: CandidateItem | null;
   matchScore: number;           // 0-100
   matchReasons: string[];       // ["token_overlap", "category_match", etc.]
-  allCandidates: Array<{
+  allCandidates: {
     candidate: CandidateItem;
     score: number;
     reasons: string[];
-  }>;
+  }[];
   confidence: "high" | "medium" | "low" | "none";
 }
 
@@ -380,11 +380,11 @@ export async function findBestMatch(
   // Check for learned mapping first
   const learnedMapping = await findLearnedMapping(ctx, storeId, receiptItem.name);
 
-  const scoredCandidates: Array<{
+  const scoredCandidates: {
     candidate: CandidateItem;
     score: number;
     reasons: string[];
-  }> = [];
+  }[] = [];
 
   for (const candidate of candidates) {
     // Check if this candidate matches the learned mapping

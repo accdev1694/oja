@@ -14,9 +14,12 @@ async function requireUser(ctx: any) {
 
   // Auto-create user record for partners who haven't completed onboarding
   const now = Date.now();
+  const fallbackName = identity.email ? identity.email.split("@")[0] : "Shopper";
+  const displayName = identity.name || identity.givenName || fallbackName;
+
   const userId = await ctx.db.insert("users", {
     clerkId: identity.subject,
-    name: identity.name ?? "User",
+    name: displayName,
     email: identity.email,
     avatarUrl: identity.pictureUrl,
     currency: "GBP",

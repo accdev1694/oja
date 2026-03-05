@@ -348,7 +348,7 @@ export default function CreateListFromReceiptScreen() {
           <View style={styles.scanCtaText}>
             <Text style={styles.scanCtaTitle}>Scan a New Receipt</Text>
             <Text style={styles.scanCtaDesc}>
-              Have a receipt? Scan it and we'll build your list
+              Have a receipt? Scan it and we&apos;ll build your list
             </Text>
           </View>
           <MaterialCommunityIcons

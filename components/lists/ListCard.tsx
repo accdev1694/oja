@@ -42,7 +42,7 @@ export interface ListCardProps {
     actualTotal?: number;
     listNumber?: number;
     storeName?: string;
-    storeSegments?: Array<{ storeId: string; storeName: string; switchedAt: number }>;
+    storeSegments?: { storeId: string; storeName: string; switchedAt: number }[];
   };
   onPress: (id: Id<"shoppingLists">) => void;
   onDelete: (id: Id<"shoppingLists">, name: string) => void;

@@ -51,12 +51,6 @@ function InitialLayout() {
 
     // User changed (sign-out, sign-in, or account switch)
     if (previousUserId !== currentUserId) {
-      console.log('[Convex Cache] User changed:', {
-        from: previousUserId,
-        to: currentUserId,
-        action: currentUserId ? 'signed in' : 'signed out'
-      });
-
       // Block all queries temporarily to prevent showing stale cached data
       setIsSwitchingUsers(true);
 
@@ -66,7 +60,6 @@ function InitialLayout() {
       // Allow queries to resume after a brief delay to ensure Convex
       // has had a chance to re-authenticate with the new user's token
       const timeoutId = setTimeout(() => {
-        console.log('[Convex Cache] Resuming queries for new user');
         setIsSwitchingUsers(false);
       }, 200); // 200ms for token refresh and query invalidation
 

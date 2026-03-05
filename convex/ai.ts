@@ -14,67 +14,74 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 
 /**
- * AI fallback wrapper: tries primary (Gemini) first, falls back to secondary (OpenAI).
- * Both providers fail → throws the fallback error.
- * Includes simple retry logic for rate limits (429).
+ * Retry wrapper for AI API calls with exponential backoff.
+ * Handles rate limits (429) and transient errors with automatic retry.
  */
 async function withRetry<T>(
   fn: () => Promise<T>,
-  retries = 2,
+  operationName: string,
+  retries = 3,
   delay = 1000
 ): Promise<T> {
   try {
     return await fn();
   } catch (error: any) {
-    const isRateLimit = 
-      error?.status === 429 || 
-      error?.message?.includes("429") || 
-      error?.code === "insufficient_quota" ||
-      error?.message?.includes("quota");
+    const isRateLimit =
+      error?.status === 429 ||
+      error?.message?.includes("429") ||
+      error?.message?.includes("quota") ||
+      error?.message?.includes("RESOURCE_EXHAUSTED") ||
+      error?.message?.includes("Rate limit");
 
-    if (retries > 0 && isRateLimit) {
-      console.warn(`AI Rate limit hit, retrying in ${delay}ms... (${retries} retries left)`);
+    const isTransientError =
+      error?.message?.includes("UNAVAILABLE") ||
+      error?.message?.includes("DEADLINE_EXCEEDED") ||
+      error?.message?.includes("timeout") ||
+      error?.status >= 500;
+
+    if (retries > 0 && (isRateLimit || isTransientError)) {
+      const errorType = isRateLimit ? "Rate limit" : "Transient error";
+      console.warn(`[${operationName}] ${errorType} hit, retrying in ${delay}ms... (${retries} retries left)`);
       await new Promise((resolve) => setTimeout(resolve, delay));
-      return withRetry(fn, retries - 1, delay * 2);
+      return withRetry(fn, operationName, retries - 1, delay * 2);
     }
+
+    // Throw the original error so the fallback wrapper can decide what to do
     throw error;
   }
 }
 
+/**
+ * Fallback wrapper that tries Gemini first and OpenAI second.
+ */
 async function withAIFallback<T>(
-  primary: () => Promise<T>,
-  fallback: () => Promise<T>,
-  operationName: string
+  operationName: string,
+  geminiFn: () => Promise<T>,
+  openaiFn: () => Promise<T>
 ): Promise<T> {
   try {
-    return await withRetry(primary);
-  } catch (primaryError) {
-    console.warn(`[${operationName}] Primary AI (Gemini) failed, trying fallback (OpenAI):`, primaryError);
+    // Attempt Gemini first (it has its own internal retries via withRetry)
+    return await withRetry(geminiFn, operationName);
+  } catch (geminiError: any) {
+    console.warn(`[${operationName}] Gemini failed permanently, falling back to OpenAI (gpt-4o-mini)...`);
     try {
-      return await withRetry(fallback);
-    } catch (fallbackError) {
-      console.error(`[${operationName}] Both AI providers failed:`, { primaryError, fallbackError });
-      throw fallbackError;
+      // Attempt OpenAI as fallback
+      return await withRetry(openaiFn, `${operationName}_fallback_openai`);
+    } catch (openaiError: any) {
+      console.error(`[${operationName}] Both AI providers failed for ${operationName}.`);
+      
+      // If both fail, provide a user-friendly error
+      throw new Error(
+        openaiError?.message?.includes("API key")
+          ? "AI service configuration error. Please contact support."
+          : "AI services temporarily unavailable. Please try again."
+      );
     }
   }
 }
 
 /**
- * Run a prompt through OpenAI GPT-4o-mini and return the text response.
- * Used as fallback when Gemini is unavailable.
- */
-async function openaiGenerate(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [{ role: "user", content: prompt }],
-    temperature: options?.temperature ?? 0.7,
-    max_tokens: options?.maxTokens ?? 4000,
-  });
-  return completion.choices[0]?.message?.content?.trim() || "";
-}
-
-/**
- * Run a prompt through Gemini and return the text response.
+ * Run a prompt through Gemini.
  */
 async function geminiGenerate(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
   const model = genAI.getGenerativeModel({
@@ -87,6 +94,54 @@ async function geminiGenerate(prompt: string, options?: { temperature?: number; 
   const result = await model.generateContent(prompt);
   const response = await result.response;
   return response.text().trim();
+}
+
+/**
+ * Run a prompt through OpenAI gpt-4o-mini.
+ */
+async function openaiGenerate(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [{ role: "user", content: prompt }],
+    temperature: options?.temperature ?? 0.7,
+    max_tokens: options?.maxTokens ?? 4000,
+  });
+  return response.choices[0].message.content?.trim() || "";
+}
+
+/**
+ * Run a prompt with an image through OpenAI gpt-4o-mini.
+ */
+async function openaiVisionGenerate(prompt: string, base64Image: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${base64Image}` },
+          },
+        ],
+      },
+    ],
+    temperature: options?.temperature ?? 0.2,
+    max_tokens: options?.maxTokens ?? 4000,
+  });
+  return response.choices[0].message.content?.trim() || "";
+}
+
+/**
+ * Unified generation helper with fallback.
+ */
+async function smartGenerate(prompt: string, operationName: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
+  return await withAIFallback(
+    operationName,
+    async () => geminiGenerate(prompt, options),
+    async () => openaiGenerate(prompt, options)
+  );
 }
 
 /** Strip markdown code blocks from AI response */
@@ -317,9 +372,9 @@ IMPORTANT:
 
     try {
       const aiItems = await withAIFallback(
+        isFullGeneration ? "generateHybridSeedItems" : "generateHybridSeedItems-gap",
         async () => parseSeedResponse(await geminiGenerate(fullPrompt, { temperature: 0.8 })),
-        async () => parseSeedResponse(await openaiGenerate(fullPrompt, { temperature: 0.8 })),
-        isFullGeneration ? "generateHybridSeedItems" : "generateHybridSeedItems-gap"
+        async () => parseSeedResponse(await openaiGenerate(fullPrompt, { temperature: 0.8 }))
       );
 
       const combined = [...globalItems, ...aiItems];
@@ -390,11 +445,8 @@ Return ONLY a JSON array of item names, nothing else:
     }
 
     try {
-      return await withAIFallback(
-        async () => parseSuggestions(await geminiGenerate(prompt, { maxTokens: 200 })),
-        async () => parseSuggestions(await openaiGenerate(prompt, { maxTokens: 200 })),
-        "generateListSuggestions"
-      );
+      const response = await smartGenerate(prompt, "generateListSuggestions", { maxTokens: 200 });
+      return parseSuggestions(response);
     } catch (error) {
       console.error("AI suggestion generation failed:", error);
       return getFallbackSuggestions(currentItems);
@@ -550,32 +602,21 @@ IMPORTANT RULES:
 - Only include actual product items that the customer bought and took home
 - Be HONEST about confidence — do not inflate scores. A fuzzy receipt should have low imageQuality and low item confidence.`;
 
-      async function geminiParseReceipt(): Promise<any> {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-        const result = await model.generateContent([
-          { text: receiptPrompt },
-          { inlineData: { mimeType: "image/jpeg", data: base64Image } },
-        ]);
-        return JSON.parse(stripCodeBlocks(result.response.text().trim()));
-      }
-
-      async function openaiParseReceipt(): Promise<any> {
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [{
-            role: "user",
-            content: [
-              { type: "text", text: receiptPrompt },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
-            ],
-          }],
-          max_tokens: 4000,
-        });
-        const text = completion.choices[0]?.message?.content?.trim() || "";
-        return JSON.parse(stripCodeBlocks(text));
-      }
-
-      const parsed = await withAIFallback(geminiParseReceipt, openaiParseReceipt, "parseReceipt");
+      const parsed = await withAIFallback(
+        "parseReceipt",
+        async () => {
+          const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+          const result = await model.generateContent([
+            { text: receiptPrompt },
+            { inlineData: { mimeType: "image/jpeg", data: base64Image } },
+          ]);
+          return JSON.parse(stripCodeBlocks(result.response.text().trim()));
+        },
+        async () => {
+          const response = await openaiVisionGenerate(receiptPrompt, base64Image);
+          return JSON.parse(stripCodeBlocks(response));
+        }
+      );
 
       // Image quality score from AI (0-100)
       const imageQuality = typeof parsed.imageQuality === "number" ? parsed.imageQuality : 50;
@@ -746,32 +787,21 @@ If the image does not show a recognisable product (e.g., blurry, not a product, 
 
 Return ONLY valid JSON, no markdown code blocks.`;
 
-      async function geminiParseProduct(): Promise<Record<string, unknown>> {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-        const result = await model.generateContent([
-          { text: productPrompt },
-          { inlineData: { mimeType: "image/jpeg", data: base64Image } },
-        ]);
-        return JSON.parse(stripCodeBlocks(result.response.text().trim()));
-      }
-
-      async function openaiParseProduct(): Promise<Record<string, unknown>> {
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [{
-            role: "user",
-            content: [
-              { type: "text", text: productPrompt },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
-            ],
-          }],
-          max_tokens: 1000,
-        });
-        const text = completion.choices[0]?.message?.content?.trim() || "";
-        return JSON.parse(stripCodeBlocks(text));
-      }
-
-      const parsed = await withAIFallback(geminiParseProduct, openaiParseProduct, "scanProduct");
+      const parsed = await withAIFallback(
+        "scanProduct",
+        async () => {
+          const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+          const result = await model.generateContent([
+            { text: productPrompt },
+            { inlineData: { mimeType: "image/jpeg", data: base64Image } },
+          ]);
+          return JSON.parse(stripCodeBlocks(result.response.text().trim()));
+        },
+        async () => {
+          const response = await openaiVisionGenerate(productPrompt, base64Image);
+          return JSON.parse(stripCodeBlocks(response));
+        }
+      );
 
       const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
 
@@ -906,11 +936,8 @@ RULES:
     }
 
     try {
-      return await withAIFallback(
-        async () => parseVariantResponse(await geminiGenerate(prompt, { temperature: 0.5, maxTokens: 4000 })),
-        async () => parseVariantResponse(await openaiGenerate(prompt, { temperature: 0.5, maxTokens: 4000 })),
-        "generateItemVariants"
-      );
+      const response = await smartGenerate(prompt, "generateItemVariants", { temperature: 0.5, maxTokens: 4000 });
+      return parseVariantResponse(response);
     } catch (error) {
       console.error("Variant generation failed (both providers):", error);
       return [];
@@ -996,11 +1023,8 @@ RULES:
     }
 
     try {
-      const result = await withAIFallback(
-        async () => parseEstimateResponse(await geminiGenerate(prompt, { temperature: 0.3, maxTokens: 2000 })),
-        async () => parseEstimateResponse(await openaiGenerate(prompt, { temperature: 0.3, maxTokens: 2000 })),
-        "estimateItemPrice"
-      );
+      const response = await smartGenerate(prompt, "estimateItemPrice", { temperature: 0.3, maxTokens: 2000 });
+      const result = parseEstimateResponse(response);
 
       // Write to currentPrices as AI Estimate with reportCount: 0
       await ctx.runMutation(api.currentPrices.upsertAIEstimate, {
@@ -1045,8 +1069,8 @@ RULES:
 /**
  * Parse a voice command transcript into a structured shopping intent.
  *
- * Uses Gemini (primary) + OpenAI (fallback) to understand natural language
- * commands like "Create a grocery list with milk and bread" or
+ * Uses Gemini 2.0 Flash to understand natural language commands like
+ * "Create a grocery list with milk and bread" or
  * "Add chicken and rice to my weekly shop".
  *
  * Returns structured JSON with action, list name, items, and confidence.
@@ -1183,23 +1207,24 @@ Respond with ONLY valid JSON, no markdown, no explanation:
       }
     };
 
-    return await withAIFallback(
-      async () => {
-        const raw = await geminiGenerate(prompt, {
-          temperature: 0.2,
-          maxTokens: 1000,
-        });
-        return parseResponse(raw);
-      },
-      async () => {
-        const raw = await openaiGenerate(prompt, {
-          temperature: 0.2,
-          maxTokens: 1000,
-        });
-        return parseResponse(raw);
-      },
-      "parseVoiceCommand"
-    );
+    try {
+      const raw = await smartGenerate(prompt, "parseVoiceCommand", {
+        temperature: 0.2,
+        maxTokens: 1000,
+      });
+      return parseResponse(raw);
+    } catch (error) {
+      console.error("parseVoiceCommand failed:", error);
+      return {
+        action: "unsupported",
+        listName: null,
+        matchedListId: null,
+        items: [],
+        confidence: 0.1,
+        rawTranscript: args.transcript,
+        error: "AI service failed",
+      };
+    }
   },
 });
 
@@ -1389,107 +1414,21 @@ export const voiceAssistant = action({
         pendingAction,
       };
     } catch (error) {
-      console.error("[voiceAssistant] Gemini failed, trying OpenAI fallback:", error);
+      console.error("[voiceAssistant] Gemini failed:", error);
 
-      // Gap 3: OpenAI fallback WITH function calling (not degraded text-only)
-      try {
-        const openaiTools = voiceFunctionDeclarations.map((decl) => ({
-          type: "function" as const,
-          function: {
-            name: decl.name,
-            description: decl.description || "",
-            parameters: decl.parameters as unknown as Record<string, unknown>,
-          },
-        }));
+      // Return user-friendly error message
+      const isRateLimit =
+        (error as any)?.message?.includes("429") ||
+        (error as any)?.message?.includes("quota") ||
+        (error as any)?.message?.includes("RESOURCE_EXHAUSTED");
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const openaiMessages: Array<any> = [
-          { role: "system", content: systemPrompt },
-          ...(args.conversationHistory || []).map((msg) => ({
-            role: msg.role === "model" ? "assistant" : "user",
-            content: msg.text,
-          })),
-          { role: "user", content: args.transcript },
-        ];
-
-        let pendingAction: {
-          action: string;
-          params: Record<string, unknown>;
-          confirmLabel: string;
-        } | null = null;
-
-        // Function-calling loop for OpenAI (max 3 iterations)
-        for (let i = 0; i < 3; i++) {
-          const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: openaiMessages,
-            tools: openaiTools,
-            temperature: 0.3,
-            max_tokens: 500,
-          });
-
-          const choice = completion.choices[0];
-          if (!choice) break;
-
-          // If no tool calls, we have the final answer
-          if (!choice.message.tool_calls || choice.message.tool_calls.length === 0) {
-            const fallbackText = choice.message.content || "I'm having a bit of trouble. Try again in a moment?";
-            return {
-              type: pendingAction ? ("confirm_action" as const) : ("answer" as const),
-              text: fallbackText,
-              pendingAction,
-            };
-          }
-
-          // Process tool calls — push full assistant message with tool_calls
-          openaiMessages.push(choice.message);
-
-          for (const toolCall of choice.message.tool_calls) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const tc = toolCall as any;
-            const fnName = tc.function.name as string;
-            const fnArgs = JSON.parse(tc.function.arguments || "{}");
-            console.log(`[voiceAssistant/openai] Tool call ${i + 1}: ${fnName}`, fnArgs);
-
-            const toolResult = await executeVoiceTool(ctx, fnName, fnArgs);
-
-            if (toolResult.type === "confirm") {
-              pendingAction = {
-                action: toolResult.result.action,
-                params: toolResult.result.params,
-                confirmLabel: toolResult.result.description,
-              };
-            }
-
-            openaiMessages.push({
-              role: "tool",
-              content: JSON.stringify(toolResult.result),
-              tool_call_id: tc.id,
-            });
-          }
-        }
-
-        // If we exhausted iterations, send one final request for text
-        const finalCompletion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: openaiMessages,
-          temperature: 0.3,
-          max_tokens: 500,
-        });
-
-        return {
-          type: pendingAction ? ("confirm_action" as const) : ("answer" as const),
-          text: finalCompletion.choices[0]?.message?.content || "Done!",
-          pendingAction,
-        };
-      } catch (fallbackError) {
-        console.error("[voiceAssistant] OpenAI fallback also failed:", fallbackError);
-        return {
-          type: "error" as const,
-          text: "I'm having trouble right now. You can still use the app normally!",
-          pendingAction: null,
-        };
-      }
+      return {
+        type: "error" as const,
+        text: isRateLimit
+          ? "Tobi is taking a quick break. Try again in a moment!"
+          : "I'm having trouble right now. You can still use the app normally!",
+        pendingAction: null,
+      };
     }
   },
 });
