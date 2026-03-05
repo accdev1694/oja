@@ -34,7 +34,7 @@ export const PlatformAIUsageMonitor = ({ data }: PlatformAIUsageMonitorProps) =>
       <View style={styles.header}>
         <View style={styles.headerTitleRow}>
           <MaterialCommunityIcons name="molecule" size={24} color={colors.accent.primary} />
-          <Text style={styles.title}>PLATFORM AI INFRASTRUCTURE</Text>
+          <Text style={styles.title}>AI USAGE BY OJA</Text>
         </View>
         <View style={styles.providerBadge}>
           <Text style={styles.providerText}>{data.activeProvider}</Text>
