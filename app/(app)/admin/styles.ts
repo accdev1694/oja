@@ -71,11 +71,6 @@ export const adminStyles = StyleSheet.create({
   gmvLabel: { ...typography.labelSmall, color: colors.text.tertiary, textTransform: "uppercase", marginBottom: 2 },
   gmvValue: { ...typography.headlineMedium, color: colors.semantic.success, fontWeight: "700" },
   gmvValueLarge: { ...typography.headlineLarge, color: colors.semantic.success, fontWeight: "800", fontSize: 26 },
-  gmvPicker: { flexDirection: "row", backgroundColor: `${colors.glass.border}40`, borderRadius: 10, padding: 3, marginBottom: 4 },
-  gmvPickerBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  gmvPickerBtnActive: { backgroundColor: colors.accent.primary },
-  gmvPickerText: { fontSize: 9, color: colors.text.tertiary, fontWeight: "700" },
-  gmvPickerTextActive: { color: "#000" },
 
   // Revenue
   revenueGrid: { flexDirection: "row", gap: spacing.lg, marginBottom: spacing.sm },

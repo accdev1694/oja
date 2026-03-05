@@ -15,6 +15,7 @@ import {
   GlassCard,
   GlassButton,
   AnimatedSection,
+  GlassSegmentedControl,
   colors,
   spacing,
   GlassDateRangePicker,
@@ -238,19 +239,25 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
                       </Text>
                     </View>
                     
-                    <View style={styles.gmvPicker}>
-                      {(["week", "month", "year", "lifetime"] as const).map((f) => (
-                        <Pressable
-                          key={f}
-                          onPress={() => handleGmvFilterChange(f)}
-                          style={[styles.gmvPickerBtn, gmvFilter === f && styles.gridItemActive]}
-                        >
-                          <Text style={[styles.gmvPickerText, gmvFilter === f && styles.gridLabelActive]}>
-                            {f === "lifetime" ? "All" : f === "week" ? "Wk" : f === "month" ? "Mth" : "Yr"}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
+                    <GlassSegmentedControl
+                      tabs={[
+                        { label: "Wk" },
+                        { label: "Mth" },
+                        { label: "Yr" },
+                        { label: "All" },
+                      ]}
+                      activeIndex={
+                        gmvFilter === "week" ? 0 : 
+                        gmvFilter === "month" ? 1 : 
+                        gmvFilter === "year" ? 2 : 3
+                      }
+                      onTabChange={(index) => {
+                        const periods = ["week", "month", "year", "lifetime"] as const;
+                        handleGmvFilterChange(periods[index]);
+                      }}
+                      style={{ width: 160 }}
+                      activeColor={colors.accent.primary}
+                    />
                   </View>
                 </View>
               </GlassCard>

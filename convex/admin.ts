@@ -1168,10 +1168,23 @@ export const getPlatformAIUsage = query({
         };
       }
 
+      // Calculate averages and renewal
+      const daysInMonthSoFar = Math.max(1, Math.ceil((now - monthStart) / (24 * 60 * 60 * 1000)));
+      const weeksInMonthSoFar = Math.max(1, daysInMonthSoFar / 7);
+      
+      const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
+      const daysUntilRenewal = Math.ceil((nextMonth.getTime() - now) / (24 * 60 * 60 * 1000));
+
       return {
         summary,
         totalRequests,
         totalTokens,
+        tokenQuota: TOKEN_ALERT_THRESHOLD,
+        requestQuota: REQ_ALERT_THRESHOLD,
+        dailyAverageTokens: Math.round(totalTokens / daysInMonthSoFar),
+        weeklyAverageTokens: Math.round(totalTokens / weeksInMonthSoFar),
+        daysUntilRenewal,
+        renewalDate: nextMonth.getTime(),
         activeProvider: "Gemini 2.0 Flash",
         alert,
         computedAt: now,

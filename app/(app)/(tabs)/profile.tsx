@@ -23,6 +23,7 @@ import {
   SimpleHeader,
   SkeletonCard,
   AnimatedSection,
+  GlassSegmentedControl,
   colors,
   typography,
   spacing,
@@ -31,6 +32,7 @@ import {
 } from "@/components/ui/glass";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
+import { PlatformAIUsageMonitor } from "@/components/admin/PlatformAIUsageMonitor";
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
@@ -287,19 +289,25 @@ export default function ProfileScreen() {
                            adminAnalytics?.totalGMV) ?? 0).toLocaleString()}
                       </Text>
                     </View>
-                    <View style={styles.adminPicker}>
-                      {(["week", "month", "year", "lifetime"] as const).map((f) => (
-                        <Pressable
-                          key={f}
-                          onPress={() => { setGmvFilter(f); Haptics.selectionAsync(); }}
-                          style={[styles.adminPickerBtn, gmvFilter === f && styles.adminPickerBtnActive]}
-                        >
-                          <Text style={[styles.adminPickerText, gmvFilter === f && styles.adminPickerTextActive]}>
-                            {f === "lifetime" ? "All" : f === "week" ? "Wk" : f === "month" ? "Mth" : "Yr"}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
+                    <GlassSegmentedControl
+                      tabs={[
+                        { label: "Wk" },
+                        { label: "Mth" },
+                        { label: "Yr" },
+                        { label: "All" },
+                      ]}
+                      activeIndex={
+                        gmvFilter === "week" ? 0 : 
+                        gmvFilter === "month" ? 1 : 
+                        gmvFilter === "year" ? 2 : 3
+                      }
+                      onTabChange={(index) => {
+                        const periods = ["week", "month", "year", "lifetime"] as const;
+                        setGmvFilter(periods[index]);
+                      }}
+                      style={{ width: 160 }}
+                      activeColor={colors.semantic.success}
+                    />
                   </View>
 
                   <View style={styles.healthDivider} />
@@ -318,20 +326,7 @@ export default function ProfileScreen() {
 
                   <View style={styles.healthDivider} />
 
-                  <View style={styles.aiUsageRow}>
-                    <View style={styles.aiUsageItem}>
-                      <Text style={styles.adminLabel}>Global Tokens</Text>
-                      <Text style={styles.aiUsageValue}>{(platformAIUsage?.totalTokens ?? 0).toLocaleString()}</Text>
-                    </View>
-                    <View style={styles.aiUsageItem}>
-                      <Text style={styles.adminLabel}>Global Req</Text>
-                      <Text style={styles.aiUsageValue}>{(platformAIUsage?.totalRequests ?? 0).toLocaleString()}</Text>
-                    </View>
-                    <View style={styles.aiUsageItem}>
-                      <Text style={styles.adminLabel}>Voice (All)</Text>
-                      <Text style={styles.aiUsageValue}>{(platformAIUsage?.summary?.voice?.requests ?? 0).toLocaleString()}</Text>
-                    </View>
-                  </View>
+                  <PlatformAIUsageMonitor data={platformAIUsage} />
 
                   {platformAIUsage?.alert && (
                     <View style={[styles.adminAlertBox, { backgroundColor: platformAIUsage.alert.level === "critical" ? `${colors.semantic.danger}15` : `${colors.semantic.warning}15`, borderColor: platformAIUsage.alert.level === "critical" ? colors.semantic.danger : colors.semantic.warning }]}>
@@ -815,30 +810,6 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     textTransform: "uppercase",
     marginBottom: 4,
-  },
-  adminPicker: {
-    flexDirection: "row",
-    backgroundColor: `${colors.glass.border}40`,
-    borderRadius: 10,
-    padding: 3,
-    alignSelf: "flex-end",
-    marginBottom: 4,
-  },
-  adminPickerBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  adminPickerBtnActive: {
-    backgroundColor: colors.accent.primary,
-  },
-  adminPickerText: {
-    fontSize: 9,
-    color: colors.text.tertiary,
-    fontWeight: "700",
-  },
-  adminPickerTextActive: {
-    color: "#000",
   },
   healthDivider: {
     height: 1,

@@ -96,6 +96,12 @@ export {
   type CapsuleTab,
 } from "./GlassCapsuleSwitcher";
 
+export {
+  GlassSegmentedControl,
+  type GlassSegmentedControlProps,
+  type SegmentedControlTab,
+} from "./GlassSegmentedControl";
+
 // =============================================================================
 // LIST COMPONENTS
 // =============================================================================
