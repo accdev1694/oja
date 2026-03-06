@@ -308,7 +308,7 @@ export default function SubscriptionScreen() {
                   </Text>
                 </View>
                 <View style={styles.lifetimeScansChip}>
-                  <MaterialCommunityIcons name="barcode-scan" size={14} color={colors.text.tertiary} />
+                  <MaterialCommunityIcons name="cube-scan" size={14} color={colors.text.tertiary} />
                   <Text style={styles.lifetimeScansText}>
                     {pointsBalance.tierProgress} scanned
                   </Text>

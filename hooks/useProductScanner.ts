@@ -30,6 +30,7 @@ export interface ScannedProduct {
   brand?: string;
   estimatedPrice?: number;
   confidence: number;
+  sizeSource?: "visible" | "estimated" | "unknown";
   imageStorageId: string;
   /** Local file URI for immediate display before upload completes */
   localImageUri?: string;
@@ -204,6 +205,7 @@ export function useProductScanner(options?: UseProductScannerOptions) {
           brand: parsed.brand as string | undefined,
           estimatedPrice: parsed.estimatedPrice as number | undefined,
           confidence: parsed.confidence as number,
+          sizeSource: parsed.sizeSource as any,
           imageStorageId: storageId,
           localImageUri: uri,
           status: "ready",

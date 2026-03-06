@@ -14,7 +14,7 @@ export const getBuyItAgainSuggestions = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) return [];
 
@@ -27,7 +27,7 @@ export const getBuyItAgainSuggestions = query({
     // Get price history for the user in this window
     const history = await ctx.db
       .query("priceHistory")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .filter((q) => q.and(
         q.gte(q.field("purchaseDate"), startWindow),
         q.lte(q.field("purchaseDate"), endWindow)
@@ -37,7 +37,16 @@ export const getBuyItAgainSuggestions = query({
     if (history.length === 0) return [];
 
     // Aggregate by item name to find distinct purchases
-    const itemMap = new Map();
+    const itemMap = new Map<string, {
+      name: string;
+      normalizedName: string;
+      quantity: number;
+      storeName: string;
+      lastPrice: number;
+      purchaseDate: number;
+      size?: string;
+      unit?: string;
+    }>();
     for (const h of history) {
       const key = h.normalizedName;
       if (!itemMap.has(key)) {
@@ -57,12 +66,12 @@ export const getBuyItAgainSuggestions = query({
     // Get current active list items to filter out duplicates
     const activeLists = await ctx.db
       .query("shoppingLists")
-      .withIndex("by_user_status", (q: any) => q.eq("userId", user._id).eq("status", "active"))
+      .withIndex("by_user_status", (q) => q.eq("userId", user._id).eq("status", "active"))
       .collect();
     
     const shoppingLists = await ctx.db
       .query("shoppingLists")
-      .withIndex("by_user_status", (q: any) => q.eq("userId", user._id).eq("status", "shopping"))
+      .withIndex("by_user_status", (q) => q.eq("userId", user._id).eq("status", "shopping"))
       .collect();
     
     const allActiveLists = [...activeLists, ...shoppingLists];
@@ -71,7 +80,7 @@ export const getBuyItAgainSuggestions = query({
     for (const list of allActiveLists) {
       const items = await ctx.db
         .query("listItems")
-        .withIndex("by_list", (q: any) => q.eq("listId", list._id))
+        .withIndex("by_list", (q) => q.eq("listId", list._id))
         .collect();
       for (const item of items) {
         activeItemNames.add(item.name.toLowerCase().trim());

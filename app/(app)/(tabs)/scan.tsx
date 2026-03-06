@@ -132,14 +132,14 @@ export default function ScanScreen() {
     }
   }, [shoppingLists, productScanner, addItemsToList, alert, router]);
 
-  function handleScanAction() {
+  async function handleScanAction() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     const isReceipt = scanMode === "receipt";
     const title = isReceipt ? "Scan Receipt" : "Scan Product";
     const message = isReceipt 
       ? "Take a clear photo of your receipt or upload from your library."
-      : "Snap a product label or pick an image from your gallery.";
+      : "Ensure the product name and size/weight are clearly visible.";
 
     alert(
       title,
@@ -151,11 +151,37 @@ export default function ScanScreen() {
         },
         { 
           text: "Photo Library", 
-          onPress: () => isReceipt ? receiptScanner.pickReceipt() : productScanner.pickFromLibrary() 
+          onPress: async () => {
+            if (isReceipt) {
+              await receiptScanner.pickReceipt();
+            } else {
+              const product = await productScanner.pickFromLibrary();
+              if (product && (product.sizeSource === "estimated" || product.sizeSource === "unknown" || !product.size)) {
+                // Auto-open modal for confirmation/correction
+                const index = productScanner.scannedProducts.findIndex(p => 
+                  p.imageStorageId === product.imageStorageId || p.localImageUri === product.localImageUri
+                );
+                setViewingProduct({ product, index: index !== -1 ? index : productScanner.scannedProducts.length - 1 });
+              }
+            }
+          } 
         },
         { 
           text: "Use Camera", 
-          onPress: () => isReceipt ? receiptScanner.captureReceipt() : productScanner.captureProduct() 
+          onPress: async () => {
+            if (isReceipt) {
+              await receiptScanner.captureReceipt();
+            } else {
+              const product = await productScanner.captureProduct();
+              if (product && (product.sizeSource === "estimated" || product.sizeSource === "unknown" || !product.size)) {
+                // Auto-open modal for confirmation/correction
+                const index = productScanner.scannedProducts.findIndex(p => 
+                  p.imageStorageId === product.imageStorageId || p.localImageUri === product.localImageUri
+                );
+                setViewingProduct({ product, index: index !== -1 ? index : productScanner.scannedProducts.length - 1 });
+              }
+            }
+          } 
         },
       ]
     );
@@ -194,7 +220,7 @@ export default function ScanScreen() {
           <GlassCapsuleSwitcher
             tabs={[
               { label: "Receipt", icon: "receipt", activeColor: colors.accent.primary },
-              { label: "Product", icon: "barcode-scan", activeColor: colors.accent.primary },
+              { label: "Product", icon: "cube-scan", activeColor: colors.accent.primary },
             ]}
             activeIndex={scanMode === "receipt" ? 0 : 1}
             onTabChange={handleScanModeSwitch}

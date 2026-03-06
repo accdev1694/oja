@@ -39,6 +39,14 @@ interface TemplateCardProps {
   onPress: () => void;
 }
 
+const formatShortDate = (ts: number) => {
+  const d = new Date(ts);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
+};
+
 function TemplateCard({ list, onPress }: TemplateCardProps) {
   const scale = useSharedValue(1);
 
@@ -57,14 +65,6 @@ function TemplateCard({ list, onPress }: TemplateCardProps) {
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress();
-  };
-
-  const formatShortDate = (ts: number) => {
-    const d = new Date(ts);
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yy = String(d.getFullYear()).slice(-2);
-    return `${dd}/${mm}/${yy}`;
   };
 
   const completedDate = list.completedAt

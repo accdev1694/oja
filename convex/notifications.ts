@@ -273,14 +273,51 @@ export const sendPush = internalAction({
     data: v.optional(v.any()),
   },
   handler: async (ctx, args): Promise<{ sent: boolean; reason?: string; ticketId?: string }> => {
-    // Get user's push token
+    // Get user's push token and preferences
     const user = await ctx.runQuery(internal.notifications.getUserPushToken, {
       userId: args.userId,
-    }) as { expoPushToken?: string } | null;
+    }) as { 
+      expoPushToken?: string; 
+      preferences?: { 
+        notifications: boolean; 
+        notificationSettings?: { 
+          quietHours?: { enabled: boolean; start: string; end: string } 
+        } 
+      } 
+    } | null;
 
     if (!user?.expoPushToken) {
       console.log(`[sendPush] No push token for user ${args.userId}`);
       return { sent: false, reason: "no_token" };
+    }
+
+    // 1. Enforce Master Toggle
+    if (user.preferences?.notifications === false) {
+      console.log(`[sendPush] Notifications disabled by user ${args.userId}`);
+      return { sent: false, reason: "disabled_by_user" };
+    }
+
+    // 2. Enforce Quiet Hours
+    const quietHours = user.preferences?.notificationSettings?.quietHours;
+    if (quietHours?.enabled) {
+      const now = new Date();
+      const currentHM = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+      
+      const { start, end } = quietHours;
+      let isQuiet = false;
+      
+      if (start <= end) {
+        // Simple range (e.g. 08:00 to 22:00)
+        isQuiet = currentHM >= start && currentHM <= end;
+      } else {
+        // Overnight range (e.g. 22:00 to 08:00)
+        isQuiet = currentHM >= start || currentHM <= end;
+      }
+
+      if (isQuiet) {
+        console.log(`[sendPush] Suppressed by quiet hours (${start}-${end}) for user ${args.userId}`);
+        return { sent: false, reason: "quiet_hours" };
+      }
     }
 
     // Validate Expo push token format

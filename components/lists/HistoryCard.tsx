@@ -35,18 +35,24 @@ export interface HistoryCardProps {
   onPress: (id: Id<"shoppingLists">) => void;
   formatDateTime: (timestamp: number) => string;
   onUseAsTemplate?: (id: Id<"shoppingLists">, name: string) => void;
-  onEditName?: (id: Id<"shoppingLists">, currentName: string) => void;
   selectable?: boolean;
   selected?: boolean;
   onToggleSelect?: (id: Id<"shoppingLists">) => void;
 }
+
+const formatShortDate = (ts: number) => {
+  const d = new Date(ts);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
+};
 
 export const HistoryCard = React.memo(function HistoryCard({
   list,
   onPress,
   formatDateTime,
   onUseAsTemplate,
-  onEditName,
   selectable,
   selected,
   onToggleSelect,
@@ -74,25 +80,10 @@ export const HistoryCard = React.memo(function HistoryCard({
     }
   }, [onPress, list._id, selectable, onToggleSelect]);
 
-  const handleEditName = useCallback(() => {
-    if (onEditName) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      onEditName(list._id, list.name);
-    }
-  }, [onEditName, list._id, list.name]);
-
   const budget = list.budget ?? 0;
   const actual = list.actualTotal ?? 0;
   const diff = budget - actual;
   const savedMoney = diff > 0 && budget > 0;
-
-  const formatShortDate = (ts: number) => {
-    const d = new Date(ts);
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yy = String(d.getFullYear()).slice(-2);
-    return `${dd}/${mm}/${yy}`;
-  };
 
   const completedDate = list.completedAt
     ? formatShortDate(list.completedAt)
@@ -228,21 +219,6 @@ export const HistoryCard = React.memo(function HistoryCard({
             </View>
           </GlassCard>
         </Pressable>
-
-        {/* Floating edit badge */}
-        {onEditName && !selectable && (
-          <Pressable
-            onPress={handleEditName}
-            style={styles.editBadge}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons
-              name="pencil"
-              size={14}
-              color={colors.text.secondary}
-            />
-          </Pressable>
-        )}
       </Animated.View>
     </Swipeable>
   );
@@ -260,7 +236,6 @@ export const HistoryCard = React.memo(function HistoryCard({
     prev.onPress === next.onPress &&
     prev.formatDateTime === next.formatDateTime &&
     prev.onUseAsTemplate === next.onUseAsTemplate &&
-    prev.onEditName === next.onEditName &&
     prev.selectable === next.selectable &&
     prev.selected === next.selected &&
     prev.onToggleSelect === next.onToggleSelect

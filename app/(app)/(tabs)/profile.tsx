@@ -20,6 +20,7 @@ import {
   GlassScreen,
   GlassCard,
   GlassButton,
+  GlassCheckbox,
   SimpleHeader,
   SkeletonCard,
   AnimatedSection,
@@ -45,6 +46,7 @@ export default function ProfileScreen() {
   const cancelAllSubs = useAction(api.stripe.cancelAllUserSubscriptions);
   const resetMyAccount = useMutation(api.users.resetMyAccount);
   const deleteMyAccount = useMutation(api.users.deleteMyAccount);
+  const updateNotificationSettings = useMutation(api.users.updateNotificationSettings);
   
   // Skip all queries during user switching to prevent cache leakage
   const allLists = useQuery(
@@ -433,6 +435,71 @@ export default function ProfileScreen() {
                 <Text style={styles.referralStats}>
                   {referralInfo.referredUsers.length} friend{referralInfo.referredUsers.length !== 1 ? "s" : ""} joined · {referralInfo.pointsEarned} pts earned
                 </Text>
+              )}
+            </GlassCard>
+          </View>
+        </AnimatedSection>
+
+        {/* Settings Section */}
+        <AnimatedSection animation="fadeInDown" duration={400} delay={isAdmin ? 250 : 50}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Settings</Text>
+            <GlassCard variant="standard" style={{ padding: spacing.md }}>
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingTitle}>Enable Notifications</Text>
+                  <Text style={styles.settingSubtitle}>Master switch for all alerts</Text>
+                </View>
+                <GlassCheckbox 
+                  checked={convexUser?.preferences?.notifications ?? true}
+                  onCheckedChange={(val) => updateNotificationSettings({ notifications: val })}
+                />
+              </View>
+              
+              {convexUser?.preferences?.notifications !== false && (
+                <>
+                  <View style={styles.settingDivider} />
+                  <View style={styles.settingRow}>
+                    <View style={styles.settingInfo}>
+                      <Text style={styles.settingTitle}>Stock Reminders</Text>
+                      <Text style={styles.settingSubtitle}>Wed & Fri pantry checks</Text>
+                    </View>
+                    <GlassCheckbox 
+                      checked={convexUser?.preferences?.notificationSettings?.stockReminders ?? true}
+                      onCheckedChange={(val) => updateNotificationSettings({ stockReminders: val })}
+                    />
+                  </View>
+                  
+                  <View style={styles.settingDivider} />
+                  <View style={styles.settingRow}>
+                    <View style={styles.settingInfo}>
+                      <Text style={styles.settingTitle}>Nurture Messages</Text>
+                      <Text style={styles.settingSubtitle}>Tips to get the most out of Oja</Text>
+                    </View>
+                    <GlassCheckbox 
+                      checked={convexUser?.preferences?.notificationSettings?.nurtureMessages ?? true}
+                      onCheckedChange={(val) => updateNotificationSettings({ nurtureMessages: val })}
+                    />
+                  </View>
+
+                  <View style={styles.settingDivider} />
+                  <View style={styles.settingRow}>
+                    <View style={styles.settingInfo}>
+                      <Text style={styles.settingTitle}>Quiet Hours (22:00 - 08:00)</Text>
+                      <Text style={styles.settingSubtitle}>Pause alerts during the night</Text>
+                    </View>
+                    <GlassCheckbox 
+                      checked={convexUser?.preferences?.notificationSettings?.quietHours?.enabled ?? false}
+                      onCheckedChange={(val) => updateNotificationSettings({ 
+                        quietHours: { 
+                          enabled: val, 
+                          start: "22:00", 
+                          end: "08:00" 
+                        } 
+                      })}
+                    />
+                  </View>
+                </>
               )}
             </GlassCard>
           </View>
@@ -1078,5 +1145,31 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     marginTop: spacing.sm,
     textAlign: "center",
+  },
+
+  // Settings
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  settingInfo: {
+    flex: 1,
+  },
+  settingTitle: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  settingSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  settingDivider: {
+    height: 1,
+    backgroundColor: colors.glass.border,
+    marginVertical: spacing.md,
   },
 });

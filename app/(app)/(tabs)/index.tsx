@@ -47,7 +47,6 @@ import { defaultListName } from "@/lib/list/helpers";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { SeasonalEventBanner } from "@/components/ui/SeasonalEventBanner";
 import { NotificationDropdown } from "@/components/partners/NotificationDropdown";
-import { PersonalizedSuggestions } from "@/components/lists/PersonalizedSuggestions";
 
 type TabMode = "active" | "history";
 
@@ -556,7 +555,6 @@ export default function ListsScreen() {
                         onPress={handleHistoryPress}
                         formatDateTime={stableFormatDateTime}
                         onUseAsTemplate={handleUseAsTemplate}
-                        onEditName={handleEditName}
                         selectable={isMultiSelectMode}
                         selected={selectedHistoryLists.has(list._id)}
                         onToggleSelect={handleToggleSelect}

@@ -1,6 +1,43 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+
+const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
+
+/**
+ * Internal mutation: Cleanup old receipt images
+ * Deletes from storage but keeps metadata
+ * Called monthly via cron
+ */
+export const cleanupOldImages = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const sixMonthsAgo = Date.now() - SIX_MONTHS_MS;
+    
+    // Find receipts with images older than 6 months
+    const oldReceipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_created", (q) => q.lt(q.field("createdAt"), sixMonthsAgo))
+      .filter((q) => q.neq(q.field("imageStorageId"), undefined))
+      .collect();
+
+    let deletedCount = 0;
+    for (const receipt of oldReceipts) {
+      if (receipt.imageStorageId) {
+        try {
+          await ctx.storage.delete(receipt.imageStorageId as any);
+          await ctx.db.patch(receipt._id, { imageStorageId: undefined });
+          deletedCount++;
+        } catch (error) {
+          console.error(`Failed to delete storage image ${receipt.imageStorageId} for receipt ${receipt._id}:`, error);
+        }
+      }
+    }
+
+    console.log(`[receipts] Cleaned up ${deletedCount} old receipt images`);
+    return { deleted: deletedCount };
+  },
+});
 import type { MutationCtx } from "./_generated/server";
 import { normalizeStoreName } from "./lib/storeNormalizer";
 import { pushReceiptId } from "./lib/receiptHelpers";

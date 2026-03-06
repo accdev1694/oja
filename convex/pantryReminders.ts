@@ -48,12 +48,34 @@ export const sendStockUpdateReminders = internalMutation({
     let sentCount = 0;
 
     for (const user of users) {
+      // Check user preferences
+      const settings = user.preferences?.notificationSettings;
+      if (user.preferences?.notifications === false) continue;
+      if (settings && settings.stockReminders === false) continue;
+
+      // Get user's stock levels for personalized message
+      const items = await ctx.db
+        .query("pantryItems")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .collect();
+      
+      const outCount = items.filter(i => i.stockLevel === "out").length;
+      const lowCount = items.filter(i => i.stockLevel === "low").length;
+
+      let customTitle = title;
+      let customBody = body;
+
+      if (outCount > 0 || lowCount > 0) {
+        customTitle = outCount > 0 ? "Items out of stock! 🚨" : "Stock running low ⚠️";
+        customBody = `You have ${outCount} items out and ${lowCount} running low. Tap to update your list!`;
+      }
+
       // 1. Create in-app notification
       await ctx.db.insert("notifications", {
         userId: user._id,
         type: "nurture",
-        title,
-        body,
+        title: customTitle,
+        body: customBody,
         data: { screen: "index" }, // Links to pantry tab
         read: false,
         createdAt: Date.now(),
@@ -62,8 +84,8 @@ export const sendStockUpdateReminders = internalMutation({
       // 2. Schedule push notification
       await ctx.scheduler.runAfter(0, internal.notifications.sendPush, {
         userId: user._id,
-        title,
-        body,
+        title: customTitle,
+        body: customBody,
         data: { type: "pantry_reminder", screen: "index" },
       });
 

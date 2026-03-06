@@ -1,6 +1,34 @@
 import { v } from "convex/values";
-import { mutation, query, internalQuery } from "./_generated/server";
+import { mutation, query, internalQuery, internalMutation } from "./_generated/server";
 import { normalizeStoreName } from "./lib/storeNormalizer";
+
+const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Internal mutation: Prune stale product prices not seen in 12 months
+ * Called monthly via cron
+ */
+export const pruneStale = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const twelveMonthsAgo = Date.now() - TWELVE_MONTHS_MS;
+    
+    // Find all prices older than 12 months
+    const stalePrices = await ctx.db
+      .query("currentPrices")
+      .withIndex("by_updated", (q) => q.lt(q.field("updatedAt"), twelveMonthsAgo))
+      .collect();
+
+    let deletedCount = 0;
+    for (const price of stalePrices) {
+      await ctx.db.delete(price._id);
+      deletedCount++;
+    }
+
+    console.log(`[currentPrices] Pruned ${deletedCount} stale product prices`);
+    return { deleted: deletedCount };
+  },
+});
 import { isValidProductName } from "./lib/communityHelpers";
 import { toGroceryTitleCase } from "./lib/titleCase";
 import { isDuplicateItemName } from "./lib/fuzzyMatch";

@@ -12,13 +12,30 @@ interface PersonalizedSuggestionsProps {
   onItemAdded?: () => void;
 }
 
+interface SuggestionItem {
+  name: string;
+  quantity: number;
+  lastPrice: number;
+  purchaseDate: number;
+  size?: string;
+  unit?: string;
+}
+
 export const PersonalizedSuggestions = ({ activeListId, onItemAdded }: PersonalizedSuggestionsProps) => {
-  const suggestions = useQuery(api.personalization.getBuyItAgainSuggestions, {});
+  const suggestions = useQuery(api.personalization.getBuyItAgainSuggestions, {}) as SuggestionItem[] | undefined;
   const addItem = useMutation(api.listItems.create);
 
   if (!suggestions || suggestions.length === 0) return null;
 
-  const handleAdd = async (item: any) => {
+  const getDaysAgoText = (purchaseDate: number) => {
+    const days = Math.floor((Date.now() - purchaseDate) / (24 * 60 * 60 * 1000));
+    if (days === 0) return "today";
+    if (days === 1) return "yesterday";
+    if (days === 7) return "last week";
+    return `${days} days ago`;
+  };
+
+  const handleAdd = async (item: SuggestionItem) => {
     if (!activeListId) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
@@ -49,7 +66,7 @@ export const PersonalizedSuggestions = ({ activeListId, onItemAdded }: Personali
         {suggestions.map((item, index) => (
           <GlassCard key={index} style={styles.card} variant="standard">
             <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.itemMeta}>Bought {item.quantity} last week</Text>
+            <Text style={styles.itemMeta}>Bought {item.quantity} {getDaysAgoText(item.purchaseDate)}</Text>
             <Pressable 
               style={({ pressed }) => [
                 styles.addButton, 

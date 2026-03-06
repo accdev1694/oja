@@ -160,6 +160,16 @@ export const update = mutation({
         notifications: v.boolean(),
         haptics: v.boolean(),
         theme: v.string(),
+        notificationSettings: v.optional(v.object({
+          stockReminders: v.boolean(),
+          nurtureMessages: v.boolean(),
+          partnerUpdates: v.boolean(),
+          quietHours: v.optional(v.object({
+            enabled: v.boolean(),
+            start: v.string(),
+            end: v.string(),
+          }))
+        }))
       })
     ),
   },
@@ -189,6 +199,65 @@ export const update = mutation({
 
     await ctx.db.patch(user._id, updates);
     return await ctx.db.get(user._id);
+  },
+});
+
+/**
+ * Update specific notification settings without overwriting other preferences
+ */
+export const updateNotificationSettings = mutation({
+  args: {
+    notifications: v.optional(v.boolean()),
+    stockReminders: v.optional(v.boolean()),
+    nurtureMessages: v.optional(v.boolean()),
+    partnerUpdates: v.optional(v.boolean()),
+    quietHours: v.optional(v.object({
+      enabled: v.boolean(),
+      start: v.string(),
+      end: v.string(),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    const currentPrefs = user.preferences ?? {
+      notifications: true,
+      haptics: true,
+      theme: "system",
+    };
+
+    const currentSettings = currentPrefs.notificationSettings ?? {
+      stockReminders: true,
+      nurtureMessages: true,
+      partnerUpdates: true,
+    };
+
+    const newPrefs = {
+      ...currentPrefs,
+      notifications: args.notifications ?? currentPrefs.notifications,
+      notificationSettings: {
+        ...currentSettings,
+        stockReminders: args.stockReminders ?? currentSettings.stockReminders,
+        nurtureMessages: args.nurtureMessages ?? currentSettings.nurtureMessages,
+        partnerUpdates: args.partnerUpdates ?? currentSettings.partnerUpdates,
+        quietHours: args.quietHours ?? currentSettings.quietHours,
+      },
+    };
+
+    await ctx.db.patch(user._id, {
+      preferences: newPrefs,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
   },
 });
 

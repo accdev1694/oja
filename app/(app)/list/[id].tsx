@@ -1217,6 +1217,8 @@ export default function ListDetailScreen() {
     );
   }
 
+  const isEditable = list.status !== "completed" && list.status !== "archived";
+
   return (
     <GlassScreen>
       {/* Offline banner - shows when disconnected from Convex */}
@@ -1226,7 +1228,7 @@ export default function ListDetailScreen() {
         {/* Header */}
         <SimpleHeader
           title={list.name}
-          onTitlePress={handleOpenEditName}
+          onTitlePress={isEditable ? handleOpenEditName : undefined}
           subtitle={`${list.listNumber != null ? `#${list.listNumber} \u00B7 ` : ""}${checkedCount}/${totalCount} items`}
           showBack={true}
           onBack={() => {
@@ -1255,17 +1257,19 @@ export default function ListDetailScreen() {
               )}
 
               {/* Edit list name button */}
-              <Pressable
-                onPress={handleOpenEditName}
-                hitSlop={8}
-                style={styles.headerIconButton}
-              >
-                <MaterialCommunityIcons
-                  name="pencil-outline"
-                  size={20}
-                  color={colors.text.secondary}
-                />
-              </Pressable>
+              {isEditable && (
+                <Pressable
+                  onPress={handleOpenEditName}
+                  hitSlop={8}
+                  style={styles.headerIconButton}
+                >
+                  <MaterialCommunityIcons
+                    name="pencil-outline"
+                    size={20}
+                    color={colors.text.secondary}
+                  />
+                </Pressable>
+              )}
 
               <NotificationBell onPress={() => setShowNotifications(true)} />
               {hasPartners && (

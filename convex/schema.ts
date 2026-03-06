@@ -27,6 +27,16 @@ export default defineSchema({
         notifications: v.boolean(),
         haptics: v.boolean(),
         theme: v.string(),
+        notificationSettings: v.optional(v.object({
+          stockReminders: v.boolean(),
+          nurtureMessages: v.boolean(),
+          partnerUpdates: v.boolean(),
+          quietHours: v.optional(v.object({
+            enabled: v.boolean(),
+            start: v.string(), // "22:00"
+            end: v.string(),   // "08:00"
+          }))
+        }))
       })
     ),
 
@@ -379,6 +389,27 @@ export default defineSchema({
     .index("by_user_item_date", ["userId", "normalizedName", "purchaseDate"])
     .index("by_receipt", ["receiptId"])
     .index("by_store", ["storeName"]),
+
+  // Aggregated price history (for long-term retention)
+  priceHistoryMonthly: defineTable({
+    userId: v.id("users"),
+    normalizedName: v.string(),
+    month: v.string(), // "2025-01"
+    
+    // Aggregated stats
+    avgPrice: v.number(),
+    minPrice: v.number(),
+    maxPrice: v.number(),
+    entryCount: v.number(),
+    
+    // Store context
+    storeName: v.string(),
+    normalizedStoreId: v.optional(v.string()),
+
+    updatedAt: v.number(),
+  })
+    .index("by_user_month", ["userId", "month"])
+    .index("by_user_item_month", ["userId", "normalizedName", "month"]),
 
   // Item variants (size-aware pricing + community product catalog)
   itemVariants: defineTable({

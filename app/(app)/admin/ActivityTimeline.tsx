@@ -25,7 +25,7 @@ export function ActivityTimeline({ userId }: ActivityTimelineProps) {
       case "onboarding_complete": return "check-decagram";
       case "first_list": return "clipboard-list";
       case "first_receipt": return "receipt";
-      case "first_scan": return "barcode-scan";
+      case "first_scan": return "label-variant-outline";
       case "subscribed": return "crown";
       case "support_ticket_created": return "help-circle";
       default: return "circle-outline";

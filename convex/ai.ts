@@ -762,30 +762,25 @@ export const scanProduct = action({
       }
       const base64Image = btoa(chunks.join(""));
 
-      const productPrompt = `You are a UK grocery product identifier. Analyse this photo of a physical product or group of the same unlabelled products (like loose fruit/veg) and extract details.
+      const productPrompt = `You are a UK grocery product identifier. Analyse this photo and extract details.
+The photo shows a physical product (front, back, or side) or loose items.
 
-Read the text on the packaging (if any) — product name, brand, size/weight, and any other relevant info. The photo may show any side of the packaging (front, back, top, side). 
+FIELDS:
+- name: (string) Concise product name (MAX 30 chars). e.g. "Semi-Skimmed Milk", "6pk Coke", "5 Bananas", "Chicken Breast".
+- category: (string) One of: "Dairy & Eggs", "Meat & Fish", "Fruits & Vegetables", "Bakery", "Drinks", "Snacks & Sweets", "Canned & Jarred", "Frozen", "Household", "Personal Care", "Condiments & Sauces", "Grains & Pasta", "Baking", "Baby & Kids", "Pet", "Other".
+- quantity: (number) Usually 1. Only use > 1 if you see multiple distinct packages of the exact same product.
+- size: (string or null) e.g., "500g", "2L", "4 pack", "2pt". 
+  - If you see the size text clearly: Use that value.
+  - If size text is NOT visible but you recognize the product (e.g. standard beans tin): Estimate the standard UK size (e.g. "415g").
+  - Otherwise use null.
+- sizeSource: (string) One of "visible" (I can read it), "estimated" (I guessed it based on product type), or "unknown" (cannot find or guess).
+- brand: (string or null) The brand name if visible.
+- estimatedPrice: (number) Best estimate of UK retail price in GBP.
+- confidence: (number 0-100) Your confidence in this identification.
 
-CRITICAL: If the photo shows the BACK of the pack (nutritional info/barcode side), look for the product name and weight/volume declarations. Always identify the CANONICAL product name as it would appear on the front label.
+If the image is completely unrecognisable or not a grocery item, set confidence to 0 and provide a "rejection" string explaining why.
 
-Return a JSON object with these fields:
-- name: Concise but descriptive product name, MAX 30 CHARACTERS. FORMAT: "{quantity}{pk} {descriptor} {product type}". 
-  - For multi-packs (e.g. 6 cans of Coke), use "6pk Coke". 
-  - For loose/unlabelled items where you find a count > 1 (e.g. 5 bananas), INCLUDE the count in the name string: "5 Bananas", "12 Oranges", etc.
-  - DROP all brand/own-label names (Tesco, Asda, Aldi, etc.) UNLESS the brand IS the product identity (e.g., "Coke Zero", "PG Tips", "Marmite").
-  - Examples: "12pk Medium Eggs", "2pt Semi-Skimmed Milk", "5 Bananas", "12 Oranges", "Chicken Breast"
-- category: One of: "Dairy & Eggs", "Meat & Fish", "Fruits & Vegetables", "Bakery", "Drinks", "Snacks & Sweets", "Canned & Jarred", "Frozen", "Household", "Personal Care", "Condiments & Sauces", "Grains & Pasta", "Baking", "Baby & Kids", "Pet", "Other"
-- quantity: number (The PURCHASE QUANTITY multiplier. For a single bunch or group of items in the image, ALWAYS use 1. Only use > 1 if you see multiple DISTINCT packages/bunches of the same product.)
-- size: The size/weight value (e.g., "2L", "500g", "6 pack", "2pt"). Read from packaging. If not visible (like loose fruit), use null or estimate the standard UK size if applicable.
-- unit: Unit of measurement (e.g., "L", "g", "pack", "pint", "ml", "kg")
-- brand: Brand name if visible (e.g., "Tesco", "Heinz", "PG Tips"). null if generic/unbranded.
-- estimatedPrice: Your best estimate of the UK retail price in GBP (number). Use typical UK supermarket pricing.
-- confidence: 0-100 how confident you are in the identification. Below 40 means the image is too unclear.
-
-If the image does not show a recognisable product (e.g., blurry, not a product, random object), return:
-{"confidence": 0, "rejection": "Product not recognised. Snap the label showing name and size."}
-
-Return ONLY valid JSON, no markdown code blocks.`;
+Return ONLY valid JSON.`;
 
       const parsed = await withAIFallback(
         "scanProduct",
@@ -823,6 +818,7 @@ Return ONLY valid JSON, no markdown code blocks.`;
         brand: typeof parsed.brand === "string" ? parsed.brand : undefined,
         estimatedPrice: typeof parsed.estimatedPrice === "number" && isFinite(parsed.estimatedPrice) && parsed.estimatedPrice > 0 ? parsed.estimatedPrice : undefined,
         confidence,
+        sizeSource: typeof parsed.sizeSource === "string" ? parsed.sizeSource : "unknown",
       };
     } catch (error) {
       console.error("Product scanning failed:", error);

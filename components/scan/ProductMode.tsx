@@ -52,10 +52,10 @@ export function ProductMode({
 
         {!hasProducts && !isScanning ? (
           <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="barcode-scan" size={64} color={colors.text.tertiary} />
+            <MaterialCommunityIcons name="package-variant-closed" size={64} color={colors.text.tertiary} />
             <Text style={styles.emptyTitle}>Ready to scan</Text>
             <Text style={styles.emptySubtitle}>
-              Tap the button below to scan a product barcode or name
+              Tap the button below to scan. For best results, ensure the product name and size/weight (e.g. 500g, 2L) are clearly visible.
             </Text>
           </View>
         ) : (

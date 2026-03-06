@@ -214,6 +214,8 @@ export const ListCard = React.memo(function ListCard({
     ? { borderLeftWidth: 3, borderLeftColor: colors.accent.warning }
     : undefined;
 
+  const isEditable = list.status !== "completed" && list.status !== "archived";
+
   return (
     <Animated.View style={animatedStyle}>
       <Pressable
@@ -343,7 +345,7 @@ export const ListCard = React.memo(function ListCard({
       </Pressable>
 
       {/* Floating edit badge */}
-      {onEditName && (
+      {onEditName && isEditable && (
         <Pressable
           onPress={handleEditName}
           style={styles.editBadge}

@@ -381,6 +381,10 @@ export const getUsersForNurture = internalQuery({
       const user = await ctx.db.get(userId);
       if (!user || !user.expoPushToken) continue; // Skip users without push tokens
 
+      // Enforce notification preferences
+      if (user.preferences?.notifications === false) continue;
+      if (user.preferences?.notificationSettings?.nurtureMessages === false) continue;
+
       const sub = subscriptions.find((s) => s.userId === userId);
 
       users.push({

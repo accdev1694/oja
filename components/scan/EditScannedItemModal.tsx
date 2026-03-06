@@ -111,7 +111,7 @@ export function EditScannedItemModal({ product, onClose, onConfirm }: EditScanne
       avoidKeyboard
     >
       <View style={styles.header}>
-        <MaterialCommunityIcons name="barcode-scan" size={28} color={colors.accent.primary} />
+        <MaterialCommunityIcons name="package-variant-closed" size={28} color={colors.accent.primary} />
         <Text style={styles.title}>Review Scanned Item</Text>
         <Text style={styles.subtitle}>Confirm details before adding to list</Text>
       </View>
@@ -157,18 +157,26 @@ export function EditScannedItemModal({ product, onClose, onConfirm }: EditScanne
         </View>
       </View>
 
-      {/* Size input with warning if missing */}
+      {/* Size input with warning if missing or estimated */}
       <View style={styles.inputGroup}>
         <View style={styles.labelRow}>
           <Text style={styles.inputLabel}>Size / Weight</Text>
-          {isSizeMissing && (
+          {isSizeMissing ? (
             <View style={styles.warningBadge}>
               <MaterialCommunityIcons name="alert" size={12} color={colors.accent.warning} />
               <Text style={styles.warningBadgeText}>Missing</Text>
             </View>
-          )}
+          ) : product?.sizeSource === "estimated" ? (
+            <View style={[styles.warningBadge, { backgroundColor: "rgba(59, 130, 246, 0.15)" }]}>
+              <MaterialCommunityIcons name="auto-fix" size={12} color={colors.accent.primary} />
+              <Text style={[styles.warningBadgeText, { color: colors.accent.primary }]}>Estimated</Text>
+            </View>
+          ) : null}
         </View>
-        <View style={[styles.inputContainer, isSizeMissing && styles.inputContainerWarning]}>
+        <View style={[
+          styles.inputContainer, 
+          (isSizeMissing || product?.sizeSource === "estimated") && styles.inputContainerWarning
+        ]}>
           <TextInput
             style={styles.textInput}
             value={editSize}
@@ -177,11 +185,15 @@ export function EditScannedItemModal({ product, onClose, onConfirm }: EditScanne
             placeholderTextColor={colors.text.tertiary}
           />
         </View>
-        {isSizeMissing && (
+        {isSizeMissing ? (
           <Text style={styles.warningHint}>
             Adding size helps with duplicate detection
           </Text>
-        )}
+        ) : product?.sizeSource === "estimated" ? (
+          <Text style={[styles.warningHint, { color: colors.text.secondary }]}>
+            We estimated this standard size. Please check if it matches the pack.
+          </Text>
+        ) : null}
       </View>
 
       {/* Quantity and Price row */}

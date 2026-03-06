@@ -133,7 +133,11 @@ export function GlassCapsuleSwitcher({
             <View key={i} style={styles.tab}>
               {tab.leading}
               <Pressable style={styles.labelArea} onPress={() => handlePress(i)}>
-                <Text style={[styles.tabText, isActive && activeColorStyle]}>
+                <Text 
+                  style={[styles.tabText, isActive && activeColorStyle]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
                   {tab.label}
                 </Text>
                 {renderBadge(tab, isActive, activeColorStyle, activeBadgeBg)}
@@ -147,11 +151,15 @@ export function GlassCapsuleSwitcher({
             {tab.icon && (
               <MaterialCommunityIcons
                 name={tab.icon}
-                size={16}
+                size={14}
                 color={isActive ? tab.activeColor : colors.text.tertiary}
               />
             )}
-            <Text style={[styles.tabText, isActive && activeColorStyle]}>
+            <Text 
+              style={[styles.tabText, isActive && activeColorStyle]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {tab.label}
             </Text>
             {renderBadge(tab, isActive, activeColorStyle, activeBadgeBg)}
@@ -217,32 +225,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     borderRadius: borderRadius.md,
+    overflow: "hidden",
   },
   labelArea: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 4,
+    overflow: "hidden",
   },
   tabText: {
     ...typography.labelMedium,
     color: colors.text.tertiary,
-    fontSize: 13,
+    fontSize: 12,
+    flexShrink: 1,
   },
   badge: {
     backgroundColor: colors.glass.backgroundHover,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: borderRadius.full,
-    minWidth: 22,
+    minWidth: 18,
     alignItems: "center",
+    justifyContent: "center",
   },
   badgeText: {
     ...typography.labelSmall,
     color: colors.text.tertiary,
-    fontSize: 11,
+    fontSize: 10,
+    fontWeight: "700",
   },
 });

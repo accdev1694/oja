@@ -59,9 +59,9 @@ export default function WelcomeScreen() {
               description="AI-powered suggestions based on your favourite foods and habits"
             />
             <FeatureCard
-              icon="barcode-scan"
+              icon="cube-scan"
               title="Scan & Earn"
-              description="Snap receipts to earn points. 1,000 points = £1.00 off your next bill"
+              description="Snap products or receipts to earn points. 1,000 points = £1.00 off your next bill"
             />
             <FeatureCard
               icon="microphone-outline"

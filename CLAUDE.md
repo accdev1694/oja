@@ -336,17 +336,60 @@ GEMINI_API_KEY, OPENAI_API_KEY, STRIPE_SECRET_KEY, CLERK_SECRET_KEY
 
 ## Data Retention & Scaling Policy (Concise)
 
-### Currently Implemented
+### Currently Implemented ✅
+
+**Personal Data Limits:**
 - **Pantry Limits:** Free users capped at 30 items; all users capped at 150 active items (LIFO archiving).
 - **Auto-Archiving:** Daily cron archives non-pinned "out of stock" items idle for 90 days.
 - **Deduplication:** Fuzzy name matching (85% Levenshtein) + unit normalization (e.g., 1L = 1000ml) on creation.
 - **Pruning:** Notifications deleted after 30 days; admin logs archived weekly.
 
-### Future Scaling Steps
+**Global Catalog Retention (✅ Fully Implemented):**
+- **Price History Compression:** `priceHistory.ts:16-129` - Monthly cron aggregates 6-12mo old data into `priceHistoryMonthly`, deletes raw entries >1yr
+- **Stale Product Pruning:** `currentPrices.ts:11-31` - Monthly cron deletes products not seen in 12 months
+- **Receipt Image Cleanup:** `receipts.ts:12-40` - Monthly cron deletes images >6mo old, keeps metadata
+- **Variant Merge Tool:** `itemVariants.ts:9-80` - Admin mutation to merge duplicate variants from OCR errors
+
+**Cron Schedule:**
+```
+1st of month:
+  1:30am UTC - compress-old-price-history
+  2:00am UTC - prune-stale-products
+15th of month:
+  3:00am UTC - cleanup-old-receipt-images
+```
+
+### Production Readiness Checklist
+
+**Before First Deployment:**
+- [ ] Verify `priceHistoryMonthly` table exists in schema (schema.ts:394-412)
+- [ ] Confirm all 3 cron jobs registered in `crons.ts:146-162`
+- [ ] Test manual execution:
+  ```bash
+  npx convex run priceHistory:compressOldData
+  npx convex run currentPrices:pruneStale
+  npx convex run receipts:cleanupOldImages
+  ```
+- [ ] Monitor first scheduled cron execution logs
+- [ ] Verify compression creates monthly aggregates correctly
+- [ ] Verify old images actually deleted from Convex storage
+- [ ] Check admin UI for variant merge tool accessibility
+
+**Data Protection Guarantees:**
+| Data Type | Policy | Status |
+|-----------|--------|--------|
+| Personal pantry | 150 max + 90-day idle archiving | ✅ Bounded |
+| Price history raw | Deleted after 1 year (aggregated first) | ✅ Bounded |
+| Price history monthly | Kept indefinitely (aggregated) | ✅ Small |
+| Current prices | Deleted if not seen 12 months | ✅ Bounded |
+| Receipt images | Deleted after 6 months | ✅ Bounded |
+| Receipt metadata | Kept indefinitely | ⚠️ By design |
+| Item variants | Admin merge tool available | ✅ Managed |
+
+### Future Enhancements
 - **Semantic Matching:** Move from fuzzy text to AI vector embeddings for better variant merging.
-- **Price Compression:** Aggregate data >1 year old into monthly averages to shrink `priceHistory`.
-- **Image Lifecycle:** Delete or move receipt images to cold storage 6 months after successful parsing.
-- **Community Cleanup:** Implement "Report Duplicate" tools for users to flag global catalog bloat.
+- **User-Facing Tools:** "Report Duplicate" button for community catalog cleanup.
+- **Receipt Metadata:** Consider archiving receipts >2 years old (tax/warranty considerations).
 
 ## BMAD Workflow
 

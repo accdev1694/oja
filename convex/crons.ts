@@ -142,6 +142,25 @@ crons.monthly(
   internal.points.expireOldPoints
 );
 
+// Global Catalog & Data Maintenance
+crons.monthly(
+  "compress-old-price-history",
+  { day: 1, hourUTC: 1, minuteUTC: 30 },
+  internal.priceHistory.compressOldData
+);
+
+crons.monthly(
+  "prune-stale-products",
+  { day: 1, hourUTC: 2, minuteUTC: 0 },
+  internal.currentPrices.pruneStale
+);
+
+crons.monthly(
+  "cleanup-old-receipt-images",
+  { day: 15, hourUTC: 3, minuteUTC: 0 },
+  internal.receipts.cleanupOldImages
+);
+
 crons.daily(
   "reconcile-stripe-points",
   { hourUTC: 2, minuteUTC: 30 },

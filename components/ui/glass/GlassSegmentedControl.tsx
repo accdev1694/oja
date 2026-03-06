@@ -114,7 +114,11 @@ export function GlassSegmentedControl({
                 color={isActive ? activeColor : colors.text.tertiary}
               />
             )}
-            <Text style={[styles.tabText, colorStyle]} numberOfLines={1}>
+            <Text 
+              style={[styles.tabText, colorStyle]} 
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {tab.label}
             </Text>
           </Pressable>
@@ -157,9 +161,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: borderRadius.md,
     zIndex: 1,
+    overflow: "hidden",
   },
   tabText: {
     fontSize: 11,
     ...typography.labelSmall,
+    flexShrink: 1,
   },
 });
