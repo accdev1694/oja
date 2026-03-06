@@ -181,6 +181,21 @@ export default defineSchema({
     // Provenance: which receipt this list was created from (create-from-receipt flow)
     sourceReceiptId: v.optional(v.id("receipts")),
 
+    // AI Health Analysis
+    healthAnalysis: v.optional(v.object({
+      score: v.number(), // 0-100
+      summary: v.string(),
+      strengths: v.array(v.string()),
+      weaknesses: v.array(v.string()),
+      swaps: v.array(v.object({
+        originalName: v.string(),
+        originalId: v.id("listItems"),
+        suggestedName: v.string(),
+        reason: v.string()
+      })),
+      updatedAt: v.number()
+    })),
+
     // Per-user sequential number (auto-assigned on creation)
     listNumber: v.optional(v.number()),
 

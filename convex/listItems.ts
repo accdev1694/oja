@@ -1717,4 +1717,60 @@ export const refreshListPrices = mutation({
   },
 });
 
+export const applyHealthSwap = mutation({
+  args: {
+    listId: v.id("shoppingLists"),
+    originalItemId: v.id("listItems"),
+    suggestedName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    // Fetch the original item to copy some properties (quantity, priority)
+    const originalItem = await ctx.db.get(args.originalItemId);
+    if (!originalItem || originalItem.listId !== args.listId) {
+      throw new Error("Original item not found in this list");
+    }
+
+    // Delete original
+    await ctx.db.delete(args.originalItemId);
+
+    // Create new suggested item
+    const newItemId = await ctx.db.insert("listItems", {
+      listId: args.listId,
+      userId: user._id,
+      name: args.suggestedName,
+      quantity: originalItem.quantity,
+      priority: originalItem.priority,
+      isChecked: false,
+      autoAdded: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    // Remove this swap from the list's healthAnalysis
+    const list = await ctx.db.get(args.listId);
+    if (list?.healthAnalysis) {
+      const updatedSwaps = list.healthAnalysis.swaps.filter(
+        (s: any) => s.originalId !== args.originalItemId
+      );
+      await ctx.db.patch(args.listId, {
+        healthAnalysis: {
+          ...list.healthAnalysis,
+          swaps: updatedSwaps,
+        }
+      });
+    }
+
+    return newItemId;
+  }
+});
+
 

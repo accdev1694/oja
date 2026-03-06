@@ -2021,3 +2021,94 @@ export const textToSpeech = action({
     return { audioBase64: null, provider: null, error: null };
   },
 });
+
+/**
+ * Epic 6: Gamification & Insights
+ * Analyze a grocery list for health and suggest swaps
+ */
+export const analyzeListHealth = action({
+  args: {
+    listId: v.id("shoppingLists"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.runQuery(api.users.getByClerkId, {
+      clerkId: identity.subject,
+    });
+    if (!user) throw new Error("User not found");
+
+    const listItems = await ctx.runQuery(api.listItems.getByList, { listId: args.listId });
+    if (!listItems || listItems.length === 0) {
+      throw new Error("Add some items to your list first!");
+    }
+
+    const itemsText = listItems.map((i: any) => `- ${i.name} (Qty: ${i.quantity})`).join("\n");
+
+    const prompt = `You are an enthusiastic, modern AI nutritionist evaluating a grocery list.
+Rate the healthiness of this list on a scale of 0 to 100. Provide an exciting, highly engaging summary (2-3 sentences max).
+Identify 1-2 strengths ("What you're doing great") and 1-2 weaknesses ("Areas to improve").
+Suggest up to 3 healthy swaps for specific items on the list. Be realistic and practical (e.g., swapping white bread for wholemeal bread, or adding a specific vegetable). 
+If the list is already perfectly healthy, suggest a fun, healthy addition instead of a swap.
+
+Grocery List:
+${itemsText}
+
+Return ONLY valid JSON in this exact format, with no markdown formatting or code blocks:
+{
+  "score": 85,
+  "summary": "Amazing job packing in those veggies! You're on track for a super vibrant week, just watch out for hidden sugars.",
+  "strengths": ["Lots of fresh greens", "Good lean protein sources"],
+  "weaknesses": ["A few highly processed snacks"],
+  "swaps": [
+    {
+      "originalName": "White Bread",
+      "suggestedName": "Wholemeal Bread",
+      "reason": "More fiber and keeps you full longer!"
+    }
+  ]
+}`;
+
+    const response = await smartGenerate(prompt, "analyzeListHealth", { temperature: 0.7 });
+    const cleaned = stripCodeBlocks(response);
+    
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (e) {
+      console.error("Failed to parse health analysis:", cleaned);
+      throw new Error("Failed to analyze health. Please try again.");
+    }
+
+    // Map originalNames to originalIds
+    const swapsWithIds = (parsed.swaps || []).map((swap: any) => {
+      // Find matching item in list
+      const matchedItem = listItems.find((i: any) => 
+        i.name.toLowerCase().includes(swap.originalName.toLowerCase()) || 
+        swap.originalName.toLowerCase().includes(i.name.toLowerCase())
+      );
+      return {
+        ...swap,
+        originalId: matchedItem ? matchedItem._id : null
+      };
+    }).filter((s: any) => s.originalId !== null);
+
+    const healthAnalysis = {
+      score: typeof parsed.score === 'number' ? parsed.score : 50,
+      summary: parsed.summary || "Keep adding fresh items!",
+      strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
+      weaknesses: Array.isArray(parsed.weaknesses) ? parsed.weaknesses : [],
+      swaps: swapsWithIds,
+      updatedAt: Date.now()
+    };
+
+    // Save to the list
+    await ctx.runMutation(internal.shoppingLists.updateHealthAnalysis, {
+      listId: args.listId,
+      healthAnalysis
+    });
+
+    return healthAnalysis;
+  }
+});

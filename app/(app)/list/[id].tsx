@@ -65,6 +65,7 @@ import { StickyBudgetBar } from "@/components/list/BudgetSection";
 import { ListActionRow } from "@/components/list/ListActionRow";
 import { StoreDropdownSheet } from "@/components/list/StoreDropdownSheet";
 import { AddItemsModal } from "@/components/list/AddItemsModal";
+import { HealthAnalysisModal } from "@/components/lists/HealthAnalysisModal";
 import {
   EditBudgetModal,
   MidShopModal,
@@ -188,6 +189,9 @@ export default function ListDetailScreen() {
 
   // Add Items modal state
   const [showAddItemsModal, setShowAddItemsModal] = useState(false);
+
+  // Health Analysis modal state
+  const [showHealthModal, setShowHealthModal] = useState(false);
 
   // Mid-shop add flow state
   const [midShopState, setMidShopState] = useState<{
@@ -1271,6 +1275,24 @@ export default function ListDetailScreen() {
                 </Pressable>
               )}
 
+              {/* AI Health Analysis Button */}
+              {(items?.length ?? 0) > 0 && (
+                <Pressable
+                  onPress={() => {
+                    haptic("light");
+                    setShowHealthModal(true);
+                  }}
+                  hitSlop={8}
+                  style={styles.headerIconButton}
+                >
+                  <MaterialCommunityIcons
+                    name={list.healthAnalysis ? "leaf" : "leaf-outline"}
+                    size={20}
+                    color={list.healthAnalysis ? colors.status.success : colors.text.secondary}
+                  />
+                </Pressable>
+              )}
+
               <NotificationBell onPress={() => setShowNotifications(true)} />
               {hasPartners && (
                 <Pressable
@@ -1422,7 +1444,15 @@ export default function ListDetailScreen() {
         listStoreName={list.storeName}
         listNormalizedStoreId={list.normalizedStoreId}
         existingItems={items ?? []}
-        listStatus={list.status}
+        listStatus={list.status as "active" | "shopping"}
+      />
+
+      {/* Health Analysis Modal */}
+      <HealthAnalysisModal
+        visible={showHealthModal}
+        onClose={() => setShowHealthModal(false)}
+        listId={id}
+        initialAnalysis={list.healthAnalysis}
       />
 
       {/* Trip Summary Modal */}

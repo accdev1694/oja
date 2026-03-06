@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { canCreateList, canAddPantryItem } from "./lib/featureGating";
 import { getAllStores, getStoreInfoSafe, isValidStoreId, normalizeStoreName, UKStoreId } from "./lib/storeNormalizer";
@@ -2086,6 +2086,30 @@ export const createFromTemplate = mutation({
       itemCount: sourceItems.length,
     };
   },
+});
+
+export const updateHealthAnalysis = internalMutation({
+  args: {
+    listId: v.id("shoppingLists"),
+    healthAnalysis: v.object({
+      score: v.number(),
+      summary: v.string(),
+      strengths: v.array(v.string()),
+      weaknesses: v.array(v.string()),
+      swaps: v.array(v.object({
+        originalName: v.string(),
+        originalId: v.id("listItems"),
+        suggestedName: v.string(),
+        reason: v.string()
+      })),
+      updatedAt: v.number()
+    })
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.listId, {
+      healthAnalysis: args.healthAnalysis
+    });
+  }
 });
 
 export const getTemplatePreview = query({
