@@ -152,19 +152,19 @@ export const typography = {
   displayLarge: {
     fontSize: 48,
     fontWeight: "700" as const,
-    lineHeight: 56,
+    lineHeight: 60,
     letterSpacing: -0.5,
   },
   displayMedium: {
     fontSize: 36,
     fontWeight: "600" as const,
-    lineHeight: 44,
+    lineHeight: 48,
     letterSpacing: -0.25,
   },
   displaySmall: {
     fontSize: 28,
     fontWeight: "600" as const,
-    lineHeight: 36,
+    lineHeight: 40,
     letterSpacing: 0,
   },
 

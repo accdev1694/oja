@@ -9,6 +9,7 @@ import {
   executeVoiceTool,
 } from "./lib/voiceTools";
 import { toGroceryTitleCase } from "./lib/titleCase";
+import { calculateSimilarity } from "./lib/fuzzyMatch";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
@@ -2041,16 +2042,37 @@ export const analyzeListHealth = action({
 
     const listItems = await ctx.runQuery(api.listItems.getByList, { listId: args.listId });
     if (!listItems || listItems.length === 0) {
-      throw new Error("Add some items to your list first!");
+      throw new Error("Your list is empty! Add some items first so our AI nutritionist can analyze them.");
     }
 
-    const itemsText = listItems.map((i: any) => `- ${i.name} (Qty: ${i.quantity})`).join("\n");
+    const list = await ctx.runQuery(api.shoppingLists.getById, { id: args.listId });
+    const budgetInfo = list?.budget ? `Budget: £${list.budget}` : "No budget set";
+    const userPrefs = user.cuisinePreferences?.length ? `User Cuisines: ${user.cuisinePreferences.join(", ")}` : "";
+    const dietaryRestrictions = user.dietaryRestrictions?.length ? `Dietary Restrictions: ${user.dietaryRestrictions.join(", ")} (CRITICAL: Only suggest items that follow these)` : "";
+
+    const itemsText = listItems.map((i) => `- ${i.name} (Qty: ${i.quantity}, Category: ${i.category || "Uncategorized"}, Est. Price: £${i.estimatedPrice || '?'})`).join("\n");
 
     const prompt = `You are an enthusiastic, modern AI nutritionist evaluating a grocery list.
+
+USER PROFILE:
+${userPrefs}
+${dietaryRestrictions}
+${budgetInfo}
+
 Rate the healthiness of this list on a scale of 0 to 100. Provide an exciting, highly engaging summary (2-3 sentences max).
 Identify 1-2 strengths ("What you're doing great") and 1-2 weaknesses ("Areas to improve").
-Suggest up to 3 healthy swaps for specific items on the list. Be realistic and practical (e.g., swapping white bread for wholemeal bread, or adding a specific vegetable). 
-If the list is already perfectly healthy, suggest a fun, healthy addition instead of a swap.
+Suggest up to 3 healthy swaps for specific items on the list. 
+
+REQUIREMENTS FOR SWAPS:
+1. Practical & Budget-Conscious: Swaps should be realistic.
+2. Price Delta: Estimate the price difference (e.g., +0.30 for more expensive, -0.15 for cheaper).
+3. Budget Limit: If a swap increases the item price by more than 50% or exceeds the total budget significantly, skip it.
+4. Dietary Compliance: If the user has dietary restrictions (e.g., Vegan, Gluten-Free), ensure swaps COMPLY with them.
+
+If the list is already perfectly healthy, suggest a fun, healthy addition instead of a swap (mark these as originalName: "Bonus").
+
+CATEGORIES (choose the most appropriate one for each suggested item):
+Dairy, Bakery, Produce, Meat, Pantry Staples, Spices & Seasonings, Condiments, Beverages, Snacks, Frozen, Canned Goods, Grains & Pasta, Oils & Vinegars, Baking, Ethnic Ingredients, Household, Personal Care, Health & Wellness, Baby & Kids, Pets, Electronics, Clothing, Garden & Outdoor, Office & Stationery
 
 Grocery List:
 ${itemsText}
@@ -2058,13 +2080,15 @@ ${itemsText}
 Return ONLY valid JSON in this exact format, with no markdown formatting or code blocks:
 {
   "score": 85,
-  "summary": "Amazing job packing in those veggies! You're on track for a super vibrant week, just watch out for hidden sugars.",
-  "strengths": ["Lots of fresh greens", "Good lean protein sources"],
+  "summary": "Amazing job packing in those veggies!",
+  "strengths": ["Lots of fresh greens"],
   "weaknesses": ["A few highly processed snacks"],
   "swaps": [
     {
       "originalName": "White Bread",
       "suggestedName": "Wholemeal Bread",
+      "suggestedCategory": "Bakery",
+      "priceDelta": 0.30,
       "reason": "More fiber and keeps you full longer!"
     }
   ]
@@ -2081,18 +2105,43 @@ Return ONLY valid JSON in this exact format, with no markdown formatting or code
       throw new Error("Failed to analyze health. Please try again.");
     }
 
-    // Map originalNames to originalIds
-    const swapsWithIds = (parsed.swaps || []).map((swap: any) => {
-      // Find matching item in list
-      const matchedItem = listItems.find((i: any) => 
-        i.name.toLowerCase().includes(swap.originalName.toLowerCase()) || 
-        swap.originalName.toLowerCase().includes(i.name.toLowerCase())
-      );
+    // Map originalNames to originalIds using improved fuzzy matching
+    const swapsWithIds = (parsed.swaps || []).map((swap) => {
+      if (swap.originalName === "Bonus") {
+        return {
+          ...swap,
+          originalId: null,
+          suggestedCategory: swap.suggestedCategory || "Produce"
+        };
+      }
+
+      // Find best match in list
+      let bestMatch = null;
+      let highestSimilarity = 0;
+
+      for (const item of listItems) {
+        // Use calculateSimilarity (Levenshtein)
+        const sim = calculateSimilarity(item.name, swap.originalName);
+        
+        // Also check substring containment as a strong signal
+        const includes = item.name.toLowerCase().includes(swap.originalName.toLowerCase()) || 
+                         swap.originalName.toLowerCase().includes(item.name.toLowerCase());
+        
+        const effectiveSim = includes ? Math.max(sim, 80) : sim;
+
+        if (effectiveSim > highestSimilarity) {
+          highestSimilarity = effectiveSim;
+          bestMatch = item;
+        }
+      }
+
+      // Only match if similarity is decent (e.g., > 60%)
       return {
         ...swap,
-        originalId: matchedItem ? matchedItem._id : null
+        originalId: highestSimilarity > 60 ? bestMatch?._id : null,
+        suggestedCategory: swap.suggestedCategory || bestMatch?.category || "Pantry Staples"
       };
-    }).filter((s: any) => s.originalId !== null);
+    }).filter((s) => s.originalId !== null || s.originalName === "Bonus");
 
     const healthAnalysis = {
       score: typeof parsed.score === 'number' ? parsed.score : 50,
@@ -2100,6 +2149,7 @@ Return ONLY valid JSON in this exact format, with no markdown formatting or code
       strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
       weaknesses: Array.isArray(parsed.weaknesses) ? parsed.weaknesses : [],
       swaps: swapsWithIds,
+      itemCountAtAnalysis: listItems.length,
       updatedAt: Date.now()
     };
 
@@ -2107,6 +2157,13 @@ Return ONLY valid JSON in this exact format, with no markdown formatting or code
     await ctx.runMutation(internal.shoppingLists.updateHealthAnalysis, {
       listId: args.listId,
       healthAnalysis
+    });
+
+    // Record in user history for trends and achievements
+    await ctx.runMutation(internal.users.recordHealthAnalysis, {
+      userId: user._id,
+      listId: args.listId,
+      score: healthAnalysis.score,
     });
 
     return healthAnalysis;

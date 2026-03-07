@@ -66,6 +66,15 @@ export const TIPS = {
     priority: 1,
   },
 
+  lists_health_analysis: {
+    context: "list_detail",
+    title: "Get AI Health Insights",
+    body: "Your list is ready for a health check! Tap the {{icon:heart-pulse}} heart icon to see your nutrition score and get healthy swap suggestions.",
+    showAfterSessions: 0,
+    showIfCondition: "first_list_with_5_items",
+    priority: 2,
+  },
+
   // Scan Screen Tips
   scan_first_receipt: {
     context: "scan",
@@ -223,6 +232,8 @@ export const getNextTip = query({
           if (!subscription?.trialEndsAt) return false;
           const daysLeft = Math.ceil((subscription.trialEndsAt - Date.now()) / (24 * 60 * 60 * 1000));
           return subscription.status === "trial" && daysLeft <= 3 && daysLeft > 0;
+        case "first_list_with_5_items":
+          return lists.some((l) => !l.healthAnalysis);
         default:
           return false;
       }

@@ -15,6 +15,7 @@ import { api } from "@/convex/_generated/api";
 import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { haptic } from "@/lib/haptics/safeHaptics";
 import Animated, {
   useSharedValue,
@@ -57,6 +58,7 @@ import {
 
 import { ListChatThread } from "@/components/partners/ListChatThread";
 import { GlassToast } from "@/components/ui/glass/GlassToast";
+import { TipBanner } from "@/components/ui/TipBanner";
 import { useDelightToast } from "@/hooks/useDelightToast";
 import { useStableValue, shallowRecordEqual } from "@/hooks/useStableValue";
 import { ShoppingListItem, type ListItem } from "@/components/list/ShoppingListItem";
@@ -108,6 +110,30 @@ export default function ListDetailScreen() {
   const restockFromCheckedItems = useMutation(api.pantryItems.restockFromCheckedItems);
   const refreshListPrices = useMutation(api.listItems.refreshListPrices);
 
+  // Health icon pulse animation
+  const pulseScale = useSharedValue(1);
+  const pulseAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
+
+  useEffect(() => {
+    const shouldPulse = list && !list.healthAnalysis && (items?.length ?? 0) >= 5;
+    
+    if (shouldPulse) {
+      pulseScale.value = withRepeat(
+        withSequence(
+          withTiming(1.2, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      );
+    } else {
+      cancelAnimation(pulseScale);
+      pulseScale.value = withTiming(1, { duration: 300 });
+    }
+  }, [list?.healthAnalysis, items?.length]);
+
   // Trip stats for completion summary (only fetch when shopping)
   const tripStats = useQuery(
     api.shoppingLists.getTripStats,
@@ -119,6 +145,10 @@ export default function ListDetailScreen() {
   const addItemMidShop = useMutation(api.listItems.addItemMidShop);
   const setStore = useMutation(api.shoppingLists.setStore);
   const switchStoreMidShop = useMutation(api.shoppingLists.switchStoreMidShop);
+  const dismissTip = useMutation(api.tips.dismissTip);
+
+  // Check if health discovery banner has been dismissed
+  const healthBannerDismissed = useQuery(api.tips.hasDismissedTip, { tipKey: "health_discovery_banner" });
 
   // Current user for store preferences
   const currentUser = useQuery(api.users.getCurrent);
@@ -192,6 +222,7 @@ export default function ListDetailScreen() {
 
   // Health Analysis modal state
   const [showHealthModal, setShowHealthModal] = useState(false);
+  const [isPostShoppingHealthFlow, setIsPostShoppingHealthFlow] = useState(false);
 
   // Mid-shop add flow state
   const [midShopState, setMidShopState] = useState<{
@@ -794,7 +825,14 @@ export default function ListDetailScreen() {
       const result = await restockFromCheckedItems({ listId: id });
       haptic("success");
       setShowTripSummary(false);
-      setShowScanNudge(true);
+
+      // Show health modal if list is eligible and hasn't been analyzed
+      if (!list?.healthAnalysis && (items?.length ?? 0) >= 5) {
+        setIsPostShoppingHealthFlow(true);
+        setShowHealthModal(true);
+      } else {
+        setShowScanNudge(true);
+      }
     } catch (error) {
       console.error("Failed to complete shopping:", error);
       alert("Error", "Failed to complete shopping");
@@ -941,6 +979,49 @@ export default function ListDetailScreen() {
             <Text style={styles.activeShopperText}>
               {activeShopper?.name || "Your partner"} is currently shopping this list
             </Text>
+          </View>
+        </AnimatedSection>
+      )}
+
+      {/* AI Health Tutorial Tip */}
+      {(items?.length ?? 0) >= 5 && (
+        <TipBanner context="list_detail" />
+      )}
+
+      {/* AI Health Discovery Banner */}
+      {!list?.healthAnalysis && (items?.length ?? 0) >= 5 && !healthBannerDismissed && (
+        <AnimatedSection animation="fadeInDown" duration={600} delay={500}>
+          <View style={styles.discoveryBannerContainer}>
+            <Pressable
+              onPress={() => {
+                haptic("light");
+                setShowHealthModal(true);
+              }}
+              style={({pressed}) => [styles.discoveryBanner, pressed && {opacity: 0.8}]}
+            >
+              <LinearGradient
+                colors={["rgba(74, 222, 128, 0.15)", "rgba(74, 222, 128, 0.05)"]}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 0}}
+                style={styles.discoveryGradient}
+              >
+                <MaterialCommunityIcons name="auto-fix" size={18} color="#4ADE80" />
+                <Text style={styles.discoveryText}>
+                  Get a professional AI Health Analysis for this list
+                </Text>
+                <MaterialCommunityIcons name="chevron-right" size={18} color="#4ADE80" />
+              </LinearGradient>
+            </Pressable>
+            <Pressable
+              onPress={async () => {
+                haptic("light");
+                await dismissTip({ tipKey: "health_discovery_banner" });
+              }}
+              hitSlop={8}
+              style={styles.dismissButton}
+            >
+              <MaterialCommunityIcons name="close" size={20} color="#4ADE80" />
+            </Pressable>
           </View>
         </AnimatedSection>
       )}
@@ -1285,11 +1366,13 @@ export default function ListDetailScreen() {
                   hitSlop={8}
                   style={styles.headerIconButton}
                 >
-                  <MaterialCommunityIcons
-                    name={list.healthAnalysis ? "leaf" : "leaf-outline"}
-                    size={20}
-                    color={list.healthAnalysis ? colors.status.success : colors.text.secondary}
-                  />
+                  <Animated.View style={pulseAnimatedStyle}>
+                    <MaterialCommunityIcons
+                      name="heart-pulse"
+                      size={22}
+                      color={list.healthAnalysis ? "#4ADE80" : "rgba(255, 255, 255, 0.35)"}
+                    />
+                  </Animated.View>
                 </Pressable>
               )}
 
@@ -1450,9 +1533,16 @@ export default function ListDetailScreen() {
       {/* Health Analysis Modal */}
       <HealthAnalysisModal
         visible={showHealthModal}
-        onClose={() => setShowHealthModal(false)}
+        onClose={() => {
+          setShowHealthModal(false);
+          if (isPostShoppingHealthFlow) {
+            setIsPostShoppingHealthFlow(false);
+            setShowScanNudge(true);
+          }
+        }}
         listId={id}
-        initialAnalysis={list.healthAnalysis}
+        initialAnalysis={list?.healthAnalysis}
+        itemCount={items?.length}
       />
 
       {/* Trip Summary Modal */}
@@ -1529,6 +1619,36 @@ const styles = StyleSheet.create({
   },
   listHeaderContainer: {
     paddingTop: spacing.xs,
+    gap: spacing.md,
+  },
+  discoveryBannerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  discoveryBanner: {
+    flex: 1,
+    borderRadius: borderRadius.lg,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(74, 222, 128, 0.3)",
+  },
+  discoveryGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  discoveryText: {
+    ...typography.labelMedium,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  dismissButton: {
+    padding: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: "rgba(74, 222, 128, 0.1)",
   },
   sectionHeader: {
     flexDirection: "row",

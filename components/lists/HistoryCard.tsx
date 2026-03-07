@@ -113,11 +113,11 @@ export const HistoryCard = React.memo(function HistoryCard({
           style={styles.swipeButton}
         >
           <MaterialCommunityIcons
-            name="content-copy"
+            name="cart-arrow-right"
             size={20}
             color="#fff"
           />
-          <Text style={styles.swipeText}>Use as Template</Text>
+          <Text style={styles.swipeText}>Shop Again</Text>
         </Pressable>
       </View>
     );
@@ -200,9 +200,13 @@ export const HistoryCard = React.memo(function HistoryCard({
               </View>
             </View>
 
-            {/* Bottom row: number + stores + date */}
+            {/* Bottom row: stores, date + Shop Again */}
             <View style={styles.bottomRow}>
               <View style={styles.bottomLeft}>
+                <View style={styles.metaItem}>
+                  <MaterialCommunityIcons name="calendar" size={14} color={colors.text.tertiary} />
+                  <Text style={styles.metaText}>{completedDate}</Text>
+                </View>
                 {storeNames.length > 0 && (
                   <View style={styles.metaItem}>
                     <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
@@ -212,10 +216,19 @@ export const HistoryCard = React.memo(function HistoryCard({
                   </View>
                 )}
               </View>
-              <View style={styles.metaItem}>
-                <MaterialCommunityIcons name="calendar" size={14} color={colors.text.tertiary} />
-                <Text style={styles.metaText}>{completedDate}</Text>
-              </View>
+              
+              {!selectable && onUseAsTemplate && (
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    onUseAsTemplate(list._id, list.name);
+                  }}
+                  style={styles.shopAgainBtn}
+                >
+                  <MaterialCommunityIcons name="cart-arrow-right" size={16} color={colors.accent.primary} />
+                  <Text style={styles.shopAgainText}>Shop Again</Text>
+                </Pressable>
+              )}
             </View>
           </GlassCard>
         </Pressable>
@@ -355,5 +368,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.25)",
+  },
+  shopAgainBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderRadius: borderRadius.md,
+  },
+  shopAgainText: {
+    ...typography.labelSmall,
+    color: colors.accent.primary,
+    fontWeight: "600",
   },
 });

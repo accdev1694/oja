@@ -50,6 +50,16 @@ const CUISINES = [
   { id: "ethiopian", name: "Ethiopian", emoji: "🇪🇹" },
 ];
 
+const DIETARY_RESTRICTIONS = [
+  { id: "vegan", name: "Vegan", icon: "leaf" },
+  { id: "vegetarian", name: "Vegetarian", icon: "carrot" },
+  { id: "gluten-free", name: "Gluten-Free", icon: "wheat-off" },
+  { id: "dairy-free", name: "Dairy-Free", icon: "cow-off" },
+  { id: "halal", name: "Halal", icon: "star-crescent" },
+  { id: "keto", name: "Keto", icon: "fire" },
+  { id: "paleo", name: "Paleo", icon: "bone" },
+];
+
 export default function CuisineSelectionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -62,6 +72,7 @@ export default function CuisineSelectionScreen() {
   const [countryCode, setCountryCode] = useState("");
   const [currency, setCurrency] = useState("");
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
+  const [selectedDietary, setSelectedDietary] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -95,6 +106,17 @@ export default function CuisineSelectionScreen() {
     });
   }
 
+  function toggleDietary(dietaryId: string) {
+    safeHaptics.light();
+
+    setSelectedDietary((prev) => {
+      if (prev.includes(dietaryId)) {
+        return prev.filter((id) => id !== dietaryId);
+      }
+      return [...prev, dietaryId];
+    });
+  }
+
   async function handleContinue() {
     if (selectedCuisines.length === 0) {
       safeHaptics.warning();
@@ -112,6 +134,7 @@ export default function CuisineSelectionScreen() {
         name: displayName,
         country,
         cuisinePreferences: selectedCuisines,
+        dietaryRestrictions: selectedDietary,
       });
 
       safeHaptics.success();
@@ -203,6 +226,25 @@ export default function CuisineSelectionScreen() {
             />
           ))}
         </View>
+
+        {/* Dietary Restrictions */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.subtitle}>Any dietary preferences?</Text>
+          <Text style={styles.description}>
+            We'll use this to suggest healthier, suitable alternatives (optional)
+          </Text>
+        </View>
+
+        <View style={styles.dietaryGrid}>
+          {DIETARY_RESTRICTIONS.map((diet) => (
+            <DietaryButton
+              key={diet.id}
+              diet={diet}
+              isSelected={selectedDietary.includes(diet.id)}
+              onToggle={() => toggleDietary(diet.id)}
+            />
+          ))}
+        </View>
       </ScrollView>
 
       {/* Pinned Continue Button */}
@@ -223,7 +265,7 @@ export default function CuisineSelectionScreen() {
 }
 
 // =============================================================================
-// CUISINE BUTTON COMPONENT
+// SUB-COMPONENTS
 // =============================================================================
 
 interface CuisineButtonProps {
@@ -277,6 +319,50 @@ function CuisineButton({ cuisine, isSelected, onToggle }: CuisineButtonProps) {
               />
             </View>
           )}
+        </GlassCard>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+interface DietaryButtonProps {
+  diet: { id: string; name: string; icon: string };
+  isSelected: boolean;
+  onToggle: () => void;
+}
+
+function DietaryButton({ diet, isSelected, onToggle }: DietaryButtonProps) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={[styles.dietaryButtonWrapper, animatedStyle]}>
+      <Pressable
+        onPress={onToggle}
+        onPressIn={() => (scale.value = withSpring(0.95))}
+        onPressOut={() => (scale.value = withSpring(1))}
+      >
+        <GlassCard
+          variant={isSelected ? "bordered" : "standard"}
+          accentColor={isSelected ? colors.accent.success : undefined}
+          style={[styles.dietaryButton, isSelected && styles.dietaryButtonSelected]}
+        >
+          <MaterialCommunityIcons 
+            name={diet.icon as any} 
+            size={24} 
+            color={isSelected ? colors.accent.success : colors.text.secondary} 
+          />
+          <Text
+            style={[
+              styles.dietaryName,
+              isSelected && styles.dietaryNameSelected,
+            ]}
+          >
+            {diet.name}
+          </Text>
         </GlassCard>
       </Pressable>
     </Animated.View>
@@ -369,8 +455,18 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.xl,
   },
+  dietaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+  },
   cuisineButtonWrapper: {
     width: "48%",
+    flexGrow: 1,
+  },
+  dietaryButtonWrapper: {
+    width: "31%",
     flexGrow: 1,
   },
   cuisineButton: {
@@ -378,8 +474,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     position: "relative",
   },
+  dietaryButton: {
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+  },
   cuisineButtonSelected: {
     backgroundColor: `${colors.accent.primary}10`,
+  },
+  dietaryButtonSelected: {
+    backgroundColor: `${colors.accent.success}10`,
   },
   cuisineEmoji: {
     fontSize: 32,
@@ -391,8 +495,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
+  dietaryName: {
+    ...typography.labelSmall,
+    color: colors.text.primary,
+    textAlign: "center",
+  },
   cuisineNameSelected: {
     color: colors.accent.primary,
+  },
+  dietaryNameSelected: {
+    color: colors.accent.success,
+    fontWeight: "700",
   },
   checkmark: {
     position: "absolute",

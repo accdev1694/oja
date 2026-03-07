@@ -1145,8 +1145,8 @@ export const addFromReceipt = mutation({
     const pantryItemId = await ctx.db.insert("pantryItems", {
       userId: user._id,
       name: toGroceryTitleCase(args.name),
-      category: args.category || "other",
-      icon: getIconForItem(toGroceryTitleCase(args.name), args.category || "other"),
+      category: args.category || "Pantry Staples",
+      icon: getIconForItem(toGroceryTitleCase(args.name), args.category || "Pantry Staples"),
       stockLevel: "stocked",
       status: "active" as const,
       nameSource: "system" as const,

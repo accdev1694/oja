@@ -288,8 +288,8 @@ const styles = StyleSheet.create({
   },
   headerOuter: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
   },
   leftContainer: {
     minWidth: 36,
@@ -300,6 +300,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     flex: 1,
     marginLeft: spacing.sm,
+    paddingVertical: 2,
   },
   subtitle: {
     ...typography.bodySmall,
@@ -444,9 +445,9 @@ export function SimpleHeader({
 const simpleHeaderStyles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    marginBottom: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    marginBottom: spacing.md,
     backgroundColor: `${colors.background.secondary}F5`,
     borderBottomWidth: 1,
     borderBottomColor: colors.glass.border,
@@ -454,6 +455,7 @@ const simpleHeaderStyles = StyleSheet.create({
   title: {
     ...typography.displaySmall,
     color: colors.text.primary,
+    paddingVertical: 2,
   },
   subtitle: {
     ...typography.bodyMedium,

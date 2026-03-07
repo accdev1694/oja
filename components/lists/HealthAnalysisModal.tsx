@@ -13,15 +13,18 @@ interface HealthAnalysisModalProps {
   onClose: () => void;
   listId: Id<"shoppingLists">;
   initialAnalysis?: any;
+  itemCount?: number;
 }
 
-export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis }: HealthAnalysisModalProps) {
+export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis, itemCount }: HealthAnalysisModalProps) {
   const [analysis, setAnalysis] = useState<any>(initialAnalysis);
   const [loading, setLoading] = useState(false);
   const [swappingId, setSwappingId] = useState<string | null>(null);
+  const [addingBonus, setAddingBonus] = useState<string | null>(null);
 
   const analyzeHealth = useAction(api.ai.analyzeListHealth);
   const applySwap = useMutation(api.listItems.applyHealthSwap);
+  const addItem = useMutation(api.listItems.create);
 
   useEffect(() => {
     setAnalysis(initialAnalysis);
@@ -48,7 +51,7 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis 
     }
   };
 
-  const handleApplySwap = async (originalId: string, suggestedName: string) => {
+  const handleApplySwap = async (originalId: string, suggestedName: string, suggestedCategory?: string) => {
     if (!originalId) return;
     setSwappingId(originalId);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -57,6 +60,7 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis 
         listId,
         originalItemId: originalId as Id<"listItems">,
         suggestedName,
+        suggestedCategory,
       });
       // Remove from local state to reflect UI update immediately
       setAnalysis((prev: any) => ({
@@ -72,11 +76,42 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis 
     }
   };
 
+  const handleAddBonus = async (name: string, category?: string) => {
+    setAddingBonus(name);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await addItem({
+        listId,
+        name,
+        category: category || "Produce",
+        quantity: 1,
+        priority: "should-have",
+      });
+      // Remove from local state
+      setAnalysis((prev: any) => ({
+        ...prev,
+        swaps: prev.swaps.filter((s: any) => s.suggestedName !== name)
+      }));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      console.error(e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setAddingBonus(null);
+    }
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return colors.accent.success;
     if (score >= 60) return colors.accent.warning;
     return colors.accent.error;
   };
+
+  const isStale = analysis && itemCount !== undefined && analysis.itemCountAtAnalysis !== undefined && 
+                 Math.abs(itemCount - analysis.itemCountAtAnalysis) > (analysis.itemCountAtAnalysis * 0.3);
+
+  const regularSwaps = analysis?.swaps?.filter((s: any) => s.originalName !== "Bonus") || [];
+  const bonusItems = analysis?.swaps?.filter((s: any) => s.originalName === "Bonus") || [];
 
   return (
     <Modal
@@ -88,7 +123,15 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis 
       <View style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.header}>
-            <Text style={styles.title}>AI Health Analysis</Text>
+            <View>
+              <Text style={styles.title}>AI Health Analysis</Text>
+              {isStale && (
+                <View style={styles.staleBadge}>
+                  <MaterialCommunityIcons name="alert-outline" size={12} color={colors.accent.warning} />
+                  <Text style={styles.staleText}>List has changed significantly</Text>
+                </View>
+              )}
+            </View>
             <Pressable onPress={onClose} style={({pressed}) => [styles.closeBtn, pressed && {opacity: 0.7}]}>
               <MaterialCommunityIcons name="close" size={24} color={colors.text.secondary} />
             </Pressable>
@@ -115,7 +158,7 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis 
               <View style={styles.splitSection}>
                 <GlassCard variant="standard" style={styles.splitCard}>
                   <Text style={styles.splitTitle}>
-                    <MaterialCommunityIcons name="leaf" size={16} color={colors.accent.success} /> Great Job
+                    <MaterialCommunityIcons name="heart-pulse" size={16} color="#4ADE80" /> Great Job
                   </Text>
                   {analysis.strengths?.map((s: string, i: number) => (
                     <Text key={i} style={styles.bulletText}>• {s}</Text>
@@ -127,7 +170,7 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis 
 
                 <GlassCard variant="standard" style={styles.splitCard}>
                   <Text style={styles.splitTitle}>
-                    <MaterialCommunityIcons name="target" size={16} color={colors.accent.warning} /> To Improve
+                    <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.accent.warning} /> To Improve
                   </Text>
                   {analysis.weaknesses?.map((w: string, i: number) => (
                     <Text key={i} style={styles.bulletText}>• {w}</Text>
@@ -139,10 +182,10 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis 
               </View>
 
               {/* Swaps */}
-              {analysis.swaps?.length > 0 && (
+              {regularSwaps.length > 0 && (
                 <View style={styles.swapsSection}>
                   <Text style={styles.sectionTitle}>Healthy Swaps</Text>
-                  {analysis.swaps.map((swap: any, i: number) => (
+                  {regularSwaps.map((swap: any, i: number) => (
                     <LinearGradient
                       key={i}
                       colors={[colors.glass.background, colors.glass.backgroundHover]}
@@ -153,7 +196,14 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis 
                           <Text style={styles.swapItemLabel}>Original</Text>
                           <Text style={styles.swapItemText} numberOfLines={1}>{swap.originalName}</Text>
                         </View>
-                        <MaterialCommunityIcons name="arrow-right-bold" size={20} color={colors.accent.primary} />
+                        <View style={styles.swapArrow}>
+                          <MaterialCommunityIcons name="arrow-right-bold" size={20} color={colors.accent.primary} />
+                          {swap.priceDelta !== undefined && (
+                            <Text style={[styles.priceDelta, { color: swap.priceDelta > 0 ? colors.accent.error : colors.accent.success }]}>
+                              {swap.priceDelta > 0 ? `+£${swap.priceDelta.toFixed(2)}` : `-£${Math.abs(swap.priceDelta).toFixed(2)}`}
+                            </Text>
+                          )}
+                        </View>
                         <View style={styles.swapItem}>
                           <Text style={styles.swapItemLabel}>Suggested</Text>
                           <Text style={styles.swapItemText} numberOfLines={1}>{swap.suggestedName}</Text>
@@ -161,7 +211,7 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis 
                       </View>
                       <Text style={styles.swapReason}>{swap.reason}</Text>
                       <GlassButton
-                        onPress={() => handleApplySwap(swap.originalId, swap.suggestedName)}
+                        onPress={() => handleApplySwap(swap.originalId, swap.suggestedName, swap.suggestedCategory)}
                         variant="primary"
                         disabled={!swap.originalId || swappingId === swap.originalId}
                         style={{ marginTop: spacing.md }}
@@ -172,6 +222,44 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis 
                   ))}
                 </View>
               )}
+
+              {/* Bonus Suggestions */}
+              {bonusItems.length > 0 && (
+                <View style={styles.swapsSection}>
+                  <Text style={styles.sectionTitle}>Boost Your Health</Text>
+                  {bonusItems.map((bonus: any, i: number) => (
+                    <LinearGradient
+                      key={i}
+                      colors={[colors.glass.background, colors.glass.backgroundHover]}
+                      style={styles.swapCard}
+                    >
+                      <View style={styles.bonusHeader}>
+                        <MaterialCommunityIcons name="plus-circle-outline" size={24} color="#4ADE80" />
+                        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                          <Text style={styles.swapItemText}>{bonus.suggestedName}</Text>
+                          <Text style={styles.swapReason}>{bonus.reason}</Text>
+                        </View>
+                      </View>
+                      <GlassButton
+                        onPress={() => handleAddBonus(bonus.suggestedName, bonus.suggestedCategory)}
+                        variant="secondary"
+                        disabled={addingBonus === bonus.suggestedName}
+                        style={{ marginTop: spacing.md }}
+                      >
+                        {addingBonus === bonus.suggestedName ? "Adding..." : "Add to List"}
+                      </GlassButton>
+                    </LinearGradient>
+                  ))}
+                </View>
+              )}
+
+              {/* Disclaimer */}
+              <View style={styles.disclaimerBox}>
+                <MaterialCommunityIcons name="information-outline" size={14} color={colors.text.tertiary} />
+                <Text style={styles.disclaimerText}>
+                  AI suggestions are general guidance based on your list. Please check labels for allergens and medical suitability.
+                </Text>
+              </View>
 
               <View style={styles.footerActions}>
                 <Pressable onPress={handleAnalyze} style={({pressed}) => [styles.reAnalyzeBtn, pressed && {opacity: 0.7}]}>
@@ -215,6 +303,16 @@ const styles = StyleSheet.create({
   title: {
     ...typography.headlineLarge,
     color: colors.text.primary,
+  },
+  staleBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  staleText: {
+    ...typography.labelSmall,
+    color: colors.accent.warning,
   },
   closeBtn: {
     padding: 4,
@@ -315,6 +413,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: spacing.sm,
   },
+  swapArrow: {
+    alignItems: "center",
+    paddingHorizontal: spacing.xs,
+  },
+  priceDelta: {
+    ...typography.labelSmall,
+    marginTop: 2,
+    fontWeight: "bold",
+  },
+  bonusHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
   swapItem: {
     flex: 1,
   },
@@ -333,6 +444,20 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontStyle: "italic",
     marginTop: spacing.xs,
+  },
+  disclaimerBox: {
+    flexDirection: "row",
+    gap: spacing.xs,
+    padding: spacing.md,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.lg,
+  },
+  disclaimerText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    flex: 1,
+    lineHeight: 16,
   },
   footerActions: {
     alignItems: "center",

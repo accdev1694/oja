@@ -161,6 +161,13 @@ crons.monthly(
   internal.receipts.cleanupOldImages
 );
 
+// Prune health analysis older than 30 days
+crons.daily(
+  "prune-stale-health-analyses",
+  { hourUTC: 4, minuteUTC: 30 },
+  internal.shoppingLists.pruneStaleHealthAnalyses
+);
+
 crons.daily(
   "reconcile-stripe-points",
   { hourUTC: 2, minuteUTC: 30 },

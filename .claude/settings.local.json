@@ -156,7 +156,8 @@
       "Bash(timeout 60 npx convex dev:*)",
       "mcp__playwright__browser_tabs",
       "Bash(./gradlew clean:*)",
-      "Bash(./gradlew:*)"
+      "Bash(./gradlew:*)",
+      "Bash(git diff:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

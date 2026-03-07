@@ -14,6 +14,12 @@ export default defineSchema({
     currency: v.string(),
     country: v.optional(v.string()),
     cuisinePreferences: v.optional(v.array(v.string())),
+    dietaryRestrictions: v.optional(v.array(v.string())), // e.g. ["vegan", "gluten-free", "halal"]
+    healthHistory: v.optional(v.array(v.object({
+      listId: v.id("shoppingLists"),
+      score: v.number(),
+      analyzedAt: v.number()
+    }))),
 
     // Store preferences
     storePreferences: v.optional(v.object({
@@ -191,8 +197,11 @@ export default defineSchema({
         originalName: v.string(),
         originalId: v.id("listItems"),
         suggestedName: v.string(),
+        suggestedCategory: v.optional(v.string()),
+        priceDelta: v.optional(v.number()), // Estimated price difference (e.g., +0.30 or -0.15)
         reason: v.string()
       })),
+      itemCountAtAnalysis: v.optional(v.number()), // Number of items when analyzed to detect staleness
       updatedAt: v.number()
     })),
 

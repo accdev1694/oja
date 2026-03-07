@@ -260,11 +260,11 @@ export const create = mutation({
       } else {
         const pantryAccess = await canAddPantryItem(ctx, user._id);
         if (pantryAccess.allowed) {
-          const icon = getIconForItem(name, args.category || "Other");
+          const icon = getIconForItem(name, args.category || "Pantry Staples");
           pantryItemId = await ctx.db.insert("pantryItems", {
             userId: user._id,
             name,
-            category: args.category || "Other",
+            category: args.category || "Pantry Staples",
             icon,
             stockLevel: "low",
             status: "active" as const,
@@ -961,7 +961,7 @@ export const addItemMidShop = mutation({
       const pantryItemId = await ctx.db.insert("pantryItems", {
         userId: user._id,
         name,
-        category: args.category || "Uncategorized",
+        category: args.category || "Pantry Staples",
         stockLevel: "out",
         status: "active" as const,
         nameSource: "system" as const,
@@ -1722,6 +1722,7 @@ export const applyHealthSwap = mutation({
     listId: v.id("shoppingLists"),
     originalItemId: v.id("listItems"),
     suggestedName: v.string(),
+    suggestedCategory: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -1739,6 +1740,8 @@ export const applyHealthSwap = mutation({
       throw new Error("Original item not found in this list");
     }
 
+    const category = args.suggestedCategory || originalItem.category || "Pantry Staples";
+
     // Delete original
     await ctx.db.delete(args.originalItemId);
 
@@ -1747,6 +1750,7 @@ export const applyHealthSwap = mutation({
       listId: args.listId,
       userId: user._id,
       name: args.suggestedName,
+      category,
       quantity: originalItem.quantity,
       priority: originalItem.priority,
       isChecked: false,

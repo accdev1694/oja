@@ -206,6 +206,17 @@ export function AddItemsModal({
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
+  const { triggerPrefetch } = useVariantPrefetch({
+    store: listNormalizedStoreId ?? listStoreName ?? "tesco",
+  });
+
+  // ── Product scanner (camera) ──────────────────────────────────────────────
+  const productScanner = useProductScanner({
+    onDuplicate: (existing) => {
+      alert("Already Scanned", `${existing.name} is already in this session.`);
+    },
+  });
+
   // Clear product scanner session when modal opens to prevent cross-session duplicates
   useEffect(() => {
     if (visible) {
@@ -272,16 +283,6 @@ export function AddItemsModal({
     clear: clearSuggestions,
   } = useItemSuggestions({ storeName: listStoreName });
 
-  const { triggerPrefetch } = useVariantPrefetch({
-    store: listNormalizedStoreId ?? listStoreName ?? "tesco",
-  });
-
-  // ── Product scanner (camera) ──────────────────────────────────────────────
-  const productScanner = useProductScanner({
-    onDuplicate: (existing) => {
-      alert("Already Scanned", `${existing.name} is already in this session.`);
-    },
-  });
   const enrichVariant = useMutation(api.itemVariants.enrichFromScan);
 
   const priceEstimate = useQuery(

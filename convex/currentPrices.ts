@@ -16,7 +16,7 @@ export const pruneStale = internalMutation({
     // Find all prices older than 12 months
     const stalePrices = await ctx.db
       .query("currentPrices")
-      .withIndex("by_updated", (q) => q.lt(q.field("updatedAt"), twelveMonthsAgo))
+      .withIndex("by_updated", (q) => q.lt("updatedAt", twelveMonthsAgo))
       .collect();
 
     let deletedCount = 0;

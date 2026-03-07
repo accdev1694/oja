@@ -17,7 +17,7 @@ export const cleanupOldImages = internalMutation({
     // Find receipts with images older than 6 months
     const oldReceipts = await ctx.db
       .query("receipts")
-      .withIndex("by_created", (q) => q.lt(q.field("createdAt"), sixMonthsAgo))
+      .withIndex("by_created", (q) => q.lt("createdAt", sixMonthsAgo))
       .filter((q) => q.neq(q.field("imageStorageId"), undefined))
       .collect();
 

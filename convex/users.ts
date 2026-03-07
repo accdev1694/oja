@@ -1,6 +1,66 @@
 import { v } from "convex/values";
-import { mutation, query, action } from "./_generated/server";
+import { mutation, query, action, internalMutation } from "./_generated/server";
 import { trackFunnelEvent, trackActivity } from "./lib/analytics";
+
+/**
+ * Record a health analysis score for historical tracking
+ */
+export const recordHealthAnalysis = internalMutation({
+  args: {
+    userId: v.id("users"),
+    listId: v.id("shoppingLists"),
+    score: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return;
+
+    const healthHistory = user.healthHistory || [];
+    // Keep only last 50 entries to prevent document bloat
+    const updatedHistory = [
+      ...healthHistory,
+      { listId: args.listId, score: args.score, analyzedAt: Date.now() }
+    ].slice(-50);
+
+    await ctx.db.patch(args.userId, {
+      healthHistory: updatedHistory,
+      updatedAt: Date.now(),
+    });
+
+    // Check for "Health Champion" achievement: 3 lists scored 80+ in the last 30 days
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    const recentHighScores = updatedHistory.filter(h => h.score >= 80 && h.analyzedAt > thirtyDaysAgo);
+    
+    if (recentHighScores.length >= 3) {
+      // Check if already has it
+      const existing = await ctx.db
+        .query("achievements")
+        .withIndex("by_user_type", q => q.eq("userId", args.userId).eq("type", "health_champion"))
+        .first();
+      
+      if (!existing) {
+        await ctx.db.insert("achievements", {
+          userId: args.userId,
+          type: "health_champion",
+          title: "🏆 Health Champion",
+          description: "Scored 80+ on 3 different lists this month!",
+          icon: "medal",
+          unlockedAt: Date.now(),
+        });
+        
+        // Also notify user
+        await ctx.db.insert("notifications", {
+          userId: args.userId,
+          type: "achievement",
+          title: "New Achievement Unlocked!",
+          body: "You've earned the Health Champion medal! 🏆",
+          read: false,
+          createdAt: Date.now(),
+        });
+      }
+    }
+  },
+});
 
 /**
  * Sync MFA status from the frontend (security requirement)
@@ -269,6 +329,7 @@ export const setOnboardingData = mutation({
     name: v.string(),
     country: v.string(),
     cuisinePreferences: v.array(v.string()),
+    dietaryRestrictions: v.optional(v.array(v.string())),
     defaultBudget: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -290,6 +351,7 @@ export const setOnboardingData = mutation({
       name: args.name,
       country: args.country,
       cuisinePreferences: args.cuisinePreferences,
+      dietaryRestrictions: args.dietaryRestrictions,
       defaultBudget: args.defaultBudget,
       updatedAt: Date.now(),
     });
@@ -756,4 +818,3 @@ export const deleteAllClerkUsers = action({
     };
   },
 });
-

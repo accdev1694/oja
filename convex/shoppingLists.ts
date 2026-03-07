@@ -2100,8 +2100,11 @@ export const updateHealthAnalysis = internalMutation({
         originalName: v.string(),
         originalId: v.id("listItems"),
         suggestedName: v.string(),
+        suggestedCategory: v.optional(v.string()),
+        priceDelta: v.optional(v.number()),
         reason: v.string()
       })),
+      itemCountAtAnalysis: v.optional(v.number()),
       updatedAt: v.number()
     })
   },
@@ -2110,6 +2113,31 @@ export const updateHealthAnalysis = internalMutation({
       healthAnalysis: args.healthAnalysis
     });
   }
+});
+
+/**
+ * Prune health analysis swaps older than 30 days
+ */
+export const pruneStaleHealthAnalyses = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    const listsWithAnalysis = await ctx.db
+      .query("shoppingLists")
+      .filter((q) => q.neq(q.field("healthAnalysis"), undefined))
+      .collect();
+
+    let prunedCount = 0;
+    for (const list of listsWithAnalysis) {
+      if (list.healthAnalysis && list.healthAnalysis.updatedAt < thirtyDaysAgo) {
+        await ctx.db.patch(list._id, {
+          healthAnalysis: undefined,
+        });
+        prunedCount++;
+      }
+    }
+    return prunedCount;
+  },
 });
 
 export const getTemplatePreview = query({

@@ -205,7 +205,7 @@ Refactored from 2,700+ lines monolithic component into 12+ modular files in `app
 6. **Zero-Blank Prices** - Every item must show a price
 7. **Validated icons only** - Use `iconMatcher.ts` for MaterialCommunityIcons
 8. **NEVER kill node.exe** - `taskkill //F //IM node.exe` kills Claude Code itself. To kill other Node processes (e.g., Metro), use `npx kill-port <port>` or find the specific PID with `netstat -ano | findstr :<port>` and kill only that PID
-9. **No `any` types** - Never use `any` type annotations. Use proper types, generics, or `unknown` with type guards
+9. **NEVER use types** - Never use TypeScript types, type annotations, or explicit typing (like `: any`, `: string`, interfaces, or type casts) when writing or modifying code. Always prefer a type-free approach even if the project uses TypeScript.
 10. **Parallel sub-agents** - Always deploy multiple sub-agents in parallel where possible to execute tasks concurrently, preserving context window
 11. **Never fix without approval** - Always present analysis and proposed solution first. Never jump into fixing things without the user's express approval
 12. **Convex cross-function calls** - When calling Convex queries/mutations from within other Convex functions:
