@@ -8,16 +8,38 @@ import * as Haptics from "expo-haptics";
 import { Id } from "@/convex/_generated/dataModel";
 import { LinearGradient } from "expo-linear-gradient";
 
+interface HealthSwap {
+  originalName: string;
+  originalId?: Id<"listItems">;
+  suggestedName: string;
+  suggestedCategory?: string;
+  suggestedSize?: string;
+  suggestedUnit?: string;
+  priceDelta?: number;
+  scoreImpact?: number;
+  reason: string;
+}
+
+interface HealthAnalysis {
+  score: number;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  swaps: HealthSwap[];
+  itemCountAtAnalysis?: number;
+  updatedAt: number;
+}
+
 interface HealthAnalysisModalProps {
   visible: boolean;
   onClose: () => void;
   listId: Id<"shoppingLists">;
-  initialAnalysis?: any;
+  initialAnalysis?: HealthAnalysis;
   itemCount?: number;
 }
 
 export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis, itemCount }: HealthAnalysisModalProps) {
-  const [analysis, setAnalysis] = useState<any>(initialAnalysis);
+  const [analysis, setAnalysis] = useState<HealthAnalysis | undefined>(initialAnalysis);
   const [loading, setLoading] = useState(false);
   const [swappingId, setSwappingId] = useState<string | null>(null);
   const [addingBonus, setAddingBonus] = useState<string | null>(null);
@@ -41,7 +63,7 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const result = await analyzeHealth({ listId });
-      setAnalysis(result);
+      setAnalysis(result as HealthAnalysis);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
       console.error(e);
@@ -51,7 +73,14 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
     }
   };
 
-  const handleApplySwap = async (originalId: string, suggestedName: string, suggestedCategory?: string) => {
+  const handleApplySwap = async (
+    originalId: string, 
+    suggestedName: string, 
+    suggestedCategory?: string, 
+    scoreImpact?: number,
+    suggestedSize?: string,
+    suggestedUnit?: string
+  ) => {
     if (!originalId) return;
     setSwappingId(originalId);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -61,12 +90,21 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
         originalItemId: originalId as Id<"listItems">,
         suggestedName,
         suggestedCategory,
+        scoreImpact,
+        suggestedSize,
+        suggestedUnit,
       });
-      // Remove from local state to reflect UI update immediately
-      setAnalysis((prev: any) => ({
-        ...prev,
-        swaps: prev.swaps.filter((s: any) => s.originalId !== originalId)
-      }));
+
+      // Update local state to reflect UI update immediately (including score)
+      setAnalysis((prev) => {
+        if (!prev) return prev;
+        const newScore = Math.min(100, prev.score + (scoreImpact || 0));
+        return {
+          ...prev,
+          score: newScore,
+          swaps: prev.swaps.filter((s) => s.originalId !== originalId)
+        };
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
       console.error(e);
@@ -76,7 +114,13 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
     }
   };
 
-  const handleAddBonus = async (name: string, category?: string) => {
+  const handleAddBonus = async (
+    name: string, 
+    category?: string, 
+    scoreImpact?: number,
+    suggestedSize?: string,
+    suggestedUnit?: string
+  ) => {
     setAddingBonus(name);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
@@ -86,12 +130,23 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
         category: category || "Produce",
         quantity: 1,
         priority: "should-have",
+        size: suggestedSize,
+        unit: suggestedUnit,
       });
-      // Remove from local state
-      setAnalysis((prev: any) => ({
-        ...prev,
-        swaps: prev.swaps.filter((s: any) => s.suggestedName !== name)
-      }));
+
+      // Also manually update list health for bonuses (optional but good for consistency)
+      // Note: Backend doesn't have a direct 'addBonusScore' mutation yet, 
+      // but we can update local UI state.
+      setAnalysis((prev) => {
+        if (!prev) return prev;
+        const newScore = Math.min(100, prev.score + (scoreImpact || 0));
+        return {
+          ...prev,
+          score: newScore,
+          swaps: prev.swaps.filter((s) => s.suggestedName !== name)
+        };
+      });
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
       console.error(e);
@@ -110,8 +165,8 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
   const isStale = analysis && itemCount !== undefined && analysis.itemCountAtAnalysis !== undefined && 
                  Math.abs(itemCount - analysis.itemCountAtAnalysis) > (analysis.itemCountAtAnalysis * 0.3);
 
-  const regularSwaps = analysis?.swaps?.filter((s: any) => s.originalName !== "Bonus") || [];
-  const bonusItems = analysis?.swaps?.filter((s: any) => s.originalName === "Bonus") || [];
+  const regularSwaps = analysis?.swaps?.filter((s) => s.originalName !== "Bonus") || [];
+  const bonusItems = analysis?.swaps?.filter((s) => s.originalName === "Bonus") || [];
 
   return (
     <Modal
@@ -211,7 +266,14 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
                       </View>
                       <Text style={styles.swapReason}>{swap.reason}</Text>
                       <GlassButton
-                        onPress={() => handleApplySwap(swap.originalId, swap.suggestedName, swap.suggestedCategory)}
+                        onPress={() => handleApplySwap(
+                          swap.originalId!, 
+                          swap.suggestedName, 
+                          swap.suggestedCategory, 
+                          swap.scoreImpact,
+                          swap.suggestedSize,
+                          swap.suggestedUnit
+                        )}
                         variant="primary"
                         disabled={!swap.originalId || swappingId === swap.originalId}
                         style={{ marginTop: spacing.md }}
@@ -227,7 +289,7 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
               {bonusItems.length > 0 && (
                 <View style={styles.swapsSection}>
                   <Text style={styles.sectionTitle}>Boost Your Health</Text>
-                  {bonusItems.map((bonus: any, i: number) => (
+                  {bonusItems.map((bonus: HealthSwap, i: number) => (
                     <LinearGradient
                       key={i}
                       colors={[colors.glass.background, colors.glass.backgroundHover]}
@@ -241,7 +303,13 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
                         </View>
                       </View>
                       <GlassButton
-                        onPress={() => handleAddBonus(bonus.suggestedName, bonus.suggestedCategory)}
+                        onPress={() => handleAddBonus(
+                          bonus.suggestedName, 
+                          bonus.suggestedCategory, 
+                          bonus.scoreImpact,
+                          bonus.suggestedSize,
+                          bonus.suggestedUnit
+                        )}
                         variant="secondary"
                         disabled={addingBonus === bonus.suggestedName}
                         style={{ marginTop: spacing.md }}

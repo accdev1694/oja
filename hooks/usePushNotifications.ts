@@ -2,21 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
-import Constants from "expo-constants";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "expo-router";
 
-// Configure notification handler (how to display when app is foregrounded)
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Check if running in Expo Go (Store Client)
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 /**
  * Hook to register and manage push notifications
@@ -34,6 +26,28 @@ export function usePushNotifications() {
   const registerToken = useMutation(api.notifications.registerPushToken);
 
   useEffect(() => {
+    // Android Push notifications were removed from Expo Go in SDK 53+.
+    // To avoid the red screen error, we skip all notification setup when in Expo Go on Android.
+    if (isExpoGo && Platform.OS === "android") {
+      console.warn(
+        "[Push] Skipping registration: Android Push Notifications are not supported in Expo Go (SDK 53+). " +
+        "Use a development build instead: https://docs.expo.dev/develop/development-builds/introduction/"
+      );
+      return;
+    }
+
+    // Configure notification handler (how to display when app is foregrounded)
+    // Only call this if not already set or inside the hook to ensure it doesn't fire in Expo Go
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+
     let isMounted = true;
 
     // Register for push notifications
@@ -87,6 +101,11 @@ export function usePushNotifications() {
 async function registerForPushNotificationsAsync(): Promise<string | null> {
   // Must be a physical device
   if (!Device.isDevice) {
+    return null;
+  }
+
+  // Double check Expo Go for Android
+  if (isExpoGo && Platform.OS === "android") {
     return null;
   }
 

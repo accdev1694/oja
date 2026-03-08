@@ -2098,10 +2098,13 @@ export const updateHealthAnalysis = internalMutation({
       weaknesses: v.array(v.string()),
       swaps: v.array(v.object({
         originalName: v.string(),
-        originalId: v.id("listItems"),
+        originalId: v.optional(v.id("listItems")),
         suggestedName: v.string(),
         suggestedCategory: v.optional(v.string()),
+        suggestedSize: v.optional(v.string()),
+        suggestedUnit: v.optional(v.string()),
         priceDelta: v.optional(v.number()),
+        scoreImpact: v.optional(v.number()),
         reason: v.string()
       })),
       itemCountAtAnalysis: v.optional(v.number()),

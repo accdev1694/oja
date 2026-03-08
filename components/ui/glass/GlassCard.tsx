@@ -199,7 +199,7 @@ export function GlassCard({
     borderColor,
     borderRadius: radius,
     padding: paddingValue,
-    overflow: "hidden",
+    ...(variant === "sunken" || (enableBlur && blurConfig.isSupported && Platform.OS === "ios") ? { overflow: "hidden" } : {}),
     ...(variant === "elevated" ? shadows.lg : {}),
   };
 

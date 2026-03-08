@@ -13,6 +13,7 @@ import {
   colors,
   spacing,
   useGlassAlert,
+  AlertButton,
 } from "@/components/ui/glass";
 import { GlassToast } from "@/components/ui/glass/GlassToast";
 import { useScanLogic } from "@/hooks";
@@ -22,6 +23,7 @@ import { ScanOnboardingTip } from "@/components/scan/ScanOnboardingTip";
 import { EditScannedItemModal } from "@/components/scan/EditScannedItemModal";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -85,12 +87,12 @@ export default function ScanScreen() {
     if (!shoppingLists || shoppingLists.length === 0) {
       alert("No Active Lists", "Create a shopping list first before adding items.", [
         { text: "Cancel", style: "cancel" },
-        { text: "Create List", onPress: () => router.push("/(app)/(tabs)/") }
+        { text: "Create List", onPress: () => router.push("/") }
       ]);
       return;
     }
 
-    const executeAdd = async (listId: any) => {
+    const executeAdd = async (listId: Id<"shoppingLists">) => {
       try {
         const itemsToAdd = productScanner.scannedProducts.map(p => ({
           name: p.name,
@@ -121,13 +123,15 @@ export default function ScanScreen() {
       executeAdd(shoppingLists[0]._id);
     } else {
       // Prompt user to pick a list
+      const buttons: AlertButton[] = shoppingLists.map(list => ({
+        text: list.name,
+        onPress: () => executeAdd(list._id)
+      }));
+      
       alert(
         "Choose List",
         "Which list should these items be added to?",
-        shoppingLists.map(list => ({
-          text: list.name,
-          onPress: () => executeAdd(list._id)
-        })).concat([{ text: "Cancel", style: "cancel" }])
+        [...buttons, { text: "Cancel", style: "cancel" }]
       );
     }
   }, [shoppingLists, productScanner, addItemsToList, alert, router]);
@@ -271,10 +275,9 @@ export default function ScanScreen() {
         visible={!!(productScanner.lastError || receiptScanner.lastError)}
         message={productScanner.lastError || receiptScanner.lastError || ""}
         onDismiss={() => {
-          productScanner.setLastError(null);
+          productScanner.clearLastError();
           receiptScanner.setLastError(null);
         }}
-        type="error"
       />
 
     </GlassScreen>

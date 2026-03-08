@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect, memo } from "react";
+import { ScrollView as GHScrollView } from "react-native-gesture-handler";
 import {
   View,
   Text,
@@ -222,7 +223,7 @@ export function AddItemsModal({
     if (visible) {
       productScanner.clearAll();
     }
-  }, [visible, productScanner]);
+  }, [visible, productScanner.clearAll]);
 
   // ── State ───────────────────────────────────────────────────────────────────
   const [itemName, setItemName] = useState("");
@@ -321,7 +322,7 @@ export function AddItemsModal({
   const pantryItems = useQuery(api.pantryItems.getByUser);
   const createItem = useMutation(api.listItems.create);
   const addAndSeedPantry = useMutation(api.listItems.addAndSeedPantry);
-  const addItemMidShop = useMutation(api.shoppingLists.addItemMidShop);
+  const addItemMidShop = useMutation(api.listItems.addItemMidShop);
   const updateItem = useMutation(api.listItems.update);
 
   // ── Derived data ────────────────────────────────────────────────────────────
@@ -1230,11 +1231,12 @@ export function AddItemsModal({
           </>
         ) : (
           /* ── Search view — single-layer variants ────────── */
-          <ScrollView
+          <GHScrollView
             style={styles.variantScrollView}
             contentContainerStyle={styles.variantScrollContent}
             keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
+            nestedScrollEnabled={true}
           >
             {itemName.trim().length === 0 ? (
               <>
@@ -1307,10 +1309,11 @@ export function AddItemsModal({
                 {altSuggestions.length > 0 && (
                   <View style={styles.altSuggestionsSection}>
                     <Text style={styles.altSuggestionsLabel}>Did you mean?</Text>
-                    <ScrollView
+                    <GHScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
                       keyboardShouldPersistTaps="always"
+                      nestedScrollEnabled={true}
                       contentContainerStyle={styles.altSuggestionsRow}
                     >
                       {altSuggestions.map((s) => (
@@ -1332,13 +1335,13 @@ export function AddItemsModal({
                           )}
                         </Pressable>
                       ))}
-                    </ScrollView>
+                    </GHScrollView>
                   </View>
                 )}
               </>
             )}
 
-          </ScrollView>
+          </GHScrollView>
         )}
       </View>
 
@@ -1603,7 +1606,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   altSuggestionsRow: {
-    gap: spacing.sm,
+    paddingRight: spacing.xl,
   },
   altSuggestionChip: {
     flexDirection: "row",
@@ -1615,6 +1618,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     borderWidth: 1,
     borderColor: colors.glass.border,
+    marginRight: spacing.sm,
   },
   altSuggestionText: {
     ...typography.bodySmall,

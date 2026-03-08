@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -62,9 +63,19 @@ export const PersonalizedSuggestions = ({ activeListId, onItemAdded }: Personali
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Suggested for you</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        nestedScrollEnabled={true}
+        keyboardShouldPersistTaps="always"
+      >
         {suggestions.map((item, index) => (
-          <GlassCard key={index} style={styles.card} variant="standard">
+          <GlassCard 
+            key={index} 
+            style={styles.card} 
+            variant="standard"
+          >
             <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
             <Text style={styles.itemMeta}>Bought {item.quantity} {getDaysAgoText(item.purchaseDate)}</Text>
             <Pressable 

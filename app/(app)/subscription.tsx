@@ -86,6 +86,22 @@ export default function SubscriptionScreen() {
       ? (subscription as any).currentPeriodEnd
       : null;
 
+  // Handle manage subscription (Stripe portal)
+  const handleManageSubscription = useCallback(async () => {
+    setPortalLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const result = await createPortal();
+      if (result.url) {
+        await Linking.openURL(result.url);
+      }
+    } catch (error: any) {
+      alert("Error", error?.message || "Failed to open portal");
+    } finally {
+      setPortalLoading(false);
+    }
+  }, [createPortal]);
+
   // Handle Stripe checkout
   const handleCheckout = useCallback(
     async (planId: "premium_monthly" | "premium_annual") => {
@@ -118,22 +134,6 @@ export default function SubscriptionScreen() {
     },
     [isPremium, isTrial, isAdmin, alert, handleManageSubscription, createCheckout]
   );
-
-  // Handle manage subscription (Stripe portal)
-  const handleManageSubscription = useCallback(async () => {
-    setPortalLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      const result = await createPortal();
-      if (result.url) {
-        await Linking.openURL(result.url);
-      }
-    } catch (error: any) {
-      alert("Error", error?.message || "Failed to open portal");
-    } finally {
-      setPortalLoading(false);
-    }
-  }, [createPortal]);
 
   // Handle cancel subscription
   const handleCancelSubscription = useCallback(async () => {

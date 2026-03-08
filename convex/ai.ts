@@ -1,6 +1,7 @@
 import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
+import { Id, Doc } from "./_generated/dataModel";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import {
@@ -26,7 +27,8 @@ async function withRetry<T>(
 ): Promise<T> {
   try {
     return await fn();
-  } catch (error: any) {
+  } catch (err: unknown) {
+    const error = err as { status?: number; message?: string };
     const isRateLimit =
       error?.status === 429 ||
       error?.message?.includes("429") ||
@@ -38,7 +40,7 @@ async function withRetry<T>(
       error?.message?.includes("UNAVAILABLE") ||
       error?.message?.includes("DEADLINE_EXCEEDED") ||
       error?.message?.includes("timeout") ||
-      error?.status >= 500;
+      (error?.status ?? 0) >= 500;
 
     if (retries > 0 && (isRateLimit || isTransientError)) {
       const errorType = isRateLimit ? "Rate limit" : "Transient error";
@@ -63,12 +65,14 @@ async function withAIFallback<T>(
   try {
     // Attempt Gemini first (it has its own internal retries via withRetry)
     return await withRetry(geminiFn, operationName);
-  } catch (geminiError: any) {
+  } catch (geminiErr: unknown) {
+    const geminiError = geminiErr as Error;
     console.warn(`[${operationName}] Gemini failed permanently, falling back to OpenAI (gpt-4o-mini)...`);
     try {
       // Attempt OpenAI as fallback
       return await withRetry(openaiFn, `${operationName}_fallback_openai`);
-    } catch (openaiError: any) {
+    } catch (openaiErr: unknown) {
+      const openaiError = openaiErr as Error;
       console.error(`[${operationName}] Both AI providers failed for ${operationName}.`);
       
       // If both fail, provide a user-friendly error
@@ -167,6 +171,18 @@ export interface SeedItem {
   defaultUnit?: string;       // For hasVariants=false: "g", "tin", "each"
 }
 
+interface PopularVariant {
+  name: string;
+  category: string;
+  size: string;
+  unit: string;
+  brand?: string;
+  estimatedPrice?: number;
+  source: string;
+  scanCount: number;
+  userCount: number;
+}
+
 /** Deduplicate SeedItems by normalized name (case-insensitive, first wins) */
 function deduplicateItems(items: SeedItem[]): SeedItem[] {
   const seen = new Set<string>();
@@ -199,14 +215,15 @@ export const generateHybridSeedItems = action({
     // ── Step 1: Query global DB for scan-verified items ──
     let globalItems: SeedItem[] = [];
     try {
-      const popularVariants = await ctx.runQuery(
+        const popularVariants = await ctx.runQuery(
         internal.itemVariants.getPopularForSeeding,
         { limit: totalItems }
       );
 
       if (popularVariants.length > 0) {
         // Get crowdsourced prices for these items
-        const normalizedNames = popularVariants.map((variant) =>
+        const variants = popularVariants as PopularVariant[];
+        const normalizedNames = variants.map((variant) =>
           (variant.name ?? "").toLowerCase().trim()
         );
         const crowdPrices = await ctx.runQuery(
@@ -214,7 +231,7 @@ export const generateHybridSeedItems = action({
           { normalizedNames }
         );
 
-        globalItems = popularVariants.map((variant) => {
+        globalItems = variants.map((variant) => {
           const normName = (variant.name ?? "").toLowerCase().trim();
           const crowdPrice = crowdPrices[normName];
           return {
@@ -645,7 +662,7 @@ IMPORTANT RULES:
 
       // Post-parse filter: strip non-product lines the AI may have included
       const NON_PRODUCT_PATTERNS = /^(balance due|amount tendered|change|cash|card payment|subtotal|total|charity donation|carrier bag|price cut|savings|clubcard|nectar|meal deal saving|price crunch|bag charge|vat|receipt|thank you|points)/i;
-      const items = rawItems.filter((item: any) => {
+      const items = rawItems.filter((item: { name: string; totalPrice?: number; unitPrice?: number; quantity?: number }) => {
         // Exclude items matching known non-product patterns
         if (typeof item.name === "string" && NON_PRODUCT_PATTERNS.test(item.name.trim())) {
           return false;
@@ -659,8 +676,9 @@ IMPORTANT RULES:
 
       // Ensure each item has a confidence score
       for (const item of items) {
-        if (typeof item.confidence !== "number") {
-          item.confidence = imageQuality >= 70 ? 75 : 40;
+        const itemWithConf = item as { confidence?: number };
+        if (typeof itemWithConf.confidence !== "number") {
+          itemWithConf.confidence = imageQuality >= 70 ? 75 : 40;
         }
       }
 
@@ -675,7 +693,7 @@ IMPORTANT RULES:
       // If most items are low-confidence guesses, reject the scan server-side.
       if (items.length > 0) {
         const avgItemConfidence =
-          items.reduce((sum: number, item: any) => sum + (typeof item.confidence === "number" ? item.confidence : 50), 0) / items.length;
+          items.reduce((sum: number, item: { confidence?: number }) => sum + (typeof item.confidence === "number" ? item.confidence : 50), 0) / items.length;
         if (avgItemConfidence < 45) {
           return {
             storeName,
@@ -914,14 +932,14 @@ RULES:
 
       return variants
         .filter(
-          (v: any) =>
+          (v: { baseItem: string; variantName: string; size: string; unit: string; category: string }) =>
             v.baseItem &&
             v.variantName &&
             v.size &&
             v.unit &&
             v.category
         )
-        .map((v: any) => ({
+        .map((v: { baseItem: string; variantName: string; size: string; unit: string; category: string; estimatedPrice?: number }) => ({
           baseItem: v.baseItem.toLowerCase().trim(),
           variantName: v.variantName,
           size: v.size,
@@ -1410,14 +1428,15 @@ export const voiceAssistant = action({
         text: finalText,
         pendingAction,
       };
-    } catch (error) {
-      console.error("[voiceAssistant] Gemini failed:", error);
+    } catch (err: unknown) {
+      console.error("[voiceAssistant] Gemini failed:", err);
 
+      const error = err as { message?: string };
       // Return user-friendly error message
       const isRateLimit =
-        (error as any)?.message?.includes("429") ||
-        (error as any)?.message?.includes("quota") ||
-        (error as any)?.message?.includes("RESOURCE_EXHAUSTED");
+        error?.message?.includes("429") ||
+        error?.message?.includes("quota") ||
+        error?.message?.includes("RESOURCE_EXHAUSTED");
 
       return {
         type: "error" as const,
@@ -1455,24 +1474,23 @@ export const executeVoiceAction = action({
       }
 
       case "add_items_to_list": {
-        const items = args.params.items || [];
-        const listId = args.params.listId;
+        const items = (args.params.items || []) as Array<{ name: string; quantity?: number; unit?: string }>;
+        const listId = args.params.listId as string | undefined;
 
         // If no listId, try to find by name
-        let targetListId = listId;
+        let targetListId: string | undefined = listId;
         if (!targetListId && args.params.listName) {
-          const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+          const lists = (await ctx.runQuery(api.shoppingLists.getActive, {})) as Array<{ name: string; _id: string }>;
           const match = lists.find(
-             
-            (l: any) =>
-              l.name.toLowerCase().includes(args.params.listName.toLowerCase())
+            (l: { name: string }) =>
+              l.name.toLowerCase().includes((args.params.listName as string).toLowerCase())
           );
           if (match) targetListId = match._id;
         }
 
         if (!targetListId) {
           // Fall back to most recent active list
-          const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
+          const lists = (await ctx.runQuery(api.shoppingLists.getActive, {})) as Array<{ _id: string }>;
           if (lists.length > 0) targetListId = lists[0]._id;
         }
 
@@ -1482,7 +1500,7 @@ export const executeVoiceAction = action({
 
         for (const item of items) {
           await ctx.runMutation(api.listItems.create, {
-            listId: targetListId,
+            listId: targetListId as Id<"shoppingLists">,
             name: item.name,
             quantity: item.quantity || 1,
             unit: item.unit,
@@ -1496,40 +1514,38 @@ export const executeVoiceAction = action({
 
       case "update_stock_level": {
         // Find pantry item by name
-        const pantryItems = await ctx.runQuery(api.pantryItems.getByUser, {});
+        const pantryItems = (await ctx.runQuery(api.pantryItems.getByUser, {})) as Array<{ name: string; _id: string }>;
         const match = pantryItems.find(
-           
-          (p: any) =>
-            p.name.toLowerCase().includes(args.params.itemName.toLowerCase())
+          (p: { name: string }) =>
+            p.name.toLowerCase().includes((args.params.itemName as string).toLowerCase())
         );
         if (!match) {
           return { success: false, message: `Couldn't find "${args.params.itemName}" in your pantry.` };
         }
         await ctx.runMutation(api.pantryItems.updateStockLevel, {
-          id: match._id,
-          stockLevel: args.params.stockLevel,
+          id: match._id as Id<"pantryItems">,
+          stockLevel: args.params.stockLevel as "stocked" | "low" | "out",
         });
         return { success: true, message: `Marked ${match.name} as ${args.params.stockLevel}` };
       }
 
       case "check_off_item": {
         // Find list item by name
-        const listId = args.params.listId;
+        const listId = args.params.listId as Id<"shoppingLists">;
         if (!listId) {
           return { success: false, message: "No list specified to check off from." };
         }
-        const listItems = await ctx.runQuery(api.listItems.getByList, {
+        const listItems = (await ctx.runQuery(api.listItems.getByList, {
           listId,
-        });
+        })) as Array<{ name: string; _id: string }>;
         const match = listItems.find(
-           
-          (i: any) =>
-            i.name.toLowerCase().includes(args.params.itemName.toLowerCase())
+          (i: { name: string }) =>
+            i.name.toLowerCase().includes((args.params.itemName as string).toLowerCase())
         );
         if (!match) {
           return { success: false, message: `Couldn't find "${args.params.itemName}" on this list.` };
         }
-        await ctx.runMutation(api.listItems.toggleChecked, { id: match._id });
+        await ctx.runMutation(api.listItems.toggleChecked, { id: match._id as Id<"listItems"> });
         return { success: true, message: `Checked off ${match.name}` };
       }
 
@@ -2027,11 +2043,31 @@ export const textToSpeech = action({
  * Epic 6: Gamification & Insights
  * Analyze a grocery list for health and suggest swaps
  */
+export interface HealthAnalysis {
+  score: number;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  swaps: {
+    originalName: string;
+    originalId?: Id<"listItems">;
+    suggestedName: string;
+    suggestedCategory?: string;
+    suggestedSize?: string;
+    suggestedUnit?: string;
+    priceDelta?: number;
+    scoreImpact?: number; // Estimated health score increase if this swap is made
+    reason: string;
+  }[];
+  itemCountAtAnalysis: number;
+  updatedAt: number;
+}
+
 export const analyzeListHealth = action({
   args: {
     listId: v.id("shoppingLists"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<HealthAnalysis> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
@@ -2040,8 +2076,8 @@ export const analyzeListHealth = action({
     });
     if (!user) throw new Error("User not found");
 
-    const listItems = await ctx.runQuery(api.listItems.getByList, { listId: args.listId });
-    if (!listItems || listItems.length === 0) {
+    const items = (await ctx.runQuery(api.listItems.getByList, { listId: args.listId })) as Doc<"listItems">[];
+    if (!items || items.length === 0) {
       throw new Error("Your list is empty! Add some items first so our AI nutritionist can analyze them.");
     }
 
@@ -2050,7 +2086,7 @@ export const analyzeListHealth = action({
     const userPrefs = user.cuisinePreferences?.length ? `User Cuisines: ${user.cuisinePreferences.join(", ")}` : "";
     const dietaryRestrictions = user.dietaryRestrictions?.length ? `Dietary Restrictions: ${user.dietaryRestrictions.join(", ")} (CRITICAL: Only suggest items that follow these)` : "";
 
-    const itemsText = listItems.map((i) => `- ${i.name} (Qty: ${i.quantity}, Category: ${i.category || "Uncategorized"}, Est. Price: £${i.estimatedPrice || '?'})`).join("\n");
+    const itemsText = items.map((i) => `- ${i.name} (Qty: ${i.quantity}, Category: ${i.category || "Uncategorized"}, Est. Price: £${i.estimatedPrice || '?'})`).join("\n");
 
     const prompt = `You are an enthusiastic, modern AI nutritionist evaluating a grocery list.
 
@@ -2068,6 +2104,13 @@ REQUIREMENTS FOR SWAPS:
 2. Price Delta: Estimate the price difference (e.g., +0.30 for more expensive, -0.15 for cheaper).
 3. Budget Limit: If a swap increases the item price by more than 50% or exceeds the total budget significantly, skip it.
 4. Dietary Compliance: If the user has dietary restrictions (e.g., Vegan, Gluten-Free), ensure swaps COMPLY with them.
+5. Score Impact: Estimate how much the total health score (0-100) would increase if this specific swap is made (e.g., 2, 5, 10).
+6. **Size & Unit (CRITICAL - REQUIRED)**: You MUST provide a specific size with a NUMBER and a unit for EVERY swap.
+   - VALID: "800g", "500ml", "1kg", "2 pints", "250g", "1L", "400g"
+   - INVALID: "per item", "each", "unit", "piece", "item" (these are NOT ALLOWED)
+   - Size must contain digits (0-9) and be a realistic UK supermarket package size
+   - Common UK units: g, kg, ml, L, pints, oz, lbs
+   - If you cannot determine a specific size, use the most common package size for that product in UK supermarkets
 
 If the list is already perfectly healthy, suggest a fun, healthy addition instead of a swap (mark these as originalName: "Bonus").
 
@@ -2088,7 +2131,10 @@ Return ONLY valid JSON in this exact format, with no markdown formatting or code
       "originalName": "White Bread",
       "suggestedName": "Wholemeal Bread",
       "suggestedCategory": "Bakery",
+      "suggestedSize": "800g",
+      "suggestedUnit": "g",
       "priceDelta": 0.30,
+      "scoreImpact": 5,
       "reason": "More fiber and keeps you full longer!"
     }
   ]
@@ -2097,7 +2143,23 @@ Return ONLY valid JSON in this exact format, with no markdown formatting or code
     const response = await smartGenerate(prompt, "analyzeListHealth", { temperature: 0.7 });
     const cleaned = stripCodeBlocks(response);
     
-    let parsed;
+    let parsed: {
+      score: number;
+      summary: string;
+      strengths: string[];
+      weaknesses: string[];
+      swaps: Array<{
+        originalName: string;
+        suggestedName: string;
+        suggestedCategory?: string;
+        suggestedSize?: string;
+        suggestedUnit?: string;
+        priceDelta?: number;
+        scoreImpact?: number;
+        reason: string;
+      }>;
+    };
+    
     try {
       parsed = JSON.parse(cleaned);
     } catch (e) {
@@ -2110,16 +2172,20 @@ Return ONLY valid JSON in this exact format, with no markdown formatting or code
       if (swap.originalName === "Bonus") {
         return {
           ...swap,
-          originalId: null,
-          suggestedCategory: swap.suggestedCategory || "Produce"
+          originalId: undefined as Id<"listItems"> | undefined,
+          suggestedCategory: swap.suggestedCategory || "Produce",
+          suggestedSize: swap.suggestedSize || "per item",
+          suggestedUnit: swap.suggestedUnit || "each",
+          priceDelta: swap.priceDelta ? parseFloat(String(swap.priceDelta).replace(/^\+/, '')) : undefined,
+          scoreImpact: typeof swap.scoreImpact === 'number' ? swap.scoreImpact : 2
         };
       }
 
       // Find best match in list
-      let bestMatch = null;
+      let bestMatch: Doc<"listItems"> | null = null;
       let highestSimilarity = 0;
 
-      for (const item of listItems) {
+      for (const item of items) {
         // Use calculateSimilarity (Levenshtein)
         const sim = calculateSimilarity(item.name, swap.originalName);
         
@@ -2138,18 +2204,22 @@ Return ONLY valid JSON in this exact format, with no markdown formatting or code
       // Only match if similarity is decent (e.g., > 60%)
       return {
         ...swap,
-        originalId: highestSimilarity > 60 ? bestMatch?._id : null,
-        suggestedCategory: swap.suggestedCategory || bestMatch?.category || "Pantry Staples"
+        originalId: highestSimilarity > 60 ? bestMatch?._id : undefined as Id<"listItems"> | undefined,
+        suggestedCategory: swap.suggestedCategory || bestMatch?.category || "Pantry Staples",
+        suggestedSize: swap.suggestedSize || bestMatch?.size || "per item",
+        suggestedUnit: swap.suggestedUnit || bestMatch?.unit || "each",
+        priceDelta: swap.priceDelta ? parseFloat(String(swap.priceDelta).replace(/^\+/, '')) : undefined,
+        scoreImpact: typeof swap.scoreImpact === 'number' ? swap.scoreImpact : 5
       };
-    }).filter((s) => s.originalId !== null || s.originalName === "Bonus");
+    }).filter((s) => s.originalId !== undefined || s.originalName === "Bonus");
 
-    const healthAnalysis = {
+    const healthAnalysis: HealthAnalysis = {
       score: typeof parsed.score === 'number' ? parsed.score : 50,
       summary: parsed.summary || "Keep adding fresh items!",
       strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
       weaknesses: Array.isArray(parsed.weaknesses) ? parsed.weaknesses : [],
       swaps: swapsWithIds,
-      itemCountAtAnalysis: listItems.length,
+      itemCountAtAnalysis: items.length,
       updatedAt: Date.now()
     };
 

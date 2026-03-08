@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAction, useMutation } from "convex/react";
@@ -351,6 +351,11 @@ export function useProductScanner(options?: UseProductScannerOptions) {
     return true;
   }, []);
 
+  /** Clear only the last error */
+  const clearLastError = useCallback(() => {
+    setLastError(null);
+  }, []);
+
   /** Clear all scanned products and storage */
   const clearAll = useCallback(() => {
     setScannedProducts([]);
@@ -358,15 +363,30 @@ export function useProductScanner(options?: UseProductScannerOptions) {
     AsyncStorage.removeItem(STORAGE_KEY);
   }, []);
 
-  return {
-    scannedProducts,
-    isProcessing,
-    lastError,
-    captureProduct,
-    pickFromLibrary,
-    addProduct,
-    removeProduct,
-    updateProduct,
-    clearAll,
-  };
+  return useMemo(
+    () => ({
+      scannedProducts,
+      isProcessing,
+      lastError,
+      captureProduct,
+      pickFromLibrary,
+      addProduct,
+      removeProduct,
+      updateProduct,
+      clearAll,
+      clearLastError,
+    }),
+    [
+      scannedProducts,
+      isProcessing,
+      lastError,
+      captureProduct,
+      pickFromLibrary,
+      addProduct,
+      removeProduct,
+      updateProduct,
+      clearAll,
+      clearLastError,
+    ]
+  );
 }

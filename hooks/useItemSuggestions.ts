@@ -29,6 +29,8 @@ interface UseItemSuggestionsOptions {
   minChars?: number;
 }
 
+const EMPTY_ARRAY: ItemSuggestion[] = [];
+
 export function useItemSuggestions(options?: UseItemSuggestionsOptions) {
   const { storeName, debounceMs = 300, minChars = 2 } = options ?? {};
 
@@ -48,9 +50,11 @@ export function useItemSuggestions(options?: UseItemSuggestionsOptions) {
 
   const result = useQuery(api.itemSearch.searchItems, queryArgs);
 
-  const suggestions: ItemSuggestion[] = result?.suggestions ?? [];
-  const didYouMean: DidYouMean | null =
-    !dismissed && result?.didYouMean ? result.didYouMean : null;
+  const suggestions = useMemo(() => result?.suggestions ?? EMPTY_ARRAY, [result]);
+  const didYouMean = useMemo(() => 
+    !dismissed && result?.didYouMean ? result.didYouMean : null,
+    [dismissed, result]
+  );
   const isLoading = queryArgs !== "skip" && result === undefined;
 
   const search = useCallback(
@@ -107,14 +111,26 @@ export function useItemSuggestions(options?: UseItemSuggestionsOptions) {
     latestTermRef.current = "";
   }, []);
 
-  return {
-    suggestions,
-    didYouMean,
-    isLoading,
-    search,
-    acceptSuggestion,
-    acceptDidYouMean,
-    dismissDidYouMean,
-    clear,
-  };
+  return useMemo(
+    () => ({
+      suggestions,
+      didYouMean,
+      isLoading,
+      search,
+      acceptSuggestion,
+      acceptDidYouMean,
+      dismissDidYouMean,
+      clear,
+    }),
+    [
+      suggestions,
+      didYouMean,
+      isLoading,
+      search,
+      acceptSuggestion,
+      acceptDidYouMean,
+      dismissDidYouMean,
+      clear,
+    ]
+  );
 }

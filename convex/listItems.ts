@@ -34,6 +34,65 @@ async function getPriceFromCurrentPrices(
 }
 
 /**
+ * Validates that size contains a meaningful measurement (number + unit).
+ * Rejects vague defaults like "per item", "each", etc.
+ * Returns true if valid, false otherwise.
+ */
+function isValidSize(size?: string | null, unit?: string | null): boolean {
+  if (!size || !unit) return false;
+
+  const vagueSizes = ["per item", "item", "each", "unit", "piece"];
+  const normalizedSize = size.toLowerCase().trim();
+
+  if (vagueSizes.includes(normalizedSize)) return false;
+
+  // Check if size contains a number (e.g., "500ml", "2kg", "1 pint")
+  const hasNumber = /\d/.test(size);
+  return hasNumber;
+}
+
+/**
+ * Emergency fallback for price estimation.
+ * Used when all other price sources (variant, currentPrices, pantry) fail.
+ * Provides category-based estimates to ensure Zero-Blank Prices policy.
+ */
+function getEmergencyPriceEstimate(
+  itemName: string,
+  category?: string
+): { price: number; size: string; unit: string } {
+  const name = itemName.toLowerCase();
+
+  // Category-based emergency pricing
+  const categoryPrices = {
+    "Dairy": 2.50,
+    "Bakery": 1.50,
+    "Produce": 1.00,
+    "Meat": 4.00,
+    "Beverages": 1.50,
+    "Snacks": 2.00,
+    "Frozen": 2.50,
+    "Pantry Staples": 1.50,
+  };
+
+  const basePrice = categoryPrices[category as keyof typeof categoryPrices] || 1.50;
+
+  // Common item patterns for better estimates
+  if (name.includes("milk")) return { price: 1.15, size: "2 pints", unit: "pint" };
+  if (name.includes("bread")) return { price: 1.20, size: "800g", unit: "g" };
+  if (name.includes("egg")) return { price: 2.50, size: "6 pack", unit: "pack" };
+  if (name.includes("butter")) return { price: 2.00, size: "250g", unit: "g" };
+  if (name.includes("chicken")) return { price: 4.50, size: "500g", unit: "g" };
+  if (name.includes("rice")) return { price: 2.00, size: "1kg", unit: "kg" };
+  if (name.includes("pasta")) return { price: 1.00, size: "500g", unit: "g" };
+
+  return {
+    price: basePrice,
+    size: "per item",
+    unit: "each",
+  };
+}
+
+/**
  * Find an existing list item that is a fuzzy duplicate of the given name.
  * Checks all items on the list (checked and unchecked).
  * Returns the matching item document or null.
@@ -283,6 +342,22 @@ export const create = mutation({
       }
     }
 
+    // ── Zero-Blank Prices: Use emergency fallback if needed ──
+    if (estimatedPrice === undefined || !isValidSize(size, unit)) {
+      const emergency = getEmergencyPriceEstimate(name, args.category);
+
+      if (estimatedPrice === undefined) {
+        estimatedPrice = emergency.price;
+        priceSource = "ai";
+        priceConfidence = 0.3; // Low confidence for emergency estimates
+      }
+
+      if (!isValidSize(size, unit)) {
+        size = emergency.size;
+        unit = emergency.unit;
+      }
+    }
+
     const itemId = await ctx.db.insert("listItems", {
       listId: args.listId,
       userId: user._id,
@@ -306,8 +381,8 @@ export const create = mutation({
     // Recalculate list total after adding item
     await recalculateListTotal(ctx, args.listId);
 
-    // Schedule AI price estimation if still no price after cascade
-    if (estimatedPrice === undefined) {
+    // Schedule AI price estimation if we used emergency fallback (low confidence)
+    if (priceConfidence !== undefined && priceConfidence < 0.5) {
       await ctx.scheduler.runAfter(0, api.ai.estimateItemPrice, {
         itemName: name,
         userId: user._id,
@@ -855,7 +930,7 @@ export const addItemMidShop = mutation({
   args: {
     listId: v.id("shoppingLists"),
     name: v.string(),
-    estimatedPrice: v.number(),
+    estimatedPrice: v.optional(v.number()),
     source: v.union(
       v.literal("add"),
       v.literal("next_trip")
@@ -1723,6 +1798,9 @@ export const applyHealthSwap = mutation({
     originalItemId: v.id("listItems"),
     suggestedName: v.string(),
     suggestedCategory: v.optional(v.string()),
+    suggestedSize: v.optional(v.string()),
+    suggestedUnit: v.optional(v.string()),
+    scoreImpact: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -1740,7 +1818,45 @@ export const applyHealthSwap = mutation({
       throw new Error("Original item not found in this list");
     }
 
-    const category = args.suggestedCategory || originalItem.category || "Pantry Staples";
+    const list = await ctx.db.get(args.listId);
+    if (!list) throw new Error("List not found");
+
+    // ── Price & Size Resolution ──
+    const variantResult = await resolveVariantWithPrice(
+      ctx,
+      args.suggestedName,
+      list.normalizedStoreId,
+      user._id
+    );
+
+    let category = args.suggestedCategory || variantResult?.variant.category || originalItem.category || "Pantry Staples";
+    let size = variantResult?.variant.size || args.suggestedSize || "per item";
+    let unit = variantResult?.variant.unit || args.suggestedUnit || "each";
+    let estimatedPrice = variantResult?.price ?? undefined;
+    let priceSource = variantResult?.priceSource ?? "ai";
+    let priceConfidence = variantResult?.confidence ?? 0.5;
+
+    // ── Zero-Blank Prices: Use emergency fallback if needed ──
+    if (estimatedPrice === undefined || !isValidSize(size, unit)) {
+      const emergency = getEmergencyPriceEstimate(args.suggestedName, category);
+
+      if (estimatedPrice === undefined) {
+        estimatedPrice = emergency.price;
+        priceSource = "ai";
+        priceConfidence = 0.3; // Low confidence for emergency estimates
+      }
+
+      if (!isValidSize(size, unit)) {
+        size = emergency.size;
+        unit = emergency.unit;
+      }
+
+      // Schedule async AI estimation for better price later
+      await ctx.scheduler.runAfter(0, api.ai.estimateItemPrice, {
+        itemName: args.suggestedName,
+        userId: user._id,
+      });
+    }
 
     // Delete original
     await ctx.db.delete(args.originalItemId);
@@ -1753,24 +1869,52 @@ export const applyHealthSwap = mutation({
       category,
       quantity: originalItem.quantity,
       priority: originalItem.priority,
+      size,
+      unit,
+      estimatedPrice,
+      priceSource,
+      priceConfidence,
+      brand: variantResult?.variant.brand,
       isChecked: false,
       autoAdded: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
 
-    // Remove this swap from the list's healthAnalysis
-    const list = await ctx.db.get(args.listId);
-    if (list?.healthAnalysis) {
+    // Remove this swap from the list's healthAnalysis and UPDATE SCORE
+    if (list.healthAnalysis) {
       const updatedSwaps = list.healthAnalysis.swaps.filter(
-        (s: any) => s.originalId !== args.originalItemId
+        (s: { originalId?: Id<"listItems"> }) => s.originalId !== args.originalItemId
       );
+      
+      // Calculate new score (capped at 100)
+      const currentScore = list.healthAnalysis.score;
+      const impact = args.scoreImpact || 0;
+      const newScore = Math.min(100, currentScore + impact);
+
       await ctx.db.patch(args.listId, {
         healthAnalysis: {
           ...list.healthAnalysis,
+          score: newScore,
           swaps: updatedSwaps,
         }
       });
+
+      // Also record the update in user history if score improved
+      if (newScore > currentScore) {
+        await ctx.db.insert("activityEvents", {
+          userId: user._id,
+          eventType: "health_score_improved",
+          timestamp: Date.now(),
+          metadata: {
+            listId: args.listId,
+            oldScore: currentScore,
+            newScore: newScore,
+            improvement: impact,
+            itemSwapped: args.suggestedName
+          }
+        });
+      }
     }
 
     return newItemId;

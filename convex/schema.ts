@@ -195,10 +195,13 @@ export default defineSchema({
       weaknesses: v.array(v.string()),
       swaps: v.array(v.object({
         originalName: v.string(),
-        originalId: v.id("listItems"),
+        originalId: v.optional(v.id("listItems")),
         suggestedName: v.string(),
         suggestedCategory: v.optional(v.string()),
+        suggestedSize: v.optional(v.string()),
+        suggestedUnit: v.optional(v.string()),
         priceDelta: v.optional(v.number()), // Estimated price difference (e.g., +0.30 or -0.15)
+        scoreImpact: v.optional(v.number()), // Estimated score increase
         reason: v.string()
       })),
       itemCountAtAnalysis: v.optional(v.number()), // Number of items when analyzed to detect staleness

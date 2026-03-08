@@ -164,7 +164,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   tabText: {
-    fontSize: 11,
     ...typography.labelSmall,
     flexShrink: 1,
   },

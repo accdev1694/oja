@@ -25,9 +25,9 @@ npx expo start                    # Start dev server
 npx convex dev                    # Start Convex backend (required)
 
 # Testing
-npm test                          # Jest unit tests (31 test files)
+npm test                          # Jest unit tests (42 test files)
 npm run test:watch                # Watch mode
-npm run e2e                       # Playwright E2E (16 specs, 398 cases)
+npm run e2e                       # Playwright E2E (16 specs)
 npm run e2e:ui                    # Playwright UI mode
 
 # Code Quality
@@ -48,103 +48,106 @@ npm run typecheck                 # TypeScript check
 1. Native modules (e.g., `react-native-keyboard-controller`, `expo-speech-recognition`) require rebuilding the APK
 2. If you see "package doesn't seem to be linked" errors, the APK needs to be rebuilt
 3. Rebuild with: `npx expo run:android` (or `eas build --profile development --platform android`)
-4. Reinstall the new APK on the phone
 
 **Safe wrappers for native modules:**
 - `lib/keyboard/safeKeyboardController.tsx` - Wraps `react-native-keyboard-controller` with fallback to `KeyboardAvoidingView` if native module isn't linked
-- Always use `SafeKeyboardProvider` and `SafeKeyboardAwareScrollView` instead of importing directly from `react-native-keyboard-controller`
+- Always use `SafeKeyboardProvider` and `SafeKeyboardAwareScrollView` instead of importing directly
 - This allows development to continue even if the APK hasn't been rebuilt yet
 
 ## Architecture
 
 ### Navigation (Expo Router)
 
-```
-app/
-├── _layout.tsx              # Root: Clerk + Convex providers
-├── +not-found.tsx           # Catch-all for OAuth callbacks
-├── (auth)/                  # Sign in/up/forgot-password
-├── onboarding/              # welcome → cuisine → pantry-seeding → store-selection → review
-└── (app)/                   # Protected routes
-    ├── _layout.tsx          # PersistentTabBar + VoiceFAB
-    ├── (tabs)/              # Bottom tabs: Pantry, Lists, Scan, Profile
-    │   ├── index.tsx        # Pantry (1,084 lines)
-    │   ├── lists.tsx        # Shopping lists
-    │   ├── scan.tsx         # Receipt scanning
-    │   └── profile.tsx      # User profile
-    ├── list/[id].tsx        # Shopping list detail (1,279 lines)
-    ├── receipt/[id]/        # confirm.tsx + reconciliation.tsx
-    ├── insights.tsx         # Gamification/analytics (1,620 lines)
-    ├── subscription.tsx     # Stripe payment flow
-    ├── ai-usage.tsx         # Voice/scan usage tracking
-    ├── admin.tsx            # Admin entry (refactored, 258 lines)
-    └── admin/               # Modular Admin Dashboard
-        ├── OverviewTab.tsx  # Platform KPIs & Hero metrics
-        ├── UsersTab.tsx     # User CRM with lifecycle management
-        ├── AnalyticsTab.tsx # Revenue, Churn & Cohort Analysis
-        ├── ReceiptsTab.tsx  # Data quality & anomaly detection
-        ├── CatalogTab.tsx   # Store normalization & category management
-        ├── MonitoringTab.tsx # Real-time system health & SLAs
-        ├── WebhooksTab.tsx  # Event delivery & management
-        ├── SupportTab.tsx   # Integrated support ticketing
-        ├── SettingsTab.tsx  # Feature flags & Announcements
-        └── styles.ts        # Shared Glass Admin design tokens
-```
+**4 Main Tabs:**
+- **Lists** (`/(app)/(tabs)/index.tsx`) - Shopping lists, templates, shared lists
+- **Stock** (`/(app)/(tabs)/stock.tsx`) - Pantry management (attention view / all items)
+- **Scan** (`/(app)/(tabs)/scan.tsx`) - Receipt + product scanning
+- **Profile** (`/(app)/(tabs)/profile.tsx`) - User settings, account, admin access
+
+**Route Groups:**
+- `(auth)/` - Sign in/up/forgot-password (unauthenticated only)
+- `onboarding/` - welcome → cuisine → store → pantry-seeding → review
+- `(app)/` - Protected routes (signed in + onboarding complete)
+
+**Key Routes:**
+- `list/[id].tsx` - Shopping list detail (1,279 lines)
+- `receipt/[id]/confirm.tsx` + `reconciliation.tsx` - Receipt processing
+- `admin.tsx` + `admin/*` - 9-tab modular admin dashboard
+- `insights.tsx` - Gamification/analytics (1,620 lines)
+- `subscription.tsx` - Stripe payment flow
+- `ai-usage.tsx` - Voice/scan usage tracking
+
+**Tab Bar Behavior:**
+- Custom `PersistentTabBar` (not Expo Router's native Tabs)
+- Hidden on focused flows: receipt processing, trip summary, onboarding
+- Stock tab shows badge: count of low + out-of-stock items
 
 ### Backend (Convex)
 
-All backend in `convex/`. **28 tables** in schema.ts:
+**47 tables** organized by feature area:
 - **Core:** users, pantryItems, shoppingLists, listItems, receipts
-- **Pricing:** currentPrices, priceHistory, itemVariants
+- **Pricing:** currentPrices, priceHistory, priceHistoryMonthly, itemVariants
 - **Collaboration:** listPartners, inviteCodes, listMessages, itemComments
-- **Gamification:** achievements, streaks, weeklyChallenges, loyaltyPoints
-- **Subscriptions:** subscriptions, scanCredits, aiUsage
-- **Admin:** adminLogs, activityEvents, funnelEvents, platformMetrics
+- **Gamification:** achievements, streaks, weeklyChallenges, pointsBalance, pointsTransactions
+- **Subscriptions:** subscriptions, scanCredits, scanCreditTransactions, aiUsage
+- **Admin:** adminRoles, adminLogs, adminSessions, adminAlerts, slaMetrics
+- **Analytics:** platformMetrics, cohortMetrics, funnelEvents, churnMetrics, ltvMetrics
+- **Marketing:** nurtureMessages, referralCodes, notifications, announcements
 
-**Key files:**
-- `ai.ts` - Gemini 2.0 Flash + OpenAI fallback
-- `admin.ts` - **2,890 lines** - Mission-critical Admin API (RBAC, MFA, SIEM)
-- `lib/voiceTools.ts` - **30 voice tools** for Tobi assistant
-- `lib/featureGating.ts` - Free trial (full features, time-limited) → paid subscription
+**Key Files:**
+| File | Lines | Purpose |
+|------|-------|---------|
+| `admin.ts` | 3,157 | 9-tab admin API with RBAC, MFA, SIEM |
+| `ai.ts` | 2,241 | Gemini 2.0 Flash + OpenAI fallback |
+| `shoppingLists.ts` | 2,319 | List CRUD, health analysis, multi-store |
+| `listItems.ts` | 1,924 | Item CRUD, price resolution, variant matching |
+| `pantryItems.ts` | 1,616 | Pantry CRUD, auto-archiving (90d idle) |
+| `insights.ts` | 1,117 | Gamification engine |
+| `lib/voiceTools.ts` | 2,099 | 30 voice assistant function tools |
+| `lib/featureGating.ts` | 227 | Single source of truth for features/tiers |
 
-**Pattern:** Every mutation must call `requireCurrentUser(ctx)` for auth. Admin functions must call `requireAdmin(ctx)`.
+**Auth Pattern:** Every mutation calls `requireCurrentUser(ctx)`. Admin functions call `requireAdmin(ctx)`.
+
+**Cron Jobs:** 20+ scheduled tasks for data retention, analytics, nurture, monitoring (see `crons.ts`)
 
 ### Price Intelligence (Zero-Blank Prices)
 
-Every item shows a price. Three-layer cascade:
+**Every item shows a price.** Three-layer cascade:
 1. **Personal History** - User's own receipts (highest trust)
 2. **Crowdsourced** - All users' receipt data by store/region
 3. **AI Estimate** - Gemini with OpenAI fallback
 
-Key files: `itemVariants.ts`, `currentPrices.ts`, `priceHistory.ts`
+**Key files:** `lib/priceResolver.ts`, `currentPrices.ts`, `itemVariants.ts`, `priceHistory.ts`
 
 ### Glass UI Design System
 
-Import from `@/components/ui/glass/`. Tokens in `@/lib/design/glassTokens.ts`.
+**27 Glass components** in `@/components/ui/glass/`:
+- **Core:** GlassCard, GlassButton, GlassInput, GlassSearchInput
+- **Navigation:** GlassSegmentedControl, GlassTabBar, GlassHeader
+- **Visualization:** CircularBudgetDial, GlassProgressBar
+- **State:** GlassSkeleton (9 variants), GlassErrorState, Empty states
+- **Animations:** AnimatedPressable, AnimatedListItem, AnimatedSection, ShimmerEffect
 
-**Colors:**
+**Design Tokens** (`lib/design/glassTokens.ts`):
 - Background: #0D1528 → #1B2845 → #101A2B (gradient)
 - Primary accent: #00D4AA (teal) - **CTAs only**
 - Warm accent: #FFB088 (celebrations)
-- Secondary: white/gray/indigo
+- Typography: 5 scales (Display, Headlines, Body, Labels, Numbers)
+- Spacing: 4px base unit (xs: 4 → 6xl: 64)
+- Device tiers: Premium (iOS blur), Enhanced (Material), Baseline (solid)
 
-**Key components:** GlassCard, GlassButton, GlassInput, CircularBudgetDial, GlassAnimations
-
-**UI/UX Guidelines:**
-- **Mandatory Page Load Animation:** All pages must implement the "Oja Smooth Load" pattern:
-  - Use `pageAnimationKey` (incremented on focus) for the initial staggered entrance of static elements.
-  - Use `animationKey` (incremented on mode/tab/filter switches) for dynamic content sections to ensure smooth data transitions without full-page reloads.
-  - Wrap elements in `AnimatedSection` with staggered delays (e.g., 0ms, 50ms, 100ms, 150ms...).
-- **Haptics:** Always provide haptic feedback for primary actions (`Light` for taps, `Medium` for success/deletions).
-- **Consistency:** Maintain standard 16px horizontal margins (`spacing.lg`) for all main container elements, headers, and switchers.
-- **Loading States:** Use early returns with `SkeletonCard` or `SkeletonPantryItem` while data is `undefined`.
+**UI/UX Patterns:**
+- **Page Load Animation:** `pageAnimationKey` (on focus) + `animationKey` (on tab/filter switches) with `AnimatedSection` staggered delays
+- **Haptics:** Always provide feedback (`Light` for taps, `Medium` for success/deletions)
+- **Consistency:** 16px horizontal margins (`spacing.lg`) for all main containers
+- **Loading States:** Early returns with `SkeletonCard` while data is `undefined`
 
 ### Voice Assistant (Tobi)
 
-**30 function tools** for full CRUD via Gemini 2.0 Flash.
+**30 function tools** for full CRUD via Gemini 2.0 Flash:
 - STT: `expo-speech-recognition` (on-device)
 - TTS cascade: Google Cloud Neural2 → expo-speech
-- Hook: `hooks/useVoiceAssistant.ts` (523 lines)
+- Hook: `hooks/useVoiceAssistant.ts`
 - Tools: `convex/lib/voiceTools.ts`
 
 Requires dev build (native modules).
@@ -154,118 +157,111 @@ Requires dev build (native modules).
 | Hook/Utility | Purpose |
 |--------------|---------|
 | `useVoiceAssistant` | Voice assistant lifecycle |
-| `useVariantPrefetch` | Size/Price modal cache warming |
+| `useVariantPrefetch` | Size/Price modal cache warming (debounced, TTL-based) |
 | `usePartnerRole` | List permissions (viewer/editor/approver) |
 | `useDelightToast` | Gamification celebrations |
-| `lib/haptics/safeHaptics` | Safe haptic feedback |
+| `useCurrentUser` | Clerk user context + admin/impersonation |
+| `lib/haptics/safeHaptics` | Safe haptic feedback (device detection) |
 | `lib/sizes/sizeNormalizer` | UK size parsing (pints, ml, kg) |
-| `lib/icons/iconMatcher` | Validated MaterialCommunityIcons |
+| `lib/icons/iconMatcher` | 106 validated MaterialCommunityIcons |
 | `lib/keyboard/safeKeyboardController` | Safe keyboard wrapper (dev build fallback) |
+| `lib/text/fuzzyMatch` | Levenshtein similarity for deduplication |
 
-## Keyboard Awareness Pattern
+### Keyboard Awareness Pattern
 
-Use `react-native-keyboard-controller` (NOT Reanimated's `useAnimatedKeyboard`). See `list/[id].tsx` for the reference implementation: dynamic overlap algorithm using `useReanimatedKeyboardAnimation` + `useReanimatedFocusedInput` + `useKeyboardHandler({ onEnd })`. Never call `Dimensions.get()` inside a worklet — capture on JS thread and close over it.
+Use `react-native-keyboard-controller` (NOT Reanimated's `useAnimatedKeyboard`).
+
+Reference implementation: `list/[id].tsx` - dynamic overlap algorithm using `useReanimatedKeyboardAnimation` + `useReanimatedFocusedInput` + `useKeyboardHandler({ onEnd })`.
+
+**Never call `Dimensions.get()` inside a worklet** — capture on JS thread and close over it.
 
 **Windows build:** `android/app/build.gradle` has `buildStagingDirectory = file("C:/b")` to avoid 260-char path limit.
 
-## Admin Dashboard (100% COMPLETE & PRODUCTION READY)
+## Admin Dashboard (Production Ready)
 
-**Access:** `app/(app)/admin.tsx` - Feature-gated via `isAdmin` and `role` (super_admin, admin, moderator).
+**Access:** `app/(app)/admin.tsx` - Feature-gated via `isAdmin` and `role` (super_admin, admin, moderator)
 
-### Modular Architecture
-Refactored from 2,700+ lines monolithic component into 12+ modular files in `app/(app)/admin/`.
-- **RBAC:** Advanced role-based access control with permissions per tab.
-- **Global Search:** `Cmd+K` command palette for searching across users, receipts, and platform settings.
-- **Keyboard Navigation:** Full desktop/web support with 1-9 tab switching and arrow navigation.
+**9 Tabs:**
+1. **OVERVIEW** - Platform KPIs, hero metrics, activity timeline
+2. **USERS** - Lifecycle management, trial/premium granting, impersonation
+3. **ANALYTICS** - Cohort retention, MRR/ARR/churn, LTV predictions
+4. **RECEIPTS** - Moderation queue, anomaly detection, price overrides
+5. **CATALOG** - Store variant merging, price history auditing
+6. **MONITORING** - Real-time health, SLA tracking, alerts
+7. **WEBHOOKS** - Stripe, Clerk, internal event management
+8. **SUPPORT** - Integrated ticketing system
+9. **SETTINGS** - Feature flags, announcements, admin management
 
-### 9-Tab Professional Interface
-
-1.  **OVERVIEW:** Hero metrics, platform health, and system-wide activity timeline.
-2.  **USERS:** Lifecycle management, Trial/Premium granting, Suspensions, and Impersonation.
-3.  **ANALYTICS:** Cohort retention, Revenue breakdown (MRR/ARR/Churn), and LTV predictions.
-4.  **RECEIPTS:** Moderation queue, anomaly detection, and inline price overrides.
-5.  **CATALOG:** Store variant merging, price history auditing, and category inventory.
-6.  **MONITORING:** Real-time health, SLA tracking, and Sentry/CloudWatch integration.
-7.  **WEBHOOKS:** Stripe, Clerk, and internal event management.
-8.  **SUPPORT:** Integrated ticketing system with user detail cross-referencing.
-9.  **SETTINGS:** Feature flags (kill switches), Scheduled Announcements, and Admin Management.
-
-### Backend Infrastructure (`convex/admin.ts`)
-- **Performance:** Multi-layer caching, precomputed metrics, and 100% indexed queries.
-- **Security:** Clerk MFA integration, IP Whitelisting, Audit Logging (immutable), and SIEM.
-- **Data Safety:** Multi-admin approval for destructive actions, XSS sanitization, and session timeouts.
+**Features:**
+- RBAC with granular permissions
+- Global search (Cmd+K command palette)
+- Keyboard navigation (1-9 tab switching)
+- Multi-layer caching, precomputed metrics
+- MFA integration (14-day grace period)
+- Immutable audit logging (SIEM)
 
 ## Critical Rules
 
 1. **Read `project-context.md` first** - If it exists, always read before implementation
-2. **Use indexes** - Never scan full Convex tables
+2. **Use indexes** - Never scan full Convex tables (every query has `.withIndex()`)
 3. **Optimistic updates** - For instant UX feedback
 4. **Haptic feedback** - On all interactions via `safeHaptics.ts`
 5. **Handle all states** - Loading, error, empty, success
-6. **Zero-Blank Prices** - Every item must show a price
+6. **Zero-Blank Prices** - Every item must show a price (3-layer cascade)
 7. **Validated icons only** - Use `iconMatcher.ts` for MaterialCommunityIcons
-8. **NEVER kill node.exe** - `taskkill //F //IM node.exe` kills Claude Code itself. To kill other Node processes (e.g., Metro), use `npx kill-port <port>` or find the specific PID with `netstat -ano | findstr :<port>` and kill only that PID
-9. **NEVER use types** - Never use TypeScript types, type annotations, or explicit typing (like `: any`, `: string`, interfaces, or type casts) when writing or modifying code. Always prefer a type-free approach even if the project uses TypeScript.
-10. **Parallel sub-agents** - Always deploy multiple sub-agents in parallel where possible to execute tasks concurrently, preserving context window
-11. **Never fix without approval** - Always present analysis and proposed solution first. Never jump into fixing things without the user's express approval
-12. **Convex cross-function calls** - When calling Convex queries/mutations from within other Convex functions:
+8. **NEVER kill node.exe** - Kills Claude Code itself. Use `npx kill-port <port>` instead
+9. **NEVER use types** - Never use TypeScript type annotations (`: any`, `: string`, interfaces, type casts) when writing code
+10. **Parallel sub-agents** - Deploy multiple sub-agents in parallel where possible
+11. **Never fix without approval** - Present analysis and proposed solution first
+12. **Convex cross-function calls:**
     - Import `api` from `./_generated/api`: `import { api } from "./_generated/api";`
     - Use `ctx.runQuery(api.module.functionName, args)` or `ctx.runMutation(api.module.functionName, args)`
-    - Never use `query.functionName` - `query` is the function wrapper, not the API reference
     - Example: `await ctx.runQuery(api.admin.getAnalytics, {})` ✅ not `await ctx.runQuery(query.getAnalytics, {})` ❌
 
 ## Feature Development Workflow
 
-For every new feature, follow this workflow:
-
 ### 1. Planning Phase
-- Run an **ultrathink session in party mode** (`/party-mode`) with all relevant BMAD agents
-- Discuss architecture, edge cases, and implementation approach
+- Run **ultrathink session in party mode** (`/party-mode`) with relevant BMAD agents
+- Discuss architecture, edge cases, implementation approach
 - Identify affected files and potential risks
 
 ### 2. Create Implementation Plan
-- Create a new `.md` file in the **project root** named `FEATURE-NAME-IMPLEMENTATION.md`
-- Structure the file with **numbered phases** (e.g., Phase 1, Phase 2, etc.)
-- Each phase should have **checkboxes** for tracking progress:
-
-```markdown
-## Phase 1: Foundation
-- [ ] Task 1 description
-- [ ] Task 2 description
-- [x] Completed task (check when done)
-
-## Phase 2: Core Logic
-- [ ] Task 1 description
-...
-```
+- Create `FEATURE-NAME-IMPLEMENTATION.md` in project root
+- Structure with **numbered phases** (Phase 1, Phase 2, etc.)
+- Each phase has **checkboxes** for tracking progress
 
 ### 3. Execution
-- User tells Claude which phase to execute (e.g., "execute phase 3")
-- Claude spawns **parallel sub-agents** where possible for efficiency
-- Claude checks off completed items in the plan file as work progresses
-- Run tests after each phase before moving to the next
+- User tells Claude which phase to execute
+- Spawn **parallel sub-agents** where possible
+- Check off completed items as work progresses
+- Run tests after each phase
 
 ### 4. Cleanup
-- Delete the implementation `.md` file once feature is complete
-- Update this CLAUDE.md if the feature adds new patterns or conventions
+- Delete the implementation `.md` file when complete
+- Update this CLAUDE.md if feature adds new patterns
 
 ## Testing
 
-**Unit Tests (31 files in `__tests__/`):**
+**Unit Tests (42 files in `__tests__/`):**
 - Admin, insights, partners, subscriptions, sizes, components
+- Jest with ts-jest, mocked Convex/Clerk/Expo
+- Test factories for realistic data
 
 **E2E Tests (16 specs in `e2e/tests/`):**
+- Playwright with Expo Web (http://localhost:8081)
 - Full user journeys: auth → onboarding → pantry → lists → receipts → insights
-- Playwright with shared Clerk auth state
+- Shared Clerk auth state (serial execution)
 - 19 real UK receipt images for scanning tests
+- Page Object Model (7 pages)
 
 **Known E2E quirks:**
-- `AnimatedPressable` clicks need `page.evaluate()` JS click
+- `AnimatedPressable` clicks need `page.evaluate()` JS click via `clickPressable()` helper
 - `networkidle` never fires (Convex WebSocket) - use `waitForConvex()` helper
+- Receipt upload via hidden `<input type="file">` (expo-image-picker on web)
 
 ## Environment Variables
 
-**Client (.env):**
+**Client (.env.local):**
 ```
 EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
 EXPO_PUBLIC_CONVEX_URL=https://...
@@ -276,120 +272,60 @@ EXPO_PUBLIC_CONVEX_URL=https://...
 GEMINI_API_KEY, OPENAI_API_KEY, STRIPE_SECRET_KEY, CLERK_SECRET_KEY
 ```
 
-## Large Files (Refactoring Candidates)
+**E2E (.env.e2e):**
+```
+E2E_CLERK_USER_USERNAME, E2E_CLERK_USER_PASSWORD
+```
 
-| File | Lines | Notes |
-|------|-------|-------|
-| convex/admin.ts | 2,890 | Mission-critical Admin API (Refactored but large) |
-| insights.tsx | 1,620 | Gamification + trends + achievements |
-| list/[id].tsx | 1,279 | Shopping list detail (improved from 3000+) |
-| (tabs)/index.tsx | 1,084 | Pantry screen (improved from 1800+) |
+## Subscription System (Pinned)
 
-## Subscription System (PINNED — Revisit Later)
+**Status:** Core bugs fixed (Feb 2025). Needs Stripe Dashboard config + end-to-end live testing before production.
 
-**Status:** Core bugs fixed (Feb 2025). Needs Stripe Dashboard config + end-to-end live testing.
+**Architecture:**
+- **Trial:** 7 days, auto-started in `convex/users.ts:completeOnboarding()`. Sets `plan: "premium_monthly"`, `status: "trial"`
+- **Feature Gating:** Single source in `convex/lib/featureGating.ts`
+  - Free: 3 lists, 50 pantry, 3 scans/mo, 20 voice/mo, partnerMode: false
+  - Premium: unlimited (voice capped at 200/mo)
+- **Tier System:** Bronze→Silver(20)→Gold(50)→Platinum(100) based on lifetime scans
+- **Scan Credits:** Premium users earn £0.25-0.30/scan, capped per tier, applied as negative invoice item via `invoice.created` webhook
+- **Stripe Flow:** createCheckoutSession → Stripe Checkout → `checkout.session.completed` webhook → subscription active + scanCredits record created
 
-### Architecture
-- **Trial:** 7 days, auto-started in `convex/users.ts:completeOnboarding()` (lines 182-212). Sets `plan: "premium_monthly"`, `status: "trial"`.
-- **Feature Gating:** Single source of truth in `convex/lib/featureGating.ts`. Free tier: 3 lists, 50 pantry, 3 scans/mo, 20 voice/mo, `partnerMode: false`. Premium: unlimited (voice capped at 200/mo).
-- **Tier System:** Bronze→Silver(20)→Gold(50)→Platinum(100) based on lifetime scans. Config in `featureGating.ts:TIER_TABLE`.
-- **Scan Credits:** Premium users earn £0.25-0.30/scan, capped per tier. Applied as negative invoice item via `invoice.created` webhook.
-- **Stripe Flow:** `createCheckoutSession` → Stripe Checkout → `checkout.session.completed` webhook → `handleCheckoutCompleted` → subscription active + scanCredits record created.
-
-### Key Files
-| File | Purpose |
-|------|---------|
-| `convex/lib/featureGating.ts` | **Single source** for features, tiers, premium checks |
-| `convex/subscriptions.ts` | Queries, mutations, earnScanCredit, expireTrials cron |
-| `convex/stripe.ts` | Checkout, portal, webhooks, getAndMarkScanCredits |
-| `convex/http.ts` | Webhook route (5 events including `invoice.created`) |
-| `convex/users.ts:159-216` | `completeOnboarding` — auto-starts 7-day trial |
-| `convex/schema.ts:502-516` | subscriptions table (has `by_status` index) |
-| `convex/schema.ts:540-573` | scanCredits + scanCreditTransactions tables |
-| `app/(app)/subscription.tsx` | Subscription UI page |
-
-### Bugs Fixed (This Session)
-1. **"Current Plan" badge during trial** — `subscription.tsx:451` now checks `status === "active"`
-2. **handleCheckoutCompleted full table scan** — replaced `.collect().find()` with `ctx.db.get(userId)`, throws on failure instead of silent return
-3. **expireTrials full table scan** — added `by_status` index to schema, query uses `.withIndex("by_status")`
-4. **Duplicate helpers** — `getFreeFeatures`, `getPlanFeatures`, `isEffectivelyPremium`, `effectiveStatus`, tier config all consolidated into `featureGating.ts`. `subscriptions.ts` and `stripe.ts` import from there
-5. **partnerMode gating** — set to `false` in free features so `requireFeature()` correctly blocks free users
-6. **Tier table duplication** — `stripe.ts:handleSubscriptionUpdated` now imports `getTierFromScans` from featureGating
-7. **Scan credits never applied to Stripe** — implemented `invoice.created` webhook handler + `getAndMarkScanCredits` mutation. Adds negative invoice item for earned credits
-8. **First invoice skipped** — `billing_reason` filter now includes both `subscription_cycle` AND `subscription_create`
-9. **No scanCredits at checkout** — `handleCheckoutCompleted` now creates initial scanCredits record, carrying forward trial-period lifetime scans
-10. **stripeInvoiceId dead field** — now populated when credits are applied to invoice
-
-### Before Going Live — Checklist
+**Before Going Live:**
 - [ ] Enable `invoice.created` event in Stripe Dashboard webhook settings
 - [ ] Verify `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL` in Convex Dashboard
-- [ ] **Stripe setup:** Complete end-to-end live testing (signup → trial → scan → subscribe → credit discount)
-- [ ] **Ice-Box Review:** Review `MARKETING_ICEBOX.md` to prioritize viral growth and sharing features
-- [ ] Live test: monthly renewal → verify credits reset and apply to next invoice
-- [ ] Live test: cancel → verify features drop to free tier
-- [ ] Consider: trial-period credits — currently they accumulate but only apply if user subscribes before trial ends and `invoice.created` fires
+- [ ] End-to-end live testing (signup → trial → scan → subscribe → credit discount)
+- [ ] Test monthly renewal → verify credits reset and apply
+- [ ] Test cancel → verify features drop to free tier
 - [ ] Consider: Stripe↔Convex reconciliation cron (no sync exists if webhooks are missed)
-- [ ] Finalize voice/AI request rate limiting — currently only monthly caps (20 free / 200 premium) + 6s client throttle. Decide if daily caps are needed (e.g., max 30/day to prevent burning all 200 in one session). Client-side daily limit was removed as redundant; add server-side daily enforcement here if desired
 
-## Subscription System (PINNED — Revisit Later)
+## Data Retention & Scaling
 
+**Personal Data:**
+- Pantry: 150 max active items (LIFO archiving), 90-day idle auto-archiving (non-pinned, out-of-stock)
+- Deduplication: 85% Levenshtein + unit normalization (1L = 1000ml)
+- Notifications: deleted after 30 days
 
-## Data Retention & Scaling Policy (Concise)
-
-### Currently Implemented ✅
-
-**Personal Data Limits:**
-- **Pantry Limits:** Free users capped at 30 items; all users capped at 150 active items (LIFO archiving).
-- **Auto-Archiving:** Daily cron archives non-pinned "out of stock" items idle for 90 days.
-- **Deduplication:** Fuzzy name matching (85% Levenshtein) + unit normalization (e.g., 1L = 1000ml) on creation.
-- **Pruning:** Notifications deleted after 30 days; admin logs archived weekly.
-
-**Global Catalog Retention (✅ Fully Implemented):**
-- **Price History Compression:** `priceHistory.ts:16-129` - Monthly cron aggregates 6-12mo old data into `priceHistoryMonthly`, deletes raw entries >1yr
-- **Stale Product Pruning:** `currentPrices.ts:11-31` - Monthly cron deletes products not seen in 12 months
-- **Receipt Image Cleanup:** `receipts.ts:12-40` - Monthly cron deletes images >6mo old, keeps metadata
-- **Variant Merge Tool:** `itemVariants.ts:9-80` - Admin mutation to merge duplicate variants from OCR errors
+**Global Catalog:**
+- Price history: Raw entries >1yr aggregated into monthly buckets, then deleted (monthly cron)
+- Current prices: Products unseen 12mo deleted (monthly cron)
+- Receipt images: Deleted after 6mo, metadata kept (monthly cron on 15th)
+- Item variants: Admin merge tool available
 
 **Cron Schedule:**
 ```
-1st of month:
-  1:30am UTC - compress-old-price-history
-  2:00am UTC - prune-stale-products
-15th of month:
-  3:00am UTC - cleanup-old-receipt-images
+1st of month, 1:30am UTC - compress-old-price-history
+1st of month, 2:00am UTC - prune-stale-products
+15th of month, 3:00am UTC - cleanup-old-receipt-images
 ```
 
-### Production Readiness Checklist
+## Recent Features (2025)
 
-**Before First Deployment:**
-- [ ] Verify `priceHistoryMonthly` table exists in schema (schema.ts:394-412)
-- [ ] Confirm all 3 cron jobs registered in `crons.ts:146-162`
-- [ ] Test manual execution:
-  ```bash
-  npx convex run priceHistory:compressOldData
-  npx convex run currentPrices:pruneStale
-  npx convex run receipts:cleanupOldImages
-  ```
-- [ ] Monitor first scheduled cron execution logs
-- [ ] Verify compression creates monthly aggregates correctly
-- [ ] Verify old images actually deleted from Convex storage
-- [ ] Check admin UI for variant merge tool accessibility
-
-**Data Protection Guarantees:**
-| Data Type | Policy | Status |
-|-----------|--------|--------|
-| Personal pantry | 150 max + 90-day idle archiving | ✅ Bounded |
-| Price history raw | Deleted after 1 year (aggregated first) | ✅ Bounded |
-| Price history monthly | Kept indefinitely (aggregated) | ✅ Small |
-| Current prices | Deleted if not seen 12 months | ✅ Bounded |
-| Receipt images | Deleted after 6 months | ✅ Bounded |
-| Receipt metadata | Kept indefinitely | ⚠️ By design |
-| Item variants | Admin merge tool available | ✅ Managed |
-
-### Future Enhancements
-- **Semantic Matching:** Move from fuzzy text to AI vector embeddings for better variant merging.
-- **User-Facing Tools:** "Report Duplicate" button for community catalog cleanup.
-- **Receipt Metadata:** Consider archiving receipts >2 years old (tax/warranty considerations).
+- ✅ AI health analysis with dietary preferences + swaps
+- ✅ Dietary restrictions + health concerns in user profile
+- ✅ Data retention crons (price compression, image cleanup, stale pruning)
+- ✅ Push notification settings with quiet hours
+- ✅ AI usage monitoring dashboard (voice/scan caps)
+- ✅ Personalization settings for health analysis
 
 ## BMAD Workflow
 

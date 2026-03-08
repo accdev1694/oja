@@ -74,6 +74,7 @@ export default function ConfirmReceiptScreen() {
   const savePriceHistory = useMutation(api.priceHistory.savePriceHistoryFromReceipt);
   const checkPriceAlerts = useMutation(api.priceHistory.checkPriceAlerts);
   const checkDuplicate = useMutation(api.receipts.checkDuplicate);
+  const deleteReceipt = useMutation(api.receipts.remove);
   const upsertCurrentPrices = useMutation(api.currentPrices.upsertFromReceipt);
   const improveArchivedPrices = useMutation(api.currentPrices.improveArchivedListPrices);
   const refreshActiveListPrices = useMutation(api.currentPrices.refreshActiveListsFromReceipt);
@@ -513,7 +514,7 @@ export default function ConfirmReceiptScreen() {
                     {segment.storeName}
                   </Text>
                   <Text style={styles.segmentTime}>
-                    {new Date(segment.visitedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {new Date(segment.switchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </Text>
                 </View>
               ))}

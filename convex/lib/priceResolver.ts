@@ -47,6 +47,10 @@ export interface ResolvedVariantWithPrice {
     source: string;
     commonality?: number;
     estimatedPrice?: number;
+    brand?: string;
+    productName?: string;
+    displayLabel?: string;
+    imageStorageId?: Id<"_storage">;
   };
   /** Resolved price info */
   price: number | null;

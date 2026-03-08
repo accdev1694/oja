@@ -59,6 +59,7 @@ export default function ReconciliationScreen() {
   const autoRestock = useMutation(api.pantryItems.autoRestockFromReceipt);
   const confirmFuzzyRestock = useMutation(api.pantryItems.confirmFuzzyRestock);
   const addFromReceipt = useMutation(api.pantryItems.addFromReceipt);
+  const deleteReceipt = useMutation(api.receipts.remove);
   // (Old loyalty earnPoints removed — scan rewards handled at confirm step)
 
   const [isCompleting, setIsCompleting] = useState(false);
@@ -161,7 +162,7 @@ export default function ReconciliationScreen() {
                       {segment.storeName}
                     </Text>
                     <Text style={styles.segmentTime}>
-                      {new Date(segment.visitedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(segment.switchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </Text>
                   </View>
                 ))}
