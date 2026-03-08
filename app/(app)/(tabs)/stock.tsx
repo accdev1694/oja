@@ -57,6 +57,9 @@ import { TipBanner } from "@/components/ui/TipBanner";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
 import { defaultListName } from "@/lib/list/helpers";
+import { useHint } from "@/hooks/useHint";
+import { HintOverlay } from "@/components/tutorial/HintOverlay";
+import { hasViewedHint as hasViewedHintLocal } from "@/lib/storage/hintStorage";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -173,6 +176,26 @@ export default function PantryScreen() {
   const { firstName } = useCurrentUser();
   const isSwitchingUsers = useIsSwitchingUsers();
 
+  // Hint targets
+  const headerRef = useRef<View>(null);
+  const tabsRef = useRef<View>(null);
+  const itemRef = useRef<View>(null);
+
+  // Hints
+  const introHint = useHint("stock_intro", "delayed");
+  const levelsHint = useHint("stock_levels", "manual");
+  const lowHint = useHint("stock_low_alert", "manual");
+  const autoAddHint = useHint("stock_auto_add", "manual");
+
+  // Sequence: Show levels hint after intro is dismissed
+  useEffect(() => {
+    if (introHint.shouldShow === false) {
+      if (!hasViewedHintLocal("stock_levels")) {
+        levelsHint.showHint();
+      }
+    }
+  }, [introHint.shouldShow]);
+
   // Skip queries during user switching to prevent cache leakage
   const items = useQuery(
     api.pantryItems.getByUser,
@@ -183,6 +206,20 @@ export default function PantryScreen() {
     !isSwitchingUsers ? {} : "skip"
   );
   const updateStockLevel = useMutation(api.pantryItems.updateStockLevel);
+  const toggleAutoAdd = useMutation(api.pantryItems.toggleAutoAdd);
+
+  // Wrappers for hints
+  const handleStockUpdateWithHint = useCallback(async (itemId: Id<"pantryItems">, level: StockLevel) => {
+    await updateStockLevel({ id: itemId, stockLevel: level });
+    if (level === "low") {
+      lowHint.showHint();
+    }
+  }, [updateStockLevel, lowHint]);
+
+  const handleToggleAutoAddWithHint = useCallback(async (item: any) => {
+    await toggleAutoAdd({ id: item._id, autoAdd: !item.autoAdd });
+    autoAddHint.showHint();
+  }, [toggleAutoAdd, autoAddHint]);
   const createList = useMutation(api.shoppingLists.create);
   const addListItem = useMutation(api.listItems.create);
   const migrateIcons = useMutation(api.pantryItems.migrateIcons);
@@ -492,7 +529,7 @@ export default function PantryScreen() {
     } catch {}
 
     try {
-      await updateStockLevel({ id: item._id, stockLevel: nextLevel });
+      await handleStockUpdateWithHint(item._id, nextLevel);
       if (nextLevel === "out") {
         await autoAddToShoppingList(item, { x: SCREEN_WIDTH / 2, y: 300 });
       }
@@ -928,28 +965,30 @@ export default function PantryScreen() {
 
           {/* View Mode Tabs */}
           <AnimatedSection key={`tabs-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={150}>
-            <GlassCapsuleSwitcher
-              tabs={[
-                {
-                  label: "Needs Restocking",
-                  activeColor: attentionCount === 0 ? colors.semantic.success : colors.accent.warning,
-                  icon: attentionCount > 0 ? "alert-circle-outline" : undefined,
-                  badge: attentionCount > 0 ? attentionCount : undefined,
-                  badgeCustom: attentionCount === 0 ? (
-                    <MaterialCommunityIcons name="check" size={12} color={colors.semantic.success} />
-                  ) : undefined,
-                },
-                {
-                  label: "All Items",
-                  activeColor: colors.accent.primary,
-                  icon: "view-list-outline",
-                  badge: items.length,
-                },
-              ]}
-              activeIndex={capsuleActiveIndex}
-              onTabChange={handleViewModeSwitch}
-              style={styles.viewModeTabs}
-            />
+            <View ref={tabsRef}>
+              <GlassCapsuleSwitcher
+                tabs={[
+                  {
+                    label: "Needs Restocking",
+                    activeColor: attentionCount === 0 ? colors.semantic.success : colors.accent.warning,
+                    icon: attentionCount > 0 ? "alert-circle-outline" : undefined,
+                    badge: attentionCount > 0 ? attentionCount : undefined,
+                    badgeCustom: attentionCount === 0 ? (
+                      <MaterialCommunityIcons name="check" size={12} color={colors.semantic.success} />
+                    ) : undefined,
+                  },
+                  {
+                    label: "All Items",
+                    activeColor: colors.accent.primary,
+                    icon: "view-list-outline",
+                    badge: items.length,
+                  },
+                ]}
+                activeIndex={capsuleActiveIndex}
+                onTabChange={handleViewModeSwitch}
+                style={styles.viewModeTabs}
+              />
+            </View>
           </AnimatedSection>
 
           {/* Search field */}
@@ -977,17 +1016,21 @@ export default function PantryScreen() {
                 // Use pre-calculated section delay + small item stagger
                 const delay = (section as any).sectionDelay + (index * 20);
 
+                const isFirstItem = index === 0 && section.title === sections[0].title;
+
                 return (
                   <AnimatedSection key={`${item._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={delay}>
-                    <PantryItemRow
-                      item={item}
-                      onSwipeDecrease={handleSwipeDecrease}
-                      onSwipeIncrease={handleSwipeIncrease}
-                      onRemove={handleRemoveItem}
-                      onAddToList={handleAddToList}
-                      onLongPress={handleItemLongPress}
-                      isArchivedResult={isArchivedResult}
-                    />
+                    <View ref={isFirstItem ? itemRef : undefined}>
+                      <PantryItemRow
+                        item={item}
+                        onSwipeDecrease={handleSwipeDecrease}
+                        onSwipeIncrease={handleSwipeIncrease}
+                        onRemove={handleRemoveItem}
+                        onAddToList={handleAddToList}
+                        onLongPress={handleItemLongPress}
+                        isArchivedResult={isArchivedResult}
+                      />
+                    </View>
                   </AnimatedSection>
                 );
               }}
@@ -1078,6 +1121,25 @@ export default function PantryScreen() {
 
       {/* Gesture Onboarding Overlay */}
       {showGestureOnboarding && <SwipeOnboardingOverlay onDismiss={dismissGestureOnboarding} />}
+
+      {/* Tutorial Hints */}
+      <HintOverlay
+        visible={levelsHint.shouldShow}
+        targetRef={tabsRef}
+        title="Pantry Status"
+        content="Tap stock icons to toggle levels. We'll automatically add 'Out' items to your next list."
+        onDismiss={levelsHint.dismiss}
+        position="below"
+      />
+
+      <HintOverlay
+        visible={lowHint.shouldShow}
+        targetRef={itemRef}
+        title="Low Stock Alert"
+        content="Items marked 'Low' will be suggested first when you create a new list."
+        onDismiss={lowHint.dismiss}
+        position="below"
+      />
     </GlassScreen>
   );
 }

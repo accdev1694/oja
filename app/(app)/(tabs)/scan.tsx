@@ -25,9 +25,21 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
+import { useHint } from "@/hooks/useHint";
+import { HintOverlay } from "@/components/tutorial/HintOverlay";
+import { hasViewedHint as hasViewedHintLocal } from "@/lib/storage/hintStorage";
+
 export default function ScanScreen() {
   const router = useRouter();
   const { returnTo } = useLocalSearchParams<{ listId?: string; returnTo?: string }>();
+
+  // Hint targets
+  const tabsRef = useRef<View>(null);
+  const scanButtonRef = useRef<View>(null);
+
+  // Hints
+  const typeHint = useHint("scan_type", "delayed");
+  const tierHint = useHint("scan_tier", "manual");
   
   // Custom Scan Logic Hook (Centralized business logic)
   const {
@@ -47,6 +59,14 @@ export default function ScanScreen() {
     dismissOnboardingTip,
     shoppingLists,
   } = useScanLogic({ returnTo });
+
+  // Trigger tier hint after first successful scan (when allReceipts or scannedProducts changes)
+  useEffect(() => {
+    const hasScannedBefore = (allReceipts && allReceipts.length > 0) || (productScanner.scannedProducts.length > 0);
+    if (hasScannedBefore && !typeHint.shouldShow) {
+      tierHint.showHint();
+    }
+  }, [allReceipts?.length, productScanner.scannedProducts.length, typeHint.shouldShow]);
 
   const [animationKey, setAnimationKey] = useState(0);
   const [pageAnimationKey, setPageAnimationKey] = useState(0);
@@ -221,15 +241,17 @@ export default function ScanScreen() {
 
       <View style={styles.content}>
         <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
-          <GlassCapsuleSwitcher
-            tabs={[
-              { label: "Receipt", icon: "receipt", activeColor: colors.accent.primary },
-              { label: "Product", icon: "cube-scan", activeColor: colors.accent.primary },
-            ]}
-            activeIndex={scanMode === "receipt" ? 0 : 1}
-            onTabChange={handleScanModeSwitch}
-            style={styles.tabContainer}
-          />
+          <View ref={tabsRef}>
+            <GlassCapsuleSwitcher
+              tabs={[
+                { label: "Receipt", icon: "receipt", activeColor: colors.accent.primary },
+                { label: "Product", icon: "cube-scan", activeColor: colors.accent.primary },
+              ]}
+              activeIndex={scanMode === "receipt" ? 0 : 1}
+              onTabChange={handleScanModeSwitch}
+              style={styles.tabContainer}
+            />
+          </View>
         </AnimatedSection>
 
         <ScanOnboardingTip 
@@ -243,6 +265,7 @@ export default function ScanScreen() {
             isScanning={receiptScanner.isProcessing}
             onSelectReceipt={(receipt) => router.push(`/receipt/${receipt._id}/confirm` as any)}
             onScanPress={handleScanAction}
+            scanButtonRef={scanButtonRef}
           />
         ) : (
           <ProductMode 
@@ -252,9 +275,29 @@ export default function ScanScreen() {
             onProductPress={handleProductPress}
             onClearAll={handleClearAllProducts}
             onAddAll={handleAddAllToList}
+            scanButtonRef={scanButtonRef}
           />
         )}
       </View>
+
+      {/* Tutorial Hints */}
+      <HintOverlay
+        visible={typeHint.shouldShow}
+        targetRef={tabsRef}
+        title="Scan Everything"
+        content="Scan receipts to update your pantry instantly, or products to check current prices."
+        onDismiss={typeHint.dismiss}
+        position="below"
+      />
+
+      <HintOverlay
+        visible={tierHint.shouldShow}
+        targetRef={scanButtonRef}
+        title="Earn Rewards"
+        content="Scanning earns you points toward your next subscription tier. Level up for more AI features!"
+        onDismiss={tierHint.dismiss}
+        position="above"
+      />
 
       {/* Modals */}
       <EditScannedItemModal

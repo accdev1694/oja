@@ -20,6 +20,7 @@ interface ProductModeProps {
   onProductPress: (product: any, index: number) => void;
   onClearAll: () => void;
   onAddAll: () => void;
+  scanButtonRef?: React.RefObject<View>;
 }
 
 export function ProductMode({ 
@@ -28,7 +29,8 @@ export function ProductMode({
   onScanPress, 
   onProductPress,
   onClearAll,
-  onAddAll 
+  onAddAll,
+  scanButtonRef
 }: ProductModeProps) {
   const insets = useSafeAreaInsets();
   const hasProducts = scannedProducts && scannedProducts.length > 0;
@@ -102,10 +104,13 @@ export function ProductMode({
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      <View style={[
-        styles.scanButtonContainer,
-        { bottom: 110 + insets.bottom }
-      ]}>
+      <View 
+        ref={scanButtonRef}
+        style={[
+          styles.scanButtonContainer,
+          { bottom: 110 + insets.bottom }
+        ]}
+      >
         <Pressable 
           style={styles.scanButton} 
           onPress={onScanPress}

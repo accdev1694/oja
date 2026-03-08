@@ -40,6 +40,10 @@ import {
 import { useDelightToast } from "@/hooks/useDelightToast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
+import { useHint } from "@/hooks/useHint";
+import { HintOverlay } from "@/components/tutorial/HintOverlay";
+import { hasViewedHint as hasViewedHintLocal } from "@/lib/storage/hintStorage";
+
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CHART_WIDTH = SCREEN_WIDTH - spacing.lg * 2 - spacing.md * 2;
 
@@ -51,6 +55,35 @@ export default function InsightsScreen() {
   const prevAchievementCount = useRef<number | null>(null);
   const { toast, dismiss, onAchievementUnlock } = useDelightToast();
   const { firstName, user } = useCurrentUser();
+
+  // Hint targets
+  const challengeRef = useRef<View>(null);
+  const spendingRef = useRef<View>(null);
+  const bestsRef = useRef<View>(null);
+
+  // Hints
+  const challengeHint = useHint("insights_challenges", "delayed");
+  const spendingHint = useHint("insights_spending", "manual");
+  const milestonesHint = useHint("insights_milestones", "manual");
+
+  // Sequence: challenge -> spending -> milestones
+  useEffect(() => {
+    if (challengeHint.shouldShow === false) {
+      if (!hasViewedHintLocal("insights_spending")) {
+        spendingHint.showHint();
+      } else if (!hasViewedHintLocal("insights_milestones")) {
+        milestonesHint.showHint();
+      }
+    }
+  }, [challengeHint.shouldShow]);
+
+  useEffect(() => {
+    if (spendingHint.shouldShow === false && hasViewedHintLocal("insights_spending")) {
+      if (!hasViewedHintLocal("insights_milestones")) {
+        milestonesHint.showHint();
+      }
+    }
+  }, [spendingHint.shouldShow]);
 
   const digest = useQuery(api.insights.getWeeklyDigest);
   const savingsJar = useQuery(api.insights.getSavingsJar);
@@ -179,159 +212,163 @@ export default function InsightsScreen() {
       >
         {/* ============ WEEKLY DIGEST ============ */}
         <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
-          <GlassCard style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons
-                name="calendar-week"
-                size={22}
-                color={colors.accent.primary}
-              />
-              <Text style={styles.sectionTitle}>This Week</Text>
-            </View>
+          <View ref={spendingRef}>
+            <GlassCard style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <MaterialCommunityIcons
+                  name="calendar-week"
+                  size={22}
+                  color={colors.accent.primary}
+                />
+                <Text style={styles.sectionTitle}>This Week</Text>
+              </View>
 
-            {digest && (
-              <>
-                <View style={styles.statsGrid}>
-                  <StatBox
-                    label="Spent"
-                    value={`£${digest.thisWeekTotal.toFixed(2)}`}
-                    icon="cash"
-                    color={colors.accent.primary}
-                  />
-                  <StatBox
-                    label="vs Last Week"
-                    value={`${digest.percentChange > 0 ? "+" : ""}${digest.percentChange.toFixed(0)}%`}
-                    icon={digest.percentChange > 0 ? "trending-up" : "trending-down"}
-                    color={
-                      digest.percentChange > 0
-                        ? colors.accent.error
-                        : colors.accent.success
-                    }
-                  />
-                  <StatBox
-                    label="Trips"
-                    value={`${digest.tripsCount}`}
-                    icon="shopping"
-                    color={colors.accent.secondary}
-                  />
-                  <StatBox
-                    label="Saved"
-                    value={`£${digest.budgetSaved.toFixed(2)}`}
-                    icon="piggy-bank"
-                    color={colors.accent.success}
-                  />
-                </View>
-
-                {/* Weekly Narrative */}
-                <Text style={styles.weeklyNarrative}>
-                  {weeklyNarrative}
-                </Text>
-
-                {/* Sparkline */}
-                {digest.dailySparkline && digest.dailySparkline.some((v: number) => v > 0) && (
-                  <View style={styles.sparklineContainer}>
-                    <Text style={styles.sparklineLabel}>Daily spending</Text>
-                    <LineChart
-                      data={{
-                        labels: ["M", "T", "W", "T", "F", "S", "S"],
-                        datasets: [{ data: digest.dailySparkline.map((v: number) => v || 0.01) }],
-                      }}
-                      width={CHART_WIDTH}
-                      height={80}
-                      withDots={false}
-                      withInnerLines={false}
-                      withOuterLines={false}
-                      withVerticalLabels={true}
-                      withHorizontalLabels={false}
-                      chartConfig={{
-                        backgroundGradientFrom: "transparent",
-                        backgroundGradientTo: "transparent",
-                        color: () => colors.accent.primary,
-                        labelColor: () => colors.text.tertiary,
-                        propsForBackgroundLines: { stroke: "transparent" },
-                        strokeWidth: 2,
-                        fillShadowGradientFrom: colors.accent.primary,
-                        fillShadowGradientTo: "transparent",
-                        fillShadowGradientFromOpacity: 0.3,
-                        fillShadowGradientToOpacity: 0,
-                      }}
-                      bezier
-                      style={styles.sparklineChart}
+              {digest && (
+                <>
+                  <View style={styles.statsGrid}>
+                    <StatBox
+                      label="Spent"
+                      value={`£${digest.thisWeekTotal.toFixed(2)}`}
+                      icon="cash"
+                      color={colors.accent.primary}
+                    />
+                    <StatBox
+                      label="vs Last Week"
+                      value={`${digest.percentChange > 0 ? "+" : ""}${digest.percentChange.toFixed(0)}%`}
+                      icon={digest.percentChange > 0 ? "trending-up" : "trending-down"}
+                      color={
+                        digest.percentChange > 0
+                          ? colors.accent.error
+                          : colors.accent.success
+                      }
+                    />
+                    <StatBox
+                      label="Trips"
+                      value={`${digest.tripsCount}`}
+                      icon="shopping"
+                      color={colors.accent.secondary}
+                    />
+                    <StatBox
+                      label="Saved"
+                      value={`£${digest.budgetSaved.toFixed(2)}`}
+                      icon="piggy-bank"
+                      color={colors.accent.success}
                     />
                   </View>
-                )}
-              </>
-            )}
-          </GlassCard>
+
+                  {/* Weekly Narrative */}
+                  <Text style={styles.weeklyNarrative}>
+                    {weeklyNarrative}
+                  </Text>
+
+                  {/* Sparkline */}
+                  {digest.dailySparkline && digest.dailySparkline.some((v: number) => v > 0) && (
+                    <View style={styles.sparklineContainer}>
+                      <Text style={styles.sparklineLabel}>Daily spending</Text>
+                      <LineChart
+                        data={{
+                          labels: ["M", "T", "W", "T", "F", "S", "S"],
+                          datasets: [{ data: digest.dailySparkline.map((v: number) => v || 0.01) }],
+                        }}
+                        width={CHART_WIDTH}
+                        height={80}
+                        withDots={false}
+                        withInnerLines={false}
+                        withOuterLines={false}
+                        withVerticalLabels={true}
+                        withHorizontalLabels={false}
+                        chartConfig={{
+                          backgroundGradientFrom: "transparent",
+                          backgroundGradientTo: "transparent",
+                          color: () => colors.accent.primary,
+                          labelColor: () => colors.text.tertiary,
+                          propsForBackgroundLines: { stroke: "transparent" },
+                          strokeWidth: 2,
+                          fillShadowGradientFrom: colors.accent.primary,
+                          fillShadowGradientTo: "transparent",
+                          fillShadowGradientFromOpacity: 0.3,
+                          fillShadowGradientToOpacity: 0,
+                        }}
+                        bezier
+                        style={styles.sparklineChart}
+                      />
+                    </View>
+                  )}
+                </>
+              )}
+            </GlassCard>
+          </View>
         </AnimatedSection>
 
         {/* ============ WEEKLY CHALLENGE ============ */}
         <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
-          <GlassCard style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons
-                name="flag-checkered"
-                size={22}
-                color={colors.accent.warning}
-              />
-              <Text style={styles.sectionTitle}>Weekly Challenge</Text>
-            </View>
-
-            {activeChallenge ? (
-              <View style={styles.challengeCard}>
-                <View style={styles.challengeTop}>
-                  <View style={styles.challengeIconCircle}>
-                    <MaterialCommunityIcons
-                      name={(activeChallenge.icon as any) || "star"}
-                      size={24}
-                      color={colors.accent.warning}
-                    />
-                  </View>
-                  <View style={styles.challengeInfo}>
-                    <Text style={styles.challengeTitle}>{activeChallenge.title}</Text>
-                    <Text style={styles.challengeDesc}>{activeChallenge.description}</Text>
-                  </View>
-                  <View style={styles.challengeReward}>
-                    <Text style={styles.rewardPoints}>+{activeChallenge.reward}</Text>
-                    <Text style={styles.rewardLabel}>pts</Text>
-                  </View>
-                </View>
-                <View style={styles.challengeProgressRow}>
-                  <GlassProgressBar
-                    progress={Math.round(
-                      (activeChallenge.progress / activeChallenge.target) * 100
-                    )}
-                    size="md"
-                  />
-                  <Text style={styles.challengeProgressText}>
-                    {activeChallenge.progress}/{activeChallenge.target}
-                  </Text>
-                </View>
-                {activeChallenge.completedAt && (
-                  <View style={styles.challengeCompleteBanner}>
-                    <MaterialCommunityIcons name="check-circle" size={16} color={colors.accent.success} />
-                    <Text style={styles.challengeCompleteText}>Completed!</Text>
-                  </View>
-                )}
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.generateChallengeBtn}
-                onPress={handleGenerateChallenge}
-                disabled={challengeGenerating}
-                activeOpacity={0.7}
-              >
+          <View ref={challengeRef}>
+            <GlassCard style={styles.section}>
+              <View style={styles.sectionHeader}>
                 <MaterialCommunityIcons
-                  name="dice-multiple"
-                  size={24}
+                  name="flag-checkered"
+                  size={22}
                   color={colors.accent.warning}
                 />
-                <Text style={styles.generateChallengeText}>
-                  {challengeGenerating ? "Generating..." : "Start a Challenge"}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </GlassCard>
+                <Text style={styles.sectionTitle}>Weekly Challenge</Text>
+              </View>
+
+              {activeChallenge ? (
+                <View style={styles.challengeCard}>
+                  <View style={styles.challengeTop}>
+                    <View style={styles.challengeIconCircle}>
+                      <MaterialCommunityIcons
+                        name={(activeChallenge.icon as any) || "star"}
+                        size={24}
+                        color={colors.accent.warning}
+                      />
+                    </View>
+                    <View style={styles.challengeInfo}>
+                      <Text style={styles.challengeTitle}>{activeChallenge.title}</Text>
+                      <Text style={styles.challengeDesc}>{activeChallenge.description}</Text>
+                    </View>
+                    <View style={styles.challengeReward}>
+                      <Text style={styles.rewardPoints}>+{activeChallenge.reward}</Text>
+                      <Text style={styles.rewardLabel}>pts</Text>
+                    </View>
+                  </View>
+                  <View style={styles.challengeProgressRow}>
+                    <GlassProgressBar
+                      progress={Math.round(
+                        (activeChallenge.progress / activeChallenge.target) * 100
+                      )}
+                      size="md"
+                    />
+                    <Text style={styles.challengeProgressText}>
+                      {activeChallenge.progress}/{activeChallenge.target}
+                    </Text>
+                  </View>
+                  {activeChallenge.completedAt && (
+                    <View style={styles.challengeCompleteBanner}>
+                      <MaterialCommunityIcons name="check-circle" size={16} color={colors.accent.success} />
+                      <Text style={styles.challengeCompleteText}>Completed!</Text>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.generateChallengeBtn}
+                  onPress={handleGenerateChallenge}
+                  disabled={challengeGenerating}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons
+                    name="dice-multiple"
+                    size={24}
+                    color={colors.accent.warning}
+                  />
+                  <Text style={styles.generateChallengeText}>
+                    {challengeGenerating ? "Generating..." : "Start a Challenge"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </GlassCard>
+          </View>
         </AnimatedSection>
 
         {/* ============ SAVINGS JAR ============ */}
@@ -829,7 +866,7 @@ export default function InsightsScreen() {
         {/* ============ PERSONAL BESTS ============ */}
         {personalBests && (
           <AnimatedSection animation="fadeInDown" duration={400} delay={600}>
-            <View style={styles.section}>
+            <View style={styles.section} ref={bestsRef}>
             <GlassCollapsible
               title="Personal Bests"
               icon="trophy"
@@ -945,6 +982,34 @@ export default function InsightsScreen() {
           colors.accent.warning,
           colors.accent.success,
         ]}
+      />
+
+      {/* Tutorial Hints */}
+      <HintOverlay
+        visible={challengeHint.shouldShow}
+        targetRef={challengeRef}
+        title="AI Challenges"
+        content="Complete challenges to earn bonus points. Oja AI picks these based on your shopping habits."
+        onDismiss={challengeHint.dismiss}
+        position="below"
+      />
+
+      <HintOverlay
+        visible={spendingHint.shouldShow}
+        targetRef={spendingRef}
+        title="Spending Insights"
+        content="See exactly where your money goes. We compare your spending to community averages."
+        onDismiss={spendingHint.dismiss}
+        position="below"
+      />
+
+      <HintOverlay
+        visible={milestonesHint.shouldShow}
+        targetRef={bestsRef}
+        title="Track Records"
+        content="Track your personal records! We celebrate your biggest savings and longest streaks."
+        onDismiss={milestonesHint.dismiss}
+        position="below"
       />
     </GlassScreen>
   );

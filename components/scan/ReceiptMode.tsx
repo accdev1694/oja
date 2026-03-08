@@ -19,9 +19,10 @@ interface ReceiptModeProps {
   isScanning?: boolean;
   onSelectReceipt: (receipt: any) => void;
   onScanPress: () => void;
+  scanButtonRef?: React.RefObject<View>;
 }
 
-export function ReceiptMode({ receipts, isScanning, onSelectReceipt, onScanPress }: ReceiptModeProps) {
+export function ReceiptMode({ receipts, isScanning, onSelectReceipt, onScanPress, scanButtonRef }: ReceiptModeProps) {
   const insets = useSafeAreaInsets();
   const hasReceipts = receipts && receipts.length > 0;
 
@@ -78,10 +79,13 @@ export function ReceiptMode({ receipts, isScanning, onSelectReceipt, onScanPress
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      <View style={[
-        styles.scanButtonContainer, 
-        { bottom: 110 + insets.bottom }
-      ]}>
+      <View 
+        ref={scanButtonRef}
+        style={[
+          styles.scanButtonContainer, 
+          { bottom: 110 + insets.bottom }
+        ]}
+      >
         <Pressable 
           style={styles.scanButton} 
           onPress={onScanPress}

@@ -60,6 +60,9 @@ export default defineSchema({
     // Onboarding
     onboardingComplete: v.boolean(),
 
+    // Tutorial Settings
+    showTutorialHints: v.optional(v.boolean()), // Default: true
+
     // Activity tracking (for nurture sequence)
     lastActiveAt: v.optional(v.number()), // Last activity timestamp
     sessionCount: v.optional(v.number()), // Number of app sessions
@@ -1307,4 +1310,14 @@ export default defineSchema({
     .index("by_receipt", ["receiptId"])
     .index("by_user_status", ["userId", "status"])
     .index("by_status", ["status"]),
+
+  // Tutorial hints
+  tutorialHints: defineTable({
+    userId: v.id("users"),
+    hintId: v.string(), // "lists_create", "list_detail_budget", "stock_low_alert"
+    viewedAt: v.number(), // timestamp
+    dismissedAt: v.number(), // timestamp
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_hint", ["userId", "hintId"]),
 });

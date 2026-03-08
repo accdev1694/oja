@@ -30,7 +30,8 @@ import {
   spacing,
   useGlassAlert,
 } from "@/components/ui/glass";
-import { UnmatchedItemsModal } from "@/components/receipt/UnmatchedItemsModal";
+import { useHint } from "@/hooks/useHint";
+import { HintOverlay } from "@/components/tutorial/HintOverlay";
 
 // Tier progress helper for toast messages
 function getTierProgress(lifetimeScans: number, currentTier: string): string | null {
@@ -63,6 +64,12 @@ export default function ConfirmReceiptScreen() {
   const { alert } = useGlassAlert();
   const { id, returnTo } = useLocalSearchParams<{ id: string; returnTo?: string }>();
   const receiptId = id as Id<"receipts">;
+
+  // Hint targets
+  const itemsRef = useRef<View>(null);
+
+  // Hints
+  const reviewHint = useHint("scan_review", "delayed");
 
   const receipt = useQuery(api.receipts.getById, { id: receiptId });
   const shoppingList = useQuery(
@@ -585,41 +592,43 @@ export default function ConfirmReceiptScreen() {
         )}
 
         {/* Editable Items */}
-        <GlassCard variant="standard" style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons
-              name="receipt"
-              size={20}
-              color={colors.accent.primary}
-            />
-            <Text style={styles.sectionTitle}>Items ({editedItems.length})</Text>
-          </View>
+        <View ref={itemsRef}>
+          <GlassCard variant="standard" style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons
+                name="receipt"
+                size={20}
+                color={colors.accent.primary}
+              />
+              <Text style={styles.sectionTitle}>Items ({editedItems.length})</Text>
+            </View>
 
-          {editedItems.map((item, index) => (
-            <EditableItemRow
-              key={index}
-              item={item}
-              index={index}
-              onEditName={openEditNameModal}
-              onEditPrice={openEditPriceModal}
-              onDelete={handleDeleteItem}
-            />
-          ))}
+            {editedItems.map((item, index) => (
+              <EditableItemRow
+                key={index}
+                item={item}
+                index={index}
+                onEditName={openEditNameModal}
+                onEditPrice={openEditPriceModal}
+                onDelete={handleDeleteItem}
+              />
+            ))}
 
-          {/* Add Missing Item Button */}
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleAddMissingItem}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons
-              name="plus-circle"
-              size={20}
-              color={colors.accent.primary}
-            />
-            <Text style={styles.addButtonText}>Add Missing Item</Text>
-          </TouchableOpacity>
-        </GlassCard>
+            {/* Add Missing Item Button */}
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={handleAddMissingItem}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name="plus-circle"
+                size={20}
+                color={colors.accent.primary}
+              />
+              <Text style={styles.addButtonText}>Add Missing Item</Text>
+            </TouchableOpacity>
+          </GlassCard>
+        </View>
 
         {/* Totals */}
         <GlassCard
@@ -883,21 +892,30 @@ export default function ConfirmReceiptScreen() {
 
       {/* Unmatched Items Modal */}
       <UnmatchedItemsModal
-        visible={showUnmatchedModal}
-        onClose={() => {
-          setShowUnmatchedModal(false);
-          setReceiptSaved(true);
-        }}
-        receiptId={receiptId}
-        onComplete={(matchedCount) => {
-          setShowUnmatchedModal(false);
-          setReceiptSaved(true);
-        }}
+      visible={showUnmatchedModal}
+      onClose={() => {
+        setShowUnmatchedModal(false);
+        setReceiptSaved(true);
+      }}
+      receiptId={receiptId}
+      onComplete={(matchedCount) => {
+        setShowUnmatchedModal(false);
+        setReceiptSaved(true);
+      }}
       />
-    </GlassScreen>
-  );
-}
 
+      {/* Tutorial Hints */}
+      <HintOverlay
+      visible={reviewHint.shouldShow}
+      targetRef={itemsRef}
+      title="Review Scan"
+      content="Quickly check if the AI caught everything. Tap any name or price to correct it."
+      onDismiss={reviewHint.dismiss}
+      position="below"
+      />
+      </GlassScreen>
+      );
+      }
 // =============================================================================
 // EDITABLE ITEM ROW COMPONENT
 // =============================================================================

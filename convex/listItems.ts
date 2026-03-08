@@ -11,6 +11,7 @@ import { isDuplicateItem, isPotentialDuplicateByBrandSize, isDuplicateItemName }
 import { findLearnedMapping, tokenize, calculateTokenOverlap } from "./lib/itemMatcher";
 import { enrichGlobalFromProductScan } from "./lib/globalEnrichment";
 import { toGroceryTitleCase } from "./lib/titleCase";
+import { isValidSize, cleanItemForStorage } from "./lib/itemNameParser";
 
 /**
  * Helper to get price estimate from currentPrices table
@@ -31,24 +32,6 @@ async function getPriceFromCurrentPrices(
   // Return cheapest price
   const sorted = [...prices].sort((a, b) => a.unitPrice - b.unitPrice);
   return sorted[0].unitPrice;
-}
-
-/**
- * Validates that size contains a meaningful measurement (number + unit).
- * Rejects vague defaults like "per item", "each", etc.
- * Returns true if valid, false otherwise.
- */
-function isValidSize(size?: string | null, unit?: string | null): boolean {
-  if (!size || !unit) return false;
-
-  const vagueSizes = ["per item", "item", "each", "unit", "piece"];
-  const normalizedSize = size.toLowerCase().trim();
-
-  if (vagueSizes.includes(normalizedSize)) return false;
-
-  // Check if size contains a number (e.g., "500ml", "2kg", "1 pint")
-  const hasNumber = /\d/.test(size);
-  return hasNumber;
 }
 
 /**
@@ -358,15 +341,18 @@ export const create = mutation({
       }
     }
 
+    // Clean name/size/unit using centralized parser (enforces "500ml Milk" standard)
+    const cleaned = cleanItemForStorage(name, size, unit);
+
     const itemId = await ctx.db.insert("listItems", {
       listId: args.listId,
       userId: user._id,
       pantryItemId,
-      name,
+      name: cleaned.name,
       category: args.category,
       quantity: args.quantity,
-      size,
-      unit,
+      size: cleaned.size,
+      unit: cleaned.unit,
       estimatedPrice,
       priceSource,
       priceConfidence,
@@ -733,15 +719,19 @@ export const addFromPantryOut = mutation({
       }
 
       const normalizedPantryName = toGroceryTitleCase(pantryItem.name);
+
+      // Clean name/size/unit using centralized parser
+      const cleaned = cleanItemForStorage(normalizedPantryName, size, unit);
+
       const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
         pantryItemId: pantryItem._id,
-        name: normalizedPantryName,
+        name: cleaned.name,
         category: pantryItem.category,
         quantity: 1,
-        size,
-        unit,
+        size: cleaned.size,
+        unit: cleaned.unit,
         estimatedPrice,
         priceSource,
         priceConfidence,
@@ -876,15 +866,19 @@ export const addFromPantrySelected = mutation({
       }
 
       const normalizedPantryName = toGroceryTitleCase(pantryItem.name);
+
+      // Clean name/size/unit using centralized parser
+      const cleaned = cleanItemForStorage(normalizedPantryName, size, unit);
+
       const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
         pantryItemId: pantryItem._id,
-        name: normalizedPantryName,
+        name: cleaned.name,
         category: pantryItem.category,
         quantity: 1,
-        size,
-        unit,
+        size: cleaned.size,
+        unit: cleaned.unit,
         estimatedPrice,
         priceSource,
         priceConfidence,
@@ -990,14 +984,17 @@ export const addItemMidShop = mutation({
         return { status: "bumped" as const, success: true, itemId: existingItem._id, source: "add" as const };
       }
 
+      // Clean name/size/unit using centralized parser
+      const cleaned = cleanItemForStorage(name, args.size, args.unit);
+
       const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
-        name,
+        name: cleaned.name,
         category: args.category,
         quantity,
-        size: args.size,
-        unit: args.unit,
+        size: cleaned.size,
+        unit: cleaned.unit,
         estimatedPrice: args.estimatedPrice,
         priority: "should-have",
         isChecked: false,
@@ -1163,15 +1160,19 @@ export const addFromPantryBulk = mutation({
       }
 
       const normalizedPantryName = toGroceryTitleCase(pantryItem.name);
+
+      // Clean name/size/unit using centralized parser
+      const cleaned = cleanItemForStorage(normalizedPantryName, size, unit);
+
       const itemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
         pantryItemId,
-        name: normalizedPantryName,
+        name: cleaned.name,
         category: pantryItem.category,
         quantity: 1,
-        size,
-        unit,
+        size: cleaned.size,
+        unit: cleaned.unit,
         estimatedPrice,
         priceSource,
         priceConfidence,
@@ -1336,15 +1337,18 @@ export const addAndSeedPantry = mutation({
     }
 
     // 2. Create list item linked to the pantry item
+    // Clean name/size/unit using centralized parser
+    const cleaned = cleanItemForStorage(name, args.size, args.unit);
+
     const listItemId = await ctx.db.insert("listItems", {
       listId: args.listId,
       userId: user._id,
       pantryItemId,
-      name,
+      name: cleaned.name,
       category: args.category,
       quantity,
-      size: args.size,
-      unit: args.unit,
+      size: cleaned.size,
+      unit: cleaned.unit,
       estimatedPrice: args.estimatedPrice,
       priceSource: args.estimatedPrice != null ? "manual" : undefined,
       priority: "should-have",
@@ -1527,15 +1531,18 @@ export const addBatchFromScan = mutation({
         estimatedPrice = await getPriceFromCurrentPrices(ctx, item.name);
       }
 
+      // Clean name/size/unit using centralized parser
+      const cleaned = cleanItemForStorage(name, item.size, item.unit);
+
       const listItemId = await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
         ...(pantryItemId ? { pantryItemId } : {}),
-        name,
+        name: cleaned.name,
         category: item.category,
         quantity: item.quantity ?? 1,
-        size: item.size,
-        unit: item.unit,
+        size: cleaned.size,
+        unit: cleaned.unit,
         brand: item.brand,
         estimatedPrice,
         priceSource: item.estimatedPrice != null ? "ai" : undefined,
@@ -1861,16 +1868,19 @@ export const applyHealthSwap = mutation({
     // Delete original
     await ctx.db.delete(args.originalItemId);
 
+    // Clean name/size/unit using centralized parser
+    const cleaned = cleanItemForStorage(args.suggestedName, size, unit);
+
     // Create new suggested item
     const newItemId = await ctx.db.insert("listItems", {
       listId: args.listId,
       userId: user._id,
-      name: args.suggestedName,
+      name: cleaned.name,
       category,
       quantity: originalItem.quantity,
       priority: originalItem.priority,
-      size,
-      unit,
+      size: cleaned.size,
+      unit: cleaned.unit,
       estimatedPrice,
       priceSource,
       priceConfidence,

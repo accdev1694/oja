@@ -80,6 +80,10 @@ import { EditListNameModal } from "@/components/lists/EditListNameModal";
 import type { TripStats } from "@/hooks/useTripSummary";
 import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
 
+import { useHint } from "@/hooks/useHint";
+import { HintOverlay } from "@/components/tutorial/HintOverlay";
+import { hasViewedHint as hasViewedHintLocal } from "@/lib/storage/hintStorage";
+
 // ─── Sectionalization Types ──────────────────────────────────────────────────
 type ListSectionHeader = {
   _id: string;
@@ -96,8 +100,32 @@ export default function ListDetailScreen() {
   const { alert } = useGlassAlert();
   const { toast, dismiss, onMundaneAction, showToast } = useDelightToast();
 
+  // Hint targets
+  const searchRef = useRef<View>(null);
+  const budgetRef = useRef<View>(null);
+  const healthRef = useRef<View>(null);
+
+  // Hints
+  const addHint = useHint("list_detail_add", "delayed");
+  const budgetHint = useHint("list_detail_budget", "manual");
+  const healthHint = useHint("list_detail_health", "manual");
+
   const list = useQuery(api.shoppingLists.getById, { id });
   const items = useQuery(api.listItems.getByList, { listId: id });
+
+  // Trigger budget hint when first item is added
+  useEffect(() => {
+    if (items && items.length === 1 && !addHint.shouldShow) {
+      budgetHint.showHint();
+    }
+  }, [items?.length, addHint.shouldShow]);
+
+  // Trigger health hint when 3+ items are added
+  useEffect(() => {
+    if (items && items.length >= 3 && !addHint.shouldShow && !budgetHint.shouldShow) {
+      healthHint.showHint();
+    }
+  }, [items?.length, addHint.shouldShow, budgetHint.shouldShow]);
   const toggleChecked = useMutation(api.listItems.toggleChecked);
   const addItem = useMutation(api.listItems.create);
   const updateItem = useMutation(api.listItems.update);
@@ -1028,16 +1056,18 @@ export default function ListDetailScreen() {
 
       {/* Circular Budget Dial -- tap to edit (owner only) */}
       {budget > 0 && (
-        <CircularBudgetDial
-          budget={budget}
-          planned={estimatedTotal}
-          spent={checkedTotal}
-          mode={list?.status ?? "active"}
-          onPress={canEdit ? handleOpenEditBudget : undefined}
-          storeName={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
-          storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
-          transitioning={dialTransitioning}
-        />
+        <View ref={budgetRef}>
+          <CircularBudgetDial
+            budget={budget}
+            planned={estimatedTotal}
+            spent={checkedTotal}
+            mode={list?.status ?? "active"}
+            onPress={canEdit ? handleOpenEditBudget : undefined}
+            storeName={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
+            storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
+            transitioning={dialTransitioning}
+          />
+        </View>
       )}
 
       {/* Refresh Prices button — available in both modes when store is selected */}
@@ -1066,7 +1096,7 @@ export default function ListDetailScreen() {
 
       {/* Search Bar — show when there are items */}
       {(items?.length ?? 0) > 0 && (
-        <View style={styles.searchContainer}>
+        <View style={styles.searchContainer} ref={searchRef}>
           <GlassSearchInput
             value={searchTerm}
             onChangeText={setSearchTerm}
@@ -1358,22 +1388,24 @@ export default function ListDetailScreen() {
 
               {/* AI Health Analysis Button */}
               {(items?.length ?? 0) > 0 && (
-                <Pressable
-                  onPress={() => {
-                    haptic("light");
-                    setShowHealthModal(true);
-                  }}
-                  hitSlop={8}
-                  style={styles.headerIconButton}
-                >
-                  <Animated.View style={pulseAnimatedStyle}>
-                    <MaterialCommunityIcons
-                      name="heart-pulse"
-                      size={22}
-                      color={list.healthAnalysis ? "#4ADE80" : "rgba(255, 255, 255, 0.35)"}
-                    />
-                  </Animated.View>
-                </Pressable>
+                <View ref={healthRef}>
+                  <Pressable
+                    onPress={() => {
+                      haptic("light");
+                      setShowHealthModal(true);
+                    }}
+                    hitSlop={8}
+                    style={styles.headerIconButton}
+                  >
+                    <Animated.View style={pulseAnimatedStyle}>
+                      <MaterialCommunityIcons
+                        name="heart-pulse"
+                        size={22}
+                        color={list.healthAnalysis ? "#4ADE80" : "rgba(255, 255, 255, 0.35)"}
+                      />
+                    </Animated.View>
+                  </Pressable>
+                </View>
               )}
 
               <NotificationBell onPress={() => setShowNotifications(true)} />
@@ -1450,6 +1482,34 @@ export default function ListDetailScreen() {
           drawDistance={250}
         />
       </Animated.View>
+
+      {/* Tutorial Hints */}
+      <HintOverlay
+        visible={addHint.shouldShow}
+        targetRef={searchRef}
+        title="Add items easily"
+        content="Add items by typing or using Tobi (voice). We'll suggest your usuals first."
+        onDismiss={addHint.dismiss}
+        position="below"
+      />
+
+      <HintOverlay
+        visible={budgetHint.shouldShow}
+        targetRef={budgetRef}
+        title="Your live budget"
+        content="Watch your budget update in real-time. Green is good, amber is a warning!"
+        onDismiss={budgetHint.dismiss}
+        position="below"
+      />
+
+      <HintOverlay
+        visible={healthHint.shouldShow}
+        targetRef={healthRef}
+        title="AI Health Swaps"
+        content="Tapped a heart? Oja AI will suggest healthier or cheaper swaps for your list."
+        onDismiss={healthHint.dismiss}
+        position="below"
+      />
 
       {/* Edit Budget Modal */}
       <EditBudgetModal

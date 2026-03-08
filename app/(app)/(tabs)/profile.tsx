@@ -15,6 +15,7 @@ import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { setHintsEnabled, resetAllHints } from "@/lib/storage/hintStorage";
 
 import {
   GlassScreen,
@@ -35,6 +36,10 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
 import { PlatformAIUsageMonitor } from "@/components/admin/PlatformAIUsageMonitor";
 
+import { useHint } from "@/hooks/useHint";
+import { HintOverlay } from "@/components/tutorial/HintOverlay";
+import { hasViewedHint as hasViewedHintLocal } from "@/lib/storage/hintStorage";
+
 export default function ProfileScreen() {
   const { signOut } = useAuth();
   const { user } = useUser();
@@ -42,11 +47,35 @@ export default function ProfileScreen() {
   const { alert } = useGlassAlert();
   const { firstName, user: convexUser } = useCurrentUser();
   const isSwitchingUsers = useIsSwitchingUsers();
+
+  // Hint targets
+  const headerRef = useRef<View>(null);
+  const dietRef = useRef<View>(null);
+  const hintsRef = useRef<View>(null);
+
+  // Hints
+  const introHint = useHint("profile_intro", "delayed");
+  const dietHint = useHint("profile_diet", "manual");
+  const hintsHint = useHint("profile_hints", "manual");
+
+  // Sequence: intro -> diet -> hints
+  useEffect(() => {
+    if (introHint.shouldShow === false && !hasViewedHintLocal("profile_diet")) {
+      dietHint.showHint();
+    }
+  }, [introHint.shouldShow]);
+
+  useEffect(() => {
+    if (dietHint.shouldShow === false && !hasViewedHintLocal("profile_hints") && hasViewedHintLocal("profile_diet")) {
+      hintsHint.showHint();
+    }
+  }, [dietHint.shouldShow]);
   
   const cancelAllSubs = useAction(api.stripe.cancelAllUserSubscriptions);
   const resetMyAccount = useMutation(api.users.resetMyAccount);
   const deleteMyAccount = useMutation(api.users.deleteMyAccount);
   const updateNotificationSettings = useMutation(api.users.updateNotificationSettings);
+  const updateUser = useMutation(api.users.update);
   
   // Skip all queries during user switching to prevent cache leakage
   const allLists = useQuery(
@@ -176,6 +205,17 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleResetHints = () => {
+    confirmAction(
+      "Reset All Hints",
+      "This will show all tutorial hints again as you use the app.",
+      async () => {
+        resetAllHints();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    );
+  };
+
   const handleDeleteAccount = () => {
     confirmAction(
       "Delete Account",
@@ -260,11 +300,13 @@ export default function ProfileScreen() {
 
   return (
     <GlassScreen>
-      <SimpleHeader
-        title={userDisplayName ? `Hey, ${userDisplayName}` : "Profile"}
-        accentColor={colors.semantic.profile}
-        subtitle="Your insights & settings"
-      />
+      <View ref={headerRef}>
+        <SimpleHeader
+          title={userDisplayName ? `Hey, ${userDisplayName}` : "Profile"}
+          accentColor={colors.semantic.profile}
+          subtitle="Your insights & settings"
+        />
+      </View>
 
       <ScrollView
         style={styles.scrollView}
@@ -384,7 +426,7 @@ export default function ProfileScreen() {
 
         {/* User Account Section */}
         <AnimatedSection animation="fadeInDown" duration={400} delay={isAdmin ? 200 : 0}>
-          <View style={styles.section}>
+          <View style={styles.section} ref={dietRef}>
             <Text style={styles.sectionTitle}>Account</Text>
             <GlassCard variant="bordered" accentColor={colors.semantic.profile} style={{ marginBottom: spacing.sm }}>
               <View style={styles.accountRow}>
@@ -498,6 +540,35 @@ export default function ProfileScreen() {
                         } 
                       })}
                     />
+                  </View>
+                  <View style={styles.settingDivider} />
+                  <View style={styles.settingRow} ref={hintsRef}>
+                    <View style={styles.settingInfo}>
+                      <Text style={styles.settingTitle}>Tutorial Hints</Text>
+                      <Text style={styles.settingSubtitle}>Helpful tips as you use Oja</Text>
+                    </View>
+                    <GlassCheckbox 
+                      checked={convexUser?.showTutorialHints ?? true}
+                      onCheckedChange={(val) => {
+                        setHintsEnabled(val);
+                        updateUser({ showTutorialHints: val });
+                      }}
+                    />
+                  </View>
+
+                  <View style={styles.settingDivider} />
+                  <View style={styles.settingRow}>
+                    <View style={styles.settingInfo}>
+                      <Text style={styles.settingTitle}>Re-show All Hints</Text>
+                      <Text style={styles.settingSubtitle}>Reset progress & see tips again</Text>
+                    </View>
+                    <GlassButton
+                      variant="secondary"
+                      size="sm"
+                      onPress={handleResetHints}
+                    >
+                      Reset
+                    </GlassButton>
                   </View>
                 </>
               )}
@@ -818,6 +889,34 @@ export default function ProfileScreen() {
         {/* Bottom spacing */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Tutorial Hints */}
+      <HintOverlay
+        visible={introHint.shouldShow}
+        targetRef={headerRef}
+        title="Control Center"
+        content="This is your control center. Manage your account, referrals, and app settings here."
+        onDismiss={introHint.dismiss}
+        position="below"
+      />
+
+      <HintOverlay
+        visible={dietHint.shouldShow}
+        targetRef={dietRef}
+        title="Personalise Oja"
+        content="Set your dietary preferences in Account settings to get better health swaps tailored to you."
+        onDismiss={dietHint.dismiss}
+        position="below"
+      />
+
+      <HintOverlay
+        visible={hintsHint.shouldShow}
+        targetRef={hintsRef}
+        title="Hint Settings"
+        content="You can toggle these hints off anytime if you're already an Oja pro!"
+        onDismiss={hintsHint.dismiss}
+        position="above"
+      />
     </GlassScreen>
   );
 }

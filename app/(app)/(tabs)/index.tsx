@@ -48,6 +48,10 @@ import { TipBanner } from "@/components/ui/TipBanner";
 import { SeasonalEventBanner } from "@/components/ui/SeasonalEventBanner";
 import { NotificationDropdown } from "@/components/partners/NotificationDropdown";
 
+import { useHint } from "@/hooks/useHint";
+import { HintOverlay } from "@/components/tutorial/HintOverlay";
+import { hasViewedHint as hasViewedHintLocal } from "@/lib/storage/hintStorage";
+
 type TabMode = "active" | "history";
 
 export default function ListsScreen() {
@@ -55,6 +59,35 @@ export default function ListsScreen() {
   const { alert } = useGlassAlert();
   const { firstName } = useCurrentUser();
   const [tabMode, setTabMode] = useState<TabMode>("active");
+
+  // Hint targets
+  const headerRef = useRef<View>(null);
+  const createCardRef = useRef<View>(null);
+
+  // Hints
+  const welcomeHint = useHint("lists_welcome", "delayed");
+  const createHint = useHint("lists_create", "manual");
+  const templateHint = useHint("lists_templates", "manual");
+
+  // Sequence: Show create hint after welcome is dismissed
+  useEffect(() => {
+    if (welcomeHint.shouldShow === false) {
+       // If welcome hint was shown and is now dismissed (or was already seen)
+       // and create hint hasn't been seen yet, show it.
+       if (!hasViewedHintLocal("lists_create") && tabMode === "active") {
+         createHint.showHint();
+       }
+    }
+  }, [welcomeHint.shouldShow, tabMode]);
+
+  // Show template hint if user has 3+ lists and hasn't seen it
+  useEffect(() => {
+    if (lists && (lists.length + activeShared.length) >= 3) {
+      if (!welcomeHint.shouldShow && !createHint.shouldShow) {
+        templateHint.showHint();
+      }
+    }
+  }, [lists?.length, activeShared.length, welcomeHint.shouldShow, createHint.shouldShow]);
 
   const {
     activeLists: lists,
@@ -294,64 +327,66 @@ export default function ListsScreen() {
   return (
     <GlassScreen>
       {/* Header with New List button */}
-      <SimpleHeader
-        title={firstName ? `${firstName}'s Lists` : "Shopping Lists"}
-        accentColor={colors.semantic.lists}
-        subtitle={
-          tabMode === "active"
-            ? `${lists?.length ?? 0} active list${(lists?.length ?? 0) !== 1 ? "s" : ""}`
-            : `${history?.length ?? 0} archived list${(history?.length ?? 0) !== 1 ? "s" : ""}`
-        }
-        rightElement={
-          <View style={styles.headerActions}>
-            {tabMode === "active" ? (
-              <Pressable
-                style={[styles.addButton, isCreating && { opacity: 0.5 }]}
-                onPress={handleCreateListFlow}
-                disabled={isCreating}
-              >
-                <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
-              </Pressable>
-            ) : (
-              history && history.length > 0 && (
+      <View ref={headerRef}>
+        <SimpleHeader
+          title={firstName ? `${firstName}'s Lists` : "Shopping Lists"}
+          accentColor={colors.semantic.lists}
+          subtitle={
+            tabMode === "active"
+              ? `${lists?.length ?? 0} active list${(lists?.length ?? 0) !== 1 ? "s" : ""}`
+              : `${history?.length ?? 0} archived list${(history?.length ?? 0) !== 1 ? "s" : ""}`
+          }
+          rightElement={
+            <View style={styles.headerActions}>
+              {tabMode === "active" ? (
                 <Pressable
-                  style={styles.selectTextButton}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setIsMultiSelectMode(!isMultiSelectMode);
-                    if (isMultiSelectMode) setSelectedHistoryLists(new Set());
-                  }}
+                  style={[styles.addButton, isCreating && { opacity: 0.5 }]}
+                  onPress={handleCreateListFlow}
+                  disabled={isCreating}
                 >
-                  <Text style={styles.selectTextButtonLabel}>
-                    {isMultiSelectMode ? "Cancel" : "Select"}
-                  </Text>
+                  <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
                 </Pressable>
-              )
-            )}
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setShowNotifications(true);
-              }}
-              style={styles.bellButton}
-              hitSlop={8}
-            >
-              <MaterialCommunityIcons
-                name="bell-outline"
-                size={22}
-                color={colors.text.secondary}
-              />
-              {unreadCount > 0 && (
-                <View style={styles.bellBadge}>
-                  <Text style={styles.bellBadgeText}>
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </Text>
-                </View>
+              ) : (
+                history && history.length > 0 && (
+                  <Pressable
+                    style={styles.selectTextButton}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setIsMultiSelectMode(!isMultiSelectMode);
+                      if (isMultiSelectMode) setSelectedHistoryLists(new Set());
+                    }}
+                  >
+                    <Text style={styles.selectTextButtonLabel}>
+                      {isMultiSelectMode ? "Cancel" : "Select"}
+                    </Text>
+                  </Pressable>
+                )
               )}
-            </Pressable>
-          </View>
-        }
-      />
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowNotifications(true);
+                }}
+                style={styles.bellButton}
+                hitSlop={8}
+              >
+                <MaterialCommunityIcons
+                  name="bell-outline"
+                  size={22}
+                  color={colors.text.secondary}
+                />
+                {unreadCount > 0 && (
+                  <View style={styles.bellBadge}>
+                    <Text style={styles.bellBadgeText}>
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
+          }
+        />
+      </View>
 
       <ScrollView
         style={styles.scrollView}
@@ -453,26 +488,28 @@ export default function ListsScreen() {
               <View>
                 {/* Inline create-list card — always visible as first item */}
                 <AnimatedSection key={`create-${animationKey}`} animation="fadeInDown" duration={400} delay={150}>
-                  <Pressable
-                    onPress={handleCreateListFlow}
-                    disabled={isCreating}
-                    style={({ pressed }) => [
-                      styles.createCard,
-                      isCreating && { opacity: 0.5 },
-                      pressed && { opacity: 0.7 },
-                    ]}
-                  >
-                    <View style={styles.createCardInner}>
-                      <View style={styles.createCardIcon}>
-                        <MaterialCommunityIcons name="plus" size={24} color={colors.accent.primary} />
+                  <View ref={createCardRef}>
+                    <Pressable
+                      onPress={handleCreateListFlow}
+                      disabled={isCreating}
+                      style={({ pressed }) => [
+                        styles.createCard,
+                        isCreating && { opacity: 0.5 },
+                        pressed && { opacity: 0.7 },
+                      ]}
+                    >
+                      <View style={styles.createCardInner}>
+                        <View style={styles.createCardIcon}>
+                          <MaterialCommunityIcons name="plus" size={24} color={colors.accent.primary} />
+                        </View>
+                        <View style={styles.createCardText}>
+                          <Text style={styles.createCardTitle}>Create a new list</Text>
+                          <Text style={styles.createCardSubtitle}>Set a budget and start adding items</Text>
+                        </View>
+                        <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text.tertiary} />
                       </View>
-                      <View style={styles.createCardText}>
-                        <Text style={styles.createCardTitle}>Create a new list</Text>
-                        <Text style={styles.createCardSubtitle}>Set a budget and start adding items</Text>
-                      </View>
-                      <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text.tertiary} />
-                    </View>
-                  </Pressable>
+                    </Pressable>
+                  </View>
                 </AnimatedSection>
 
                 {displayList.map((list, index) => (
@@ -635,6 +672,34 @@ export default function ListsScreen() {
         currentName={editingListName}
         onClose={() => setShowEditNameModal(false)}
         onSave={handleSaveListName}
+      />
+
+      {/* Tutorial Hints */}
+      <HintOverlay
+        visible={welcomeHint.shouldShow}
+        targetRef={headerRef}
+        title="Welcome to Oja!"
+        content="Lists are your engine. Every item here updates your budget and pantry automatically."
+        onDismiss={welcomeHint.dismiss}
+        position="below"
+      />
+
+      <HintOverlay
+        visible={createHint.shouldShow}
+        targetRef={createCardRef}
+        title="Create your first list"
+        content="Tap here to start. We'll suggest your usuals to save you time."
+        onDismiss={createHint.dismiss}
+        position="below"
+      />
+
+      <HintOverlay
+        visible={templateHint.shouldShow}
+        targetRef={createCardRef}
+        title="Templates Save Time"
+        content="Save frequent lists as templates for one-tap reuse. Great for weekly essentials!"
+        onDismiss={templateHint.dismiss}
+        position="below"
       />
 
     </GlassScreen>
