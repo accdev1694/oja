@@ -113,9 +113,9 @@ npm run typecheck                 # TypeScript check
 ### Price Intelligence (Zero-Blank Prices)
 
 **Every item shows a price.** Three-layer cascade:
-1. **Personal History** - User's own receipts (highest trust)
-2. **Crowdsourced** - All users' receipt data by store/region
-3. **AI Estimate** - Gemini with OpenAI fallback
+1. **Personal History** - User's own receipts (Highest trust: **< 3 days old**)
+2. **Crowdsourced** - Community data (Overrides personal if personal is **> 3 days old** and community data is fresher)
+3. **AI Estimate** - Gemini with OpenAI fallback (Baseline)
 
 **Key files:** `lib/priceResolver.ts`, `currentPrices.ts`, `itemVariants.ts`, `priceHistory.ts`
 
@@ -449,6 +449,7 @@ E2E_CLERK_USER_USERNAME, E2E_CLERK_USER_PASSWORD
 - ✅ Personalization settings for health analysis
 - ✅ **Centralized item name/size parser** (`lib/itemNameParser.ts`) - Mandatory for all item creation routes
 - ✅ **Latest Price Enforcement:** New lists from templates/old lists MUST resolve fresh prices via `resolveVariantWithPrice()` (never copy stale data)
+- ✅ **3-Day Recency-Aware Pricing:** Community prices automatically override stale personal history (> 3 days) for maximum accuracy.
 
 ## BMAD Workflow
 
