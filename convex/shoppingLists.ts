@@ -9,6 +9,7 @@ import { getIconForItem } from "./iconMapping";
 import { isDuplicateItemName } from "./lib/fuzzyMatch";
 import { toGroceryTitleCase } from "./lib/titleCase";
 import { trackFunnelEvent, trackActivity } from "./lib/analytics";
+import { resolveVariantWithPrice } from "./lib/priceResolver";
 import { getUserListPermissions } from "./partners";
 
 // -----------------------------------------------------------------------------
@@ -2060,8 +2061,33 @@ export const createFromTemplate = mutation({
     // Track activity
     await trackActivity(ctx, user._id, "create_list", { listId: newListId, name: args.newListName });
 
-    // 4. Copy all items to new list (unchecked)
+    // 4. Copy all items to new list (UNCHECKED + REFRESHED PRICES)
     for (const item of sourceItems) {
+      // MANDATORY: Resolve fresh prices instead of copying stale data
+      // This ensures 4-week-old templates get the "latest and greatest" prices
+      let price = item.estimatedPrice;
+      let source = item.priceSource;
+      let confidence = item.priceConfidence;
+
+      try {
+        const storeId = sourceList.normalizedStoreId || sourceList.storeName || "";
+        const variantResult = await resolveVariantWithPrice(
+          ctx,
+          user._id,
+          item.name,
+          item.size || undefined,
+          storeId
+        );
+
+        if (variantResult) {
+          price = variantResult.price;
+          source = variantResult.source;
+          confidence = variantResult.confidence;
+        }
+      } catch (err) {
+        console.warn(`[createFromTemplate] Could not refresh price for ${item.name}:`, err);
+      }
+
       await ctx.db.insert("listItems", {
         listId: newListId,
         userId: user._id,
@@ -2070,9 +2096,9 @@ export const createFromTemplate = mutation({
         quantity: item.quantity,
         size: item.size,
         unit: item.unit,
-        estimatedPrice: item.estimatedPrice,
-        priceSource: item.priceSource,
-        priceConfidence: item.priceConfidence,
+        estimatedPrice: price,
+        priceSource: source,
+        priceConfidence: confidence,
         isChecked: false, // Important: start fresh
         priority: item.priority,
         autoAdded: false,
@@ -2289,8 +2315,31 @@ export const createFromMultipleLists = mutation({
     // Track activity
     await trackActivity(ctx, user._id, "create_list", { listId: newListId, name: args.newListName });
 
-    // 4. Insert deduplicated items
+    // 4. Insert deduplicated items with REFRESHED PRICES
     for (const item of result.items) {
+      // MANDATORY: Resolve fresh prices instead of copying stale data
+      let price = item.estimatedPrice;
+      let source: "personal" | "crowdsourced" | "ai_estimate" = "personal";
+      let confidence = 1.0;
+
+      try {
+        const variantResult = await resolveVariantWithPrice(
+          ctx,
+          user._id,
+          item.name,
+          item.size || undefined,
+          primaryStoreId || ""
+        );
+
+        if (variantResult) {
+          price = variantResult.price;
+          source = variantResult.source;
+          confidence = variantResult.confidence;
+        }
+      } catch (err) {
+        console.warn(`[createFromMultipleLists] Could not refresh price for ${item.name}:`, err);
+      }
+
       await ctx.db.insert("listItems", {
         listId: newListId,
         userId: user._id,
@@ -2299,9 +2348,9 @@ export const createFromMultipleLists = mutation({
         quantity: item.quantity,
         size: item.size,
         unit: item.unit,
-        estimatedPrice: item.estimatedPrice,
-        priceSource: "personal", // Simplified for merged items
-        priceConfidence: 1.0,
+        estimatedPrice: price,
+        priceSource: source,
+        priceConfidence: confidence,
         isChecked: false,
         priority: "should-have",
         autoAdded: false,

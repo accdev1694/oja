@@ -448,6 +448,7 @@ E2E_CLERK_USER_USERNAME, E2E_CLERK_USER_PASSWORD
 - ✅ AI usage monitoring dashboard (voice/scan caps)
 - ✅ Personalization settings for health analysis
 - ✅ **Centralized item name/size parser** (`lib/itemNameParser.ts`) - Mandatory for all item creation routes
+- ✅ **Latest Price Enforcement:** New lists from templates/old lists MUST resolve fresh prices via `resolveVariantWithPrice()` (never copy stale data)
 
 ## BMAD Workflow
 

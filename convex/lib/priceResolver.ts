@@ -94,6 +94,7 @@ export async function resolvePrice(
   const normalizedStore = storeName?.toLowerCase().trim();
 
   // Layer 1: Personal priceHistory (user's own receipts)
+  let bestPersonal: any = null;
   if (userId) {
     const personalHistory = await ctx.db
       .query("priceHistory")
@@ -120,13 +121,20 @@ export async function resolvePrice(
       if (candidates.length > 0) {
         // Use most recent entry
         const sorted = candidates.sort((a, b) => b.purchaseDate - a.purchaseDate);
-        return {
-          price: sorted[0].unitPrice,
-          priceSource: "personal",
-          confidence: 1.0,
-          storeName: sorted[0].storeName,
-          reportCount: candidates.length,
-        };
+        bestPersonal = sorted[0];
+
+        // 3-Day Trust Window: If personal price is < 3 days old, it's the gold standard.
+        const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+        if (Date.now() - bestPersonal.purchaseDate < threeDaysMs) {
+          return {
+            price: bestPersonal.unitPrice,
+            priceSource: "personal",
+            confidence: 1.0,
+            storeName: bestPersonal.storeName,
+            reportCount: candidates.length,
+          };
+        }
+        // If older than 3 days, we continue to Layer 2 to see if there's fresher data.
       }
     }
   }
@@ -151,72 +159,95 @@ export async function resolvePrice(
     );
 
     if (variantPrices.length > 0) {
+      // Find the best crowdsourced match
+      let bestCrowdMatch: any = null;
+      let crowdType: "store_region" | "store" | "region" | "global" = "global";
+
       // Priority 1: Exact Store + Region Match
       if (normalizedStore) {
-        const bestMatch = variantPrices.find(
+        bestCrowdMatch = variantPrices.find(
           (p) => (p.storeName?.toLowerCase() === normalizedStore || p.normalizedStoreId === normalizedStore) && 
                  p.region === userRegion
         );
-        if (bestMatch) {
-          const age = now - bestMatch.lastSeenDate;
-          const recencyMultiplier = Math.max(0.7, 1 - (age / (thirtyDaysMs * 3))); // Decay over 90 days
-          return {
-            price: bestMatch.averagePrice ?? bestMatch.unitPrice,
-            priceSource: "crowdsourced",
-            confidence: Math.min(0.95, (0.7 + (bestMatch.reportCount * 0.05)) * recencyMultiplier),
-            storeName: bestMatch.storeName,
-            reportCount: bestMatch.reportCount,
-          };
-        }
+        if (bestCrowdMatch) crowdType = "store_region";
       }
 
       // Priority 2: Store Match (any region)
-      if (normalizedStore) {
-        const storeMatch = variantPrices.find(
+      if (!bestCrowdMatch && normalizedStore) {
+        bestCrowdMatch = variantPrices.find(
           (p) => p.storeName?.toLowerCase() === normalizedStore ||
             p.normalizedStoreId === normalizedStore
         );
-        if (storeMatch) {
-          const age = now - storeMatch.lastSeenDate;
-          const recencyMultiplier = Math.max(0.6, 1 - (age / (thirtyDaysMs * 3)));
+        if (bestCrowdMatch) crowdType = "store";
+      }
+
+      // Priority 3: Region Match (any store)
+      if (!bestCrowdMatch) {
+        bestCrowdMatch = variantPrices.find(p => p.region === userRegion);
+        if (bestCrowdMatch) crowdType = "region";
+      }
+
+      // Priority 4: Global Match (cheapest)
+      if (!bestCrowdMatch) {
+        bestCrowdMatch = [...variantPrices].sort(
+          (a, b) => (a.averagePrice ?? a.unitPrice) - (b.averagePrice ?? b.unitPrice)
+        )[0];
+        crowdType = "global";
+      }
+
+      if (bestCrowdMatch) {
+        const age = now - bestCrowdMatch.lastSeenDate;
+        const recencyMultiplier = Math.max(0.4, 1 - (age / (thirtyDaysMs * 3)));
+        
+        let baseConfidence = 0.4;
+        if (crowdType === "store_region") baseConfidence = 0.7;
+        else if (crowdType === "store") baseConfidence = 0.6;
+        else if (crowdType === "region") baseConfidence = 0.5;
+
+        const resolvedCrowd = {
+          price: bestCrowdMatch.averagePrice ?? bestCrowdMatch.unitPrice,
+          priceSource: "crowdsourced" as const,
+          confidence: Math.min(0.95, (baseConfidence + (bestCrowdMatch.reportCount * 0.05)) * recencyMultiplier),
+          storeName: bestCrowdMatch.storeName,
+          reportCount: bestCrowdMatch.reportCount,
+          lastSeenDate: bestCrowdMatch.lastSeenDate
+        };
+
+        // Comparison Logic: Pick Crowdsourced if it's fresher than your stale personal price
+        if (bestPersonal) {
+          const personalAge = now - bestPersonal.purchaseDate;
+          const crowdAge = now - resolvedCrowd.lastSeenDate;
+
+          // If crowdsourced data is more recent AND at least moderately confident, use it.
+          // OR if crowdsourced is from the same store and has many reports.
+          if (crowdAge < personalAge && resolvedCrowd.confidence > 0.6) {
+            return resolvedCrowd;
+          }
+
+          // Otherwise, fall back to the stale personal price (it's still your data)
           return {
-            price: storeMatch.averagePrice ?? storeMatch.unitPrice,
-            priceSource: "crowdsourced",
-            confidence: Math.min(0.9, (0.6 + (storeMatch.reportCount * 0.05)) * recencyMultiplier),
-            storeName: storeMatch.storeName,
-            reportCount: storeMatch.reportCount,
+            price: bestPersonal.unitPrice,
+            priceSource: "personal",
+            confidence: 0.9, // Reduced confidence because it's stale (> 3 days)
+            storeName: bestPersonal.storeName,
+            reportCount: 1,
           };
         }
-      }
 
-      // Priority 3: Region Match (any store) - e.g. "General price in London"
-      const regionMatch = variantPrices.find(p => p.region === userRegion);
-      if (regionMatch) {
-        const age = now - regionMatch.lastSeenDate;
-        const recencyMultiplier = Math.max(0.5, 1 - (age / (thirtyDaysMs * 3)));
-        return {
-          price: regionMatch.averagePrice ?? regionMatch.unitPrice,
-          priceSource: "crowdsourced",
-          confidence: Math.min(0.85, (0.5 + (regionMatch.reportCount * 0.05)) * recencyMultiplier),
-          storeName: regionMatch.storeName,
-          reportCount: regionMatch.reportCount,
-        };
+        return resolvedCrowd;
       }
-
-      // Priority 4: Cheapest across any store/region
-      const sorted = [...variantPrices].sort(
-        (a, b) => (a.averagePrice ?? a.unitPrice) - (b.averagePrice ?? b.unitPrice)
-      );
-      const age = now - sorted[0].lastSeenDate;
-      const recencyMultiplier = Math.max(0.4, 1 - (age / (thirtyDaysMs * 3)));
-      return {
-        price: sorted[0].averagePrice ?? sorted[0].unitPrice,
-        priceSource: "crowdsourced",
-        confidence: Math.min(0.8, (0.4 + (sorted[0].reportCount * 0.05)) * recencyMultiplier),
-        storeName: sorted[0].storeName,
-        reportCount: sorted[0].reportCount,
-      };
     }
+  }
+
+  // If no crowdsourced data but we have a stale personal price, use it
+  if (bestPersonal) {
+    return {
+      price: bestPersonal.unitPrice,
+      priceSource: "personal",
+      confidence: 0.9,
+      storeName: bestPersonal.storeName,
+      reportCount: 1,
+    };
   }
 
   // Layer 3: AI-estimated price
