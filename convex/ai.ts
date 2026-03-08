@@ -11,6 +11,7 @@ import {
 } from "./lib/voiceTools";
 import { toGroceryTitleCase } from "./lib/titleCase";
 import { calculateSimilarity } from "./lib/fuzzyMatch";
+import { cleanItemForStorage } from "./lib/itemNameParser";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
@@ -580,7 +581,7 @@ Return ONLY valid JSON in this exact format:
   "purchaseDate": "2026-01-29",
   "items": [
     {
-      "name": "2pt Semi-Skimmed Milk",
+      "name": "Semi-Skimmed Milk",
       "size": "2pt",
       "unit": "pint",
       "quantity": 1,
@@ -589,13 +590,13 @@ Return ONLY valid JSON in this exact format:
       "confidence": 95
     },
     {
-      "name": "Loose Bananas",
-      "size": "each",
-      "unit": "each",
-      "quantity": 1,
-      "unitPrice": 0.75,
+      "name": "Bananas",
+      "size": null,
+      "unit": null,
+      "quantity": 5,
+      "unitPrice": 0.15,
       "totalPrice": 0.75,
-      "confidence": 60
+      "confidence": 90
     }
   ],
   "subtotal": 10.00,
@@ -2170,12 +2171,20 @@ Return ONLY valid JSON in this exact format, with no markdown formatting or code
     // Map originalNames to originalIds using improved fuzzy matching
     const swapsWithIds = (parsed.swaps || []).map((swap) => {
       if (swap.originalName === "Bonus") {
+        // Clean suggested name/size/unit using centralized utility
+        const cleaned = cleanItemForStorage(
+          swap.suggestedName,
+          swap.suggestedSize,
+          swap.suggestedUnit
+        );
+
         return {
           ...swap,
+          suggestedName: cleaned.name,
           originalId: undefined as Id<"listItems"> | undefined,
           suggestedCategory: swap.suggestedCategory || "Produce",
-          suggestedSize: swap.suggestedSize || "per item",
-          suggestedUnit: swap.suggestedUnit || "each",
+          suggestedSize: cleaned.size,
+          suggestedUnit: cleaned.unit,
           priceDelta: swap.priceDelta ? parseFloat(String(swap.priceDelta).replace(/^\+/, '')) : undefined,
           scoreImpact: typeof swap.scoreImpact === 'number' ? swap.scoreImpact : 2
         };
@@ -2188,11 +2197,11 @@ Return ONLY valid JSON in this exact format, with no markdown formatting or code
       for (const item of items) {
         // Use calculateSimilarity (Levenshtein)
         const sim = calculateSimilarity(item.name, swap.originalName);
-        
+
         // Also check substring containment as a strong signal
-        const includes = item.name.toLowerCase().includes(swap.originalName.toLowerCase()) || 
+        const includes = item.name.toLowerCase().includes(swap.originalName.toLowerCase()) ||
                          swap.originalName.toLowerCase().includes(item.name.toLowerCase());
-        
+
         const effectiveSim = includes ? Math.max(sim, 80) : sim;
 
         if (effectiveSim > highestSimilarity) {
@@ -2201,13 +2210,22 @@ Return ONLY valid JSON in this exact format, with no markdown formatting or code
         }
       }
 
+      // Clean suggested name/size/unit using centralized utility
+      // Fallback to bestMatch if AI didn't provide, but clean it
+      const cleaned = cleanItemForStorage(
+        swap.suggestedName,
+        swap.suggestedSize || bestMatch?.size,
+        swap.suggestedUnit || bestMatch?.unit
+      );
+
       // Only match if similarity is decent (e.g., > 60%)
       return {
         ...swap,
+        suggestedName: cleaned.name,
         originalId: highestSimilarity > 60 ? bestMatch?._id : undefined as Id<"listItems"> | undefined,
         suggestedCategory: swap.suggestedCategory || bestMatch?.category || "Pantry Staples",
-        suggestedSize: swap.suggestedSize || bestMatch?.size || "per item",
-        suggestedUnit: swap.suggestedUnit || bestMatch?.unit || "each",
+        suggestedSize: cleaned.size,
+        suggestedUnit: cleaned.unit,
         priceDelta: swap.priceDelta ? parseFloat(String(swap.priceDelta).replace(/^\+/, '')) : undefined,
         scoreImpact: typeof swap.scoreImpact === 'number' ? swap.scoreImpact : 5
       };

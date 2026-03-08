@@ -166,6 +166,105 @@ Requires dev build (native modules).
 | `lib/icons/iconMatcher` | 106 validated MaterialCommunityIcons |
 | `lib/keyboard/safeKeyboardController` | Safe keyboard wrapper (dev build fallback) |
 | `lib/text/fuzzyMatch` | Levenshtein similarity for deduplication |
+| **`lib/itemNameParser`** | **Item name/size parser (MANDATORY for all item creation)** |
+
+### Item Name Parser (MANDATORY)
+
+**Location:** `convex/lib/itemNameParser.ts`
+
+**Critical:** MUST be used for ALL item creation/update operations across the entire codebase.
+
+**UNACCEPTABLE:** Size without unit. The utility will REJECT any size without a unit completely.
+
+**Three core functions:**
+
+1. **`cleanItemForStorage(name, size, unit)`** - Use BEFORE saving to database
+   - **CRITICAL:** Rejects size without unit completely (returns both as undefined)
+   - Filters vague sizes ("per item", "each", "unit", "piece")
+   - Validates size has number + unit
+   - Extracts size from beginning of name
+   - Auto-extracts unit from size string if not provided
+   - Returns: `{ name: string, size?: string, unit?: string }`
+   - Guarantee: If size is present, unit is ALWAYS present. If unit missing, size is rejected.
+
+2. **`formatItemDisplay(name, size, unit)`** - Use for UI display
+   - Shows size at BEGINNING: "500ml Milk" ✅
+   - Filters invalid sizes automatically
+   - Requires both size AND unit to display size
+   - Returns: formatted string
+
+3. **`isValidSize(size, unit)`** - Validate size/unit pair
+   - **CRITICAL:** Returns false if size exists but unit is missing
+   - Validates unit is a known UK grocery unit (ml, l, g, kg, pt, pint, pack, etc.)
+   - Returns boolean
+   - Use for conditional logic
+
+**Usage Examples:**
+
+```typescript
+// FRONTEND (React Native components)
+import { cleanItemForStorage, formatItemDisplay } from "@/convex/lib/itemNameParser";
+
+// Example 1: Size at beginning with vague unit - auto-extracts unit
+const cleaned1 = cleanItemForStorage("500ml Milk", "per item", "each");
+// Result: { name: "Milk", size: "500ml", unit: "ml" }
+
+// Example 2: Size without unit - REJECTED completely
+const cleaned2 = cleanItemForStorage("Milk", "500", undefined);
+// Result: { name: "Milk", size: undefined, unit: undefined }
+
+// Example 3: Valid size and unit
+const cleaned3 = cleanItemForStorage("Rice", "2kg", "kg");
+// Result: { name: "Rice", size: "2kg", unit: "kg" }
+
+await createItem({
+  listId,
+  name: cleaned.name,
+  size: cleaned.size,  // Always present with unit, or undefined
+  unit: cleaned.unit,  // Always present with size, or undefined
+  // ...
+});
+
+// For display
+const displayText = formatItemDisplay(item.name, item.size, item.unit);
+// "500ml Milk" (never "Milk 500ml" or "Milk per item" or "Milk 500")
+```
+
+```typescript
+// BACKEND (Convex mutations/actions)
+import { cleanItemForStorage } from "./lib/itemNameParser";
+
+export const addItem = mutation({
+  handler: async (ctx, args) => {
+    const cleaned = cleanItemForStorage(args.name, args.size, args.unit);
+
+    await ctx.db.insert("listItems", {
+      name: cleaned.name,
+      size: cleaned.size,
+      unit: cleaned.unit,
+      // ...
+    });
+  },
+});
+```
+
+**Enforcement:**
+- **Size without unit is UNACCEPTABLE** - utility will reject completely
+- **ALL data sources cleaned:**
+  - Frontend: PersonalizedSuggestions, HealthAnalysisModal, AddItemsModal ✅
+  - Backend queries: personalization.ts (getBuyItAgainSuggestions) ✅
+  - AI responses: ai.ts (analyzeListHealth swaps and bonuses) ✅
+  - Voice assistant: voiceTools.ts ✅
+- **ALL future routes MUST use this utility:**
+  - Before saving items to database
+  - Before returning suggestions from queries
+  - Before displaying items to users
+- Code review will reject:
+  - Item creation without this utility
+  - Query results without cleaning
+  - Any attempt to save size without unit
+  - Bypassing the utility validation
+- Utility includes fail-safe: throws error if size without unit somehow passes through
 
 ### Keyboard Awareness Pattern
 
@@ -213,7 +312,29 @@ Reference implementation: `list/[id].tsx` - dynamic overlap algorithm using `use
 9. **NEVER use types** - Never use TypeScript type annotations (`: any`, `: string`, interfaces, type casts) when writing code
 10. **Parallel sub-agents** - Deploy multiple sub-agents in parallel where possible
 11. **Never fix without approval** - Present analysis and proposed solution first
-12. **Convex cross-function calls:**
+12. **Size/Weight formatting (MANDATORY UTILITY USAGE):**
+    ```typescript
+    // ❌ WRONG - Never create items without utility
+    await createItem({ name: "500ml Milk", size: "per item" })
+    await createItem({ name: "Milk", size: "500ml" }) // NO UNIT - UNACCEPTABLE!
+
+    // ✅ CORRECT - Always use cleanItemForStorage
+    import { cleanItemForStorage } from "@/convex/lib/itemNameParser";
+    const cleaned = cleanItemForStorage("500ml Milk", "per item", "each");
+    await createItem({
+      name: cleaned.name,      // "Milk"
+      size: cleaned.size,      // "500ml"
+      unit: cleaned.unit       // "ml" - ALWAYS present if size exists
+    })
+    ```
+    - **CRITICAL:** Size without unit is UNACCEPTABLE and will be rejected
+    - **EVERY item creation/update** must call `cleanItemForStorage()` first
+    - **EVERY item display** should use `formatItemDisplay()` for consistency
+    - Utility ensures: Size + Unit always together, or both undefined
+    - See **"Item Name Parser (MANDATORY)"** section below for full documentation
+    - Import: `@/convex/lib/itemNameParser` (works in frontend & backend)
+    - Reference: `PersonalizedSuggestions.tsx`, `HealthAnalysisModal.tsx`, `voiceTools.ts`
+13. **Convex cross-function calls:**
     - Import `api` from `./_generated/api`: `import { api } from "./_generated/api";`
     - Use `ctx.runQuery(api.module.functionName, args)` or `ctx.runMutation(api.module.functionName, args)`
     - Example: `await ctx.runQuery(api.admin.getAnalytics, {})` ✅ not `await ctx.runQuery(query.getAnalytics, {})` ❌
@@ -326,6 +447,7 @@ E2E_CLERK_USER_USERNAME, E2E_CLERK_USER_PASSWORD
 - ✅ Push notification settings with quiet hours
 - ✅ AI usage monitoring dashboard (voice/scan caps)
 - ✅ Personalization settings for health analysis
+- ✅ **Centralized item name/size parser** (`lib/itemNameParser.ts`) - Mandatory for all item creation routes
 
 ## BMAD Workflow
 

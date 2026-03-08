@@ -7,6 +7,7 @@ import { colors, typography, spacing, borderRadius, GlassCard, GlassButton } fro
 import * as Haptics from "expo-haptics";
 import { Id } from "@/convex/_generated/dataModel";
 import { LinearGradient } from "expo-linear-gradient";
+import { cleanItemForStorage } from "@/convex/lib/itemNameParser";
 
 interface HealthSwap {
   originalName: string;
@@ -74,9 +75,9 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
   };
 
   const handleApplySwap = async (
-    originalId: string, 
-    suggestedName: string, 
-    suggestedCategory?: string, 
+    originalId: string,
+    suggestedName: string,
+    suggestedCategory?: string,
     scoreImpact?: number,
     suggestedSize?: string,
     suggestedUnit?: string
@@ -84,15 +85,19 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
     if (!originalId) return;
     setSwappingId(originalId);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Clean name and size using centralized utility
+    const cleaned = cleanItemForStorage(suggestedName, suggestedSize, suggestedUnit);
+
     try {
       await applySwap({
         listId,
         originalItemId: originalId as Id<"listItems">,
-        suggestedName,
+        suggestedName: cleaned.name,
         suggestedCategory,
         scoreImpact,
-        suggestedSize,
-        suggestedUnit,
+        suggestedSize: cleaned.size,
+        suggestedUnit: cleaned.unit,
       });
 
       // Update local state to reflect UI update immediately (including score)
@@ -115,23 +120,27 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
   };
 
   const handleAddBonus = async (
-    name: string, 
-    category?: string, 
+    name: string,
+    category?: string,
     scoreImpact?: number,
     suggestedSize?: string,
     suggestedUnit?: string
   ) => {
     setAddingBonus(name);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Clean name and size using centralized utility
+    const cleaned = cleanItemForStorage(name, suggestedSize, suggestedUnit);
+
     try {
       await addItem({
         listId,
-        name,
+        name: cleaned.name,
         category: category || "Produce",
         quantity: 1,
         priority: "should-have",
-        size: suggestedSize,
-        unit: suggestedUnit,
+        size: cleaned.size,
+        unit: cleaned.unit,
       });
 
       // Also manually update list health for bonuses (optional but good for consistency)

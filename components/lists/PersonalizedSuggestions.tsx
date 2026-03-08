@@ -7,6 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { colors, typography, spacing, borderRadius, GlassCard } from "@/components/ui/glass";
 import * as Haptics from "expo-haptics";
 import { Id } from "@/convex/_generated/dataModel";
+import { cleanItemForStorage, formatItemDisplay } from "@/convex/lib/itemNameParser";
 
 interface PersonalizedSuggestionsProps {
   activeListId?: Id<"shoppingLists">;
@@ -41,15 +42,19 @@ export const PersonalizedSuggestions = ({ activeListId, onItemAdded }: Personali
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
-    
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Use centralized parser to clean name and size
+    const cleaned = cleanItemForStorage(item.name, item.size, item.unit);
+
     try {
       await addItem({
         listId: activeListId,
-        name: item.name,
+        name: cleaned.name,
         quantity: item.quantity,
-        size: item.size,
-        unit: item.unit,
+        size: cleaned.size,
+        unit: cleaned.unit,
         estimatedPrice: item.lastPrice,
         priceSource: "personal",
         priority: "should-have",
@@ -63,35 +68,52 @@ export const PersonalizedSuggestions = ({ activeListId, onItemAdded }: Personali
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Suggested for you</Text>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false} 
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         nestedScrollEnabled={true}
         keyboardShouldPersistTaps="always"
       >
-        {suggestions.map((item, index) => (
-          <GlassCard 
-            key={index} 
-            style={styles.card} 
-            variant="standard"
-          >
-            <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.itemMeta}>Bought {item.quantity} {getDaysAgoText(item.purchaseDate)}</Text>
-            <Pressable 
+        {suggestions.map((item, index) => {
+          // Use centralized formatter for consistent display
+          const cleaned = cleanItemForStorage(item.name, item.size, item.unit);
+          const fullDisplayName = formatItemDisplay(cleaned.name, cleaned.size, cleaned.unit);
+
+          return (
+            <Pressable
+              key={index}
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
               style={({ pressed }) => [
-                styles.addButton, 
-                pressed && { opacity: 0.7 },
-                !activeListId && { opacity: 0.5 }
+                styles.cardPressable,
+                pressed && { opacity: 0.9 }
               ]}
-              onPress={() => handleAdd(item)}
-              disabled={!activeListId}
             >
-              <MaterialCommunityIcons name="plus" size={14} color={colors.accent.primary} />
-              <Text style={styles.addButtonText}>Buy again</Text>
+              <GlassCard
+                style={styles.card}
+                variant="standard"
+              >
+                <Text style={styles.itemName} numberOfLines={1}>{fullDisplayName}</Text>
+                <Text style={styles.itemMeta}>Bought {item.quantity} {getDaysAgoText(item.purchaseDate)}</Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.addButton,
+                    pressed && { opacity: 0.7 },
+                    !activeListId && { opacity: 0.5 }
+                  ]}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleAdd(item);
+                  }}
+                  disabled={!activeListId}
+                >
+                  <MaterialCommunityIcons name="plus" size={14} color={colors.accent.primary} />
+                  <Text style={styles.addButtonText}>Buy again</Text>
+                </Pressable>
+              </GlassCard>
             </Pressable>
-          </GlassCard>
-        ))}
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -110,6 +132,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
+  },
+  cardPressable: {
+    borderRadius: borderRadius.lg,
   },
   card: {
     width: 160,

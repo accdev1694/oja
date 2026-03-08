@@ -34,6 +34,7 @@ import type * as lib_fuzzyMatch from "../lib/fuzzyMatch.js";
 import type * as lib_globalEnrichment from "../lib/globalEnrichment.js";
 import type * as lib_itemDeduplicator from "../lib/itemDeduplicator.js";
 import type * as lib_itemMatcher from "../lib/itemMatcher.js";
+import type * as lib_itemNameParser from "../lib/itemNameParser.js";
 import type * as lib_priceBracketMatcher from "../lib/priceBracketMatcher.js";
 import type * as lib_priceResolver from "../lib/priceResolver.js";
 import type * as lib_receiptHelpers from "../lib/receiptHelpers.js";
@@ -113,6 +114,7 @@ declare const fullApi: ApiFromModules<{
   "lib/globalEnrichment": typeof lib_globalEnrichment;
   "lib/itemDeduplicator": typeof lib_itemDeduplicator;
   "lib/itemMatcher": typeof lib_itemMatcher;
+  "lib/itemNameParser": typeof lib_itemNameParser;
   "lib/priceBracketMatcher": typeof lib_priceBracketMatcher;
   "lib/priceResolver": typeof lib_priceResolver;
   "lib/receiptHelpers": typeof lib_receiptHelpers;

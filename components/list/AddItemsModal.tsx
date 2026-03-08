@@ -48,6 +48,7 @@ import { VariantPicker } from "@/components/items/VariantPicker";
 import type { VariantOption } from "@/components/items/VariantPicker";
 import { useVariantPrefetch } from "@/hooks/useVariantPrefetch";
 import { getIconForItem } from "@/lib/icons/iconMatcher";
+import { formatItemDisplay } from "@/convex/lib/itemNameParser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isDuplicateItem } from "@/convex/lib/fuzzyMatch";
 import { PersonalizedSuggestions } from "@/components/lists/PersonalizedSuggestions";
@@ -308,7 +309,7 @@ export function AddItemsModal({
   const variantOptions: VariantOption[] = useMemo(() => {
     if (!variantResult?.sizes) return [];
     return variantResult.sizes.map((s) => ({
-      variantName: `${selectedSuggestion?.name ?? ""} ${s.size}`,
+      variantName: formatItemDisplay(selectedSuggestion?.name ?? "", s.size, s.unitLabel.replace("/", "")),
       size: s.sizeNormalized || s.size,
       unit: s.unitLabel.replace("/", ""),
       price: s.price,
@@ -1099,8 +1100,7 @@ export function AddItemsModal({
                 color={colors.accent.primary}
               />
               <Text style={styles.feedbackText} numberOfLines={1}>
-                {item.name}
-                {item.size ? ` ${item.size}` : ""}
+                {formatItemDisplay(item.name, item.size)}
                 {item.price != null ? ` \u00B7 \u00A3${item.price.toFixed(2)}` : ""}
                 {" added"}
               </Text>

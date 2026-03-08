@@ -12,44 +12,7 @@ import {
 import { GlassCard, colors, spacing, borderRadius } from "@/components/ui/glass";
 import { RemoveButton } from "@/components/ui/RemoveButton";
 import { AddToListButton } from "@/components/ui/AddToListButton";
-
-/**
- * Format size display for items
- * Returns formatted size string or null if no size data
- * Examples: "250g", "2pt", "500ml"
- */
-function formatSize(size?: string, unit?: string): string | null {
-  if (!size) return null;
-  // If size already includes unit (e.g., "2pt", "500ml", "250g"), return as-is
-  if (/\d+\s*(ml|l|g|kg|pt|pint|oz|lb)/i.test(size)) return size;
-  // Otherwise combine: "2" + "pint" → "2pint" or abbreviate common units
-  if (unit) {
-    // Abbreviate common units for cleaner display
-    const unitAbbr: Record<string, string> = {
-      pint: "pt",
-      pints: "pt",
-      litre: "L",
-      litres: "L",
-      liter: "L",
-      liters: "L",
-      gram: "g",
-      grams: "g",
-      kilogram: "kg",
-      kilograms: "kg",
-      millilitre: "ml",
-      millilitres: "ml",
-      milliliter: "ml",
-      milliliters: "ml",
-      ounce: "oz",
-      ounces: "oz",
-      pound: "lb",
-      pounds: "lb",
-    };
-    const abbr = unitAbbr[unit.toLowerCase()] || unit;
-    return `${size}${abbr}`;
-  }
-  return size;
-}
+import { formatItemDisplay } from "@/convex/lib/itemNameParser";
 
 export interface PantryItemRowProps {
   item: {
@@ -164,17 +127,8 @@ export const PantryItemRow = React.memo(function PantryItemRow({
         ? "Running low"
         : "Out of stock";
 
-  // Format display name with size if available — but skip if the name already
-  // contains the size (e.g. AI returns "12pk Free Range Eggs" with size "12 pack")
-  const sizeDisplay = formatSize(item.defaultSize, item.defaultUnit);
-  const nameAlreadyHasSize = sizeDisplay
-    ? item.name.toLowerCase().includes(sizeDisplay.toLowerCase()) ||
-      // Also check raw numeric portion — "12pk" in name covers size "12pack"/"12 pack"
-      (/^\d+/.test(sizeDisplay) &&
-        item.name.match(new RegExp(`\\b${sizeDisplay.match(/^\d+/)?.[0]}\\s*(?:pk|pack|x)?\\b`, "i")) !== null)
-    : false;
-  const displayName =
-    sizeDisplay && !nameAlreadyHasSize ? `${item.name} (${sizeDisplay})` : item.name;
+  // Format display name with size at the beginning using centralized utility
+  const displayName = formatItemDisplay(item.name, item.defaultSize, item.defaultUnit);
 
   return (
     <Animated.View

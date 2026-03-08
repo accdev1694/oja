@@ -12,6 +12,7 @@ import {
 import { api } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { cleanItemForStorage } from "./itemNameParser";
 
 // ─── Function Declarations ─────────────────────────────────────────────
 
@@ -1292,22 +1293,25 @@ async function executeWriteTool(
           }
         }
 
+        // Clean name and size using centralized utility
+        const cleaned = cleanItemForStorage(item.name, size, unit);
+
         // Create the list item with size and price
         await ctx.runMutation(api.listItems.create, {
           listId: targetListId,
-          name: item.name,
+          name: cleaned.name,
           quantity,
-          size,
-          unit,
+          size: cleaned.size,
+          unit: cleaned.unit,
           estimatedPrice,
           priceSource,
           force: true,
         });
 
         addedItems.push({
-          name: item.name,
+          name: cleaned.name,
           quantity,
-          size,
+          size: cleaned.size,
           price: estimatedPrice,
         });
       }

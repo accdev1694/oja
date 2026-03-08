@@ -19,6 +19,7 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 import { formatPrice } from "@/lib/currency/currencyUtils";
+import { formatItemDisplay } from "@/convex/lib/itemNameParser";
 
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -226,64 +227,10 @@ export const ShoppingListItem = memo(function ShoppingListItem({
 
 
 
-  // Name already includes size (AI embeds it). Use as-is.
-  // Build display name with size/weight at the end only (no duplicates)
+  // Build display name with size/weight at the beginning
   const displayName = useMemo(() => {
-    if (!item.size) return item.name;
-
-    let cleanName = item.name;
-    const sizeLower = item.size.toLowerCase().trim();
-
-    // Extract the numeric part and unit separately
-    const sizeMatch = sizeLower.match(/^(\d+(?:\.\d+)?)\s*([a-z]+)?$/i);
-    if (!sizeMatch) {
-      // If size doesn't match expected pattern, just use as-is
-      return `${item.name} ${item.size}`;
-    }
-
-    const [_, sizeNum, sizeUnit] = sizeMatch;
-
-    // Build patterns to match all variations:
-    // 1. Exact size (e.g., "650g", "650 g")
-    // 2. Number alone (e.g., "650")
-    // 3. Number with typo units (e.g., "650ge")
-    // 4. Variations like "12pk" when size is "12"
-    // 5. Parenthetical sizes like "(6x124g)"
-
-    const patterns: RegExp[] = [];
-
-    // Pattern 1: Exact size with optional spaces
-    const escapedSize = sizeLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*');
-    patterns.push(new RegExp(`\\b${escapedSize}\\b`, 'gi'));
-
-    // Pattern 2: Number + optional trailing letters (catches typos like "650ge")
-    if (sizeUnit) {
-      patterns.push(new RegExp(`\\b${sizeNum}\\s*${sizeUnit}[a-z]*\\b`, 'gi'));
-    }
-
-    // Pattern 3: Number + "pk" or "pack" variations
-    patterns.push(new RegExp(`\\b${sizeNum}\\s*p[a-z]*\\b`, 'gi'));
-
-    // Pattern 4: Number alone at word boundaries
-    patterns.push(new RegExp(`\\b${sizeNum}\\b`, 'g'));
-
-    // Pattern 5: Parenthetical sizes (e.g., "(6x124g)")
-    patterns.push(new RegExp(`\\([^)]*${sizeNum}[^)]*\\)`, 'gi'));
-
-    // Apply all patterns to remove duplicates
-    for (const pattern of patterns) {
-      cleanName = cleanName.replace(pattern, '').trim();
-    }
-
-    // Clean up multiple spaces and extra separators
-    cleanName = cleanName.replace(/\s+/g, ' ').replace(/^[\s,.-]+|[\s,.-]+$/g, '').trim();
-
-    // If we ended up with an empty name, use original
-    if (!cleanName) return item.name;
-
-    // Always append the size at the end
-    return `${cleanName} ${item.size}`;
-  }, [item.name, item.size]);
+    return formatItemDisplay(item.name, item.size, item.unit);
+  }, [item.name, item.size, item.unit]);
 
 
   // Selected state background tint (planning mode)

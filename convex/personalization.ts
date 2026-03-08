@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { cleanItemForStorage } from "./lib/itemNameParser";
 
 /**
  * Get personalized "Buy it again" suggestions based on past purchases.
@@ -50,15 +51,19 @@ export const getBuyItAgainSuggestions = query({
     for (const h of history) {
       const key = h.normalizedName;
       if (!itemMap.has(key)) {
+        // Clean name and size using centralized utility
+        // Ensures: size at end, no "per item", size+unit together or both undefined
+        const cleaned = cleanItemForStorage(h.itemName, h.size, h.unit);
+
         itemMap.set(key, {
-          name: h.itemName,
+          name: cleaned.name,
           normalizedName: h.normalizedName,
           quantity: h.quantity || 1,
           storeName: h.storeName,
           lastPrice: h.unitPrice,
           purchaseDate: h.purchaseDate,
-          size: h.size,
-          unit: h.unit,
+          size: cleaned.size,
+          unit: cleaned.unit,
         });
       }
     }
