@@ -113,8 +113,8 @@ function InitialLayout() {
     if (isSignedIn && currentUser !== undefined && currentUser !== null) {
       const inAppGroup = segments[0] === "(app)";
       const inOnboarding = segments[0] === "onboarding";
-      const isAdminSetup = segments[1] === "admin-setup";
-      const isAdminPath = segments[1] === "admin";
+      const isAdminSetup = segments.length > 1 && segments[1] === "admin-setup";
+      const isAdminPath = segments.length > 1 && segments[1] === "admin";
       
       if (!currentUser.onboardingComplete && !inOnboarding) {
         router.replace("/onboarding/welcome");

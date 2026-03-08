@@ -9,7 +9,7 @@ import { getIconForItem } from "./iconMapping";
 import { isDuplicateItemName } from "./lib/fuzzyMatch";
 import { toGroceryTitleCase } from "./lib/titleCase";
 import { trackFunnelEvent, trackActivity } from "./lib/analytics";
-import { resolveVariantWithPrice } from "./lib/priceResolver";
+import { resolveVariantWithPrice, PriceSource } from "./lib/priceResolver";
 import { getUserListPermissions } from "./partners";
 
 // -----------------------------------------------------------------------------
@@ -2073,15 +2073,14 @@ export const createFromTemplate = mutation({
         const storeId = sourceList.normalizedStoreId || sourceList.storeName || "";
         const variantResult = await resolveVariantWithPrice(
           ctx,
-          user._id,
           item.name,
-          item.size || undefined,
-          storeId
+          storeId,
+          user._id
         );
 
         if (variantResult) {
-          price = variantResult.price;
-          source = variantResult.source;
+          price = variantResult.price ?? undefined;
+          source = variantResult.priceSource;
           confidence = variantResult.confidence;
         }
       } catch (err) {
@@ -2319,21 +2318,20 @@ export const createFromMultipleLists = mutation({
     for (const item of result.items) {
       // MANDATORY: Resolve fresh prices instead of copying stale data
       let price = item.estimatedPrice;
-      let source: "personal" | "crowdsourced" | "ai_estimate" = "personal";
+      let source: PriceSource | "manual" | undefined = "personal";
       let confidence = 1.0;
 
       try {
         const variantResult = await resolveVariantWithPrice(
           ctx,
-          user._id,
           item.name,
-          item.size || undefined,
-          primaryStoreId || ""
+          primaryStoreId || "",
+          user._id
         );
 
         if (variantResult) {
-          price = variantResult.price;
-          source = variantResult.source;
+          price = variantResult.price ?? undefined;
+          source = variantResult.priceSource;
           confidence = variantResult.confidence;
         }
       } catch (err) {
