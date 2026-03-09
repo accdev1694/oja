@@ -11,7 +11,7 @@ import { isDuplicateItem, isPotentialDuplicateByBrandSize, isDuplicateItemName }
 import { findLearnedMapping, tokenize, calculateTokenOverlap } from "./lib/itemMatcher";
 import { enrichGlobalFromProductScan } from "./lib/globalEnrichment";
 import { toGroceryTitleCase } from "./lib/titleCase";
-import { isValidSize, cleanItemForStorage } from "./lib/itemNameParser";
+import { isValidSize as isSizeValid, cleanItemForStorage } from "./lib/itemNameParser";
 
 /**
  * Helper to get price estimate from currentPrices table
@@ -326,7 +326,7 @@ export const create = mutation({
     }
 
     // ── Zero-Blank Prices: Use emergency fallback if needed ──
-    if (estimatedPrice === undefined || !isValidSize(size, unit)) {
+    if (estimatedPrice === undefined || !isSizeValid(size, unit)) {
       const emergency = getEmergencyPriceEstimate(name, args.category);
 
       if (estimatedPrice === undefined) {
@@ -335,7 +335,7 @@ export const create = mutation({
         priceConfidence = 0.3; // Low confidence for emergency estimates
       }
 
-      if (!isValidSize(size, unit)) {
+      if (!isSizeValid(size, unit)) {
         size = emergency.size;
         unit = emergency.unit;
       }
@@ -1844,7 +1844,7 @@ export const applyHealthSwap = mutation({
     let priceConfidence = variantResult?.confidence ?? 0.5;
 
     // ── Zero-Blank Prices: Use emergency fallback if needed ──
-    if (estimatedPrice === undefined || !isValidSize(size, unit)) {
+    if (estimatedPrice === undefined || !isSizeValid(size, unit)) {
       const emergency = getEmergencyPriceEstimate(args.suggestedName, category);
 
       if (estimatedPrice === undefined) {
@@ -1853,7 +1853,7 @@ export const applyHealthSwap = mutation({
         priceConfidence = 0.3; // Low confidence for emergency estimates
       }
 
-      if (!isValidSize(size, unit)) {
+      if (!isSizeValid(size, unit)) {
         size = emergency.size;
         unit = emergency.unit;
       }

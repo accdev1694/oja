@@ -7,7 +7,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -60,35 +60,6 @@ export default function ListsScreen() {
   const { firstName } = useCurrentUser();
   const [tabMode, setTabMode] = useState<TabMode>("active");
 
-  // Hint targets
-  const headerRef = useRef<View>(null);
-  const createCardRef = useRef<View>(null);
-
-  // Hints
-  const welcomeHint = useHint("lists_welcome", "delayed");
-  const createHint = useHint("lists_create", "manual");
-  const templateHint = useHint("lists_templates", "manual");
-
-  // Sequence: Show create hint after welcome is dismissed
-  useEffect(() => {
-    if (welcomeHint.shouldShow === false) {
-       // If welcome hint was shown and is now dismissed (or was already seen)
-       // and create hint hasn't been seen yet, show it.
-       if (!hasViewedHintLocal("lists_create") && tabMode === "active") {
-         createHint.showHint();
-       }
-    }
-  }, [welcomeHint.shouldShow, tabMode]);
-
-  // Show template hint if user has 3+ lists and hasn't seen it
-  useEffect(() => {
-    if (lists && (lists.length + activeShared.length) >= 3) {
-      if (!welcomeHint.shouldShow && !createHint.shouldShow) {
-        templateHint.showHint();
-      }
-    }
-  }, [lists?.length, activeShared.length, welcomeHint.shouldShow, createHint.shouldShow]);
-
   const {
     activeLists: lists,
     historyLists: history,
@@ -100,6 +71,47 @@ export default function ListsScreen() {
     createFromMultiple,
     createFromTemplate,
   } = useShoppingList();
+
+  const activeShared = sharedLists?.filter((l: any) => l && l.status !== "archived" && l.status !== "completed") ?? [];
+
+  // Hint targets
+  const headerRef = useRef<View>(null);
+  const createCardRef = useRef<View>(null);
+
+  // Hints
+  const welcomeHint = useHint("lists_welcome", "delayed");
+  const createHint = useHint("lists_create", "manual");
+  const templateHint = useHint("lists_templates", "manual");
+
+  // Strict sequencing: Only ONE hint visible at a time
+  // Step 1 → 2: Show create hint after welcome is dismissed
+  useEffect(() => {
+    const noHintsVisible =
+      welcomeHint.shouldShow === false &&
+      createHint.shouldShow === false &&
+      templateHint.shouldShow === false;
+
+    if (noHintsVisible && !hasViewedHintLocal("lists_create") && tabMode === "active") {
+      createHint.showHint();
+    }
+  }, [welcomeHint.shouldShow, createHint.shouldShow, templateHint.shouldShow, tabMode]);
+
+  // Step 2 → 3: Show template hint if user has 3+ lists and previous hints are dismissed
+  useEffect(() => {
+    const noHintsVisible =
+      welcomeHint.shouldShow === false &&
+      createHint.shouldShow === false &&
+      templateHint.shouldShow === false;
+
+    if (
+      lists &&
+      (lists.length + activeShared.length) >= 3 &&
+      noHintsVisible &&
+      !hasViewedHintLocal("lists_templates")
+    ) {
+      templateHint.showHint();
+    }
+  }, [lists?.length, activeShared.length, welcomeHint.shouldShow, createHint.shouldShow, templateHint.shouldShow]);
 
   const [isCreating, setIsCreating] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -303,7 +315,6 @@ export default function ListsScreen() {
   const currentData = tabMode === "active" ? lists : history;
   const isLoaded = currentData !== undefined;
   const displayList = currentData ?? [];
-  const activeShared = sharedLists?.filter((l: any) => l && l.status !== "archived" && l.status !== "completed") ?? [];
   const hasAnyActiveLists = displayList.length > 0 || activeShared.length > 0;
 
   // Loading state with skeletons (Smooth transition pattern)
@@ -674,32 +685,38 @@ export default function ListsScreen() {
         onSave={handleSaveListName}
       />
 
-      {/* Tutorial Hints */}
+      {/* Tutorial Hints - STRICT: Only one hint visible at a time */}
       <HintOverlay
-        visible={welcomeHint.shouldShow}
+        visible={welcomeHint.shouldShow && !createHint.shouldShow && !templateHint.shouldShow}
         targetRef={headerRef}
         title="Welcome to Oja!"
-        content="Lists are your engine. Every item here updates your budget and pantry automatically."
+        content="Shopping lists are your command center. Add items here and watch your budget and pantry sync automatically."
         onDismiss={welcomeHint.dismiss}
         position="below"
+        currentStep={1}
+        totalSteps={3}
       />
 
       <HintOverlay
-        visible={createHint.shouldShow}
+        visible={createHint.shouldShow && !welcomeHint.shouldShow && !templateHint.shouldShow}
         targetRef={createCardRef}
-        title="Create your first list"
-        content="Tap here to start. We'll suggest your usuals to save you time."
+        title="Start Your First List"
+        content="Tap here to create a list. We'll suggest items you buy frequently to speed things up."
         onDismiss={createHint.dismiss}
         position="below"
+        currentStep={2}
+        totalSteps={3}
       />
 
       <HintOverlay
-        visible={templateHint.shouldShow}
+        visible={templateHint.shouldShow && !welcomeHint.shouldShow && !createHint.shouldShow}
         targetRef={createCardRef}
-        title="Templates Save Time"
-        content="Save frequent lists as templates for one-tap reuse. Great for weekly essentials!"
+        title="Reuse with Templates"
+        content="Tap 'From Template' to save and reuse common lists. Perfect for weekly groceries or meal plans."
         onDismiss={templateHint.dismiss}
         position="below"
+        currentStep={3}
+        totalSteps={3}
       />
 
     </GlassScreen>

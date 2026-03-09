@@ -298,8 +298,6 @@ const styles = StyleSheet.create({
   title: {
     ...typography.headlineSmall,
     color: colors.text.primary,
-    flex: 1,
-    marginLeft: spacing.sm,
     paddingVertical: 2,
   },
   subtitle: {
@@ -416,12 +414,24 @@ export function SimpleHeader({
       {/* Row 1: Back button (optional) + Title (flex: 1, left-aligned) */}
       <View style={headerLayout.topRow}>
         {showBack && <BackButton onPress={handleBack} />}
-        <Pressable 
-          onPress={handleTitlePress} 
+        <Pressable
+          onPress={handleTitlePress}
           disabled={!onTitlePress}
-          style={{ flex: 1 }}
+          style={{ flexShrink: 1 }}
         >
-          <Text style={[simpleHeaderStyles.title, { flex: 1 }, titleStyle]}>{title}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+            <Text style={[simpleHeaderStyles.title, titleStyle]}>{title}</Text>
+            {accentColor && (
+              <View
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: accentColor,
+                }}
+              />
+            )}
+          </View>
         </Pressable>
       </View>
 

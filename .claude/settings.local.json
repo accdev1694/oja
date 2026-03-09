@@ -158,7 +158,8 @@
       "Bash(./gradlew clean:*)",
       "Bash(./gradlew:*)",
       "Bash(git diff:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(pkill:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

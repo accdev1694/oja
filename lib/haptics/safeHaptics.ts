@@ -171,3 +171,21 @@ export function getHapticsState(): { enabled: boolean; supported: boolean } {
 export function canUseHaptics(): boolean {
   return deviceSupports && isEnabled;
 }
+
+/**
+ * Exported object for compatibility
+ */
+export const safeHaptics = {
+  init: initHaptics,
+  light: () => haptic('light'),
+  medium: () => haptic('medium'),
+  heavy: () => haptic('heavy'),
+  selection: () => haptic('selection'),
+  success: () => haptic('success'),
+  warning: () => haptic('warning'),
+  error: () => haptic('error'),
+  pattern: hapticPattern,
+  setEnabled: setHapticsEnabled,
+  getState: getHapticsState,
+  canUse: canUseHaptics,
+};

@@ -20,7 +20,7 @@ interface ProductModeProps {
   onProductPress: (product: any, index: number) => void;
   onClearAll: () => void;
   onAddAll: () => void;
-  scanButtonRef?: React.RefObject<View>;
+  scanButtonRef?: React.RefObject<View | null>;
 }
 
 export function ProductMode({ 

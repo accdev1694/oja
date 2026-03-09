@@ -113,19 +113,25 @@ export default function ListDetailScreen() {
   const list = useQuery(api.shoppingLists.getById, { id });
   const items = useQuery(api.listItems.getByList, { listId: id });
 
-  // Trigger budget hint when first item is added
+  // Strict sequencing: Only ONE hint visible at a time
+  // Budget hint shows after add hint is dismissed and first item is added
   useEffect(() => {
-    if (items && items.length === 1 && !addHint.shouldShow) {
+    const noHintsVisible =
+      addHint.shouldShow === false &&
+      budgetHint.shouldShow === false &&
+      healthHint.shouldShow === false;
+
+    if (
+      items &&
+      items.length === 1 &&
+      noHintsVisible &&
+      !hasViewedHintLocal("list_detail_budget")
+    ) {
       budgetHint.showHint();
     }
-  }, [items?.length, addHint.shouldShow]);
+  }, [items?.length, addHint.shouldShow, budgetHint.shouldShow, healthHint.shouldShow]);
 
-  // Trigger health hint when 3+ items are added
-  useEffect(() => {
-    if (items && items.length >= 3 && !addHint.shouldShow && !budgetHint.shouldShow) {
-      healthHint.showHint();
-    }
-  }, [items?.length, addHint.shouldShow, budgetHint.shouldShow]);
+  // Health hint is triggered manually on first tap of health icon (see handleHealthPress below)
   const toggleChecked = useMutation(api.listItems.toggleChecked);
   const addItem = useMutation(api.listItems.create);
   const updateItem = useMutation(api.listItems.update);
@@ -1392,7 +1398,19 @@ export default function ListDetailScreen() {
                   <Pressable
                     onPress={() => {
                       haptic("light");
-                      setShowHealthModal(true);
+                      // Just-in-time hint: show on first tap if eligible and NO other hints are visible
+                      const noHintsVisible =
+                        addHint.shouldShow === false &&
+                        budgetHint.shouldShow === false &&
+                        healthHint.shouldShow === false;
+
+                      if (noHintsVisible && (items?.length ?? 0) >= 3) {
+                        healthHint.showHint();
+                      } else if (healthHint.shouldShow === false) {
+                        // If health hint not visible, open modal directly
+                        setShowHealthModal(true);
+                      }
+                      // If healthHint is currently showing, clicking dismisses it (handled by HintOverlay backdrop)
                     }}
                     hitSlop={8}
                     style={styles.headerIconButton}
@@ -1483,32 +1501,38 @@ export default function ListDetailScreen() {
         />
       </Animated.View>
 
-      {/* Tutorial Hints */}
+      {/* Tutorial Hints - STRICT: Only one hint visible at a time */}
       <HintOverlay
-        visible={addHint.shouldShow}
+        visible={addHint.shouldShow && !budgetHint.shouldShow && !healthHint.shouldShow}
         targetRef={searchRef}
-        title="Add items easily"
-        content="Add items by typing or using Tobi (voice). We'll suggest your usuals first."
+        title="Quick Item Entry"
+        content="Type to add items or tap the mic for voice input. We'll suggest items you buy often."
         onDismiss={addHint.dismiss}
         position="below"
+        currentStep={1}
+        totalSteps={3}
       />
 
       <HintOverlay
-        visible={budgetHint.shouldShow}
+        visible={budgetHint.shouldShow && !addHint.shouldShow && !healthHint.shouldShow}
         targetRef={budgetRef}
-        title="Your live budget"
-        content="Watch your budget update in real-time. Green is good, amber is a warning!"
+        title="Live Budget Tracking"
+        content="Your budget updates as you add items. Green means under budget, amber warns you're close to your limit."
         onDismiss={budgetHint.dismiss}
         position="below"
+        currentStep={2}
+        totalSteps={3}
       />
 
       <HintOverlay
-        visible={healthHint.shouldShow}
+        visible={healthHint.shouldShow && !addHint.shouldShow && !budgetHint.shouldShow}
         targetRef={healthRef}
         title="AI Health Swaps"
-        content="Tapped a heart? Oja AI will suggest healthier or cheaper swaps for your list."
+        content="Tap here for AI-powered suggestions: healthier alternatives and budget-friendly swaps for your list."
         onDismiss={healthHint.dismiss}
         position="below"
+        currentStep={3}
+        totalSteps={3}
       />
 
       {/* Edit Budget Modal */}

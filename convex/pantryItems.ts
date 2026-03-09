@@ -563,6 +563,34 @@ export const unarchiveItem = mutation({
 });
 
 /**
+ * Toggle the auto-add to list status for a pantry item.
+ * If true, this item will be automatically added to the next shopping list created.
+ */
+export const toggleAutoAdd = mutation({
+  args: { pantryItemId: v.id("pantryItems") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const item = await ctx.db.get(args.pantryItemId);
+    if (!item || item.userId !== user._id) throw new Error("Item not found");
+
+    await ctx.db.patch(args.pantryItemId, {
+      autoAddToList: !item.autoAddToList,
+      updatedAt: Date.now(),
+    });
+
+    return await ctx.db.get(args.pantryItemId);
+  },
+});
+
+/**
  * Update just the stock level of an item (optimized for frequent updates)
  */
 export const updateStockLevel = mutation({

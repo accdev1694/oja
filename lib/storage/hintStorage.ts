@@ -1,6 +1,6 @@
-import { MMKV } from 'react-native-mmkv';
+import { createSafeMMKV } from './safeMMKV';
 
-export const hintStorage = new MMKV({ id: 'tutorial-hints' });
+export const hintStorage = createSafeMMKV({ id: 'tutorial-hints' });
 
 export function markHintAsViewed(hintId: string) {
   hintStorage.set(`hint_${hintId}`, true);
@@ -11,7 +11,9 @@ export function hasViewedHint(hintId: string): boolean {
 }
 
 export function isHintsEnabled(): boolean {
-  return hintStorage.getBoolean('hints_enabled') ?? true;
+  // TEMPORARY: Hints disabled - change to true to re-enable
+  return false;
+  // return hintStorage.getBoolean('hints_enabled') ?? true;
 }
 
 export function setHintsEnabled(enabled: boolean) {

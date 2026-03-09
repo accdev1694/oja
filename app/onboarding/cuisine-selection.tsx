@@ -231,7 +231,7 @@ export default function CuisineSelectionScreen() {
         <View style={styles.sectionHeader}>
           <Text style={styles.subtitle}>Any dietary preferences?</Text>
           <Text style={styles.description}>
-            We'll use this to suggest healthier, suitable alternatives (optional)
+            We&apos;ll use this to suggest healthier, suitable alternatives (optional)
           </Text>
         </View>
 

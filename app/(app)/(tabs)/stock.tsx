@@ -217,7 +217,7 @@ export default function PantryScreen() {
   }, [updateStockLevel, lowHint]);
 
   const handleToggleAutoAddWithHint = useCallback(async (item: any) => {
-    await toggleAutoAdd({ id: item._id, autoAdd: !item.autoAdd });
+    await toggleAutoAdd({ pantryItemId: item._id });
     autoAddHint.showHint();
   }, [toggleAutoAdd, autoAddHint]);
   const createList = useMutation(api.shoppingLists.create);

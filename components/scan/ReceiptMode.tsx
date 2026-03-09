@@ -19,7 +19,7 @@ interface ReceiptModeProps {
   isScanning?: boolean;
   onSelectReceipt: (receipt: any) => void;
   onScanPress: () => void;
-  scanButtonRef?: React.RefObject<View>;
+  scanButtonRef?: React.RefObject<View | null>;
 }
 
 export function ReceiptMode({ receipts, isScanning, onSelectReceipt, onScanPress, scanButtonRef }: ReceiptModeProps) {

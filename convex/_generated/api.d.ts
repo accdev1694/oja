@@ -28,6 +28,7 @@ import type * as itemSearch from "../itemSearch.js";
 import type * as itemVariants from "../itemVariants.js";
 import type * as lib_alerts from "../lib/alerts.js";
 import type * as lib_analytics from "../lib/analytics.js";
+import type * as lib_auth from "../lib/auth.js";
 import type * as lib_communityHelpers from "../lib/communityHelpers.js";
 import type * as lib_featureGating from "../lib/featureGating.js";
 import type * as lib_fuzzyMatch from "../lib/fuzzyMatch.js";
@@ -78,6 +79,7 @@ import type * as subscriptions from "../subscriptions.js";
 import type * as support from "../support.js";
 import type * as tags from "../tags.js";
 import type * as tips from "../tips.js";
+import type * as tutorialHints from "../tutorialHints.js";
 import type * as users from "../users.js";
 import type * as workflows from "../workflows.js";
 
@@ -108,6 +110,7 @@ declare const fullApi: ApiFromModules<{
   itemVariants: typeof itemVariants;
   "lib/alerts": typeof lib_alerts;
   "lib/analytics": typeof lib_analytics;
+  "lib/auth": typeof lib_auth;
   "lib/communityHelpers": typeof lib_communityHelpers;
   "lib/featureGating": typeof lib_featureGating;
   "lib/fuzzyMatch": typeof lib_fuzzyMatch;
@@ -158,6 +161,7 @@ declare const fullApi: ApiFromModules<{
   support: typeof support;
   tags: typeof tags;
   tips: typeof tips;
+  tutorialHints: typeof tutorialHints;
   users: typeof users;
   workflows: typeof workflows;
 }>;

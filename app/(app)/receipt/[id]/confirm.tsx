@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Animated,
 } from "react-native";
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/glass";
 import { useHint } from "@/hooks/useHint";
 import { HintOverlay } from "@/components/tutorial/HintOverlay";
+import { UnmatchedItemsModal } from "@/components/receipt/UnmatchedItemsModal";
 
 // Tier progress helper for toast messages
 function getTierProgress(lifetimeScans: number, currentTier: string): string | null {
