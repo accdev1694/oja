@@ -104,32 +104,24 @@ export function parseItemNameAndSize(
   let extractedSize = existingSize?.trim() || undefined;
   let extractedUnit = existingUnit?.trim() || undefined;
 
-  // Validate existing size first
-  if (extractedSize && !isValidSize(extractedSize, extractedUnit)) {
-    extractedSize = undefined;
-    extractedUnit = undefined;
-  }
-
-  // Try to extract size from beginning of name
+  // Try to extract size from beginning of name if not already provided
   const match = cleanName.match(SIZE_PATTERN);
 
   if (match && !extractedSize) {
     const [_, sizeFromName, nameWithoutSize] = match;
     cleanName = nameWithoutSize.trim();
     extractedSize = sizeFromName.trim();
-
-    // Extract unit from the size using robust helper
-    extractedUnit = extractUnitFromSize(sizeFromName);
   }
 
-  // CRITICAL: If we have size but no unit, extract unit from size
+  // CRITICAL: If we have size but no unit, try to extract unit from size
   if (extractedSize && !extractedUnit) {
     extractedUnit = extractUnitFromSize(extractedSize);
   }
 
-  // CRITICAL: If we still have size but no unit, REJECT the size completely
-  if (extractedSize && !extractedUnit) {
+  // Final validation - if still invalid, clear it
+  if (extractedSize && !isValidSize(extractedSize, extractedUnit)) {
     extractedSize = undefined;
+    extractedUnit = undefined;
   }
 
   return {
@@ -177,23 +169,23 @@ export function formatItemDisplay(
 
     const patterns: RegExp[] = [];
 
-    // Pattern 1: Exact size with optional spaces
+    // Pattern 1: Parenthetical sizes (e.g., "(6x124g)") - PRIORITY
+    patterns.push(new RegExp(`\\([^)]*${sizeNum}[^)]*\\)`, "gi"));
+
+    // Pattern 2: Exact size with optional spaces
     const escapedSize = sizeLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
     patterns.push(new RegExp(`\\b${escapedSize}\\b`, "gi"));
 
-    // Pattern 2: Number + optional trailing letters (catches typos like "650ge")
+    // Pattern 3: Number + optional trailing letters (catches typos like "650ge")
     if (sizeUnit) {
       patterns.push(new RegExp(`\\b${sizeNum}\\s*${sizeUnit}[a-z]*\\b`, "gi"));
     }
 
-    // Pattern 3: Number + "pk" or "pack" variations
+    // Pattern 4: Number + "pk" or "pack" variations
     patterns.push(new RegExp(`\\b${sizeNum}\\s*p[a-z]*\\b`, "gi"));
 
-    // Pattern 4: Number alone at word boundaries
+    // Pattern 5: Number alone at word boundaries
     patterns.push(new RegExp(`\\b${sizeNum}\\b`, "g"));
-
-    // Pattern 5: Parenthetical sizes (e.g., "(6x124g)")
-    patterns.push(new RegExp(`\\([^)]*${sizeNum}[^)]*\\)`, "gi"));
 
     // Apply all patterns to remove duplicates
     for (const pattern of patterns) {
