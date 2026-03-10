@@ -586,7 +586,7 @@ export default function PantryScreen() {
     if (!item) return;
 
     const planningLists = (activeLists ?? []).filter(
-      (l) => l.status === "active" || l.status === "shopping"
+      (l) => l.status === "active"
     );
 
     if (planningLists.length === 0) {

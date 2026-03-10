@@ -47,6 +47,7 @@ import {
   borderRadius,
   useGlassAlert,
   GlassDropdown,
+  GlassSegmentedControl,
   type DropdownOption,
 } from "@/components/ui/glass";
 import { usePartnerRole } from "@/hooks/usePartnerRole";
@@ -62,7 +63,6 @@ import { TipBanner } from "@/components/ui/TipBanner";
 import { useDelightToast } from "@/hooks/useDelightToast";
 import { useStableValue, shallowRecordEqual } from "@/hooks/useStableValue";
 import { ShoppingListItem, type ListItem } from "@/components/list/ShoppingListItem";
-import { ShoppingTypewriterHint } from "@/components/list/ShoppingTypewriterHint";
 import { StickyBudgetBar } from "@/components/list/BudgetSection";
 import { ListActionRow } from "@/components/list/ListActionRow";
 import { StoreDropdownSheet } from "@/components/list/StoreDropdownSheet";
@@ -137,10 +137,7 @@ export default function ListDetailScreen() {
   const updateItem = useMutation(api.listItems.update);
   const removeItem = useMutation(api.listItems.remove);
   const removeMultipleItems = useMutation(api.listItems.removeMultiple);
-  const startShopping = useMutation(api.shoppingLists.startShopping);
-  const completeShopping = useMutation(api.shoppingLists.completeShopping);
-  const pauseShoppingMut = useMutation(api.shoppingLists.pauseShopping);
-  const resumeShoppingMut = useMutation(api.shoppingLists.resumeShopping);
+  const finishTripMut = useMutation(api.shoppingLists.finishTrip);
   const restockFromCheckedItems = useMutation(api.pantryItems.restockFromCheckedItems);
   const refreshListPrices = useMutation(api.listItems.refreshListPrices);
 
@@ -168,10 +165,10 @@ export default function ListDetailScreen() {
     }
   }, [list?.healthAnalysis, items?.length]);
 
-  // Trip stats for completion summary (only fetch when shopping)
+  // Trip stats for completion summary
   const tripStats = useQuery(
     api.shoppingLists.getTripStats,
-    list?.status === "shopping" ? { id } : "skip"
+    list?.isInProgress ? { id } : "skip"
   ) as TripStats | null | undefined;
 
   const updateList = useMutation(api.shoppingLists.update);
@@ -290,32 +287,6 @@ export default function ListDetailScreen() {
     paddingBottom: keyboardHeight.value,
   }));
 
-  // Breathing pulse for Go Shopping button
-  const goShoppingScale = useSharedValue(1);
-  const hasItems = (items?.length ?? 0) > 0;
-  const isActiveStatus = list?.status === "active";
-
-  useEffect(() => {
-    if (hasItems && isActiveStatus) {
-      goShoppingScale.value = withRepeat(
-        withSequence(
-          withTiming(1.02, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-        ),
-        -1,
-        false,
-      );
-    } else {
-      cancelAnimation(goShoppingScale);
-      goShoppingScale.value = 1;
-    }
-    return () => cancelAnimation(goShoppingScale);
-  }, [hasItems, isActiveStatus, goShoppingScale]);
-
-  const goShoppingAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: goShoppingScale.value }],
-  }));
-
   // Scroll tracking for sticky mini budget bar (hooks must be before early returns)
   const scrollY = useSharedValue(0);
   const DIAL_SCROLL_THRESHOLD = 200 + spacing.md;
@@ -327,10 +298,9 @@ export default function ListDetailScreen() {
   // Calculate totals — memoized to avoid O(n) per render
   // Must be before early returns to satisfy Rules of Hooks
   const safeItems = items ?? [];
-  const { estimatedTotal, actualTotal, shoppingTotal, checkedTotal, checkedCount, totalCount } = useMemo(() => {
+  const { estimatedTotal, actualTotal, checkedTotal, checkedCount, totalCount } = useMemo(() => {
     let estimated = 0;
     let actual = 0;
-    let shopping = 0;
     let checked = 0;
     let checkedN = 0;
 
@@ -342,20 +312,14 @@ export default function ListDetailScreen() {
         checkedN++;
         if (item.actualPrice) {
           actual += item.actualPrice * item.quantity;
-          shopping += item.actualPrice * item.quantity;
-        } else {
-          shopping += estPrice;
         }
         checked += (item.actualPrice || item.estimatedPrice || 0) * item.quantity;
-      } else {
-        shopping += estPrice;
       }
     }
 
     return {
       estimatedTotal: estimated,
       actualTotal: actual,
-      shoppingTotal: shopping,
       checkedTotal: checked,
       checkedCount: checkedN,
       totalCount: safeItems.length,
@@ -364,52 +328,59 @@ export default function ListDetailScreen() {
 
   // Budget status
   const budget = list?.budget || 0;
-  const listStatus = list?.status;
-  const currentTotal = listStatus === "shopping" ? shoppingTotal : estimatedTotal;
+  const currentTotal = estimatedTotal;
   const remainingBudget = budget - currentTotal;
 
-  // Mini bar values (mode-aware)
-  const isPlanning = listStatus === "active";
-  const miniBarActiveValue = isPlanning ? estimatedTotal : checkedTotal;
+  // Mini bar values (trip-aware)
+  const isInProgress = !!list?.isInProgress;
+  const miniBarActiveValue = isInProgress ? checkedTotal : estimatedTotal;
   const miniBarRemaining = budget - miniBarActiveValue;
-  const miniBarLabel = isPlanning ? "planned" : "spent";
+  const miniBarLabel = isInProgress ? "spent" : "planned";
 
-  // Track if checked section is expanded
-  const [showCheckedItems, setShowCheckedItems] = useState(false);
+  // Track if checked items are visible
+  const [showCheckedItems, setShowCheckedItems] = useState(true);
 
   // Memoized category data + display items
   const { categoryOptions, displayItems } = useMemo(() => {
     const safeItemsArr = items ?? [];
     
-    // Split items into unchecked and checked
-    const uncheckedItems = safeItemsArr.filter(i => !i.isChecked);
-    const checkedItems = safeItemsArr.filter(i => i.isChecked);
+    // 1. Build Item List based on filters
+    let itemsToDisplay = safeItemsArr;
 
-    const cats = [...new Set(safeItemsArr.map((i) => i.category).filter(Boolean) as string[])].sort();
-    const counts: Record<string, number> = {};
-    safeItemsArr.forEach((i) => { if (i.category) counts[i.category] = (counts[i.category] || 0) + 1; });
-    
-    const result: CategorizedItem[] = [];
-
-    // 1. Build Unchecked Items by Category
-    const sortedUnchecked = [...uncheckedItems].sort((a, b) => {
-      const catA = a.category || "Other";
-      const catB = b.category || "Other";
-      if (catA !== catB) return catA.localeCompare(catB);
-      return a.name.localeCompare(b.name);
-    });
-
-    let filteredUnchecked = listCategoryFilter
-      ? sortedUnchecked.filter((i) => i.category === listCategoryFilter)
-      : sortedUnchecked;
-
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase().trim();
-      filteredUnchecked = filteredUnchecked.filter((i) => i.name.toLowerCase().includes(search));
+    // Apply "Hide Checked" filter (only if not searching)
+    if (!showCheckedItems && !searchTerm.trim()) {
+      itemsToDisplay = safeItemsArr.filter(i => !i.isChecked);
     }
 
+    // Apply category filter
+    if (listCategoryFilter) {
+      itemsToDisplay = itemsToDisplay.filter((i) => i.category === listCategoryFilter);
+    }
+
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase().trim();
+      itemsToDisplay = itemsToDisplay.filter((i) => i.name.toLowerCase().includes(search));
+    }
+
+    // 2. Sort Items: Category (asc) -> Name (asc)
+    const sortedItems = [...itemsToDisplay].sort((a, b) => {
+      const catA = a.category || "Other";
+      const catB = b.category || "Other";
+      
+      if (catA !== catB) {
+        return catA.localeCompare(catB);
+      }
+      
+      // Within same category, sort by name only so checked items stay in place
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    });
+
+    // 3. Group with headers
+    const result: CategorizedItem[] = [];
     let currentCat = "";
-    filteredUnchecked.forEach((item) => {
+    
+    sortedItems.forEach((item) => {
       const itemCat = item.category || "Other";
       if (itemCat !== currentCat && !listCategoryFilter) {
         result.push({
@@ -422,32 +393,11 @@ export default function ListDetailScreen() {
       result.push(item);
     });
 
-    // 2. Build Checked Items section (at the bottom)
-    if (checkedItems.length > 0) {
-      // Apply search filter to checked items too
-      let filteredChecked = checkedItems;
-      if (searchTerm.trim()) {
-        const search = searchTerm.toLowerCase().trim();
-        filteredChecked = checkedItems.filter((i) => i.name.toLowerCase().includes(search));
-      }
-
-      if (filteredChecked.length > 0) {
-        result.push({
-          _id: "header-checked",
-          isHeader: true,
-          title: `Checked Items (${filteredChecked.length})`,
-        });
-
-        // Only show items if expanded
-        if (showCheckedItems || searchTerm.trim()) {
-          filteredChecked.sort((a, b) => a.name.localeCompare(b.name)).forEach(item => {
-            result.push(item);
-          });
-        }
-      }
-    }
-
-    // Build dropdown options
+    // Build category options (always from safeItemsArr to show all available categories)
+    const cats = [...new Set(safeItemsArr.map((i) => i.category).filter(Boolean) as string[])].sort();
+    const counts: Record<string, number> = {};
+    safeItemsArr.forEach((i) => { if (i.category) counts[i.category] = (counts[i.category] || 0) + 1; });
+    
     const options: DropdownOption[] = [
       { label: "All Items", value: null, count: safeItemsArr.length, icon: "format-list-bulleted" },
       ...cats.map((cat) => ({
@@ -461,15 +411,11 @@ export default function ListDetailScreen() {
     return { categoryOptions: options, displayItems: result };
   }, [items, listCategoryFilter, searchTerm, showCheckedItems]);
 
-  const isShopping = listStatus === "shopping";
-  const isPaused = listStatus === "active" && !!list?.shoppingStartedAt && !!list?.pausedAt;
-
   // Active Shopper Logic
   const activeShopper = useQuery(
     api.users.getById,
     list?.activeShopperId ? { id: list.activeShopperId } : "skip"
   );
-  const isSomeoneElseShopping = isShopping && list?.activeShopperId && list.activeShopperId !== currentUser?._id;
 
   // Edit budget handlers
   function handleOpenEditBudget() {
@@ -750,7 +696,7 @@ export default function ListDetailScreen() {
 
   function handleAddItemToList(item: { name: string; estimatedPrice?: number; quantity: number }) {
     const otherLists = (allActiveLists ?? []).filter(
-      (l) => l._id !== id && (l.status === "active" || l.status === "shopping")
+      (l) => l._id !== id
     );
 
     if (otherLists.length === 0) {
@@ -816,46 +762,16 @@ export default function ListDetailScreen() {
     }
   }, [switchStoreMidShop, id, showToast]);
 
-  // Start (or resume) shopping directly — no confirmation needed since it's reversible
-  async function handleStartShopping() {
-    haptic("medium");
-    clearSelection();
-    try {
-      if (isPaused) {
-        await resumeShoppingMut({ id });
-      } else {
-        await startShopping({ id });
-      }
-      setDialTransitioning(true);
-      setTimeout(() => setDialTransitioning(false), 700);
-    } catch (error) {
-      console.error("Failed to start shopping:", error);
-      alert("Error", "Failed to start shopping");
-    }
-  }
-
-  // Pause shopping — revert to planning mode
-  async function handlePauseShopping() {
-    haptic("medium");
-    try {
-      await pauseShoppingMut({ id });
-      showToast("Trip paused — you can resume anytime", "pause-circle-outline", colors.accent.warning);
-    } catch (error) {
-      console.error("Failed to pause shopping:", error);
-      alert("Error", "Failed to pause shopping");
-    }
-  }
-
-  // Open the trip summary modal instead of alert
-  function handleCompleteShopping() {
+  // Finish trip — complete shopping session
+  async function handleFinishTrip() {
     haptic("medium");
     setShowTripSummary(true);
   }
 
   // Called from TripSummaryModal "Finish Trip" button
-  async function handleFinishTrip() {
+  async function handleCompleteTrip() {
     try {
-      await completeShopping({ id });
+      await finishTripMut({ id });
       const result = await restockFromCheckedItems({ listId: id });
       haptic("success");
       setShowTripSummary(false);
@@ -868,8 +784,8 @@ export default function ListDetailScreen() {
         setShowScanNudge(true);
       }
     } catch (error) {
-      console.error("Failed to complete shopping:", error);
-      alert("Error", "Failed to complete shopping");
+      console.error("Failed to finish trip:", error);
+      alert("Error", "Failed to finish trip");
     }
   }
 
@@ -943,7 +859,7 @@ export default function ListDetailScreen() {
   // Other lists for picker modal (memoized)
   const otherActiveLists = useMemo(
     () => (allActiveLists ?? []).filter(
-      (l) => l._id !== id && (l.status === "active" || l.status === "shopping")
+      (l) => l._id !== id
     ),
     [allActiveLists, id],
   );
@@ -953,25 +869,13 @@ export default function ListDetailScreen() {
 
   const renderItem = useCallback(({ item }: { item: CategorizedItem }) => {
     if ("isHeader" in item) {
-      const isCheckedHeader = item._id === "header-checked";
       return (
-        <Pressable 
-          onPress={() => isCheckedHeader && setShowCheckedItems(!showCheckedItems)}
-          style={[styles.sectionHeader, isCheckedHeader && styles.checkedHeader]}
-        >
-          <Text style={[styles.sectionHeaderText, isCheckedHeader && styles.checkedHeaderText]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionHeaderText}>
             {item.title.toUpperCase()}
           </Text>
-          {isCheckedHeader ? (
-            <MaterialCommunityIcons 
-              name={showCheckedItems ? "chevron-up" : "chevron-down"} 
-              size={18} 
-              color={colors.text.tertiary} 
-            />
-          ) : (
-            <View style={styles.sectionHeaderLine} />
-          )}
-        </Pressable>
+          <View style={styles.sectionHeaderLine} />
+        </View>
       );
     }
     return (
@@ -981,7 +885,7 @@ export default function ListDetailScreen() {
         onRemove={handleRemoveItem}
         onEdit={handleEditItem}
         onPriorityChange={handlePriorityChange}
-        isShopping={isShopping}
+        isShopping={true}
         canEdit={canEdit}
         isOwner={isOwner}
         commentCount={commentCounts?.[item._id as string] ?? 0}
@@ -993,7 +897,7 @@ export default function ListDetailScreen() {
       />
     );
   }, [handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange,
-      isShopping, canEdit, isOwner, commentCounts,
+      canEdit, isOwner, commentCounts,
       stableOpenComments, selectionActive, selectionVersion, toggleItemSelection, 
       currentUser?.currency, showCheckedItems]);
 
@@ -1004,8 +908,8 @@ export default function ListDetailScreen() {
   // ─── FlashList ListHeaderComponent ───────────────────────────────────────────
   const listHeader = useMemo(() => (
     <View style={styles.listHeaderContainer}>
-      {/* Active Shopper Banner (Partner Mode) */}
-      {isSomeoneElseShopping && (
+      {/* Active Shopper Banner (Partner Mode) — shown only if trip in progress */}
+      {list?.activeShopperId && list.activeShopperId !== currentUser?._id && (
         <AnimatedSection animation="fadeInDown" duration={400}>
           <View style={styles.activeShopperBanner}>
             <View style={styles.activeShopperPulse} />
@@ -1067,7 +971,7 @@ export default function ListDetailScreen() {
             budget={budget}
             planned={estimatedTotal}
             spent={checkedTotal}
-            mode={list?.status ?? "active"}
+            mode={isInProgress ? "shopping" : "active"}
             onPress={canEdit ? handleOpenEditBudget : undefined}
             storeName={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
             storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
@@ -1076,7 +980,7 @@ export default function ListDetailScreen() {
         </View>
       )}
 
-      {/* Refresh Prices button — available in both modes when store is selected */}
+      {/* Refresh Prices button — available when store is selected */}
       {list?.normalizedStoreId && canEdit && (items?.length ?? 0) > 0 && (
         <Pressable
           style={({ pressed }) => [
@@ -1112,28 +1016,29 @@ export default function ListDetailScreen() {
         </View>
       )}
 
-      {/* Paused trip resume banner — owner only */}
-      {isPaused && canEdit && (
-        <View style={styles.pausedBanner}>
-          <View style={styles.pausedBannerLeft}>
-            <MaterialCommunityIcons name="pause-circle-outline" size={20} color={colors.accent.warning} />
-            <Text style={styles.pausedBannerText}>
-              Trip paused — {checkedCount}/{totalCount} items checked
-            </Text>
-          </View>
-          <Pressable onPress={handleStartShopping} hitSlop={8}>
-            <Text style={styles.pausedResumeText}>Resume</Text>
-          </Pressable>
+      {/* Show/Hide Checked Items Toggle */}
+      {(items?.length ?? 0) > 0 && (
+        <View style={styles.toggleContainer}>
+          <GlassSegmentedControl
+            tabs={[
+              { label: "Show Checked", icon: "eye-outline" },
+              { label: "Hide Checked", icon: "eye-off-outline" },
+            ]}
+            activeIndex={showCheckedItems ? 0 : 1}
+            onTabChange={(index) => {
+              setShowCheckedItems(index === 0);
+            }}
+          />
         </View>
       )}
 
-      {/* Action Row: Store / Add Items (planning mode) — owner only */}
-      {list?.status === "active" && canEdit && (
+      {/* Action Row: Store / Add Items — owner only */}
+      {canEdit && (
         <ListActionRow
-          storeName={list.storeName}
-          storeColor={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
-          hasStore={!!list.normalizedStoreId}
-          currentStoreId={list.normalizedStoreId}
+          storeName={list?.storeName}
+          storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
+          hasStore={!!list?.normalizedStoreId}
+          currentStoreId={list?.normalizedStoreId}
           userFavorites={userFavorites}
           itemCount={items?.length ?? 0}
           onStoreSelect={handleSelectStore}
@@ -1141,78 +1046,22 @@ export default function ListDetailScreen() {
         />
       )}
 
-      {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        {list?.status === "active" && (canEdit || isPartner) && (
-          <Animated.View style={[styles.actionButton, goShoppingAnimStyle]}>
+      {/* Finish Trip Button (visible when shopping) */}
+      {isInProgress && (canEdit || isPartner) && (
+        <AnimatedSection animation="fadeInUp" duration={500}>
+          <View style={styles.actionButtons}>
             <GlassButton
               variant="primary"
               size="md"
-              icon={isPaused ? "cart-arrow-right" : "cart-outline"}
-              onPress={handleStartShopping}
-              disabled={(items?.length ?? 0) === 0 || !!isSomeoneElseShopping}
+              icon="check-circle-outline"
+              onPress={handleFinishTrip}
               fullWidth
             >
-              {isSomeoneElseShopping 
-                ? `${activeShopper?.name || "Partner"} is shopping` 
-                : isPaused ? "Resume Shopping" : "Go Shopping"}
+              Finish Trip
             </GlassButton>
-          </Animated.View>
-        )}
-        {list?.status === "shopping" && (canEdit || isPartner) && (
-          <View style={styles.shoppingModeContainer}>
-            <ShoppingTypewriterHint
-              storeName={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
-            />
-            <View style={styles.shoppingButtonGrid}>
-              <View style={styles.shoppingButtonGridRow}>
-                <GlassButton
-                  variant="secondary"
-                  size="md"
-                  icon="swap-horizontal"
-                  onPress={() => setShowMidShopStorePicker(true)}
-                  style={styles.shoppingBtnFlex2}
-                  disabled={!!isSomeoneElseShopping}
-                >
-                  Switch Store
-                </GlassButton>
-                <GlassButton
-                  variant="secondary"
-                  size="md"
-                  icon="pencil-outline"
-                  onPress={handlePauseShopping}
-                  style={styles.shoppingBtnFlex1}
-                  disabled={!!isSomeoneElseShopping}
-                >
-                  Edit List
-                </GlassButton>
-              </View>
-              <View style={styles.shoppingButtonGridRow}>
-                <GlassButton
-                  variant="secondary"
-                  size="md"
-                  icon="plus"
-                  onPress={() => setShowAddItemsModal(true)}
-                  style={styles.shoppingBtnFlex1}
-                  disabled={!!isSomeoneElseShopping}
-                >
-                  Add Items
-                </GlassButton>
-                <GlassButton
-                  variant="primary"
-                  size="md"
-                  icon="check-circle-outline"
-                  onPress={handleCompleteShopping}
-                  style={styles.shoppingBtnFlex2}
-                  disabled={!!isSomeoneElseShopping}
-                >
-                  Complete Shopping
-                </GlassButton>
-              </View>
-            </View>
           </View>
-        )}
-      </View>
+        </AnimatedSection>
+      )}
 
       {/* Items section header (only when items exist) */}
       {(items?.length ?? 0) > 0 && (
@@ -1269,17 +1118,18 @@ export default function ListDetailScreen() {
         </View>
       )}
     </View>
-  ), [budget, estimatedTotal, checkedTotal, list?.status,
+  ), [budget, estimatedTotal, checkedTotal,
       list?.userId, list?.storeName, list?.normalizedStoreId,
-      list?.shoppingStartedAt, list?.pausedAt,
+      list?.shoppingStartedAt, list?.activeShopperId, isInProgress,
       hasPartners, id,
       isOwner, canEdit, items, isPartner,
       selectionVersion, categoryOptions, listCategoryFilter,
-      isPaused, dialTransitioning, checkedCount, totalCount,
-      activeShopper?.name, goShoppingAnimStyle, handleBulkDelete,
-      handlePauseShopping, handleRefreshPrices, handleSelectStore,
-      handleStartShopping, isSomeoneElseShopping, refreshingPrices,
-      selectAllItems, userFavorites]);
+      dialTransitioning, checkedCount, totalCount,
+      activeShopper?.name, handleBulkDelete,
+      handleRefreshPrices, handleSelectStore,
+      handleFinishTrip, refreshingPrices,
+      selectAllItems, userFavorites, currentUser?._id,
+      healthBannerDismissed, showCheckedItems, searchTerm]);
 
   // ─── FlashList ListEmptyComponent ────────────────────────────────────────────
   const listEmpty = useMemo(() => (
@@ -1475,7 +1325,7 @@ export default function ListDetailScreen() {
             activeValue={miniBarActiveValue}
             remaining={miniBarRemaining}
             label={miniBarLabel}
-            isPlanning={isPlanning}
+            isPlanning={!isInProgress}
             scrollY={scrollY}
             scrollThreshold={DIAL_SCROLL_THRESHOLD}
             onPress={handleOpenEditBudget}
@@ -1611,7 +1461,7 @@ export default function ListDetailScreen() {
         listStoreName={list.storeName}
         listNormalizedStoreId={list.normalizedStoreId}
         existingItems={items ?? []}
-        listStatus={list.status as "active" | "shopping"}
+        listStatus={isInProgress ? "shopping" : "active"}
       />
 
       {/* Health Analysis Modal */}
@@ -1633,7 +1483,7 @@ export default function ListDetailScreen() {
       <TripSummaryModal
         visible={showTripSummary}
         onClose={() => setShowTripSummary(false)}
-        onFinish={handleFinishTrip}
+        onFinish={handleCompleteTrip}
         onScanReceipt={handleScanReceipt}
         onContinueShopping={() => setShowTripSummary(false)}
         onRemoveItem={handleRemoveUncheckedItem}
@@ -1756,16 +1606,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.glass.border,
     opacity: 0.5,
   },
-  checkedHeader: {
-    backgroundColor: "rgba(0, 0, 0, 0.05)",
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.lg,
-    justifyContent: "space-between",
-  },
-  checkedHeaderText: {
-    color: colors.text.tertiary,
+  toggleContainer: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
   bottomSpacer: {
     height: 140,
@@ -1805,56 +1648,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
     marginBottom: spacing.xs,
-  },
-  actionButton: {
-    flex: 1,
     marginTop: spacing.md,
-  },
-  // Shopping Mode Container
-  shoppingModeContainer: {
-    flex: 1,
-  },
-  shoppingButtonGrid: {
-    gap: spacing.sm,
-  },
-  shoppingButtonGridRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  shoppingBtnFlex2: {
-    flex: 2,
-  },
-  shoppingBtnFlex1: {
-    flex: 1,
-  },
-
-  // Empty State
-  emptyContainer: {
-    alignItems: "center",
-    paddingVertical: spacing.lg,
-  },
-  emptyIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.glass.background,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: spacing.md,
-  },
-  emptyTitle: {
-    ...typography.headlineSmall,
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-    textAlign: "center",
-    width: "100%",
-  },
-  emptySubtitle: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-    textAlign: "center",
-    paddingHorizontal: spacing.lg,
-    width: "100%",
   },
 
   // Items Section
@@ -1894,36 +1688,6 @@ const styles = StyleSheet.create({
   },
   deleteIconButton: {
     padding: spacing.xs,
-  },
-
-  // Paused trip banner
-  pausedBanner: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    backgroundColor: "rgba(245, 158, 11, 0.10)",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: "rgba(245, 158, 11, 0.25)",
-  },
-  pausedBannerLeft: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: spacing.xs,
-    flex: 1,
-  },
-  pausedBannerText: {
-    color: colors.accent.warning,
-    fontSize: typography.bodySmall.fontSize,
-    fontWeight: "500" as const,
-  },
-  pausedResumeText: {
-    color: colors.accent.primary,
-    fontSize: typography.bodySmall.fontSize,
-    fontWeight: "700" as const,
   },
 
   // Refresh prices button

@@ -49,6 +49,7 @@ import type * as lib_voiceTools from "../lib/voiceTools.js";
 import type * as listItems from "../listItems.js";
 import type * as migrations_backfillListNumbers from "../migrations/backfillListNumbers.js";
 import type * as migrations_backfillListStores from "../migrations/backfillListStores.js";
+import type * as migrations_collapseShoppingModes from "../migrations/collapseShoppingModes.js";
 import type * as migrations_grantAdminAccess from "../migrations/grantAdminAccess.js";
 import type * as migrations_migrateAdminsToRBAC from "../migrations/migrateAdminsToRBAC.js";
 import type * as migrations_migrateToPoints from "../migrations/migrateToPoints.js";
@@ -131,6 +132,7 @@ declare const fullApi: ApiFromModules<{
   listItems: typeof listItems;
   "migrations/backfillListNumbers": typeof migrations_backfillListNumbers;
   "migrations/backfillListStores": typeof migrations_backfillListStores;
+  "migrations/collapseShoppingModes": typeof migrations_collapseShoppingModes;
   "migrations/grantAdminAccess": typeof migrations_grantAdminAccess;
   "migrations/migrateAdminsToRBAC": typeof migrations_migrateAdminsToRBAC;
   "migrations/migrateToPoints": typeof migrations_migrateToPoints;

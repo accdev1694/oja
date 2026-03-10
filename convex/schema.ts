@@ -152,7 +152,6 @@ export default defineSchema({
     name: v.string(),
     status: v.union(
       v.literal("active"),
-      v.literal("shopping"),
       v.literal("completed"),
       v.literal("archived")
     ),
@@ -178,7 +177,6 @@ export default defineSchema({
     shoppingStartedAt: v.optional(v.number()),
     activeShopperId: v.optional(v.id("users")), // Who is currently shopping this list
     completedAt: v.optional(v.number()),
-    pausedAt: v.optional(v.number()),
     archivedAt: v.optional(v.number()),
 
     // Post-trip summary

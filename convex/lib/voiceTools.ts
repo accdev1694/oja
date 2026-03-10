@@ -889,8 +889,7 @@ export async function executeVoiceTool(
           targetList = lists[0];
         } else if (lists.length > 1) {
           // Find in-progress list first, then most recent
-           
-          targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
+          targetList = lists.find((l: any) => l.isInProgress) || lists[0];
         }
 
         if (!targetList) {
@@ -931,8 +930,7 @@ export async function executeVoiceTool(
         } else if (allLists.length === 1) {
           list = allLists[0];
         } else if (allLists.length > 1) {
-           
-          list = allLists.find((l: any) => l.status === "shopping") || allLists[0];
+          list = allLists.find((l: any) => l.isInProgress) || allLists[0];
         }
 
         if (!list) {
@@ -1474,8 +1472,7 @@ async function executeWriteTool(
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-         
-        targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
+        targetList = lists.find((l: any) => l.isInProgress) || lists[0];
       }
 
       if (!targetList) {
@@ -1573,8 +1570,7 @@ async function executeWriteTool(
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-         
-        targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
+        targetList = lists.find((l: any) => l.isInProgress) || lists[0];
       }
 
       if (!targetList) {
@@ -1649,8 +1645,7 @@ async function executeWriteTool(
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-         
-        targetList = lists.find((l: any) => l.status === "shopping") || lists[0];
+        targetList = lists.find((l: any) => l.isInProgress) || lists[0];
       }
 
       if (!targetList) {
@@ -1959,7 +1954,7 @@ async function executeWriteTool(
       }
 
       try {
-        await ctx.runMutation(api.shoppingLists.completeShopping, {
+        await ctx.runMutation(api.shoppingLists.finishTrip, {
           id: targetList._id,
         });
 

@@ -53,7 +53,7 @@ export default function ReconciliationScreen() {
     listId ? { receiptId, listId } : "skip"
   );
 
-  const completeShopping = useMutation(api.shoppingLists.completeShopping);
+  const finishTrip = useMutation(api.shoppingLists.finishTrip);
   const archiveList = useMutation(api.shoppingLists.archiveList);
   const linkReceiptToList = useMutation(api.receipts.linkToList);
   const autoRestock = useMutation(api.pantryItems.autoRestockFromReceipt);
@@ -301,7 +301,7 @@ export default function ReconciliationScreen() {
       }
 
       // Step 2: Complete the shopping trip
-      await completeShopping({ id: listId });
+      await finishTrip({ id: listId });
 
       // Step 3: Auto-restock pantry from receipt
       const result = await autoRestock({ receiptId });

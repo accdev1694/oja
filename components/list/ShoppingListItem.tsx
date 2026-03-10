@@ -1,4 +1,4 @@
-import { memo, useRef, useEffect, useCallback, useMemo } from "react";
+import { memo, useRef, useEffect, useCallback, useMemo, useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import Animated, {
   useSharedValue,
@@ -122,17 +122,6 @@ export const ShoppingListItem = memo(function ShoppingListItem({
   currency = "GBP",
 }: ShoppingListItemProps) {
   const translateX = useSharedValue(0);
-  const checkFlash = useSharedValue(0);
-  const prevCheckedRef = useRef(item.isChecked);
-
-  // Celebration flash when item gets checked
-  useEffect(() => {
-    if (item.isChecked && !prevCheckedRef.current) {
-      checkFlash.value = 1;
-      checkFlash.value = withTiming(0, { duration: 600 });
-    }
-    prevCheckedRef.current = item.isChecked;
-  }, [item.isChecked]);
 
   const currentPriority = item.priority || "should-have";
   const priorityConfig = PRIORITY_CONFIG[currentPriority];
@@ -149,7 +138,8 @@ export const ShoppingListItem = memo(function ShoppingListItem({
     if (isShopping) {
       // Shopping: tap = check off
       if (canEdit) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        // Snappy haptic and immediate toggle
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         onToggle(item._id);
       }
     } else {
@@ -159,7 +149,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
         onEdit(item);
       }
     }
-  }, [selectionActive, isShopping, canEdit, item, onToggle, onEdit, onSelectToggle]);
+  }, [selectionActive, isShopping, canEdit, item._id, item.isChecked, onToggle, onEdit, onSelectToggle]);
 
   const handleLongPress = useCallback(() => {
     // Both modes: long press = toggle selection
@@ -218,15 +208,6 @@ export const ShoppingListItem = memo(function ShoppingListItem({
     opacity: translateX.value < -20 ? Math.min((-translateX.value - 20) / 30, 1) : 0,
   }));
 
-  const checkFlashStyle = useAnimatedStyle(() => ({
-    borderColor: checkFlash.value > 0
-      ? `rgba(16, 185, 129, ${checkFlash.value * 0.6})`
-      : "transparent",
-    borderWidth: checkFlash.value > 0 ? 1.5 : 0,
-  }));
-
-
-
   // Build display name with size/weight at the beginning
   const displayName = useMemo(() => {
     return formatItemDisplay(item.name, item.size, item.unit);
@@ -256,7 +237,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
 
       <GestureDetector gesture={composedGesture}>
         <Animated.View style={animatedStyle}>
-          <Animated.View style={[{ borderRadius: borderRadius.lg }, checkFlashStyle]}>
+          <View style={{ borderRadius: borderRadius.lg }}>
             <GlassCard
               variant="standard"
               style={[itemStyles.itemCard, selectedTint, item.isChecked && itemStyles.itemCardChecked]}
@@ -266,6 +247,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                 onPress={handlePress}
                 onLongPress={handleLongPress}
                 delayLongPress={400}
+                android_ripple={{ color: `${colors.accent.primary}20` }}
               >
                 {/* Checkbox — visible in selection mode OR shopping mode (not in planning) */}
                 {(selectionActive || (isShopping && !selectionActive)) && (
@@ -273,6 +255,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                     checked={selectionActive ? !!isSelected : item.isChecked}
                     size="xs"
                     style={{ marginRight: spacing.xs }}
+                    onToggle={handlePress}
                   />
                 )}
 

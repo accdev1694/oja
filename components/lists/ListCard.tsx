@@ -38,7 +38,7 @@ export interface ListCardProps {
     checkedCount?: number;
     totalEstimatedCost?: number;
     shoppingStartedAt?: number;
-    pausedAt?: number;
+    isInProgress?: boolean;
     actualTotal?: number;
     listNumber?: number;
     storeName?: string;
@@ -60,22 +60,16 @@ interface StatusEntry {
 }
 
 function getStatusConfig(list: ListCardProps["list"]): StatusEntry {
-  const status = list.status as ListStatus;
-
-  if (status === "shopping") {
-    return { color: colors.semantic.scan, label: "Shopping", icon: "cart-outline" };
-  }
-
-  if (status === "active" && list.shoppingStartedAt && list.pausedAt) {
-    return { color: colors.accent.warning, label: "Paused", icon: "pause-circle-outline" };
-  }
-
-  if (status === "completed" || status === "archived") {
+  if (list.status === "completed" || list.status === "archived") {
     return { color: colors.text.tertiary, label: "Completed", icon: "check-circle-outline" };
   }
 
-  // Default: active without shoppingStartedAt = Planning
-  return { color: colors.accent.primary, label: "Planning", icon: "clipboard-edit-outline" };
+  if (list.isInProgress) {
+    return { color: colors.semantic.scan, label: "In Progress", icon: "cart-outline" };
+  }
+
+  // Default: Active (no items checked yet)
+  return { color: colors.accent.primary, label: "Active", icon: "clipboard-edit-outline" };
 }
 
 // ---------------------------------------------------------------------------
@@ -117,23 +111,19 @@ const PulseDot = React.memo(function PulseDot({ color }: { color: string }) {
 // ---------------------------------------------------------------------------
 
 function getProgressText(list: ListCardProps["list"]): string | null {
-  const status = list.status as ListStatus;
   const total = list.itemCount ?? 0;
   const checked = list.checkedCount ?? 0;
 
-  if (status === "shopping") {
+  if (list.status === "completed" || list.status === "archived") {
+    if (list.actualTotal != null) return `\u00A3${list.actualTotal.toFixed(2)}`;
+    return `${total} item${total !== 1 ? "s" : ""}`;
+  }
+
+  if (list.isInProgress) {
     return `${checked}/${total} items`;
   }
 
-  if (status === "active" && list.shoppingStartedAt && list.pausedAt) {
-    return `${checked}/${total} checked`;
-  }
-
-  if ((status === "completed" || status === "archived") && list.actualTotal != null) {
-    return `\u00A3${list.actualTotal.toFixed(2)}`;
-  }
-
-  if (total > 0 && status === "active") {
+  if (total > 0) {
     return `${total} item${total !== 1 ? "s" : ""}`;
   }
 
@@ -193,11 +183,7 @@ export const ListCard = React.memo(function ListCard({
 
   const statusConfig = getStatusConfig(list);
   const progressText = getProgressText(list);
-  const isShopping = (list.status as ListStatus) === "shopping";
-  const isPaused =
-    (list.status as ListStatus) === "active" &&
-    !!list.shoppingStartedAt &&
-    !!list.pausedAt;
+  const isInProgress = !!list.isInProgress;
 
   // Collect unique store names
   const storeNames: string[] = [];
@@ -208,11 +194,6 @@ export const ListCard = React.memo(function ListCard({
   } else if (list.storeName) {
     storeNames.push(list.storeName);
   }
-
-  // Paused state gets a subtle amber left border
-  const cardBorderStyle: ViewStyle | undefined = isPaused
-    ? { borderLeftWidth: 3, borderLeftColor: colors.accent.warning }
-    : undefined;
 
   const isEditable = list.status !== "completed" && list.status !== "archived";
 
@@ -225,7 +206,7 @@ export const ListCard = React.memo(function ListCard({
       >
         <GlassCard
           variant="standard"
-          style={[styles.listCard, cardBorderStyle]}
+          style={styles.listCard}
         >
           {/* Header row */}
           <View style={styles.listHeader}>
@@ -296,7 +277,7 @@ export const ListCard = React.memo(function ListCard({
                 <View style={styles.metaItem}>
                   <MaterialCommunityIcons
                     name={
-                      isShopping || isPaused
+                      isInProgress
                         ? "checkbox-marked-circle-outline"
                         : "format-list-bulleted"
                     }
@@ -319,7 +300,7 @@ export const ListCard = React.memo(function ListCard({
                 { backgroundColor: `${statusConfig.color}20` },
               ]}
             >
-              {isShopping && <PulseDot color={statusConfig.color} />}
+              {isInProgress && <PulseDot color={statusConfig.color} />}
               <Text
                 style={[styles.statusText, { color: statusConfig.color }]}
               >
@@ -369,7 +350,7 @@ export const ListCard = React.memo(function ListCard({
     prev.list.checkedCount === next.list.checkedCount &&
     prev.list.totalEstimatedCost === next.list.totalEstimatedCost &&
     prev.list.shoppingStartedAt === next.list.shoppingStartedAt &&
-    prev.list.pausedAt === next.list.pausedAt &&
+    prev.list.isInProgress === next.list.isInProgress &&
     prev.list.actualTotal === next.list.actualTotal &&
     prev.list.createdAt === next.list.createdAt &&
     prev.list.name === next.list.name &&

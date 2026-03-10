@@ -151,7 +151,7 @@ export async function canCreateList(ctx: any, userId: any): Promise<{ allowed: b
     .collect();
 
   const activeCount = activeLists.filter(
-    (l: any) => l.status === "active" || l.status === "shopping"
+    (l: any) => l.status === "active"
   ).length;
 
   if (activeCount >= features.maxLists) {

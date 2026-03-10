@@ -532,10 +532,20 @@ export const toggleChecked = mutation({
       updatedAt: Date.now(),
     };
 
+    const list = await ctx.db.get(item.listId);
+
+    // Auto-trigger trip start if this is the first item checked
+    if (newCheckedStatus && list && !list.shoppingStartedAt) {
+      await ctx.db.patch(item.listId, {
+        shoppingStartedAt: Date.now(),
+        activeShopperId: user._id,
+        updatedAt: Date.now(),
+      });
+    }
+
     // When checking ON, stamp the current store on the item (multi-store support)
-    if (newCheckedStatus) {
-      const list = await ctx.db.get(item.listId);
-      if (list?.normalizedStoreId) {
+    if (newCheckedStatus && list) {
+      if (list.normalizedStoreId) {
         updates.purchasedAtStoreId = list.normalizedStoreId;
         updates.purchasedAtStoreName = list.storeName;
       }

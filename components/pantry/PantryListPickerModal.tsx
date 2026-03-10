@@ -43,7 +43,7 @@ export const PantryListPickerModal = React.memo(function PantryListPickerModal({
   const [search, setSearch] = useState("");
 
   const activeLists = useMemo(() => 
-    lists.filter((l) => l.status === "active" || l.status === "shopping"),
+    lists.filter((l) => l.status === "active"),
   [lists]);
 
   const filteredLists = useMemo(() => {
@@ -109,7 +109,7 @@ export const PantryListPickerModal = React.memo(function PantryListPickerModal({
                 {list.name}
               </Text>
               <Text style={styles.optionMeta}>
-                {list.status === "shopping" ? "Shopping" : "Active"}
+                {(list as any).isInProgress ? "Shopping" : "Active"}
               </Text>
               <MaterialCommunityIcons
                 name="chevron-right"

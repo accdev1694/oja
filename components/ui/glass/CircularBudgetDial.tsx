@@ -104,37 +104,46 @@ export function CircularBudgetDial({
   }
   const spentColor = getSpentColor()
 
-  // --- Opacity per mode ---
-  const outerFillOpacity = isPlanning ? 1.0 : isFinished ? 0.2 : 0.25
-  const innerFillOpacity = isPlanning ? 0.0 : isFinished ? 0.7 : 1.0
+  // --- Opacity (both arcs always visible - no mode switching) ---
+  // Outer arc (planned): subtle but visible for reference
+  // Inner arc (spent): always prominent since it's what matters
+  const outerFillOpacity = isFinished ? 0.3 : 0.5
+  const innerFillOpacity = 1.0
 
-  // --- Sentiment ---
+  // --- Sentiment (unified - always based on spent vs budget) ---
   const getSentiment = () => {
     if (budget <= 0) return null
 
-    if (isPlanning) {
-      const ratio = planned / budget
-      if (ratio > 1)
-        return `Over budget by ${currency}${(planned - budget).toFixed(2)}`
-      if (ratio > 0.8) return 'Tight fit — almost at your limit'
-      if (ratio > 0.5) return 'Fits your budget — looking good'
-      return 'Fits your budget — lots of room'
-    }
+    // Always show spent vs budget (actual spending is what matters)
+    const spentRatio = spent / budget
+    const plannedRatio = planned / budget
 
-    // Shopping / completed / archived
-    const ratio = spent / budget
-    if (ratio > 1)
+    // If overspent, show by how much
+    if (spentRatio > 1)
       return `Over budget by ${currency}${(spent - budget).toFixed(2)}`
-    if (ratio > 0.8) return 'Getting close — nearly there'
-    if (ratio > 0.5) return 'On track — stay focused'
-    return 'On track — doing well'
+
+    // If planning and planned is over budget, warn early
+    if (spent === 0 && plannedRatio > 1)
+      return `Planned exceeds budget by ${currency}${(planned - budget).toFixed(2)}`
+
+    // Normal progress messages
+    if (spentRatio > 0.8) return 'Getting close — nearly there'
+    if (spentRatio > 0.5) return 'On track — stay focused'
+    if (spent > 0) return 'On track — doing well'
+
+    // No items checked yet - show planned vs budget
+    if (plannedRatio > 0.8) return 'Tight fit — almost at your limit'
+    if (plannedRatio > 0.5) return 'Fits your budget — looking good'
+    return 'Fits your budget — lots of room'
   }
   const sentiment = getSentiment()
-  const sentimentColor = (isPlanning ? isPlannedOver : isOverBudget)
+  const sentimentColor = isOverBudget
     ? colors.semantic.danger
-    : isPlanning
-      ? colors.accent.secondary
-      : spentColor
+    : spent > 0
+      ? spentColor
+      : isPlannedOver
+        ? colors.semantic.danger
+        : colors.accent.secondary
 
   // --- Remaining label color (always budget - spent) ---
   const remainingColor = isOverBudget

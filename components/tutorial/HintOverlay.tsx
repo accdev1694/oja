@@ -192,49 +192,49 @@ function getArrowStyle(position: string) {
     case 'above':
       return {
         bottom: -arrowSize,
-        left: '50%',
+        left: '50%' as const,
         marginLeft: -arrowSize / 2,
         borderLeftWidth: arrowSize / 2,
         borderRightWidth: arrowSize / 2,
         borderTopWidth: arrowSize,
-        borderLeftColor: 'transparent',
-        borderRightColor: 'transparent',
+        borderLeftColor: 'transparent' as const,
+        borderRightColor: 'transparent' as const,
         borderTopColor: glassTokens.colors.glass.border,
       };
     case 'below':
       return {
         top: -arrowSize,
-        left: '50%',
+        left: '50%' as const,
         marginLeft: -arrowSize / 2,
         borderLeftWidth: arrowSize / 2,
         borderRightWidth: arrowSize / 2,
         borderBottomWidth: arrowSize,
-        borderLeftColor: 'transparent',
-        borderRightColor: 'transparent',
+        borderLeftColor: 'transparent' as const,
+        borderRightColor: 'transparent' as const,
         borderBottomColor: glassTokens.colors.glass.border,
       };
     case 'left':
       return {
         right: -arrowSize,
-        top: '50%',
+        top: '50%' as const,
         marginTop: -arrowSize / 2,
         borderTopWidth: arrowSize / 2,
         borderBottomWidth: arrowSize / 2,
         borderLeftWidth: arrowSize,
-        borderTopColor: 'transparent',
-        borderBottomColor: 'transparent',
+        borderTopColor: 'transparent' as const,
+        borderBottomColor: 'transparent' as const,
         borderLeftColor: glassTokens.colors.glass.border,
       };
     case 'right':
       return {
         left: -arrowSize,
-        top: '50%',
+        top: '50%' as const,
         marginTop: -arrowSize / 2,
         borderTopWidth: arrowSize / 2,
         borderBottomWidth: arrowSize / 2,
         borderRightWidth: arrowSize,
-        borderTopColor: 'transparent',
-        borderBottomColor: 'transparent',
+        borderTopColor: 'transparent' as const,
+        borderBottomColor: 'transparent' as const,
         borderRightColor: glassTokens.colors.glass.border,
       };
     default:

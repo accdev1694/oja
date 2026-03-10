@@ -163,28 +163,26 @@ test.describe("7. Budget Tracking & Price Cascade", () => {
     expect(typeof found).toBe("boolean");
   });
 
-  // ── Budget Never Resets to £0 (Bug Fix Verification) ────
+  // ── Budget Consistency ────────────────────────────────
 
-  test("7.7 — budget does not reset to £0 in shopping mode", async ({
+  test("7.7 — budget reflects item estimates immediately", async ({
     page,
   }) => {
     await lists.goto();
     await lists.openList("Budget Test");
 
-    // Start shopping if possible
-    if (await detail.startShoppingButton.isVisible()) {
-      await detail.startShopping();
-      await page.waitForTimeout(1000);
+    // Check an item
+    await detail.checkOffItem("Milk");
+    await page.waitForTimeout(1000);
 
-      // Budget should NOT be £0 — it should show the estimated total
-      const zerobudget = await page
-        .getByText("£0.00", { exact: true })
-        .isVisible()
-        .catch(() => false);
+    // Budget should NOT be £0 — it should show the estimated total or actual spent
+    const zerobudget = await page
+      .getByText("£0.00", { exact: true })
+      .isVisible()
+      .catch(() => false);
 
-      // The budget display should reflect items, not reset to 0
-      // (This was critical bug #7 from the E2E sweep)
-    }
+    // If we have items with prices, budget should not be 0
+    expect(zerobudget).toBeFalsy();
   });
 
   // ── Check-Off Budget Update ──────────────────────────────
@@ -205,12 +203,12 @@ test.describe("7. Budget Tracking & Price Cascade", () => {
 
   // ── Trip Summary ─────────────────────────────────────────
 
-  test("7.9 — completing shopping shows trip summary", async ({ page }) => {
+  test("7.9 — completing trip shows summary", async ({ page }) => {
     await lists.goto();
     await lists.openList("Budget Test");
 
-    if (await detail.completeShoppingButton.isVisible()) {
-      await detail.completeShopping();
+    if (await detail.finishTripButton.isVisible()) {
+      await detail.finishTrip();
       await page.waitForTimeout(2000);
 
       // Should navigate to trip summary or show completion state

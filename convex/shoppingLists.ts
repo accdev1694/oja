@@ -101,7 +101,7 @@ export const getActive = query({
       return [];
     }
 
-    // Fetch both "active" and "shopping" status lists
+    // Only "active" lists are considered current
     const active = await ctx.db
       .query("shoppingLists")
       .withIndex("by_user_status", (q) =>
@@ -110,22 +110,9 @@ export const getActive = query({
       .order("desc")
       .collect();
 
-    const shopping = await ctx.db
-      .query("shoppingLists")
-      .withIndex("by_user_status", (q) =>
-        q.eq("userId", user._id).eq("status", "shopping")
-      )
-      .order("desc")
-      .collect();
-
-    // Merge and sort by updatedAt descending (shopping lists first since they're in progress)
-    const merged = [...shopping, ...active].sort(
-      (a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt)
-    );
-
-    // Enrich each list with item counts and estimated total
+    // Enrich each list with item counts, estimated total, and in-progress flag
     const enriched = await Promise.all(
-      merged.map(async (list) => {
+      active.map(async (list) => {
         const items = await ctx.db
           .query("listItems")
           .withIndex("by_list", (q) => q.eq("listId", list._id))
@@ -142,6 +129,7 @@ export const getActive = query({
           itemCount: items.length,
           checkedCount,
           totalEstimatedCost: totalEstimatedCost > 0 ? totalEstimatedCost : undefined,
+          isInProgress: list.shoppingStartedAt != null && list.completedAt == null,
         };
       })
     );
@@ -189,7 +177,10 @@ export const getById = query({
       }
     }
 
-    return list;
+    return {
+      ...list,
+      isInProgress: list.shoppingStartedAt != null && list.completedAt == null,
+    };
   },
 });
 
@@ -558,7 +549,6 @@ export const update = mutation({
     status: v.optional(
       v.union(
         v.literal("active"),
-        v.literal("shopping"),
         v.literal("completed"),
         v.literal("archived")
       )
@@ -657,64 +647,44 @@ export const remove = mutation({
 });
 
 /**
- * Start shopping (change status to "shopping")
+ * Mark the start of a shopping trip
  */
-export const startShopping = mutation({
+export const markTripStart = mutation({
   args: { id: v.id("shoppingLists") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
+    if (!identity) throw new Error("Not authenticated");
 
     const list = await ctx.db.get(args.id);
-    if (!list) {
-      throw new Error("List not found");
-    }
+    if (!list) throw new Error("List not found");
     requireEditableList(list);
 
-    // Verify ownership OR partnership
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
+    if (!user) throw new Error("User not found");
 
-    if (!user) {
-      throw new Error("User not found");
+    const perms = await getUserListPermissions(ctx, args.id, user._id);
+    if (!perms.canEdit) throw new Error("Unauthorized");
+
+    // Only set if not already set
+    if (!list.shoppingStartedAt) {
+      await ctx.db.patch(args.id, {
+        shoppingStartedAt: Date.now(),
+        activeShopperId: user._id,
+        updatedAt: Date.now(),
+      });
     }
-
-    let isAuthorized = list.userId === user._id;
-    if (!isAuthorized) {
-      const partner = await ctx.db
-        .query("listPartners")
-        .withIndex("by_list_user", (q: any) =>
-          q.eq("listId", args.id).eq("userId", user._id)
-        )
-        .unique();
-      if (partner && (partner.status === "accepted" || partner.status === "pending")) {
-        isAuthorized = true;
-      }
-    }
-
-    if (!isAuthorized) {
-      throw new Error("Unauthorized");
-    }
-
-    await ctx.db.patch(args.id, {
-      status: "shopping",
-      shoppingStartedAt: Date.now(),
-      activeShopperId: user._id,
-      updatedAt: Date.now(),
-    });
 
     return await ctx.db.get(args.id);
   },
 });
 
 /**
- * Complete shopping (change status to "completed")
+ * Finish a shopping trip (change status to "completed")
  */
-export const completeShopping = mutation({
+export const finishTrip = mutation({
   args: { id: v.id("shoppingLists") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -737,20 +707,8 @@ export const completeShopping = mutation({
       throw new Error("User not found");
     }
 
-    let isAuthorized = list.userId === user._id;
-    if (!isAuthorized) {
-      const partner = await ctx.db
-        .query("listPartners")
-        .withIndex("by_list_user", (q: any) =>
-          q.eq("listId", args.id).eq("userId", user._id)
-        )
-        .unique();
-      if (partner && (partner.status === "accepted" || partner.status === "pending")) {
-        isAuthorized = true;
-      }
-    }
-
-    if (!isAuthorized) {
+    const perms = await getUserListPermissions(ctx, args.id, user._id);
+    if (!perms.canEdit) {
       throw new Error("Unauthorized");
     }
 
@@ -809,125 +767,10 @@ export const completeShopping = mutation({
 });
 
 /**
- * Pause shopping (set status back to "active" but preserve shoppingStartedAt)
- */
-export const pauseShopping = mutation({
-  args: { id: v.id("shoppingLists") },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    const list = await ctx.db.get(args.id);
-    if (!list) {
-      throw new Error("List not found");
-    }
-    requireEditableList(list);
-
-    // Verify ownership OR partnership
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    let isAuthorized = list.userId === user._id;
-    if (!isAuthorized) {
-      const partner = await ctx.db
-        .query("listPartners")
-        .withIndex("by_list_user", (q: any) =>
-          q.eq("listId", args.id).eq("userId", user._id)
-        )
-        .unique();
-      if (partner && (partner.status === "accepted" || partner.status === "pending")) {
-        isAuthorized = true;
-      }
-    }
-
-    if (!isAuthorized) {
-      throw new Error("Unauthorized");
-    }
-
-    await ctx.db.patch(args.id, {
-      status: "active",
-      pausedAt: Date.now(),
-      activeShopperId: undefined,
-      updatedAt: Date.now(),
-    });
-
-    return await ctx.db.get(args.id);
-  },
-});
-
-/**
- * Resume a paused shopping trip (set status back to "shopping")
- */
-export const resumeShopping = mutation({
-  args: { id: v.id("shoppingLists") },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    const list = await ctx.db.get(args.id);
-    if (!list) {
-      throw new Error("List not found");
-    }
-    requireEditableList(list);
-
-    // Verify ownership OR partnership
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    let isAuthorized = list.userId === user._id;
-    if (!isAuthorized) {
-      const partner = await ctx.db
-        .query("listPartners")
-        .withIndex("by_list_user", (q: any) =>
-          q.eq("listId", args.id).eq("userId", user._id)
-        )
-        .unique();
-      if (partner && (partner.status === "accepted" || partner.status === "pending")) {
-        isAuthorized = true;
-      }
-    }
-
-    if (!isAuthorized) {
-      throw new Error("Unauthorized");
-    }
-
-    if (!list.shoppingStartedAt) {
-      throw new Error("No shopping trip to resume");
-    }
-
-    await ctx.db.patch(args.id, {
-      status: "shopping",
-      pausedAt: undefined,
-      activeShopperId: user._id,
-      updatedAt: Date.now(),
-    });
-
-    return await ctx.db.get(args.id);
-  },
-});
-
-/**
  * Switch store mid-shopping trip (lightweight — no re-pricing).
  *
- * Only works when list status is "shopping". Updates the list's current store
- * and appends to storeSegments for trip tracking. Does NOT re-price items
- * (unlike switchStore which is for planning mode).
+ * Updates the list's current store and appends to storeSegments for trip tracking. 
+ * Does NOT re-price items (unlike switchStore which is for planning mode).
  */
 export const switchStoreMidShop = mutation({
   args: {
@@ -953,9 +796,6 @@ export const switchStoreMidShop = mutation({
     // Verify ownership or partnership
     const perms = await getUserListPermissions(ctx, args.listId, user._id);
     if (!perms.canEdit) throw new Error("Unauthorized");
-    if (list.status !== "shopping") {
-      throw new Error("Can only switch stores while actively shopping");
-    }
 
     // Validate store
     const storeInfo = getStoreInfoSafe(args.newStoreId);

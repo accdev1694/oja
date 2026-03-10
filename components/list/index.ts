@@ -5,5 +5,4 @@ export { DidYouMeanChip } from "./DidYouMeanChip";
 export { ItemSuggestionsDropdown } from "./ItemSuggestionsDropdown";
 export { ListActionRow } from "./ListActionRow";
 export { ShoppingListItem } from "./ShoppingListItem";
-export { ShoppingTypewriterHint } from "./ShoppingTypewriterHint";
 export { StoreDropdownSheet } from "./StoreDropdownSheet";
