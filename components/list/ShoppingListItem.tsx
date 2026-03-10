@@ -364,7 +364,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                 </View>
               </Pressable>
             </GlassCard>
-          </Animated.View>
+          </View>
         </Animated.View>
       </GestureDetector>
     </View>

@@ -338,6 +338,14 @@ Reference implementation: `list/[id].tsx` - dynamic overlap algorithm using `use
     - Import `api` from `./_generated/api`: `import { api } from "./_generated/api";`
     - Use `ctx.runQuery(api.module.functionName, args)` or `ctx.runMutation(api.module.functionName, args)`
     - Example: `await ctx.runQuery(api.admin.getAnalytics, {})` ✅ not `await ctx.runQuery(query.getAnalytics, {})` ❌
+14. **Post-Refactor Validation (CRITICAL):**
+    - **ALWAYS run `npx expo start`** after completing any refactor to verify no syntax errors
+    - **Check JSX tag matching** - Every `<View>` must close with `</View>`, not `</Animated.View>` or vice versa
+    - **Run `npm run typecheck`** to catch TypeScript errors
+    - **Test the affected feature** manually in the app
+    - **DO NOT mark refactor complete** until the app loads successfully without errors
+    - Common mistake after major refactors: JSX tag mismatches (e.g., opening `<View>` but closing with `</Animated.View>`)
+    - This validation step is MANDATORY - skipping it leads to runtime errors that break development
 
 ## Feature Development Workflow
 

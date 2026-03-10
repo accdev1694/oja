@@ -74,12 +74,8 @@ export const getBuyItAgainSuggestions = query({
       .withIndex("by_user_status", (q) => q.eq("userId", user._id).eq("status", "active"))
       .collect();
     
-    const shoppingLists = await ctx.db
-      .query("shoppingLists")
-      .withIndex("by_user_status", (q) => q.eq("userId", user._id).eq("status", "shopping"))
-      .collect();
     
-    const allActiveLists = [...activeLists, ...shoppingLists];
+    const allActiveLists = activeLists;
     const activeItemNames = new Set<string>();
 
     for (const list of allActiveLists) {

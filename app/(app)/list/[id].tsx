@@ -1607,7 +1607,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   toggleContainer: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 0,
     marginBottom: spacing.md,
   },
   bottomSpacer: {
@@ -1720,7 +1720,7 @@ const styles = StyleSheet.create({
 
   // Search bar
   searchContainer: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 0,
     marginBottom: spacing.lg,
   },
 

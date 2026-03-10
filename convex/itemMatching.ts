@@ -125,14 +125,8 @@ export const processReceiptMatching = mutation({
       )
       .collect();
 
-    const shoppingLists = await ctx.db
-      .query("shoppingLists")
-      .withIndex("by_user_status", (q) =>
-        q.eq("userId", user._id).eq("status", "shopping")
-      )
-      .collect();
 
-    const relevantLists = [...activeLists, ...shoppingLists].filter(
+    const relevantLists = activeLists.filter(
       (l) => !l.normalizedStoreId || l.normalizedStoreId === storeId
     );
 

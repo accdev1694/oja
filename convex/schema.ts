@@ -153,7 +153,7 @@ export default defineSchema({
     status: v.union(
       v.literal("active"),
       v.literal("completed"),
-      v.literal("archived")
+      v.literal("archived"),
     ),
 
     // Budget

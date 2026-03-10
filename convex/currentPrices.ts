@@ -701,15 +701,9 @@ export const refreshActiveListsFromReceipt = mutation({
       )
       .collect();
 
-    const shoppingLists = await ctx.db
-      .query("shoppingLists")
-      .withIndex("by_user_status", (q) =>
-        q.eq("userId", user._id).eq("status", "shopping")
-      )
-      .collect();
 
     // Filter to same store only
-    const sameStoreLists = [...activeLists, ...shoppingLists].filter(
+    const sameStoreLists = activeLists.filter(
       (l) => l.normalizedStoreId === receiptStoreId
     );
 

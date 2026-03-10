@@ -159,7 +159,8 @@
       "Bash(./gradlew:*)",
       "Bash(git diff:*)",
       "Bash(tree:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(timeout 30 npx expo start:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
