@@ -38,6 +38,7 @@ import type * as lib_itemMatcher from "../lib/itemMatcher.js";
 import type * as lib_itemNameParser from "../lib/itemNameParser.js";
 import type * as lib_priceBracketMatcher from "../lib/priceBracketMatcher.js";
 import type * as lib_priceResolver from "../lib/priceResolver.js";
+import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_receiptHelpers from "../lib/receiptHelpers.js";
 import type * as lib_receiptValidation from "../lib/receiptValidation.js";
 import type * as lib_siem from "../lib/siem.js";
@@ -121,6 +122,7 @@ declare const fullApi: ApiFromModules<{
   "lib/itemNameParser": typeof lib_itemNameParser;
   "lib/priceBracketMatcher": typeof lib_priceBracketMatcher;
   "lib/priceResolver": typeof lib_priceResolver;
+  "lib/rateLimit": typeof lib_rateLimit;
   "lib/receiptHelpers": typeof lib_receiptHelpers;
   "lib/receiptValidation": typeof lib_receiptValidation;
   "lib/siem": typeof lib_siem;

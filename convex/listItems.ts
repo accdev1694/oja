@@ -218,6 +218,12 @@ export const create = mutation({
       .unique();
     if (!user) throw new Error("User not found");
 
+    // Rate Limit (Phase 2.1)
+    const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "list_items" });
+    if (!rateLimit.allowed) {
+      throw new Error("Rate limit exceeded. Please wait before adding more items.");
+    }
+
     const perms = await getUserListPermissions(ctx, args.listId, user._id);
     if (!perms.canEdit) {
       throw new Error("You don't have permission to add items to this list");

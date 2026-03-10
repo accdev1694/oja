@@ -161,6 +161,13 @@ crons.monthly(
   internal.receipts.cleanupOldImages
 );
 
+// Cleanup processed webhook records older than 90 days
+crons.monthly(
+  "cleanup-old-webhooks",
+  { day: 1, hourUTC: 4, minuteUTC: 30 },
+  internal.stripe.cleanupOldWebhooks
+);
+
 // Prune health analysis older than 30 days
 crons.daily(
   "prune-stale-health-analyses",

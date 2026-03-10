@@ -518,6 +518,15 @@ export const parseReceipt = action({
     storageId: v.string(), // Convex file storage ID
   },
   handler: async (ctx, args) => {
+    // 1. Rate Limit (Phase 2.1)
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    
+    const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "receipt_scan" });
+    if (!rateLimit.allowed) {
+      throw new Error("Scan rate limit reached. Please wait a minute before scanning again.");
+    }
+
     try {
       // Get the image URL from Convex storage
       const imageUrl = await ctx.storage.getUrl(args.storageId);
@@ -972,6 +981,12 @@ export const estimateItemPrice = action({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    // 1. Rate Limit (Phase 2.1)
+    const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "ai_estimation" });
+    if (!rateLimit.allowed) {
+      return null; // Silent fail for background estimation
+    }
+
     const normalizedName = args.itemName.toLowerCase().trim();
 
     const prompt = `You are a UK grocery pricing expert. For the item "${args.itemName}", provide:
@@ -1280,6 +1295,19 @@ export const voiceAssistant = action({
       return {
         type: "error" as const,
         text: "I didn't catch that. Try again?",
+        pendingAction: null,
+      };
+    }
+
+    // Rate Limit (Phase 2.1)
+    const rateLimitResult = await ctx.runMutation(api.aiUsage.checkRateLimit, {
+      feature: "voice",
+    });
+
+    if (!rateLimitResult.allowed) {
+      return {
+        type: "error" as const,
+        text: "You're speaking too fast for Tobi! Please wait a moment before trying again.",
         pendingAction: null,
       };
     }

@@ -3,9 +3,43 @@ import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { AI_LIMITS, getAILimit } from "./lib/featureGating";
+import { checkRateLimit as performRateLimitCheck } from "./lib/rateLimit";
 
 // Notification thresholds (percentage)
 const USAGE_THRESHOLDS = [50, 80, 100] as const;
+
+/**
+ * Check if a user has exceeded their rate limit for a specific feature.
+ * Features: "voice", "receipt_scan", "ai_estimation"
+ */
+export const checkRateLimit = mutation({
+  args: {
+    feature: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    // Default limits per minute
+    const limits: Record<string, number> = {
+      voice: 15,
+      receipt_scan: 5,
+      ai_estimation: 30,
+      list_items: 100,
+      pantry_items: 50,
+      shopping_lists: 20,
+    };
+
+    const limit = limits[args.feature] || 10;
+    return await performRateLimitCheck(ctx, user._id, args.feature, limit);
+  },
+});
 
 /**
  * Get current billing period (monthly, aligned to subscription)

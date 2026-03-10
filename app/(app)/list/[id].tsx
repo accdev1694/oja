@@ -1754,4 +1754,35 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontWeight: "800" as const,
   },
+  // Empty State
+  emptyContainer: {
+    paddingVertical: spacing.xl * 2,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: spacing.md,
+    opacity: 0.8,
+  },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: borderRadius.full,
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.05)",
+    marginBottom: spacing.sm,
+  },
+  emptyTitle: {
+    ...typography.headlineSmall,
+    color: colors.text.primary,
+    fontWeight: "600" as const,
+  },
+  emptySubtitle: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
+    textAlign: "center" as const,
+    maxWidth: 240,
+    lineHeight: 22,
+  },
 });

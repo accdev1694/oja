@@ -1318,4 +1318,48 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_hint", ["userId", "hintId"]),
+
+  // Stripe webhook idempotency (Phase 1.3)
+  processedWebhooks: defineTable({
+    eventId: v.string(),          // Stripe webhook event.id
+    eventType: v.string(),        // "checkout.session.completed"
+    processedAt: v.number(),      // Timestamp
+    status: v.union(v.literal("processing"), v.literal("completed"), v.literal("failed")),
+    error: v.optional(v.string()),
+  })
+    .index("by_event_id", ["eventId"])
+    .index("by_processed_at", ["processedAt"]),
+
+  // Rate limiting (Phase 2.1)
+  rateLimits: defineTable({
+    userId: v.id("users"),
+    feature: v.string(), // "receipt_scan", "voice_assistant", "ai_estimation"
+    windowStart: v.number(), // timestamp
+    count: v.number(),
+  })
+    .index("by_user_feature", ["userId", "feature", "windowStart"]),
+
+  // Atomic Points Deduction (Phase 2)
+  pointsReservations: defineTable({
+    userId: v.id("users"),
+    stripeInvoiceId: v.string(),
+    amount: v.number(),
+    status: v.union(v.literal("pending"), v.literal("confirmed"), v.literal("released")),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_invoice", ["stripeInvoiceId"])
+    .index("by_status_expires", ["status", "expiresAt"]),
+
+  // Points Reconciliation (Phase 2)
+  discrepancies: defineTable({
+    type: v.string(),
+    severity: v.string(),
+    description: v.string(),
+    metadata: v.any(),
+    status: v.union(v.literal("open"), v.literal("resolved")),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status"]),
 });

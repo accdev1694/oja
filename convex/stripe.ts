@@ -6,8 +6,8 @@
  */
 
 import { v } from "convex/values";
-import { action, internalMutation, internalQuery } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { internal, api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { getTierFromScans } from "./lib/featureGating";
 import { trackFunnelEvent, trackActivity } from "./lib/analytics";
@@ -167,88 +167,136 @@ export const cancelAllUserSubscriptions = action({
 
 export const processWebhookEvent = action({
   args: {
+    eventId: v.string(),
     eventType: v.string(),
     data: v.any(),
   },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
-    const { eventType, data } = args;
+    const { eventId, eventType, data } = args;
 
-    switch (eventType) {
-      case "checkout.session.completed": {
-        const session = data;
-        const convexUserId = session.metadata?.convexUserId;
-        const planId = session.metadata?.planId;
-        if (convexUserId && planId) {
-          await ctx.runMutation(internal.stripe.handleCheckoutCompleted, {
-            userId: convexUserId,
-            planId,
-            stripeCustomerId: session.customer,
-            stripeSubscriptionId: session.subscription,
-          });
-        }
-        break;
+    // 1. Check if already processed
+    const existing: any = await ctx.runQuery(internal.stripe.checkWebhookProcessed, {
+      eventId,
+    });
+
+    if (existing) {
+      if (existing.status === "completed") {
+        console.log(`[Webhook] Duplicate detected: ${eventId} (already completed at ${new Date(existing.processedAt).toISOString()})`);
+        return { success: true };
       }
-
-      case "customer.subscription.updated": {
-        const sub = data;
-        await ctx.runMutation(internal.stripe.handleSubscriptionUpdated, {
-          stripeCustomerId: sub.customer,
-          stripeSubscriptionId: sub.id,
-          status: mapStripeStatus(sub.status, sub.cancel_at_period_end),
-          currentPeriodStart: sub.current_period_start * 1000,
-          currentPeriodEnd: sub.current_period_end * 1000,
-        });
-        break;
-      }
-
-      case "customer.subscription.deleted": {
-        await ctx.runMutation(internal.stripe.handleSubscriptionDeleted, {
-          stripeCustomerId: data.customer,
-        });
-        break;
-      }
-
-      case "invoice.payment_failed": {
-        await ctx.runMutation(internal.stripe.handlePaymentFailed, {
-          stripeCustomerId: data.customer,
-        });
-        break;
-      }
-
-      case "invoice.created": {
-        // Apply points as a discount before the invoice is finalized
-        // Handles both first subscription and renewals
-        const isSubscriptionInvoice =
-          data.billing_reason === "subscription_cycle" ||
-          data.billing_reason === "subscription_create";
-        if (isSubscriptionInvoice && data.status === "draft") {
-          const creditResult: any = await ctx.runMutation(
-            internal.stripe.getAndMarkPoints,
-            {
-              stripeCustomerId: data.customer,
-              stripeInvoiceId: data.id,
-            }
-          );
-          if (creditResult && creditResult.pointsApplied > 0) {
-            const stripe = await getStripeClient();
-            // Add a negative invoice item (credit) to the draft invoice
-            // 1000 points = £1.00 = 100 pence. So points / 10 = pence.
-            const creditAmountPence = Math.round(creditResult.pointsApplied / 10);
-            
-            await stripe.invoiceItems.create({
-              customer: data.customer,
-              invoice: data.id,
-              amount: -creditAmountPence,
-              currency: "gbp",
-              description: `Oja Points redemption (${creditResult.pointsApplied} pts applied)`,
-            });
-          }
-        }
-        break;
+      if (existing.status === "processing") {
+        console.warn(`[Webhook] Concurrent processing detected: ${eventId}`);
+        return { success: true }; // Let it finish
       }
     }
 
-    return { success: true };
+    // 2. Mark as processing
+    await ctx.runMutation(internal.stripe.markWebhookProcessing, {
+      eventId,
+      eventType,
+    });
+
+    try {
+      switch (eventType) {
+        case "checkout.session.completed": {
+          const session = data;
+          const convexUserId = session.metadata?.convexUserId;
+          const planId = session.metadata?.planId;
+          if (convexUserId && planId) {
+            await ctx.runMutation(internal.stripe.handleCheckoutCompleted, {
+              userId: convexUserId,
+              planId,
+              stripeCustomerId: session.customer,
+              stripeSubscriptionId: session.subscription,
+            });
+          }
+          break;
+        }
+
+        case "customer.subscription.updated": {
+          const sub = data;
+          await ctx.runMutation(internal.stripe.handleSubscriptionUpdated, {
+            stripeCustomerId: sub.customer,
+            stripeSubscriptionId: sub.id,
+            status: mapStripeStatus(sub.status, sub.cancel_at_period_end),
+            currentPeriodStart: sub.current_period_start * 1000,
+            currentPeriodEnd: sub.current_period_end * 1000,
+          });
+          break;
+        }
+
+        case "customer.subscription.deleted": {
+          await ctx.runMutation(internal.stripe.handleSubscriptionDeleted, {
+            stripeCustomerId: data.customer,
+          });
+          break;
+        }
+
+        case "invoice.payment_failed": {
+          await ctx.runMutation(internal.stripe.handlePaymentFailed, {
+            stripeCustomerId: data.customer,
+          });
+          break;
+        }
+
+        case "invoice.created": {
+          // Apply points as a discount before the invoice is finalized
+          const isSubscriptionInvoice =
+            data.billing_reason === "subscription_cycle" ||
+            data.billing_reason === "subscription_create";
+          if (isSubscriptionInvoice && data.status === "draft") {
+            // PHASE 1: Reserve points
+            const creditResult: any = await ctx.runMutation(
+              internal.stripe.reservePoints,
+              {
+                stripeCustomerId: data.customer,
+                stripeInvoiceId: data.id,
+              }
+            );
+            if (creditResult && creditResult.pointsApplied > 0) {
+              const stripe = await getStripeClient();
+              const creditAmountPence = Math.round(creditResult.pointsApplied / 10);
+              
+              try {
+                // PHASE 2: Apply to Stripe
+                await stripe.invoiceItems.create({
+                  customer: data.customer,
+                  invoice: data.id,
+                  amount: -creditAmountPence,
+                  currency: "gbp",
+                  description: `Oja Points redemption (${creditResult.pointsApplied} pts applied)`,
+                });
+
+                // PHASE 3a: Confirm Redemption
+                await ctx.runMutation(internal.stripe.confirmPointsRedemption, {
+                  reservationId: creditResult.reservationId
+                });
+              } catch (stripeError: any) {
+                console.error(`[Webhook] Stripe invoice item creation failed for ${data.id}:`, stripeError);
+                // PHASE 3b: Release Reservation
+                await ctx.runMutation(internal.stripe.releasePoints, {
+                  reservationId: creditResult.reservationId
+                });
+                throw stripeError; // Fail the webhook processing
+              }
+            }
+          }
+          break;
+        }
+      }
+
+      // 3. Mark as complete
+      await ctx.runMutation(internal.stripe.markWebhookComplete, { eventId });
+      return { success: true };
+    } catch (error) {
+      console.error(`[Webhook] Error processing ${eventType} (${eventId}):`, error);
+      // 4. Mark as failed
+      await ctx.runMutation(internal.stripe.markWebhookFailed, {
+        eventId,
+        error: String(error),
+      });
+      throw error;
+    }
   },
 });
 
@@ -277,6 +325,16 @@ function mapStripeStatus(
 // INTERNAL QUERIES (called by actions)
 // =============================================================================
 
+export const checkWebhookProcessed = internalQuery({
+  args: { eventId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("processedWebhooks")
+      .withIndex("by_event_id", (q: any) => q.eq("eventId", args.eventId))
+      .first();
+  },
+});
+
 export const getUserByClerkId = internalQuery({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
@@ -301,6 +359,67 @@ export const getSubscriptionByUser = internalQuery({
 // =============================================================================
 // INTERNAL MUTATIONS (called from webhook processor)
 // =============================================================================
+
+export const markWebhookProcessing = internalMutation({
+  args: { eventId: v.string(), eventType: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("processedWebhooks", {
+      eventId: args.eventId,
+      eventType: args.eventType,
+      processedAt: Date.now(),
+      status: "processing",
+    });
+  },
+});
+
+export const markWebhookComplete = internalMutation({
+  args: { eventId: v.string() },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("processedWebhooks")
+      .withIndex("by_event_id", (q: any) => q.eq("eventId", args.eventId))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        status: "completed",
+        processedAt: Date.now(),
+      });
+    }
+  },
+});
+
+export const markWebhookFailed = internalMutation({
+  args: { eventId: v.string(), error: v.string() },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("processedWebhooks")
+      .withIndex("by_event_id", (q: any) => q.eq("eventId", args.eventId))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        status: "failed",
+        error: args.error,
+        processedAt: Date.now(),
+      });
+    }
+  },
+});
+
+export const cleanupOldWebhooks = internalMutation({
+  handler: async (ctx) => {
+    const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    const oldWebhooks = await ctx.db
+      .query("processedWebhooks")
+      .withIndex("by_processed_at", (q: any) => q.lt("processedAt", ninetyDaysAgo))
+      .collect();
+
+    for (const webhook of oldWebhooks) {
+      await ctx.db.delete(webhook._id);
+    }
+
+    return { deleted: oldWebhooks.length };
+  },
+});
 
 export const handleCheckoutCompleted = internalMutation({
   args: {
@@ -467,13 +586,12 @@ export const handleSubscriptionDeleted = internalMutation({
 });
 
 /**
- * Get unapplied points for a Stripe customer and mark them as applied.
- * Called during invoice.created to apply points as a discount.
+ * Phase 1 of Two-Phase Commit: Reserve points for a Stripe invoice.
  */
-export const getAndMarkPoints = internalMutation({
+export const reservePoints = internalMutation({
   args: {
     stripeCustomerId: v.string(),
-    stripeInvoiceId: v.optional(v.string()),
+    stripeInvoiceId: v.string(),
   },
   handler: async (ctx, args) => {
     // Find subscription by Stripe customer ID
@@ -496,81 +614,208 @@ export const getAndMarkPoints = internalMutation({
       return null;
     }
 
-    // Determine how many points to apply. 
-    // They are applied in increments of 500.
+    // Check if we already have an active reservation or transaction for this invoice
+    const existingReservation = await ctx.db
+      .query("pointsReservations")
+      .withIndex("by_invoice", (q: any) => q.eq("stripeInvoiceId", args.stripeInvoiceId))
+      .filter(q => q.neq(q.field("status"), "released"))
+      .first();
+      
+    if (existingReservation) {
+      return null; // Already processing or confirmed
+    }
+
+    // Determine how many points to apply
     const pointsToApply = Math.floor(balance.availablePoints / 500) * 500;
     
-    // Phase 1.1: Redemption caps
-    // Monthly max: 1,500pts (£1.50)
-    // Annual max: 5,000pts (£5.00)
     const isAnnual = sub.plan === "premium_annual";
     const maxPoints = isAnnual ? 5000 : 1500;
     const finalPoints = Math.min(pointsToApply, maxPoints);
 
     if (finalPoints === 0) return null;
 
-    // Deduct points
+    // Create reservation (DOES NOT DEDUCT POINTS YET)
     const now = Date.now();
-    await ctx.db.patch(balance._id, {
-      availablePoints: balance.availablePoints - finalPoints,
-      pointsUsed: balance.pointsUsed + finalPoints,
-      updatedAt: now,
-    });
-
-    await ctx.db.insert("pointsTransactions", {
+    const reservationId = await ctx.db.insert("pointsReservations", {
       userId: sub.userId,
-      type: "redeem",
-      amount: -finalPoints,
-      source: "invoice_credit",
-      invoiceId: args.stripeInvoiceId,
-      balanceBefore: balance.availablePoints,
-      balanceAfter: balance.availablePoints - finalPoints,
+      stripeInvoiceId: args.stripeInvoiceId,
+      amount: finalPoints,
+      status: "pending",
       createdAt: now,
+      expiresAt: now + 5 * 60 * 1000, // 5 minute expiry
     });
 
     return {
       pointsApplied: finalPoints,
+      reservationId,
       tier: balance.tier ?? "bronze",
     };
   },
 });
 
-export const reconcilePointRedemptions = internalMutation({
+/**
+ * Phase 3a of Two-Phase Commit: Confirm points redemption.
+ */
+export const confirmPointsRedemption = internalMutation({
+  args: {
+    reservationId: v.id("pointsReservations"),
+  },
+  handler: async (ctx, args) => {
+    const reservation = await ctx.db.get(args.reservationId);
+    if (!reservation || reservation.status !== "pending") return;
+
+    const balance = await ctx.db
+      .query("pointsBalance")
+      .withIndex("by_user", (q: any) => q.eq("userId", reservation.userId))
+      .first();
+
+    if (!balance) return;
+
+    const now = Date.now();
+    
+    // Deduct points NOW
+    await ctx.db.patch(balance._id, {
+      availablePoints: balance.availablePoints - reservation.amount,
+      pointsUsed: balance.pointsUsed + reservation.amount,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("pointsTransactions", {
+      userId: reservation.userId,
+      type: "redeem",
+      amount: -reservation.amount,
+      source: "invoice_credit",
+      invoiceId: reservation.stripeInvoiceId,
+      balanceBefore: balance.availablePoints,
+      balanceAfter: balance.availablePoints - reservation.amount,
+      createdAt: now,
+    });
+
+    // Mark reservation confirmed
+    await ctx.db.patch(reservation._id, { status: "confirmed" });
+  },
+});
+
+/**
+ * Phase 3b of Two-Phase Commit: Release points reservation.
+ */
+export const releasePoints = internalMutation({
+  args: {
+    reservationId: v.id("pointsReservations"),
+  },
+  handler: async (ctx, args) => {
+    const reservation = await ctx.db.get(args.reservationId);
+    if (!reservation || reservation.status !== "pending") return;
+
+    // Just mark as released, points were never actually deducted
+    await ctx.db.patch(reservation._id, { status: "released" });
+  },
+});
+
+export const reconcilePointRedemptions = internalAction({
   args: {},
   handler: async (ctx) => {
-    // 1. Query all subscriptions with status "active" or "trial"
-    const activeSubs = await ctx.db
+    const stripe = await getStripeClient();
+    
+    // 1. Get all active subscriptions from DB
+    const activeSubs: any = await ctx.runQuery(internal.stripe.getActiveSubscriptions);
+    
+    let checkedCount = 0;
+    let discrepanciesFound = 0;
+    
+    for (const sub of activeSubs) {
+      if (!sub.stripeCustomerId) continue;
+      
+      // 2. Get recent invoices from Stripe (Check last 100 instead of 5)
+      const invoices = await stripe.invoices.list({
+        customer: sub.stripeCustomerId,
+        limit: 100,
+      });
+      
+      for (const invoice of invoices.data) {
+        if (invoice.status !== "paid") continue;
+
+        // Check if this invoice has points applied in our DB
+        const transaction: any = await ctx.runQuery(internal.stripe.getRedemptionByInvoiceId, {
+          userId: sub.userId,
+          invoiceId: invoice.id,
+        });
+        
+        const hasPointCredit = invoice.lines.data.some(line => 
+          line.description?.toLowerCase().includes("oja points redemption")
+        );
+
+        // Discrepancy 1: Convex thinks points applied, but no Stripe credit
+        if (transaction && !hasPointCredit) {
+          discrepanciesFound++;
+          await ctx.runMutation(internal.stripe.logDiscrepancy, {
+            type: "points_reconciliation",
+            severity: "high",
+            description: `Invoice ${invoice.id} has a redemption record in Convex but no point credit in Stripe.`,
+            metadata: { invoiceId: invoice.id, userId: sub.userId, transactionId: transaction._id },
+          });
+        }
+        
+        // Discrepancy 2: Stripe has credit, but no Convex transaction
+        if (!transaction && hasPointCredit) {
+          discrepanciesFound++;
+          await ctx.runMutation(internal.stripe.logDiscrepancy, {
+            type: "points_reconciliation",
+            severity: "high",
+            description: `Invoice ${invoice.id} has point credit in Stripe but no redemption record in Convex.`,
+            metadata: { invoiceId: invoice.id, userId: sub.userId },
+          });
+        }
+      }
+      checkedCount++;
+    }
+    
+    return { subscriptionsChecked: checkedCount, discrepanciesFound };
+  },
+});
+
+export const logDiscrepancy = internalMutation({
+  args: {
+    type: v.string(),
+    severity: v.string(),
+    description: v.string(),
+    metadata: v.any(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("discrepancies", {
+      type: args.type,
+      severity: args.severity,
+      description: args.description,
+      metadata: args.metadata,
+      status: "open",
+      createdAt: Date.now(),
+    });
+  },
+});
+
+export const getActiveSubscriptions = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const active = await ctx.db
       .query("subscriptions")
       .withIndex("by_status", (q: any) => q.eq("status", "active"))
       .collect();
-    
-    const trialSubs = await ctx.db
+    const trial = await ctx.db
       .query("subscriptions")
       .withIndex("by_status", (q: any) => q.eq("status", "trial"))
       .collect();
-      
-    const allActive = [...activeSubs, ...trialSubs];
-    
-    // Note: A full implementation would require calling Stripe API to list invoices,
-    // which is only possible in an action. For now, we'll log the intention
-    // and implement the cross-check against existing transactions.
-    
-    let discrepanciesFound = 0;
-    for (const sub of allActive) {
-      // Find latest redemption transaction
-      const latestRedeem = await ctx.db
-        .query("pointsTransactions")
-        .withIndex("by_user_and_type", (q: any) => q.eq("userId", sub.userId).eq("type", "redeem"))
-        .order("desc")
-        .first();
-        
-      if (latestRedeem && latestRedeem.invoiceId) {
-        // Here we would verify if invoiceId still exists and is paid in Stripe
-        // If not found, we might need to refund the points.
-      }
-    }
-    
-    return { subscriptionsChecked: allActive.length, discrepanciesFound };
+    return [...active, ...trial];
+  },
+});
+
+export const getRedemptionByInvoiceId = internalQuery({
+  args: { userId: v.id("users"), invoiceId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("pointsTransactions")
+      .withIndex("by_user_and_type", (q: any) => q.eq("userId", args.userId).eq("type", "redeem"))
+      .filter((q) => q.eq(q.field("invoiceId"), args.invoiceId))
+      .first();
   },
 });
 

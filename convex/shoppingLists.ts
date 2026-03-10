@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
+import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { canCreateList, canAddPantryItem } from "./lib/featureGating";
 import { getAllStores, getStoreInfoSafe, isValidStoreId, normalizeStoreName, UKStoreId } from "./lib/storeNormalizer";
@@ -208,6 +209,12 @@ export const create = mutation({
 
     if (!user) {
       throw new Error("User not found");
+    }
+
+    // Rate Limit (Phase 2.1)
+    const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "shopping_lists" });
+    if (!rateLimit.allowed) {
+      throw new Error("Rate limit exceeded. Please wait before creating more lists.");
     }
 
     // Feature gating: check list limit for free tier

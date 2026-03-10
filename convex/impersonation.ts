@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation, action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
+import { requireAdmin } from "./lib/auth";
 
 /**
  * Generate a temporary impersonation token for an admin
@@ -10,19 +11,10 @@ export const generateImpersonationToken = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     // 1. Require admin permission
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    const admin = await requireAdmin(ctx);
     
-    const admin = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
-      
-    if (!admin || !admin.isAdmin) throw new Error("Unauthorized");
-    
-    // 2. Generate a random token
-    const tokenValue = Math.random().toString(36).substring(2, 15) + 
-                       Math.random().toString(36).substring(2, 15);
+    // 2. Generate a secure random token
+    const tokenValue = crypto.randomUUID();
     
     // 3. Store the token with 1-hour expiry
     const expiresAt = Date.now() + 60 * 60 * 1000;

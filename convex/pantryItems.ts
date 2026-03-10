@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { internal, api } from "./_generated/api";
 import type { MutationCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getIconForItem } from "./iconMapping";
@@ -318,6 +318,12 @@ export const create = mutation({
 
     if (!user) {
       throw new Error("User not found");
+    }
+
+    // Rate Limit (Phase 2.1)
+    const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "pantry_items" });
+    if (!rateLimit.allowed) {
+      throw new Error("Rate limit exceeded. Please wait before adding more items.");
     }
 
     // Dedup: return existing item if one matches by name
