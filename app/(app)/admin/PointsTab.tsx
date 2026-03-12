@@ -93,7 +93,7 @@ export function PointsTab({ hasPermission }: PointsTabProps) {
         ) : (
           Object.entries(econ.earnDistribution)
             .sort((a, b) => b[1] - a[1])
-            .map(([source, amount]) => (
+            .map(([source, amount]: [string, any]) => (
               <View key={source} style={styles.distributionRow}>
                 <View style={styles.sourceInfo}>
                   <Text style={styles.sourceName}>{source.replace(/_/g, " ")}</Text>

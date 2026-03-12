@@ -3,27 +3,26 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
   ScrollView,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { SeedItem } from "@/convex/ai";
-import { safeHaptics } from "@/lib/utils/safeHaptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   GlassScreen,
-  GlassCard,
   GlassButton,
   colors,
-  typography,
   spacing,
-  borderRadius,
   useGlassAlert,
 } from "@/components/ui/glass";
+
+import { styles } from "@/components/onboarding/styles";
+import { OnboardingCategorySection } from "@/components/onboarding/OnboardingCategorySection";
 
 // =============================================================================
 // TYPES
@@ -88,9 +87,6 @@ export default function ReviewItemsScreen() {
 
   const [isSaving, setIsSaving] = useState(false);
 
-  // Group items by source, then by category within each source
-  // If source field exists (new prompt), use it directly.
-  // If missing (old prompt), infer from position: first 60% = local, rest = cultural.
   const localCutoff = Math.floor(items.length * 0.6);
   const grouped: GroupedBySource = { local: {}, cultural: {} };
   items.forEach((item, index) => {
@@ -103,12 +99,10 @@ export default function ReviewItemsScreen() {
     grouped[source][item.category].push(item);
   });
 
-  // Counts
   const localCount = Object.values(grouped.local).flat().length;
   const culturalCount = Object.values(grouped.cultural).flat().length;
   const selectedCount = selectedItems.size;
 
-  // Count selected per source
   const localSelected = Object.values(grouped.local)
     .flat()
     .filter((item) => selectedItems.has(items.indexOf(item))).length;
@@ -188,7 +182,6 @@ export default function ReviewItemsScreen() {
       await completeOnboarding();
       safeHaptics.success();
 
-      // Fire variant seeding in the background
       const variantItems = itemsToSave.filter((item) => item.hasVariants);
       if (variantItems.length > 0) {
         generateVariants({
@@ -220,7 +213,6 @@ export default function ReviewItemsScreen() {
           Tap items to deselect, or toggle whole sections
         </Text>
 
-        {/* Summary chips */}
         <View style={styles.chipRow}>
           <View style={[styles.chip, { borderColor: SOURCE_CONFIG.local.accent }]}>
             <MaterialCommunityIcons
@@ -258,12 +250,10 @@ export default function ReviewItemsScreen() {
 
           const config = SOURCE_CONFIG[source];
           const sectionItems = Object.values(categories).flat();
-          const sectionIndices = sectionItems.map((item) => items.indexOf(item));
-          const allSelected = sectionIndices.every((i) => selectedItems.has(i));
+          const allSelected = sectionItems.every((item) => selectedItems.has(items.indexOf(item)));
 
           return (
             <View key={source} style={styles.sourceSection}>
-              {/* Source Header */}
               <TouchableOpacity
                 style={[styles.sourceHeader, { borderLeftColor: config.accent }]}
                 onPress={() => toggleSection(source)}
@@ -289,66 +279,16 @@ export default function ReviewItemsScreen() {
                 </View>
               </TouchableOpacity>
 
-              {/* Categories within this source */}
               {categoryEntries.map(([category, categoryItems]) => (
-                <View key={category} style={styles.categorySection}>
-                  <View style={styles.categoryHeader}>
-                    <View style={[styles.categoryDot, { backgroundColor: config.accent }]} />
-                    <Text style={styles.categoryTitle}>{category}</Text>
-                    <Text style={styles.categoryCount}>
-                      {categoryItems.filter((item) => selectedItems.has(items.indexOf(item))).length}/{categoryItems.length}
-                    </Text>
-                  </View>
-
-                  <View style={styles.itemGrid}>
-                    {categoryItems.map((item) => {
-                      const globalIndex = items.indexOf(item);
-                      const isSelected = selectedItems.has(globalIndex);
-
-                      return (
-                        <TouchableOpacity
-                          key={globalIndex}
-                          style={[
-                            styles.itemCard,
-                            isSelected && { borderColor: config.accent },
-                            !isSelected && styles.itemCardDeselected,
-                          ]}
-                          onPress={() => toggleItem(globalIndex)}
-                          activeOpacity={0.7}
-                        >
-                          <View style={styles.itemContent}>
-                            <Text
-                              style={[
-                                styles.itemName,
-                                !isSelected && styles.itemNameDeselected,
-                              ]}
-                              numberOfLines={2}
-                            >
-                              {item.name}
-                            </Text>
-
-                            {item.estimatedPrice != null && (
-                              <Text
-                                style={[
-                                  styles.itemPrice,
-                                  !isSelected && styles.itemPriceDeselected,
-                                ]}
-                              >
-                                ~£{item.estimatedPrice.toFixed(2)}
-                              </Text>
-                            )}
-
-                            {isSelected && (
-                              <View style={[styles.checkmark, { backgroundColor: config.accent }]}>
-                                <MaterialCommunityIcons name="check" size={12} color="#fff" />
-                              </View>
-                            )}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
+                <OnboardingCategorySection
+                  key={category}
+                  category={category}
+                  categoryItems={categoryItems}
+                  selectedItems={selectedItems}
+                  allItems={items}
+                  onToggleItem={toggleItem}
+                  accentColor={config.accent}
+                />
               ))}
             </View>
           );
@@ -371,173 +311,3 @@ export default function ReviewItemsScreen() {
     </GlassScreen>
   );
 }
-
-// =============================================================================
-// STYLES
-// =============================================================================
-
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  title: {
-    ...typography.displaySmall,
-    color: colors.text.primary,
-    marginBottom: 4,
-  },
-  subtitle: {
-    ...typography.bodyMedium,
-    color: colors.text.secondary,
-    marginBottom: spacing.md,
-  },
-  chipRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    flexWrap: "wrap",
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-  },
-  chipText: {
-    ...typography.labelSmall,
-    fontWeight: "600",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-  },
-  // -- Source section (Local / Cultural) --
-  sourceSection: {
-    marginBottom: spacing.xl,
-  },
-  sourceHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderLeftWidth: 3,
-    paddingLeft: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  sourceIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: spacing.sm,
-  },
-  sourceHeaderText: {
-    flex: 1,
-  },
-  sourceTitle: {
-    ...typography.headlineSmall,
-    color: colors.text.primary,
-  },
-  sourceSubtitle: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-    marginTop: 1,
-  },
-  selectAllBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.glass.background,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  // -- Category subsection --
-  categorySection: {
-    marginBottom: spacing.md,
-    marginLeft: spacing.md,
-  },
-  categoryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.sm,
-  },
-  categoryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: spacing.sm,
-  },
-  categoryTitle: {
-    ...typography.labelMedium,
-    color: colors.text.secondary,
-    flex: 1,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  categoryCount: {
-    ...typography.labelSmall,
-    color: colors.text.tertiary,
-  },
-  // -- Item grid --
-  itemGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  itemCard: {
-    width: "30%",
-    minWidth: 100,
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    borderWidth: 2,
-    borderColor: colors.glass.border,
-  },
-  itemCardDeselected: {
-    borderColor: colors.glass.border,
-    opacity: 0.4,
-  },
-  itemContent: {
-    position: "relative",
-  },
-  itemName: {
-    ...typography.labelSmall,
-    fontWeight: "600",
-    color: colors.text.primary,
-    paddingRight: 20,
-  },
-  itemNameDeselected: {
-    color: colors.text.tertiary,
-  },
-  itemPrice: {
-    ...typography.bodySmall,
-    color: colors.text.secondary,
-    marginTop: 2,
-  },
-  itemPriceDeselected: {
-    color: colors.text.tertiary,
-  },
-  checkmark: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  footer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.glass.border,
-  },
-});

@@ -12,7 +12,7 @@ import { useUser } from "@clerk/clerk-expo";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { detectLocation } from "@/lib/location/detectLocation";
-import { safeHaptics } from "@/lib/utils/safeHaptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {

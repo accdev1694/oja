@@ -114,7 +114,7 @@ export default function ScanScreen() {
 
     const executeAdd = async (listId: Id<"shoppingLists">) => {
       try {
-        const itemsToAdd = productScanner.scannedProducts.map(p => ({
+        const itemsToAdd = productScanner.scannedProducts.map((p: any) => ({
           name: p.name,
           category: p.category || "Other",
           quantity: p.quantity || 1,
@@ -143,7 +143,7 @@ export default function ScanScreen() {
       executeAdd(shoppingLists[0]._id);
     } else {
       // Prompt user to pick a list
-      const buttons: AlertButton[] = shoppingLists.map(list => ({
+      const buttons: AlertButton[] = shoppingLists.map((list: any) => ({
         text: list.name,
         onPress: () => executeAdd(list._id)
       }));

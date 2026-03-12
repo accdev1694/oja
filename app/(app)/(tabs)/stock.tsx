@@ -246,7 +246,7 @@ export default function PantryScreen() {
   // Migrate icons for items that don't have them yet
   useEffect(() => {
     if (items && items.length > 0) {
-      const needsMigration = items.some((item) => !item.icon);
+      const needsMigration = items.some((item: any) => !item.icon);
       if (needsMigration) {
         migrateIcons({}).catch((err) => {
           console.error("Migration failed:", err);
@@ -319,8 +319,8 @@ export default function PantryScreen() {
   // Derive unique categories from items
   const categories = useMemo(() => {
     if (!items) return [];
-    const cats = new Set(items.map((item) => item.category));
-    return [...cats].sort((a, b) => a.localeCompare(b));
+    const cats = new Set(items.map((item: any) => item.category));
+    return [...cats].sort((a: any, b: any) => a.localeCompare(b)) as string[];
   }, [items]);
 
   // Initialize all categories as collapsed on first load
@@ -329,7 +329,7 @@ export default function PantryScreen() {
     if (categoriesInitialized.current) return;
     if (categories.length === 0) return;
     categoriesInitialized.current = true;
-    setCollapsedCategories(new Set(categories));
+    setCollapsedCategories(new Set<string>(categories));
   }, [categories]);
 
   // ── Step 1.1: Memoize derived data ────────────────────────────────────
@@ -337,7 +337,7 @@ export default function PantryScreen() {
   const attentionCount = useMemo(() => {
     if (!items) return 0;
     return items.filter(
-      (item) => item.stockLevel === "low" || item.stockLevel === "out"
+      (item: any) => item.stockLevel === "low" || item.stockLevel === "out"
     ).length;
   }, [items]);
 
@@ -350,7 +350,7 @@ export default function PantryScreen() {
     const searchLower = searchQuery.toLowerCase();
 
     // Start with active items
-    const activeResults = items.filter((item) => {
+    const activeResults = items.filter((item: any) => {
       // Skip archived items in the main active list (they come from archivedItems query)
       if (item.status === "archived") return false;
 
@@ -369,7 +369,7 @@ export default function PantryScreen() {
 
     // When searching, also include matching archived items
     if (isSearching && archivedItems) {
-      const archivedResults = archivedItems.filter((item) =>
+      const archivedResults = archivedItems.filter((item: any) =>
         item.name.toLowerCase().includes(searchLower)
       );
       return [...activeResults, ...archivedResults];
@@ -383,7 +383,7 @@ export default function PantryScreen() {
     const essentials: typeof filteredItems = [];
     const regular: typeof filteredItems = [];
 
-    filteredItems.forEach((item) => {
+    filteredItems.forEach((item: any) => {
       const tier = getItemTier(item);
       if (tier === 1) {
         essentials.push(item);
@@ -394,7 +394,7 @@ export default function PantryScreen() {
 
     // Group regular items by category
     const grouped: Record<string, typeof filteredItems> = {};
-    regular.forEach((item) => {
+    regular.forEach((item: any) => {
       if (!grouped[item.category]) {
         grouped[item.category] = [];
       }
@@ -514,7 +514,7 @@ export default function PantryScreen() {
   // Step 1.3: Stable callbacks that take itemId, called by PantryItemRow internally
   const handleSwipeDecrease = useCallback(async (itemId: Id<"pantryItems">) => {
     if (showGestureOnboarding) dismissGestureOnboarding();
-    const item = items?.find((i) => i._id === itemId);
+    const item = items?.find((i: any) => i._id === itemId);
     if (!item) return;
 
     const nextLevel = getNextLowerLevel(item.stockLevel as StockLevel);
@@ -540,7 +540,7 @@ export default function PantryScreen() {
 
   const handleSwipeIncrease = useCallback(async (itemId: Id<"pantryItems">) => {
     if (showGestureOnboarding) dismissGestureOnboarding();
-    const item = items?.find((i) => i._id === itemId);
+    const item = items?.find((i: any) => i._id === itemId);
     if (!item) return;
 
     const nextLevel = getNextHigherLevel(item.stockLevel as StockLevel);
@@ -562,7 +562,7 @@ export default function PantryScreen() {
   }, [items, showGestureOnboarding, dismissGestureOnboarding, getNextHigherLevel, updateStockLevel]);
 
   const handleRemoveItem = useCallback((itemId: Id<"pantryItems">) => {
-    const item = items?.find((i) => i._id === itemId);
+    const item = items?.find((i: any) => i._id === itemId);
     if (!item) return;
 
     impactAsync(ImpactFeedbackStyle.Medium);
@@ -582,11 +582,11 @@ export default function PantryScreen() {
   }, [items, removePantryItem, alert]);
 
   const handleAddToList = useCallback((itemId: Id<"pantryItems">) => {
-    const item = items?.find((i) => i._id === itemId);
+    const item = items?.find((i: any) => i._id === itemId);
     if (!item) return;
 
     const planningLists = (activeLists ?? []).filter(
-      (l) => l.status === "active"
+      (l: any) => l.status === "active"
     );
 
     if (planningLists.length === 0) {
@@ -694,7 +694,7 @@ export default function PantryScreen() {
   const handleMergeDuplicates = useCallback(async () => {
     if (!duplicateGroups || duplicateGroups.length === 0) return;
 
-    const totalDupes = duplicateGroups.reduce((sum, g) => sum + g.length - 1, 0);
+    const totalDupes = duplicateGroups.reduce((sum: number, g: any) => sum + g.length - 1, 0);
     const groupCount = duplicateGroups.length;
 
     alert(
@@ -715,14 +715,14 @@ export default function PantryScreen() {
                 const priceRank = (source?: string) =>
                   source === "receipt" ? 3 : source === "user" ? 2 : source === "ai_estimate" ? 1 : 0;
 
-                const sorted = [...group].sort((a, b) => {
+                const sorted = [...group].sort((a: any, b: any) => {
                   const priceDiff = priceRank(b.priceSource) - priceRank(a.priceSource);
                   if (priceDiff !== 0) return priceDiff;
                   return (b.purchaseCount ?? 0) - (a.purchaseCount ?? 0);
                 });
 
                 const keepId = sorted[0]._id;
-                const deleteIds = sorted.slice(1).map((item) => item._id);
+                const deleteIds = sorted.slice(1).map((item: any) => item._id);
 
                 await mergeDuplicatesMut({ keepId, deleteIds });
               }

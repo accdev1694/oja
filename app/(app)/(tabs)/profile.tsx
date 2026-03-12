@@ -294,9 +294,9 @@ export default function ProfileScreen() {
     "Shopper";
 
   // Calculate stats
-  const completedLists = allLists.filter((list) => list.status === "completed");
-  const outOfStockItems = pantryItems.filter((item) => item.stockLevel === "out").length;
-  const lowStockItems = pantryItems.filter((item) => item.stockLevel === "low").length;
+  const completedLists = allLists.filter((list: any) => list.status === "completed");
+  const outOfStockItems = pantryItems.filter((item: any) => item.stockLevel === "out").length;
+  const lowStockItems = pantryItems.filter((item: any) => item.stockLevel === "low").length;
 
   return (
     <GlassScreen>
@@ -582,10 +582,10 @@ export default function ProfileScreen() {
           const milestones = [
             { icon: "package-variant" as const, text: "Add items to your stock", done: pantryItems.length > 0 },
             { icon: "clipboard-list-outline" as const, text: "Create your first list", done: allLists.length > 0 },
-            { icon: "camera" as const, text: "Scan a receipt", done: (receipts?.filter((r) => r.processingStatus === "completed").length ?? 0) > 0 },
+            { icon: "camera" as const, text: "Scan a receipt", done: (receipts?.filter((r: any) => r.processingStatus === "completed").length ?? 0) > 0 },
             { icon: "trophy-outline" as const, text: "Earn your first points", done: (pointsBalance?.totalPoints ?? 0) > 0 },
           ];
-          const allDone = milestones.every((m) => m.done);
+          const allDone = milestones.every((m: any) => m.done);
           if (allDone) return null;
           return (
             <AnimatedSection animation="fadeInDown" duration={400} delay={50}>
@@ -596,7 +596,7 @@ export default function ProfileScreen() {
                     Most shoppers save £30+ in their first month. Here&apos;s how to get there:
                   </Text>
                   <View style={styles.milestoneSteps}>
-                    {milestones.map((step) => (
+                    {milestones.map((step: any) => (
                       <View key={step.text} style={styles.milestoneStep}>
                         <MaterialCommunityIcons
                           name={step.done ? "check-circle" : step.icon}
@@ -630,7 +630,7 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.quickStatDivider} />
             <View style={styles.quickStat}>
-              <Text style={styles.quickStatValue}>{receipts?.filter((r) => r.processingStatus === "completed").length ?? 0}</Text>
+              <Text style={styles.quickStatValue}>{receipts?.filter((r: any) => r.processingStatus === "completed").length ?? 0}</Text>
               <Text style={styles.quickStatLabel}>receipts</Text>
             </View>
             <View style={styles.quickStatDivider} />

@@ -49,6 +49,7 @@ import { SeasonalEventBanner } from "@/components/ui/SeasonalEventBanner";
 import { NotificationDropdown } from "@/components/partners/NotificationDropdown";
 
 import { useHint } from "@/hooks/useHint";
+import { useHintSequence } from "@/hooks/useHintSequence";
 import { HintOverlay } from "@/components/tutorial/HintOverlay";
 import { hasViewedHint as hasViewedHintLocal } from "@/lib/storage/hintStorage";
 
@@ -84,34 +85,15 @@ export default function ListsScreen() {
   const templateHint = useHint("lists_templates", "manual");
 
   // Strict sequencing: Only ONE hint visible at a time
-  // Step 1 → 2: Show create hint after welcome is dismissed
-  useEffect(() => {
-    const noHintsVisible =
-      welcomeHint.shouldShow === false &&
-      createHint.shouldShow === false &&
-      templateHint.shouldShow === false;
-
-    if (noHintsVisible && !hasViewedHintLocal("lists_create") && tabMode === "active") {
-      createHint.showHint();
-    }
-  }, [welcomeHint.shouldShow, createHint.shouldShow, templateHint.shouldShow, tabMode]);
-
-  // Step 2 → 3: Show template hint if user has 3+ lists and previous hints are dismissed
-  useEffect(() => {
-    const noHintsVisible =
-      welcomeHint.shouldShow === false &&
-      createHint.shouldShow === false &&
-      templateHint.shouldShow === false;
-
-    if (
-      lists &&
-      (lists.length + activeShared.length) >= 3 &&
-      noHintsVisible &&
-      !hasViewedHintLocal("lists_templates")
-    ) {
-      templateHint.showHint();
-    }
-  }, [lists?.length, activeShared.length, welcomeHint.shouldShow, createHint.shouldShow, templateHint.shouldShow]);
+  useHintSequence([
+    { hint: welcomeHint, hintId: "lists_welcome" },
+    { hint: createHint, hintId: "lists_create", condition: tabMode === "active" },
+    { 
+      hint: templateHint, 
+      hintId: "lists_templates", 
+      condition: (lists?.length ?? 0) + activeShared.length >= 3 
+    },
+  ]);
 
   const [isCreating, setIsCreating] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -523,7 +505,7 @@ export default function ListsScreen() {
                   </View>
                 </AnimatedSection>
 
-                {displayList.map((list, index) => (
+                {displayList.map((list: any, index: number) => (
                   <AnimatedSection key={`${list._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={200 + (index * 50)}>
                     <View style={styles.cardWrapper}>
                       <ListCard
@@ -595,7 +577,7 @@ export default function ListsScreen() {
               </View>
             ) : (
               <View>
-                {displayList.map((list, index) => (
+                {displayList.map((list: any, index: number) => (
                   <AnimatedSection key={`${list._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={150 + (index * 50)}>
                     <View style={styles.cardWrapper}>
                       <HistoryCard

@@ -156,12 +156,14 @@ Requires dev build (native modules).
 
 | Hook/Utility | Purpose |
 |--------------|---------|
+| `useHintSequence` | Sequential tutorial hint management |
 | `useVoiceAssistant` | Voice assistant lifecycle |
 | `useVariantPrefetch` | Size/Price modal cache warming (debounced, TTL-based) |
 | `usePartnerRole` | List permissions (viewer/editor/approver) |
 | `useDelightToast` | Gamification celebrations |
 | `useCurrentUser` | Clerk user context + admin/impersonation |
 | `lib/haptics/safeHaptics` | Safe haptic feedback (device detection) |
+| `convex/lib/priceValidator` | Shared price confidence and emergency estimation |
 | `lib/sizes/sizeNormalizer` | UK size parsing (pints, ml, kg) |
 | `lib/icons/iconMatcher` | 106 validated MaterialCommunityIcons |
 | `lib/keyboard/safeKeyboardController` | Safe keyboard wrapper (dev build fallback) |

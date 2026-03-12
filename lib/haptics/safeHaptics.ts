@@ -15,7 +15,7 @@ import { Platform } from 'react-native';
 const HAPTICS_ENABLED_KEY = 'haptics_enabled';
 
 let isEnabled = true;
-let deviceSupports = false;
+let deviceSupports = Platform.OS !== 'web';
 
 /**
  * Initialize haptics system
@@ -23,6 +23,7 @@ let deviceSupports = false;
  */
 export async function initHaptics() {
   // Check if device supports haptics
+  // Update support status if needed (Platform check is usually enough)
   deviceSupports = Platform.OS !== 'web';
 
   // Load user preference
@@ -92,6 +93,20 @@ export async function haptic(type: HapticType): Promise<void> {
       console.debug('Haptic skipped:', type, error);
     }
   }
+}
+
+/**
+ * Compatibility helper for impact feedback
+ */
+export async function impact(style: 'light' | 'medium' | 'heavy' = 'medium'): Promise<void> {
+  return haptic(style);
+}
+
+/**
+ * Compatibility helper for notification feedback
+ */
+export async function notification(type: 'success' | 'warning' | 'error' = 'success'): Promise<void> {
+  return haptic(type);
 }
 
 /**
@@ -184,6 +199,8 @@ export const safeHaptics = {
   success: () => haptic('success'),
   warning: () => haptic('warning'),
   error: () => haptic('error'),
+  impact,
+  notification,
   pattern: hapticPattern,
   setEnabled: setHapticsEnabled,
   getState: getHapticsState,

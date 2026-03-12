@@ -64,7 +64,7 @@ export default function CreateListFromReceiptScreen() {
 
   // Queries
   const receipts = useQuery(api.receipts.getByUser, {});
-  const createFromReceipt = useMutation(api.shoppingLists.createFromReceipt);
+  const createListFromReceipt = useMutation(api.shoppingLists.createFromReceipt);
 
   // State
   const [selectedReceiptId, setSelectedReceiptId] = useState<Id<"receipts"> | null>(
@@ -115,7 +115,7 @@ export default function CreateListFromReceiptScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const listId = await createFromReceipt({
+      const listId = await createListFromReceipt({
         receiptId: selectedReceiptId,
         name: effectiveListName.trim() || undefined,
         budget: effectiveBudget,
@@ -151,7 +151,7 @@ export default function CreateListFromReceiptScreen() {
         alert("Error", "Failed to create list. Please try again.");
       }
     }
-  }, [selectedReceiptId, selectedReceipt, isCreating, effectiveListName, effectiveBudget, createFromReceipt, showToast, alert, router]);
+  }, [selectedReceiptId, selectedReceipt, isCreating, effectiveListName, effectiveBudget, createListFromReceipt, showToast, alert, router]);
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 

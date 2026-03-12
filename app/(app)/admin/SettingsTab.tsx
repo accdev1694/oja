@@ -145,11 +145,11 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
     ]);
   }, [simulateLoad, showAlert, showToast]);
 
-  const handleUpdatePrice = useCallback(async (planId: string, amount: string) => {
+  const handleUpdatePrice = useCallback(async (item: PricingConfig, amount: string) => {
     const price = parseFloat(amount);
     if (isNaN(price)) return;
     try {
-      await updatePricing({ planId, priceAmount: price });
+      await updatePricing({ id: item._id as Id<"pricingConfig">, priceAmount: price, isActive: true });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast("Price updated", "success");
     } catch (error) {
@@ -159,7 +159,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
 
   const handleToggleFlag = useCallback(async (key: string, currentValue: boolean) => {
     try {
-      await toggleFlag({ key, value: !currentValue });
+      await toggleFlag({ key });
       Haptics.selectionAsync();
       showToast(`${key} toggled`, "success");
     } catch (error) {
@@ -170,7 +170,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
   const handleAddFlag = useCallback(async () => {
     if (!newFlagKey.trim()) return;
     try {
-      await toggleFlag({ key: newFlagKey.trim(), value: true });
+      await toggleFlag({ key: newFlagKey.trim() });
       setNewFlagKey("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast("Flag added", "success");
@@ -184,10 +184,9 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
     try {
       if (editingAnnouncement) {
         await updateAnnouncement({
-          announcementId: editingAnnouncement._id as Id<"announcements">,
+          id: editingAnnouncement._id as Id<"announcements">,
           title: annTitle,
           body: annBody,
-          type: annType,
         });
       } else {
         await createAnnouncement({ title: annTitle, body: annBody, type: annType });
@@ -214,7 +213,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
 
   const handleToggleAnnouncement = useCallback(async (id: string) => {
     try {
-      await toggleAnnouncement({ announcementId: id as Id<"announcements"> });
+      await toggleAnnouncement({ id: id as Id<"announcements"> });
       Haptics.selectionAsync();
       showToast("Announcement status toggled", "success");
     } catch (error) {
@@ -494,7 +493,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
                     style={styles.flagInput}
                     keyboardType="numeric"
                     defaultValue={(p.priceAmount ?? 0).toString()}
-                    onEndEditing={(e) => handleUpdatePrice(p.planId, e.nativeEvent.text)}
+                    onEndEditing={(e) => handleUpdatePrice(p, e.nativeEvent.text)}
                   />
                 </View>
               </View>

@@ -10,7 +10,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { safeHaptics } from "@/lib/utils/safeHaptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {

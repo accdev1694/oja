@@ -1,25 +1,27 @@
 import { memo, useRef, useEffect, useCallback, useMemo, useState } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withTiming,
+  withSequence,
   runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { haptic } from "@/lib/haptics/safeHaptics";
 import {
   GlassCard,
   GlassCircularCheckbox,
   colors,
-  typography,
   spacing,
   borderRadius,
 } from "@/components/ui/glass";
 import { formatPrice } from "@/lib/currency/currencyUtils";
 import { formatItemDisplay } from "@/convex/lib/itemNameParser";
+import { styles } from "./shopping-list-item/styles";
+import { ItemSwipeActions } from "./shopping-list-item/ItemSwipeActions";
 
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -51,24 +53,6 @@ export type ListItem = {
 // Priority configuration
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PRIORITY_CONFIG = {
-  "must-have": {
-    label: "Must",
-    color: colors.semantic.danger,
-    icon: "exclamation-thick" as const,
-  },
-  "should-have": {
-    label: "Should",
-    color: colors.accent.primary,
-    icon: "check" as const,
-  },
-  "nice-to-have": {
-    label: "Nice",
-    color: colors.text.tertiary,
-    icon: "heart-outline" as const,
-  },
-};
-
 const PRIORITY_ORDER: ("must-have" | "should-have" | "nice-to-have")[] = [
   "must-have",
   "should-have",
@@ -98,6 +82,8 @@ export interface ShoppingListItemProps {
   onSelectToggle?: (itemId: Id<"listItems">) => void;
   // Currency
   currency?: string;
+  // Failed toggle indicator
+  hasFailed?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,17 +106,31 @@ export const ShoppingListItem = memo(function ShoppingListItem({
   isSelected,
   onSelectToggle,
   currency = "GBP",
+  hasFailed = false,
 }: ShoppingListItemProps) {
   const translateX = useSharedValue(0);
+  const shakeX = useSharedValue(0);
 
   const currentPriority = item.priority || "should-have";
-  const priorityConfig = PRIORITY_CONFIG[currentPriority];
+
+  // Shake animation for failed toggles
+  useEffect(() => {
+    if (hasFailed) {
+      shakeX.value = withSequence(
+        withTiming(-8, { duration: 50 }),
+        withTiming(8, { duration: 50 }),
+        withTiming(-8, { duration: 50 }),
+        withTiming(8, { duration: 50 }),
+        withTiming(0, { duration: 50 })
+      );
+    }
+  }, [hasFailed, shakeX]);
 
   // ── Unified press handlers ──────────────────────────────────────────────
   const handlePress = useCallback(() => {
     if (selectionActive) {
       // Selection mode: tap = toggle selection
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptic("light");
       onSelectToggle?.(item._id);
       return;
     }
@@ -139,13 +139,13 @@ export const ShoppingListItem = memo(function ShoppingListItem({
       // Shopping: tap = check off
       if (canEdit) {
         // Snappy haptic and immediate toggle
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptic("medium");
         onToggle(item._id);
       }
     } else {
       // Planning: tap = edit
       if (canEdit && !item.isChecked) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        haptic("light");
         onEdit(item);
       }
     }
@@ -153,7 +153,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
 
   const handleLongPress = useCallback(() => {
     // Both modes: long press = toggle selection
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic("medium");
     onSelectToggle?.(item._id);
   }, [item._id, onSelectToggle]);
 
@@ -169,7 +169,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
     }
 
     if (newIndex !== currentIndex) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptic("medium");
       onPriorityChange(item._id, PRIORITY_ORDER[newIndex]);
     }
   }, [currentPriority, onPriorityChange, item._id]);
@@ -192,11 +192,9 @@ export const ShoppingListItem = memo(function ShoppingListItem({
       translateX.value = withSpring(0, { damping: 15 });
     });
 
-  const composedGesture = panGesture;
-
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: translateX.value },
+      { translateX: translateX.value + shakeX.value },
     ],
   }));
 
@@ -220,30 +218,22 @@ export const ShoppingListItem = memo(function ShoppingListItem({
     : undefined;
 
   return (
-    <View style={itemStyles.swipeContainer}>
-      {/* Swipe actions — planning mode only */}
-      {!isShopping && (
-        <>
-          <Animated.View style={[itemStyles.swipeAction, itemStyles.swipeActionLeft, leftActionStyle]}>
-            <MaterialCommunityIcons name="arrow-up-bold" size={20} color="#fff" />
-            <Text style={itemStyles.swipeActionText}>Priority ↑</Text>
-          </Animated.View>
-          <Animated.View style={[itemStyles.swipeAction, itemStyles.swipeActionRight, rightActionStyle]}>
-            <Text style={itemStyles.swipeActionText}>Priority ↓</Text>
-            <MaterialCommunityIcons name="arrow-down-bold" size={20} color="#fff" />
-          </Animated.View>
-        </>
-      )}
+    <View style={styles.swipeContainer}>
+      <ItemSwipeActions 
+        isShopping={isShopping}
+        leftActionStyle={leftActionStyle}
+        rightActionStyle={rightActionStyle}
+      />
 
-      <GestureDetector gesture={composedGesture}>
+      <GestureDetector gesture={panGesture}>
         <Animated.View style={animatedStyle}>
           <View style={{ borderRadius: borderRadius.lg }}>
             <GlassCard
               variant="standard"
-              style={[itemStyles.itemCard, selectedTint, item.isChecked && itemStyles.itemCardChecked]}
+              style={[styles.itemCard, selectedTint, item.isChecked && styles.itemCardChecked]}
             >
               <Pressable
-                style={itemStyles.itemRow}
+                style={styles.itemRow}
                 onPress={handlePress}
                 onLongPress={handleLongPress}
                 delayLongPress={400}
@@ -260,25 +250,36 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                 )}
 
                 {/* Item details: Two-line layout */}
-                <View style={itemStyles.itemDetailsColumn}>
-                  {/* Line 1: Item name + Edit button */}
-                  <View style={itemStyles.nameRow}>
+                <View style={styles.itemDetailsColumn}>
+                  {/* Line 1: Item name + Failed indicator + Edit button */}
+                  <View style={styles.nameRow}>
                     <Text
-                      style={[itemStyles.itemName, item.isChecked && itemStyles.itemNameChecked]}
+                      style={[styles.itemName, item.isChecked && styles.itemNameChecked]}
                       numberOfLines={1}
                     >
                       {displayName}
                     </Text>
+
+                    {/* Failed toggle indicator */}
+                    {hasFailed && (
+                      <View style={styles.failedIndicator}>
+                        <MaterialCommunityIcons
+                          name="alert-circle"
+                          size={16}
+                          color={colors.semantic.danger}
+                        />
+                      </View>
+                    )}
 
                     {/* Edit button — visible in both shopping and planning modes (not in selection mode) */}
                     {canEdit && !selectionActive && (
                       <Pressable
                         onPress={(e) => {
                           e.stopPropagation();
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          haptic("light");
                           onEdit(item);
                         }}
-                        style={itemStyles.iconButton}
+                        style={styles.iconButton}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
                         <MaterialCommunityIcons
@@ -291,25 +292,25 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                   </View>
 
                   {/* Line 2: Price info + Comment button */}
-                  <View style={itemStyles.priceRowWithActions}>
+                  <View style={styles.priceRowWithActions}>
                     {/* Price info */}
-                    <View style={itemStyles.priceInfo}>
-                      <Text style={[itemStyles.itemQtyLabel, item.isChecked && itemStyles.itemPriceChecked]}>
+                    <View style={styles.priceInfo}>
+                      <Text style={[styles.itemQtyLabel, item.isChecked && styles.itemPriceChecked]}>
                         Qty {item.quantity}
                       </Text>
-                      <Text style={[itemStyles.bulletSeparator, item.isChecked && itemStyles.itemPriceChecked]}>
+                      <Text style={[styles.bulletSeparator, item.isChecked && styles.itemPriceChecked]}>
                         •
                       </Text>
-                      <Text style={[itemStyles.itemQty, item.isChecked && itemStyles.itemPriceChecked]}>
+                      <Text style={[styles.itemQty, item.isChecked && styles.itemPriceChecked]}>
                         {formatPrice(item.actualPrice || item.estimatedPrice || 0, currency)} each
                       </Text>
-                      <Text style={[itemStyles.bulletSeparator, item.isChecked && itemStyles.itemPriceChecked]}>
+                      <Text style={[styles.bulletSeparator, item.isChecked && styles.itemPriceChecked]}>
                         •
                       </Text>
-                      <Text style={[itemStyles.itemQtyLabel, item.isChecked && itemStyles.itemPriceChecked]}>
+                      <Text style={[styles.itemQtyLabel, item.isChecked && styles.itemPriceChecked]}>
                         Total
                       </Text>
-                      <Text style={[itemStyles.itemPrice, item.isChecked && itemStyles.itemPriceChecked]}>
+                      <Text style={[styles.itemPrice, item.isChecked && styles.itemPriceChecked]}>
                         {formatPrice((item.actualPrice || item.estimatedPrice || 0) * item.quantity, currency)}
                       </Text>
                     </View>
@@ -319,10 +320,10 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                       <Pressable
                         onPress={(e) => {
                           e.stopPropagation();
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          haptic("light");
                           onOpenComments(item._id, item.name);
                         }}
-                        style={itemStyles.iconButton}
+                        style={styles.iconButton}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
                         <View>
@@ -332,8 +333,8 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                             color={colors.text.tertiary}
                           />
                           {(commentCount ?? 0) > 0 && (
-                            <View style={itemStyles.commentBadge}>
-                              <Text style={itemStyles.commentBadgeText}>
+                            <View style={styles.commentBadge}>
+                              <Text style={styles.commentBadgeText}>
                                 {commentCount! > 9 ? "9+" : commentCount}
                               </Text>
                             </View>
@@ -347,10 +348,10 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                       <Pressable
                         onPress={(e) => {
                           e.stopPropagation();
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          haptic("light");
                           onRemove(item._id, item.name);
                         }}
-                        style={itemStyles.iconButton}
+                        style={styles.iconButton}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
                         <MaterialCommunityIcons
@@ -385,130 +386,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
     prevProps.onOpenComments === nextProps.onOpenComments &&
     prevProps.selectionActive === nextProps.selectionActive &&
     prevProps.isSelected === nextProps.isSelected &&
-    prevProps.onSelectToggle === nextProps.onSelectToggle
+    prevProps.onSelectToggle === nextProps.onSelectToggle &&
+    prevProps.hasFailed === nextProps.hasFailed
   );
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Styles
-// ─────────────────────────────────────────────────────────────────────────────
-
-const itemStyles = StyleSheet.create({
-  // Swipe Container
-  swipeContainer: {
-    position: "relative",
-    marginBottom: spacing.xs,
-  },
-  swipeAction: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-  },
-  swipeActionLeft: {
-    left: 0,
-    backgroundColor: colors.semantic.success,
-    borderRadius: borderRadius.lg,
-  },
-  swipeActionRight: {
-    right: 0,
-    backgroundColor: colors.text.tertiary,
-    borderRadius: borderRadius.lg,
-  },
-  swipeActionText: {
-    ...typography.labelSmall,
-    color: "#fff",
-    fontWeight: "600",
-  },
-
-  // Item Card
-  itemCard: {
-    // No marginBottom here, handled by swipeContainer
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  itemCardChecked: {
-    opacity: 0.7,
-  },
-  itemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  itemDetailsColumn: {
-    flex: 1,
-    gap: 0,
-  },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  itemName: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-    flex: 1,
-  },
-  itemNameChecked: {
-    textDecorationLine: "line-through",
-    color: colors.text.tertiary,
-  },
-  priceRowWithActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  priceInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  iconButton: {
-    padding: spacing.xs,
-  },
-  itemQty: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-  itemQtyLabel: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-  bulletSeparator: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-    marginHorizontal: 6,
-  },
-  itemPrice: {
-    ...typography.bodySmall,
-    color: colors.accent.primary,
-    fontWeight: "800",
-    marginLeft: 4,
-    fontSize: 13,
-  },
-  itemPriceChecked: {
-    color: colors.accent.primary,
-    opacity: 0.7,
-  },
-  commentBadge: {
-    position: "absolute",
-    top: -4,
-    right: -6,
-    backgroundColor: colors.accent.primary,
-    borderRadius: 7,
-    minWidth: 14,
-    height: 14,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 2,
-  },
-  commentBadgeText: {
-    fontSize: 9,
-    fontWeight: "700",
-    color: "#fff",
-    textAlign: "center",
-  },
 });

@@ -9,7 +9,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { SeedItem } from "@/convex/ai";
-import { safeHaptics } from "@/lib/utils/safeHaptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
