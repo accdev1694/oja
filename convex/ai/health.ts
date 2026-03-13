@@ -96,7 +96,7 @@ Return ONLY valid JSON in this exact format:
     const response = await smartGenerate(prompt, "analyzeListHealth", { temperature: 0.7 });
     const cleaned = stripCodeBlocks(response);
     
-    let parsed: any;
+    let parsed;
     try {
       parsed = JSON.parse(cleaned);
     } catch (e) {
@@ -104,7 +104,7 @@ Return ONLY valid JSON in this exact format:
       throw new Error("Failed to analyze health. Please try again.");
     }
 
-    const swapsWithIds = (parsed.swaps || []).map((swap: any) => {
+    const swapsWithIds = (parsed.swaps || []).map(swap => {
       if (swap.originalName === "Bonus") {
         const cleaned = cleanItemForStorage(swap.suggestedName, swap.suggestedSize, swap.suggestedUnit);
         return {

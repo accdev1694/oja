@@ -84,7 +84,7 @@ export const finishTrip = mutation({
       completedAt: now,
       updatedAt: now,
       actualTotal: actualTotal > 0 ? actualTotal : undefined,
-      activeShopperId: undefined as any,
+      activeShopperId: undefined,
     });
 
     const storeBreakdown = Array.from(storeMap.entries()).map(([storeId, data]) => ({

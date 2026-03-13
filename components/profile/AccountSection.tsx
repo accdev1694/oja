@@ -19,7 +19,7 @@ export function AccountSection({
   isAdmin,
   dietRef,
   animationDelay,
-}: any) {
+} {
   return (
     <AnimatedSection animation="fadeInDown" duration={400} delay={animationDelay}>
       <View style={styles.section} ref={dietRef}>

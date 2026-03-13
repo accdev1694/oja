@@ -178,7 +178,7 @@ const PersistentTabBar = React.memo(function PersistentTabBar() {
 
   const handleTabPress = React.useCallback(
     (tabName: string) => {
-      router.navigate(TAB_ROUTES[tabName] as any);
+      router.navigate(TAB_ROUTES[tabName]);
     },
     [router]
   );

@@ -176,7 +176,7 @@ export const getAdminTickets = query({
     if (args.status) {
       tickets = await ctx.db
         .query("supportTickets")
-        .withIndex("by_status", (q) => q.eq("status", args.status as any))
+        .withIndex("by_status", (q) => q.eq("status", args.status))
         .order("desc")
         .collect();
     } else {

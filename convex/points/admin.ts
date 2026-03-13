@@ -41,7 +41,7 @@ export const expireOldPoints = internalMutation({
       if (balance && balance.availablePoints > 0) {
         const toExpire = Math.min(balance.availablePoints, points);
         if (toExpire > 0) {
-          await processExpirePoints(ctx, userId as any, toExpire, "12_month_expiration");
+          await processExpirePoints(ctx, userId, toExpire, "12_month_expiration");
           usersAffected++;
           totalExpired += toExpire;
         }

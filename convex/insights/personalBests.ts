@@ -12,7 +12,7 @@ export const getPersonalBests = query({
       .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
-    const completed = completedLists.filter((l: any) => l.status === "completed");
+    const completed = completedLists.filter(l => l.status === "completed");
 
     let biggestSaving = 0;
     let longestStreak = 0;
@@ -26,7 +26,7 @@ export const getPersonalBests = query({
         .collect();
 
       const spent = items.reduce(
-        (sum: number, item: any) => sum + (item.actualPrice || item.estimatedPrice || 0) * item.quantity,
+        (sum, item) => sum + (item.actualPrice || item.estimatedPrice || 0) * item.quantity,
         0
       );
 

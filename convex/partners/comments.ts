@@ -86,7 +86,7 @@ export const addComment = mutation({
       // Create notifications
       for (const uid of notifyUserIds) {
         await ctx.db.insert("notifications", {
-          userId: uid as any,
+          userId: uid,
           type: "comment_added",
           title: "New Comment",
           body: `${user.name} commented on "${item.name}"`,

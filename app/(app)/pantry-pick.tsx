@@ -75,7 +75,7 @@ export default function PantryPickScreen() {
       : items;
     const groups: Record<string, typeof items> = {};
     const sorted = [...filtered].sort(
-      (a: any, b: any) =>
+      (a, b) =>
         (STOCK_SORT_ORDER[a.stockLevel] ?? 4) -
         (STOCK_SORT_ORDER[b.stockLevel] ?? 4)
     );

@@ -34,7 +34,7 @@ Return ONLY valid JSON array:
       const cleaned = stripCodeBlocks(text);
       const variants = JSON.parse(cleaned);
       if (!Array.isArray(variants)) throw new Error("Invalid variants response");
-      return variants.map((v: any) => ({
+      return variants.map(v => ({
         baseItem: v.baseItem.toLowerCase().trim(),
         variantName: v.variantName,
         size: v.size,
@@ -83,7 +83,7 @@ Return ONLY valid JSON: {"name": "...", "normalizedName": "...", "category": "..
 
       if (result.hasVariants && result.variants?.length > 0) {
         await ctx.runMutation(api.itemVariants.bulkUpsert, {
-          variants: result.variants.map((v: any) => ({
+          variants: result.variants.map(v => ({
             baseItem: result.normalizedName || normalizedName,
             variantName: v.variantName,
             size: v.size,

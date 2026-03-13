@@ -50,7 +50,7 @@ export const addListMessage = mutation({
 
     for (const uid of notifyUserIds) {
       await ctx.db.insert("notifications", {
-        userId: uid as any,
+        userId: uid,
         type: "list_message",
         title: "New Message",
         body: `${user.name} in "${list.name}": ${args.text.substring(0, 80)}`,

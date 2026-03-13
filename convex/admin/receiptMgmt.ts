@@ -109,7 +109,7 @@ export const getPriceAnomalies = query({
       priceGroups.get(key)!.push(price.unitPrice);
     }
 
-    const anomalies: any[] = [];
+    const anomalies = [];
 
     for (const [key, prices] of priceGroups.entries()) {
       if (prices.length < 2) continue;

@@ -34,7 +34,7 @@ import { headerLayout } from "@/lib/design/layoutPatterns";
 // BACK BUTTON (shared with GlassHeader)
 // =============================================================================
 
-export function BackButton({ onPress }: any) {
+export function BackButton({ onPress } {
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({

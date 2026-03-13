@@ -39,7 +39,7 @@ export default function NotificationsScreen() {
   const markRead = useMutation(api.notifications.markAsRead);
   const markAllRead = useMutation(api.notifications.markAllAsRead);
 
-  function handleNotificationPress(notification: any) {
+  function handleNotificationPressnotification {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!notification.read) {
       markRead({ id: notification._id });

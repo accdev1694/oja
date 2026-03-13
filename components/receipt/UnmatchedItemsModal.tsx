@@ -266,7 +266,7 @@ export function UnmatchedItemsModal({
               style={styles.candidatesContainer}
               showsVerticalScrollIndicator={false}
             >
-              {currentMatch.candidateMatches.map((candidate: any, index: number) => (
+              {currentMatch.candidateMatches.map((candidate, index) => (
                 <Pressable
                   key={index}
                   style={({ pressed }) => [

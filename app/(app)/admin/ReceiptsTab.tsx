@@ -183,7 +183,7 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
     { label: "Failed", value: "failed" },
   ];
 
-  const handleApplyPreset = useCallback((data: any) => {
+  const handleApplyPreset = useCallback(data => {
     if (data.status !== undefined) setStatusFilter(data.status);
     if (data.search !== undefined) setSearch(data.search);
     showToast("Preset applied", "info");

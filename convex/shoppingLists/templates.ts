@@ -65,8 +65,8 @@ export const createFromReceipt = mutation({
       if (seenNames.has(normalizedName)) continue;
       seenNames.add(normalizedName);
 
-      const size = (item as any).size as string | undefined;
-      const unit = (item as any).unit as string | undefined;
+      const size = (item).size as string | undefined;
+      const unit = (item).unit as string | undefined;
       const cleaned = cleanItemForStorage(toGroceryTitleCase(item.name), size, unit);
 
       await ctx.db.insert("listItems", {

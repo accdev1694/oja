@@ -21,7 +21,7 @@ export function AdminControlCenter({
   gmvFilter,
   setGmvFilter,
   router,
-}: any) {
+} {
   return (
     <View style={{ gap: spacing.lg, marginBottom: spacing.lg }}>
       {/* 1. Platform Vitals (GMV + Health + AI) */}

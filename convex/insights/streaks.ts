@@ -59,7 +59,7 @@ export const updateStreak = mutation({
   },
 });
 
-async function checkStreakAchievement(ctx: any, userId: any, type: string, count: number) {
+async function checkStreakAchievement(ctx: { db: { query: Function; insert: Function } }, userId: string, type: string, count: number) {
   const milestones = [
     { count: 7, title: "Week Warrior", desc: "7-day streak", icon: "fire" },
     { count: 30, title: "Monthly Master", desc: "30-day streak", icon: "star" },

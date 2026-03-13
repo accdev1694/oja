@@ -102,7 +102,7 @@ export function GlassSegmentedControl({
         const isActive = activeIndex === i;
         const colorStyle = {
           color: isActive ? activeColor : colors.text.tertiary,
-          fontWeight: (isActive ? "700" : "600") as any,
+          fontWeight: (isActive ? "700" : "600"),
         };
 
         return (

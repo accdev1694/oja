@@ -2,7 +2,7 @@ import { Platform } from "react-native";
 
 // Conditionally import expo-location only on native platforms
 // expo-location doesn't support web, so we use dynamic require
-let Location: any = null;
+let Location = null;
 if (Platform.OS !== "web") {
   Location = require("expo-location");
 }

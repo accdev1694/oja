@@ -287,7 +287,7 @@ export const addBatchFromScan = mutation({
         });
         added++;
       }
-      await enrichGlobalFromProductScan(ctx, item as any, user._id);
+      await enrichGlobalFromProductScan(ctx, item, user._id);
     }
 
     await recalculateListTotal(ctx, args.listId);
@@ -412,7 +412,7 @@ export const addAndSeedPantry = mutation({
       size: args.size,
       unit: args.unit,
       estimatedPrice: args.estimatedPrice,
-      pantryItemId: pantryId as any,
+      pantryItemId: pantryId,
       force: args.force ?? true,
     });
   },

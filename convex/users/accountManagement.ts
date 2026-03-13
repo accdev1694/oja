@@ -110,7 +110,7 @@ export const resetMyAccount = mutation({
     // Helper to delete all docs in a table by userId index
     const deleteByUser = async (table: string) => {
       const docs = await ctx.db
-        .query(table as any)
+        .query(table)
         .withIndex("by_user", q => q.eq("userId", user._id))
         .collect();
       for (const doc of docs) {

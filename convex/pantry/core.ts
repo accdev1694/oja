@@ -107,7 +107,7 @@ export const update = mutation({
     const item = await ctx.db.get(args.id);
     if (!item || item.userId !== user._id) throw new Error("Unauthorized");
 
-    const updates: any = { updatedAt: Date.now() };
+    const updates = { updatedAt: Date.now() };
     if (args.name !== undefined) {
       updates.name = toGroceryTitleCase(args.name);
       if (args.name !== item.name) updates.nameSource = "user";
@@ -303,7 +303,7 @@ export const addBatchFromScan = mutation({
         added++;
       }
 
-      await enrichGlobalFromProductScan(ctx, item as any, user._id);
+      await enrichGlobalFromProductScan(ctx, item, user._id);
     }
 
     if (added > 0 || restocked > 0) {

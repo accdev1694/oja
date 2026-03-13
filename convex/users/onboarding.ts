@@ -150,7 +150,7 @@ export const completeOnboarding = mutation({
       const trialEndsAt = now + 7 * 24 * 60 * 60 * 1000;
       await ctx.db.insert("subscriptions", {
         userId: user._id,
-        plan: (defaultPlan?.planId as any) || "premium_monthly",
+        plan: (defaultPlan?.planId) || "premium_monthly",
         status: "trial",
         trialEndsAt,
         currentPeriodStart: now,

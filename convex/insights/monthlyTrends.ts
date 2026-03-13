@@ -67,7 +67,7 @@ export const getMonthlyTrends = query({
       .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
     const completedWithBudget = lists.filter(
-      (l: any) => l.status === "completed" && l.budget && l.completedAt && l.completedAt >= sixMonthsAgo
+      l => l.status === "completed" && l.budget && l.completedAt && l.completedAt >= sixMonthsAgo
     );
 
     let underBudget = 0;
@@ -78,7 +78,7 @@ export const getMonthlyTrends = query({
         .withIndex("by_list", q => q.eq("listId", list._id))
         .collect();
       const spent = items.reduce(
-        (sum: number, item: any) => sum + (item.actualPrice || item.estimatedPrice || 0) * item.quantity,
+        (sum, item) => sum + (item.actualPrice || item.estimatedPrice || 0) * item.quantity,
         0
       );
       if (spent <= (list.budget ?? 0)) underBudget++;

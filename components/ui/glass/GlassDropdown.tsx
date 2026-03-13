@@ -30,7 +30,7 @@ interface GlassDropdownProps {
   selected: string | null;
   onSelect: (value: string | null) => void;
   placeholder?: string;
-  style?: any;
+  style?: object;
 }
 
 export function GlassDropdown({

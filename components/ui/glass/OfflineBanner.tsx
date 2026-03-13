@@ -95,7 +95,7 @@ export const OfflineBanner = memo(function OfflineBanner({
     >
       <Animated.View style={hasPendingMutations && isConnected ? syncIconStyle : undefined}>
         <MaterialCommunityIcons
-          name={iconName as any}
+          name={iconName}
           size={18}
           color={iconColor}
         />

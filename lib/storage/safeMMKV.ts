@@ -11,7 +11,7 @@ interface SafeMMKV {
 class MemoryStorage implements SafeMMKV {
   private storage = new Map<string, any>();
 
-  set(key: string, value: any) {
+  set(key, value) {
     this.storage.set(key, value);
   }
 

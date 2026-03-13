@@ -51,7 +51,7 @@ export function GlassToast({
     >
       {icon && (
         <MaterialCommunityIcons
-          name={icon as any}
+          name={icon}
           size={20}
           color={iconColor}
           style={styles.icon}

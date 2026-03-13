@@ -260,7 +260,7 @@ export const switchStore = mutation({
 });
 
 async function findPriceForExactSize(
-  ctx: { db: any },
+  ctx: { db: { query: Function; get: Function } },
   normalizedItemName: string,
   size: string,
   storeId: string

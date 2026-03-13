@@ -16,7 +16,7 @@ export const togglePin = mutation({
     const item = await ctx.db.get(args.pantryItemId);
     if (!item || item.userId !== user._id) throw new Error("Item not found");
 
-    const updates: any = {
+    const updates = {
       pinned: !item.pinned,
       updatedAt: Date.now(),
     };
@@ -149,7 +149,7 @@ export const findDuplicates = query({
 
     const active = items.filter((item) => item.status !== "archived");
     const assigned = new Set<string>();
-    const groups: any[] = [];
+    const groups = [];
 
     for (let i = 0; i < active.length; i++) {
       if (assigned.has(active[i]._id)) continue;

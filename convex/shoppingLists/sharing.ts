@@ -21,7 +21,7 @@ export const getShared = query({
 
     const partners = await ctx.db
       .query("listPartners")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
     const sharedLists = await Promise.all(

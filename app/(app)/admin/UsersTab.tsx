@@ -114,7 +114,7 @@ export function UsersTab({
 
   // --- Handlers ---
 
-  const handleApplyPreset = useCallback((data: any) => {
+  const handleApplyPreset = useCallback(data => {
     if (data.search !== undefined) setSearch(data.search);
     showToast("Preset applied", "info");
   }, [showToast]);

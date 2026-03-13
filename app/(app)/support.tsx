@@ -172,7 +172,7 @@ export default function SupportScreen() {
                   </GlassButton>
                 </View>
               ) : (
-                myTickets.map((ticket: any) => (
+                myTickets.map(ticket => (
                   <GlassCard key={ticket._id} style={styles.ticketCard}>
                     <View style={styles.ticketHeader}>
                       <Text style={styles.ticketSubject}>{ticket.subject}</Text>

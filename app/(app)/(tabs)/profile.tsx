@@ -102,7 +102,7 @@ export default function ProfileScreen() {
     router.replace("/(auth)/sign-in");
   };
 
-  const confirmAction = (title: any, message: any, onConfirm: any) => {
+  const confirmAction = (title, message, onConfirm) => {
     alert(title, message, [
       { text: "Cancel", style: "cancel" },
       { text: "Confirm", style: "destructive", onPress: onConfirm },

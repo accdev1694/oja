@@ -40,7 +40,7 @@ export default function JoinListScreen() {
       alert("Joined!", "You've successfully joined the shared list.", [
         { text: "View List", onPress: () => router.push(`/list/${result.listId}`) },
       ]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert("Error", error?.message || "Invalid or expired invite code");
     } finally {

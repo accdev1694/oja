@@ -53,7 +53,7 @@ export const voiceAssistant = action({
     const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "voice" });
     if (!rateLimit.allowed) return { type: "error", text: "Too fast! Slow down." };
 
-    const usage = await ctx.runMutation(api.aiUsage.incrementUsage, { feature: "voice", tokenCount: 500 }) as any;
+    const usage = await ctx.runMutation(api.aiUsage.incrementUsage, { feature: "voice", tokenCount: 500 });
     if (!usage.allowed) return { type: "limit_reached", text: usage.message };
 
     const systemPrompt = buildSystemPrompt({ ...args, lowStockItems: [], activeListNames: [] });
@@ -63,7 +63,7 @@ export const voiceAssistant = action({
       tools: [{ functionDeclarations: voiceFunctionDeclarations }],
     });
 
-    const history = (args.conversationHistory || []).map(msg => ({ role: msg.role as any, parts: [{ text: msg.text }] }));
+    const history = (args.conversationHistory || []).map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
     const chat = model.startChat({ history });
     let response = await chat.sendMessage(args.transcript);
 
@@ -73,7 +73,7 @@ export const voiceAssistant = action({
       if (!part?.functionCall) break;
 
       const { name, args: fnArgs } = part.functionCall;
-      const toolResult = await executeVoiceTool(ctx, name, (fnArgs as any) || {});
+      const toolResult = await executeVoiceTool(ctx, name, (fnArgs) || {});
       if (toolResult.type === "confirm") {
         pendingAction = { action: toolResult.result.action, params: toolResult.result.params, confirmLabel: toolResult.result.description };
       }
