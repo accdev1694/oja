@@ -6,7 +6,7 @@ import { trackActivity } from "./lib/analytics";
 /**
  * Get current authenticated user
  */
-async function requireUser(ctx: any) {
+async function requireUser(ctx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
   const user = await ctx.db

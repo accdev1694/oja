@@ -99,7 +99,7 @@ export default function InsightsScreen() {
   const categoryTotal = useMemo(
     () =>
       monthlyTrends?.categoryBreakdown.reduce(
-        (s: number, c: any) => s + c.total,
+        (s: number, c) => s + c.total,
         0
       ) ?? 0,
     [monthlyTrends]
@@ -116,8 +116,8 @@ export default function InsightsScreen() {
     const storeIds = Object.keys(storeSpending);
     if (storeIds.length === 0) return null;
 
-    const totalSpending = Object.values(storeSpending).reduce((a: number, b: any) => a + (b as number), 0) as number;
-    const totalVisits = Object.values(storeVisits).reduce((a: number, b: any) => a + (b as number), 0) as number;
+    const totalSpending = Object.values(storeSpending).reduce((a: number, b) => a + (b as number), 0) as number;
+    const totalVisits = Object.values(storeVisits).reduce((a: number, b) => a + (b as number), 0) as number;
 
     const stores = storeIds
       .map((storeId) => {
@@ -348,7 +348,7 @@ function generateWeeklyNarrative(digest: {
 }
 
 // Inline GlassToast for backward compatibility with existing insights logic
-function GlassToast({ message, icon, iconColor, visible, onDismiss }: any) {
+function GlassToast({ message, icon, iconColor, visible, onDismiss }) {
   const { GlassToast: UIStoreToast } = require("@/components/ui/glass");
   return <UIStoreToast message={message} icon={icon} iconColor={iconColor} visible={visible} onDismiss={onDismiss} />;
 }

@@ -24,7 +24,7 @@ export const getMyPermissions = query({
 
     const userRole = await ctx.db
       .query("userRoles")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
 
     if (!userRole) {
@@ -38,7 +38,7 @@ export const getMyPermissions = query({
 
     const rolePerms = await ctx.db
       .query("rolePermissions")
-      .withIndex("by_role", (q: any) => q.eq("roleId", userRole.roleId))
+      .withIndex("by_role", (q) => q.eq("roleId", userRole.roleId))
       .collect();
 
     return {
@@ -60,7 +60,7 @@ export const getMfaGracePeriodStatus = query({
 
     const userRole = await ctx.db
       .query("userRoles")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
 
     if (!user.isAdmin && !userRole) {

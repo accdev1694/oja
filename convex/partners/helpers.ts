@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { query } from "../_generated/server";
 
 // Helper to get authenticated user (auto-creates if missing, e.g. partner who skipped onboarding)
-export async function requireUser(ctx: any) {
+export async function requireUser(ctx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
   const user = await ctx.db
@@ -35,9 +35,9 @@ export async function requireUser(ctx: any) {
  * Exported for use in other Convex modules (listItems, etc.)
  */
 export async function getUserListPermissions(
-  ctx: any,
-  listId: any,
-  userId: any
+  ctx,
+  listId,
+  userId
 ): Promise<{
   isOwner: boolean;
   isPartner: boolean;

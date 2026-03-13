@@ -84,11 +84,11 @@ export default function ScanScreen() {
     }, [])
   );
 
-  const handleProductPress = useCallback((product: any, index: number) => {
+  const handleProductPress = useCallback((product, index: number) => {
     setViewingProduct({ product, index });
   }, [setViewingProduct]);
 
-  const handleConfirmProductEdit = useCallback((edited: any) => {
+  const handleConfirmProductEdit = useCallback((edited) => {
     if (viewingProduct) {
       productScanner.updateProduct(viewingProduct.index, edited);
     }
@@ -114,7 +114,7 @@ export default function ScanScreen() {
 
     const executeAdd = async (listId: Id<"shoppingLists">) => {
       try {
-        const itemsToAdd = productScanner.scannedProducts.map((p: any) => ({
+        const itemsToAdd = productScanner.scannedProducts.map((p) => ({
           name: p.name,
           category: p.category || "Other",
           quantity: p.quantity || 1,
@@ -143,7 +143,7 @@ export default function ScanScreen() {
       executeAdd(shoppingLists[0]._id);
     } else {
       // Prompt user to pick a list
-      const buttons: AlertButton[] = shoppingLists.map((list: any) => ({
+      const buttons: AlertButton[] = shoppingLists.map((list) => ({
         text: list.name,
         onPress: () => executeAdd(list._id)
       }));

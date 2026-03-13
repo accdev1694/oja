@@ -82,8 +82,8 @@ export const getExpiringPoints = query({
 
     const transactions = await ctx.db
       .query("pointsTransactions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
-      .filter((q: any) => q.and(
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .filter((q) => q.and(
         q.gte(q.field("createdAt"), twelveMonthsAgo),
         q.lte(q.field("createdAt"), elevenMonthsAgo),
         q.or(

@@ -181,7 +181,9 @@
       "Bash(for:*)",
       "Bash(do sed -i 's/\\(q: any\\)/q/g; s/\\(item: any\\)/item/g; s/\\(r: any\\)/r/g; s/\\(s: any\\)/s/g; s/\\(a: any, b: any\\)/\\(a, b\\)/g; s/\\(a: any\\)/a/g; s/\\(i: any\\)/i/g; s/\\(p: any\\)/p/g; s/\\(u: any\\)/u/g; s/\\(c: any\\)/c/g' \"$file\")",
       "Bash(do sed -i 's/\\(item: any\\)/item/g; s/\\(n: any\\)/n/g; s/\\(a: any\\)/a/g; s/\\(notif: any\\)/notif/g; s/ as any//g' \"$file\")",
-      "Bash(do sed -i 's/ as any//g; s/\\(e: any\\)/e/g; s/\\(event: any\\)/event/g; s/\\(item: any\\)/item/g; s/\\(p: any\\)/p/g' \"$file\")"
+      "Bash(do sed -i 's/ as any//g; s/\\(e: any\\)/e/g; s/\\(event: any\\)/event/g; s/\\(item: any\\)/item/g; s/\\(p: any\\)/p/g' \"$file\")",
+      "Bash(do sed -i 's/: any//g; s/\\(fn: any\\)/fn/g; s/\\(x: any\\)/x/g; s/\\(err: any\\)/err/g' \"$file\")",
+      "Bash(do sed -i 's/: any//g' \"$file\")"
     ]
   },
   "enableAllProjectMcpServers": true,

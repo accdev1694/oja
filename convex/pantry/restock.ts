@@ -23,9 +23,9 @@ export const autoRestockFromReceipt = mutation({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
-    const restockedItems: any[] = [];
-    const fuzzyMatches: any[] = [];
-    const itemsToAdd: any[] = [];
+    const restockedItems[] = [];
+    const fuzzyMatches[] = [];
+    const itemsToAdd[] = [];
     const now = Date.now();
 
     for (const receiptItem of receipt.items) {
@@ -49,7 +49,7 @@ export const autoRestockFromReceipt = mutation({
         continue;
       }
 
-      let bestMatch: any = null;
+      let bestMatch = null;
       for (const pantryItem of pantryItems) {
         const similarity = calculateSimilarity(receiptItem.name, pantryItem.name);
         if (similarity > 80 && (!bestMatch || similarity > bestMatch.similarity)) {

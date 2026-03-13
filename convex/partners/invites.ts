@@ -48,7 +48,7 @@ export const acceptInvite = mutation({
     const user = await requireUser(ctx);
     const invite = await ctx.db
       .query("inviteCodes")
-      .withIndex("by_code", (q: any) => q.eq("code", args.code))
+      .withIndex("by_code", (q) => q.eq("code", args.code))
       .unique();
 
     if (!invite || !invite.isActive || invite.expiresAt < Date.now()) {
@@ -58,7 +58,7 @@ export const acceptInvite = mutation({
     // Check if already a partner
     const existing = await ctx.db
       .query("listPartners")
-      .withIndex("by_list_user", (q: any) => q.eq("listId", invite.listId).eq("userId", user._id))
+      .withIndex("by_list_user", (q) => q.eq("listId", invite.listId).eq("userId", user._id))
       .unique();
     if (existing) throw new Error("Already a partner on this list");
 

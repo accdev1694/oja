@@ -52,7 +52,7 @@ export const processWorkflows = internalMutation({
     
     for (const wf of workflows) {
       // Find users matching trigger
-      let users: any[] = [];
+      let users[] = [];
       const now = Date.now();
       
       if (wf.trigger === "user_inactive_30d") {
@@ -65,7 +65,7 @@ export const processWorkflows = internalMutation({
         const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
         const trials = await ctx.db
           .query("subscriptions")
-          .withIndex("by_status", (q: any) => q.eq("status", "trial"))
+          .withIndex("by_status", (q) => q.eq("status", "trial"))
           .collect();
           
         for (const sub of trials) {

@@ -17,7 +17,7 @@ import { Id } from "../_generated/dataModel";
  * Helper to get price estimate from currentPrices table
  */
 export async function getPriceFromCurrentPrices(
-  ctx: { db: any },
+  ctx: { db },
   itemName: string
 ): Promise<number | undefined> {
   const normalizedName = itemName.toLowerCase().trim();
@@ -53,7 +53,7 @@ export const refreshListPrices = mutation({
       if (item.isChecked || item.priceOverride) continue;
 
       let newPrice: number | undefined;
-      let newSource: any;
+      let newSource;
       let newConfidence: number | undefined;
 
       if (normalizedStoreId) {
@@ -137,7 +137,7 @@ export const applyHealthSwap = mutation({
     let size = variantResult?.variant.size || args.suggestedSize || "per item";
     let unit = variantResult?.variant.unit || args.suggestedUnit || "each";
     let estimatedPrice = variantResult?.price ?? undefined;
-    let priceSource: any = variantResult?.priceSource ?? "ai";
+    let priceSource = variantResult?.priceSource ?? "ai";
     let priceConfidence = variantResult?.confidence ?? 0.5;
 
     if (estimatedPrice === undefined || !isSizeValid(size, unit)) {

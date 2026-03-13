@@ -136,7 +136,7 @@ export const completeOnboarding = mutation({
     // Auto-start 7-day premium trial for new users
     const existingSub = await ctx.db
       .query("subscriptions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
 
     if (!existingSub) {

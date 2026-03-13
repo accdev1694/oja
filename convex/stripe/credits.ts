@@ -116,7 +116,7 @@ export const reconcilePointRedemptions = internalAction({
   args: {},
   handler: async (ctx) => {
     const stripe = await getStripeClient();
-    const activeSubs: any = await ctx.runQuery(internal.stripe.getActiveSubscriptions);
+    const activeSubs = await ctx.runQuery(internal.stripe.getActiveSubscriptions);
     
     let checkedCount = 0;
     let discrepanciesFound = 0;
@@ -127,7 +127,7 @@ export const reconcilePointRedemptions = internalAction({
       
       for (const invoice of invoices.data) {
         if (invoice.status !== "paid") continue;
-        const transaction: any = await ctx.runQuery(internal.stripe.getRedemptionByInvoiceId, {
+        const transaction = await ctx.runQuery(internal.stripe.getRedemptionByInvoiceId, {
           userId: sub.userId,
           invoiceId: invoice.id,
         });

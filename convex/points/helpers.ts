@@ -5,7 +5,7 @@ import { getTierFromScans, getNextTierInfo, getMaxEarningScans, getPointsPerScan
 /**
  * Helper to get or initialize a points balance (for mutations only)
  */
-export async function getOrCreatePointsBalance(ctx: any, userId: any) {
+export async function getOrCreatePointsBalance(ctx, userId) {
   let balance = await ctx.db
     .query("pointsBalance")
     .withIndex("by_user", q => q.eq("userId", userId))
@@ -51,7 +51,7 @@ export async function getOrCreatePointsBalance(ctx: any, userId: any) {
  * Read-only helper to get points balance (for queries)
  * Returns null if balance doesn't exist
  */
-export async function getPointsBalanceReadOnly(ctx: any, userId: any) {
+export async function getPointsBalanceReadOnly(ctx, userId) {
   const balance = await ctx.db
     .query("pointsBalance")
     .withIndex("by_user", q => q.eq("userId", userId))
@@ -68,7 +68,7 @@ export function getWeekNumber(timestamp: number) {
   return weekNo + (d.getUTCFullYear() * 100); // Year + week to be unique across years
 }
 
-export async function processEarnPoints(ctx: any, userId: Id<"users">, receiptId: Id<"receipts">) {
+export async function processEarnPoints(ctx, userId: Id<"users">, receiptId: Id<"receipts">) {
   const { isPremium } = await checkFeatureAccess(ctx, userId);
   const balance = await getOrCreatePointsBalance(ctx, userId);
 
@@ -187,7 +187,7 @@ export async function processEarnPoints(ctx: any, userId: Id<"users">, receiptId
   };
 }
 
-export async function processExpirePoints(ctx: any, userId: Id<"users">, points: number, reason: string) {
+export async function processExpirePoints(ctx, userId: Id<"users">, points: number, reason: string) {
   const balance = await getOrCreatePointsBalance(ctx, userId);
 
   const expireAmount = Math.min(balance.availablePoints, points);

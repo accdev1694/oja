@@ -148,7 +148,7 @@ export const update = mutation({
     const perms = await getUserListPermissions(ctx, item.listId, user._id);
     if (!perms.canEdit) throw new Error("Unauthorized");
 
-    const updates: any = { updatedAt: Date.now() };
+    const updates = { updatedAt: Date.now() };
     if (args.name !== undefined) updates.name = toGroceryTitleCase(args.name);
     if (args.quantity !== undefined) updates.quantity = args.quantity;
     if (args.priority !== undefined) updates.priority = args.priority;
@@ -184,7 +184,7 @@ export const toggleChecked = mutation({
     if (!perms.canEdit) throw new Error("Unauthorized");
 
     const newChecked = !item.isChecked;
-    const updates: any = {
+    const updates = {
       isChecked: newChecked,
       checkedAt: newChecked ? Date.now() : undefined,
       checkedByUserId: newChecked ? user._id : undefined,

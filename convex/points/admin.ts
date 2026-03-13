@@ -35,7 +35,7 @@ export const expireOldPoints = internalMutation({
       // Check if user still has available points to expire
       const balance = await ctx.db
         .query("pointsBalance")
-        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .withIndex("by_user", (q) => q.eq("userId", userId))
         .first();
 
       if (balance && balance.availablePoints > 0) {

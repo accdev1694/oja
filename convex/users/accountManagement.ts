@@ -229,7 +229,7 @@ export const internalDeleteUser = internalMutation({
     if (!user) return;
 
     // Helper to delete all docs in a table by userId index
-    const deleteByUser = async (table: any) => {
+    const deleteByUser = async (table) => {
       const docs = await ctx.db
         .query(table)
         .withIndex("by_user", q => q.eq("userId", user._id))

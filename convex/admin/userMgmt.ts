@@ -23,12 +23,12 @@ export const searchUsers = query({
 
     const byName = await ctx.db
       .query("users")
-      .withSearchIndex("search_name", (q: any) => q.search("name", term))
+      .withSearchIndex("search_name", (q) => q.search("name", term))
       .take(args.limit || 50);
 
     const byEmail = await ctx.db
       .query("users")
-      .withSearchIndex("search_email", (q: any) => q.search("email", term))
+      .withSearchIndex("search_email", (q) => q.search("email", term))
       .take(args.limit || 50);
 
     const results = [...byName];
@@ -75,7 +75,7 @@ export const toggleAdmin = mutation({
     if (!user) throw new Error("User not found");
     const newStatus = !user.isAdmin;
 
-    const patchData: any = { isAdmin: newStatus, updatedAt: Date.now() };
+    const patchData = { isAdmin: newStatus, updatedAt: Date.now() };
     if (newStatus) {
       patchData.adminGrantedAt = Date.now();
     }
