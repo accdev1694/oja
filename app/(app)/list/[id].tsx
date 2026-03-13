@@ -69,7 +69,12 @@ export default function ListDetailScreen() {
   const [showHealthModal, setShowHealthModal] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showScanNudge, setShowScanNudge] = useState(false);
-  const [tripSummary, setTripSummary] = useState<any>(null);
+  const [tripSummary, setTripSummary] = useState<{
+    budget?: number;
+    actualTotal?: number;
+    itemsChecked?: number;
+    totalItems?: number;
+  } | null>(null);
   const [editingItem, setEditingItem] = useState<ListItem | null>(null);
 
   // ── Queries & Mutations ────────────────────────────────────────────────────
@@ -147,15 +152,15 @@ export default function ListDetailScreen() {
   const { displayItems, spent, remaining, checkedCount } = useMemo(() => {
     if (!items) return { displayItems: [], spent: 0, remaining: 0, checkedCount: 0 };
 
-    let filtered = items.filter((i: any) => 
+    let filtered = items.filter(i =>
       i.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     if (!showCheckedItems && !searchTerm) {
-      filtered = filtered.filter((i: any) => !i.isChecked);
+      filtered = filtered.filter(i => !i.isChecked);
     }
 
-    const sorted = [...filtered].sort((a: any, b: any) => {
+    const sorted = [...filtered].sort((a, b) => {
       if (a.isChecked !== b.isChecked) return a.isChecked ? 1 : -1;
       return (a.category || "Other").localeCompare(b.category || "Other");
     });
@@ -165,7 +170,7 @@ export default function ListDetailScreen() {
     let spentAcc = 0;
     let checkedAcc = 0;
 
-    sorted.forEach((item: any) => {
+    sorted.forEach(item => {
       const cat = item.category || "Other";
       if (cat !== currentCat) {
         sections.push({ _id: `header-${cat}`, isHeader: true, title: cat });
@@ -179,16 +184,16 @@ export default function ListDetailScreen() {
     });
 
     const budget = list?.budget || 0;
-    return { 
-      displayItems: sections, 
-      spent: spentAcc, 
+    return {
+      displayItems: sections,
+      spent: spentAcc,
       remaining: Math.max(0, budget - spentAcc),
       checkedCount: checkedAcc
     };
   }, [items, searchTerm, showCheckedItems, list?.budget]);
 
   const receiptStreakCount = useMemo(() => {
-    const streak = streaks?.find((s: any) => s.type === "receipt_scanner");
+    const streak = streaks?.find(s => s.type === "receipt_scanner");
     return streak?.currentCount ?? 0;
   }, [streaks]);
 
@@ -208,7 +213,7 @@ export default function ListDetailScreen() {
         <View style={styles.emptyContainer}>
           <MaterialCommunityIcons name="alert-circle-outline" size={48} color={colors.semantic.danger} />
           <Text style={styles.emptyTitle}>List not found</Text>
-          <GlassButton variant="primary" onPress={() => router.replace("/(app)/(tabs)/" as any)}>
+          <GlassButton variant="primary" onPress={() => router.replace("/(app)/(tabs)/")}>
             Go Back
           </GlassButton>
         </View>
@@ -221,7 +226,7 @@ export default function ListDetailScreen() {
       <ListHeader
         title={list.name}
         subtitle={list.storeName}
-        onBack={() => router.canGoBack() ? router.back() : router.replace("/(app)/(tabs)/" as any)}
+        onBack={() => router.canGoBack() ? router.back() : router.replace("/(app)/(tabs)/")}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         onOpenSettings={() => setShowEditModal(true)}

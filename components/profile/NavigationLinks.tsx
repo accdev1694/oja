@@ -11,6 +11,38 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 
+interface NavigationLinksProps {
+  router: {
+    push: (path: string) => void;
+    navigate: (path: string) => void;
+  };
+  convexUser: {
+    isAdmin?: boolean;
+  } | null;
+  myAdminPerms: {
+    role?: string;
+  } | null;
+  subscription: {
+    status?: string;
+    isActive?: boolean;
+    trialEndsAt?: number;
+  } | null;
+  pointsBalance: {
+    tier?: string;
+    tierProgress?: number;
+  } | null;
+  aiUsage: {
+    voice?: {
+      usage?: number;
+      limit?: number;
+    };
+  } | null;
+  outOfStockItems: number;
+  lowStockItems: number;
+  handleSupportPress: () => void;
+  animationDelay: number;
+}
+
 export function NavigationLinks({
   router,
   convexUser,
@@ -22,14 +54,14 @@ export function NavigationLinks({
   lowStockItems,
   handleSupportPress,
   animationDelay,
-}: any) {
+}: NavigationLinksProps) {
   return (
     <AnimatedSection animation="fadeInDown" duration={400} delay={animationDelay}>
       <View style={styles.section}>
       <Pressable
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          router.push("/(app)/points-history" as any);
+          router.push("/(app)/points-history");
         }}
       >
         <GlassCard variant="standard" style={styles.navCard}>
@@ -49,7 +81,7 @@ export function NavigationLinks({
       <Pressable
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          router.push("/(app)/insights" as any);
+          router.push("/(app)/insights");
         }}
       >
         <GlassCard variant="standard" style={styles.navCard}>
@@ -111,7 +143,7 @@ export function NavigationLinks({
       <Pressable
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          router.push("/(app)/ai-usage" as any);
+          router.push("/(app)/ai-usage");
         }}
       >
         <GlassCard variant="standard" style={styles.navCard}>
@@ -133,14 +165,14 @@ export function NavigationLinks({
       <Pressable
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          router.push("/(app)/subscription" as any);
+          router.push("/(app)/subscription");
         }}
       >
         <GlassCard variant="standard" style={styles.navCard}>
           <View style={styles.navRow}>
             <View style={[styles.navIcon, { backgroundColor: `${colors.accent.secondary}20` }]}>
               <MaterialCommunityIcons
-                name={(subscription as any)?.isActive ? "crown" : "crown-outline"}
+                name={subscription?.isActive ? "crown" : "crown-outline"}
                 size={20}
                 color={subscription?.status === "expired" ? colors.text.tertiary : colors.accent.secondary}
               />
@@ -151,13 +183,13 @@ export function NavigationLinks({
                   ? "Premium Trial"
                   : subscription?.status === "expired"
                     ? "Free Plan"
-                    : (subscription as any)?.isActive
+                    : subscription?.isActive
                       ? "Premium"
                       : "Free Plan"}
               </Text>
               <Text style={styles.navSubtitle}>
-                {subscription?.status === "trial" && (subscription as any)?.trialEndsAt
-                  ? `${Math.max(0, Math.ceil(((subscription as any).trialEndsAt - Date.now()) / (1000 * 60 * 60 * 24)))} days left · `
+                {subscription?.status === "trial" && subscription?.trialEndsAt
+                  ? `${Math.max(0, Math.ceil((subscription.trialEndsAt - Date.now()) / (1000 * 60 * 60 * 24)))} days left · `
                   : subscription?.status === "expired"
                     ? "Trial ended · "
                     : ""}
@@ -174,7 +206,7 @@ export function NavigationLinks({
         <Pressable
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push("/(app)/admin" as any);
+            router.push("/(app)/admin");
           }}
         >
           <GlassCard variant="standard" style={styles.navCard}>
@@ -196,7 +228,7 @@ export function NavigationLinks({
         <Pressable
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.navigate("/(app)/(tabs)/" as any);
+            router.navigate("/(app)/(tabs)/");
           }}
         >
           <GlassCard variant="standard" style={styles.navCard}>

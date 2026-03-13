@@ -114,11 +114,11 @@ export default function ReconciliationScreen() {
           if (router.canGoBack()) {
             router.back();
           } else {
-            router.replace("/(app)/(tabs)/scan" as any);
+            router.replace("/(app)/(tabs)/scan" );
           }
         }}
         onCreateListFromReceipt={() =>
-          router.push(`/(app)/create-list-from-receipt?receiptId=${receiptId}` as never)
+          router.push(`/(app)/create-list-from-receipt?receiptId=${receiptId}`)
         }
         onAddToPantry={async () => {
           try {
@@ -130,7 +130,7 @@ export default function ReconciliationScreen() {
         }}
         onDone={async () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          router.push("/(app)/(tabs)/" as any);
+          router.push("/(app)/(tabs)/" );
         }}
         onDeleteReceipt={() => {
           alert("Delete Receipt", "Are you sure? This cannot be undone.", [
@@ -140,7 +140,7 @@ export default function ReconciliationScreen() {
               style: "destructive",
               onPress: async () => {
                 await deleteReceipt({ id: receiptId });
-                router.replace("/(app)/(tabs)/scan" as any);
+                router.replace("/(app)/(tabs)/scan" );
               },
             },
           ]);
@@ -209,7 +209,7 @@ export default function ReconciliationScreen() {
       const messageParts = [savingsMessage, restockMessage].filter(Boolean);
       const fullMessage = messageParts.join("\n\n");
 
-      const navigateToHistory = () => router.push("/(app)/(tabs)/" as any);
+      const navigateToHistory = () => router.push("/(app)/(tabs)/" );
 
       if (result.fuzzyMatches.length > 0 || result.itemsToAdd.length > 0) {
         alert("Trip Archived!", fullMessage, [
@@ -246,7 +246,7 @@ export default function ReconciliationScreen() {
               text: "Restock",
               onPress: async () => {
                 try {
-                  await confirmFuzzyRestock({ pantryItemId: match.pantryItemId as any });
+                  await confirmFuzzyRestock({ pantryItemId: match.pantryItemId  });
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 } catch (error) {
                   console.error("Failed to restock:", error);
@@ -279,7 +279,7 @@ export default function ReconciliationScreen() {
       });
     }
 
-    router.push("/(app)/(tabs)/" as any);
+    router.push("/(app)/(tabs)/" );
   }
 
   return (
