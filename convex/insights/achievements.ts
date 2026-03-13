@@ -61,10 +61,10 @@ export const STORE_ACHIEVEMENTS = {
   },
 } as const;
 
-export async function processUnlockAchievement(ctx: any, userId: any, achievement: any) {
+export async function processUnlockAchievement(ctx: { db: { query: Function; insert: Function } }, userId: string, achievement: { type: string; title: string; description: string; icon: string }) {
   const existing = await ctx.db
     .query("achievements")
-    .withIndex("by_user_type", (q: any) =>
+    .withIndex("by_user_type", q =>
       q.eq("userId", userId).eq("type", achievement.type)
     )
     .unique();
@@ -100,7 +100,7 @@ export const getAchievements = query({
     if (!user) return [];
     return await ctx.db
       .query("achievements")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
   },
 });
@@ -117,7 +117,7 @@ export const unlockAchievement = mutation({
 
     const existing = await ctx.db
       .query("achievements")
-      .withIndex("by_user_type", (q: any) => q.eq("userId", user._id).eq("type", args.type))
+      .withIndex("by_user_type", q => q.eq("userId", user._id).eq("type", args.type))
       .unique();
 
     if (existing) return existing;
@@ -151,7 +151,7 @@ export const checkPointsAchievements = internalMutation({
     totalPoints: v.number(),
     currentTier: v.string(),
   },
-  handler: async (ctx: any, args: any) => {
+  handler: async (ctx, args) => {
     const unlocked: string[] = [];
 
     if (args.totalPoints >= STORE_ACHIEVEMENTS.rewards_pioneer.threshold) {
@@ -172,10 +172,10 @@ export const checkPointsAchievements = internalMutation({
 
 export const checkPantryAchievements = internalMutation({
   args: { userId: v.id("users") },
-  handler: async (ctx: any, args: any) => {
+  handler: async (ctx, args) => {
     const items = await ctx.db
       .query("pantryItems")
-      .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+      .withIndex("by_user", q => q.eq("userId", args.userId))
       .collect();
 
     if (items.length >= STORE_ACHIEVEMENTS.pantry_pro.threshold) {

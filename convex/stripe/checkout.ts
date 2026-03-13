@@ -5,7 +5,7 @@ import { internal } from "../_generated/api";
 async function getStripeClient() {
   const Stripe = (await import("stripe")).default;
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2025-04-30.basil" as any,
+    apiVersion: "2025-04-30.basil" as const,
   });
 }
 
@@ -19,12 +19,12 @@ export const createCheckoutSession = action({
 
     const stripe = await getStripeClient();
 
-    const user: any = await ctx.runQuery(internal.stripe.getUserByClerkId, {
+    const user = await ctx.runQuery(internal.stripe.getUserByClerkId, {
       clerkId: identity.subject,
     });
     if (!user) throw new Error("User not found");
 
-    const subscription: any = await ctx.runQuery(
+    const subscription = await ctx.runQuery(
       internal.stripe.getSubscriptionByUser,
       { userId: user._id }
     );
@@ -79,12 +79,12 @@ export const createPortalSession = action({
 
     const stripe = await getStripeClient();
 
-    const user: any = await ctx.runQuery(internal.stripe.getUserByClerkId, {
+    const user = await ctx.runQuery(internal.stripe.getUserByClerkId, {
       clerkId: identity.subject,
     });
     if (!user) throw new Error("User not found");
 
-    const subscription: any = await ctx.runQuery(
+    const subscription = await ctx.runQuery(
       internal.stripe.getSubscriptionByUser,
       { userId: user._id }
     );
@@ -93,7 +93,7 @@ export const createPortalSession = action({
       throw new Error("No Stripe customer found. Please subscribe first.");
     }
 
-    const session: any = await stripe.billingPortal.sessions.create({
+    const session = await stripe.billingPortal.sessions.create({
       customer: subscription.stripeCustomerId,
       return_url: `${process.env.APP_URL || "https://oja.app"}/subscription`,
     });
@@ -110,12 +110,12 @@ export const cancelAllUserSubscriptions = action({
 
     const stripe = await getStripeClient();
 
-    const user: any = await ctx.runQuery(internal.stripe.getUserByClerkId, {
+    const user = await ctx.runQuery(internal.stripe.getUserByClerkId, {
       clerkId: identity.subject,
     });
     if (!user) throw new Error("User not found");
 
-    const subscription: any = await ctx.runQuery(
+    const subscription = await ctx.runQuery(
       internal.stripe.getSubscriptionByUser,
       { userId: user._id }
     );

@@ -11,7 +11,7 @@ export const checkStoreAchievements = mutation({
 
     const receipts = await ctx.db
       .query("receipts")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
     const storeTrips: Record<string, number> = {};
@@ -51,7 +51,7 @@ export const checkDealAchievements = mutation({
     const ninetyDaysAgo = now - 90 * 24 * 60 * 60 * 1000;
     const priceHistory = await ctx.db
       .query("priceHistory")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
     const recentPriceHistory = priceHistory.filter(
@@ -96,7 +96,7 @@ export const checkDealAchievements = mutation({
 
       const currentPrices = await ctx.db
         .query("currentPrices")
-        .withIndex("by_item", (q: any) => q.eq("normalizedName", normalizedName))
+        .withIndex("by_item", q => q.eq("normalizedName", normalizedName))
         .collect();
 
       if (currentPrices.length === 0) {
@@ -104,13 +104,13 @@ export const checkDealAchievements = mutation({
       }
 
       const cheapestFromOtherStore = currentPrices
-        .filter((cp: any) => {
+        .filter(cp => {
           if (cp.normalizedStoreId && mostRecent.normalizedStoreId) {
             return cp.normalizedStoreId !== mostRecent.normalizedStoreId;
           }
           return cp.storeName.toLowerCase() !== mostRecent.storeName.toLowerCase();
         })
-        .sort((a: any, b: any) => a.unitPrice - b.unitPrice)[0];
+        .sort((a, b) => a.unitPrice - b.unitPrice)[0];
 
       if (cheapestFromOtherStore && cheapestFromOtherStore.unitPrice < mostRecent.price) {
         const savings = mostRecent.price - cheapestFromOtherStore.unitPrice;
@@ -147,7 +147,7 @@ export const getStoreAchievementProgress = query({
 
     const receipts = await ctx.db
       .query("receipts")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
     const storeTrips: Record<string, number> = {};
@@ -163,10 +163,10 @@ export const getStoreAchievementProgress = query({
 
     const userAchievements = await ctx.db
       .query("achievements")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
-    const unlockedTypes = new Set(userAchievements.map((a: any) => a.type));
+    const unlockedTypes = new Set(userAchievements.map(a => a.type));
 
     return {
       storeExplorer: {
