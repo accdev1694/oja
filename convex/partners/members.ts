@@ -13,7 +13,7 @@ export const getByList = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) return [];
 
@@ -22,7 +22,7 @@ export const getByList = query({
 
     const partners = await ctx.db
       .query("listPartners")
-      .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+      .withIndex("by_list", q => q.eq("listId", args.listId))
       .collect();
 
     // Enrich with user data
@@ -65,7 +65,7 @@ export const leaveList = mutation({
 
     const partner = await ctx.db
       .query("listPartners")
-      .withIndex("by_list_user", (q: any) => q.eq("listId", args.listId).eq("userId", user._id))
+      .withIndex("by_list_user", q => q.eq("listId", args.listId).eq("userId", user._id))
       .unique();
 
     if (!partner) throw new Error("You are not a partner on this list");
@@ -101,13 +101,13 @@ export const getSharedLists = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) return [];
 
     const partnerships = await ctx.db
       .query("listPartners")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
     const lists = await Promise.all(

@@ -173,7 +173,9 @@
       "Bash(do if [ -f \"$f\" ])",
       "Bash(else echo \"GONE: $f\")",
       "Bash(cut:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(for file in convex/stripe/credits.ts convex/stripe/checkout.ts convex/points/helpers.ts convex/listItems/pricing.ts convex/partners/helpers.ts convex/partners/messages.ts convex/partners/comments.ts convex/partners/members.ts convex/users/accountManagement.ts convex/pricingConfig.ts convex/listItems/core.ts convex/pantry/restock.ts)",
+      "Bash(do sed -i 's/\\(q: any\\) =>/q =>/g' \"$file\")"
     ]
   },
   "enableAllProjectMcpServers": true,

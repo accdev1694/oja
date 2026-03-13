@@ -14,7 +14,7 @@ export const getCommentCounts = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) return {};
 
@@ -28,7 +28,7 @@ export const getCommentCounts = query({
     for (const itemId of args.listItemIds) {
       const comments = await ctx.db
         .query("itemComments")
-        .withIndex("by_item", (q: any) => q.eq("listItemId", itemId))
+        .withIndex("by_item", q => q.eq("listItemId", itemId))
         .collect();
       counts[itemId] = comments.length;
     }
@@ -75,7 +75,7 @@ export const addComment = mutation({
       // Add all accepted partners
       const partners = await ctx.db
         .query("listPartners")
-        .withIndex("by_list", (q: any) => q.eq("listId", item.listId))
+        .withIndex("by_list", q => q.eq("listId", item.listId))
         .collect();
       for (const p of partners) {
         if (p.status === "accepted" && p.userId.toString() !== user._id.toString()) {
@@ -112,7 +112,7 @@ export const getComments = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) return [];
 
@@ -124,7 +124,7 @@ export const getComments = query({
 
     const comments = await ctx.db
       .query("itemComments")
-      .withIndex("by_item", (q: any) => q.eq("listItemId", args.listItemId))
+      .withIndex("by_item", q => q.eq("listItemId", args.listItemId))
       .order("desc")
       .collect();
 

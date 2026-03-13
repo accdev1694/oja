@@ -7,7 +7,7 @@ export async function requireUser(ctx: any) {
   if (!identity) throw new Error("Not authenticated");
   const user = await ctx.db
     .query("users")
-    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+    .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
     .unique();
   if (user) return user;
 
@@ -61,7 +61,7 @@ export async function getUserListPermissions(
   // Check partner record
   const partner = await ctx.db
     .query("listPartners")
-    .withIndex("by_list_user", (q: any) => q.eq("listId", listId).eq("userId", userId))
+    .withIndex("by_list_user", q => q.eq("listId", listId).eq("userId", userId))
     .unique();
 
   if (!partner || (partner.status !== "accepted" && partner.status !== "pending")) {
@@ -89,7 +89,7 @@ export const getMyPermissions = query({
     }
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) {
       return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false };

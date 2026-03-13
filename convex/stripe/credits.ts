@@ -17,7 +17,7 @@ export const reservePoints = internalMutation({
   handler: async (ctx, args) => {
     const sub = await ctx.db
       .query("subscriptions")
-      .withIndex("by_stripe_customer", (q: any) =>
+      .withIndex("by_stripe_customer", q =>
         q.eq("stripeCustomerId", args.stripeCustomerId)
       )
       .first();
@@ -26,14 +26,14 @@ export const reservePoints = internalMutation({
 
     const balance = await ctx.db
       .query("pointsBalance")
-      .withIndex("by_user", (q: any) => q.eq("userId", sub.userId))
+      .withIndex("by_user", q => q.eq("userId", sub.userId))
       .first();
 
     if (!balance || balance.availablePoints < 500) return null;
 
     const existingReservation = await ctx.db
       .query("pointsReservations")
-      .withIndex("by_invoice", (q: any) => q.eq("stripeInvoiceId", args.stripeInvoiceId))
+      .withIndex("by_invoice", q => q.eq("stripeInvoiceId", args.stripeInvoiceId))
       .filter(q => q.neq(q.field("status"), "released"))
       .first();
       
@@ -74,7 +74,7 @@ export const confirmPointsRedemption = internalMutation({
 
     const balance = await ctx.db
       .query("pointsBalance")
-      .withIndex("by_user", (q: any) => q.eq("userId", reservation.userId))
+      .withIndex("by_user", q => q.eq("userId", reservation.userId))
       .first();
 
     if (!balance) return;
@@ -175,8 +175,8 @@ export const logDiscrepancy = internalMutation({
 export const getActiveSubscriptions = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const active = await ctx.db.query("subscriptions").withIndex("by_status", (q: any) => q.eq("status", "active")).collect();
-    const trial = await ctx.db.query("subscriptions").withIndex("by_status", (q: any) => q.eq("status", "trial")).collect();
+    const active = await ctx.db.query("subscriptions").withIndex("by_status", q => q.eq("status", "active")).collect();
+    const trial = await ctx.db.query("subscriptions").withIndex("by_status", q => q.eq("status", "trial")).collect();
     return [...active, ...trial];
   },
 });
@@ -184,6 +184,6 @@ export const getActiveSubscriptions = internalQuery({
 export const getRedemptionByInvoiceId = internalQuery({
   args: { userId: v.id("users"), invoiceId: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db.query("pointsTransactions").withIndex("by_user_and_type", (q: any) => q.eq("userId", args.userId).eq("type", "redeem")).filter((q) => q.eq(q.field("invoiceId"), args.invoiceId)).first();
+    return await ctx.db.query("pointsTransactions").withIndex("by_user_and_type", q => q.eq("userId", args.userId).eq("type", "redeem")).filter((q) => q.eq(q.field("invoiceId"), args.invoiceId)).first();
   },
 });

@@ -7,7 +7,7 @@ import { mutation, query } from "./_generated/server";
 export const getPricing = query({
   args: { region: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    let q = ctx.db.query("pricingConfig").withIndex("by_active", (q: any) => q.eq("isActive", true));
+    let q = ctx.db.query("pricingConfig").withIndex("by_active", q => q.eq("isActive", true));
     
     const allActive = await q.collect();
     
@@ -29,8 +29,8 @@ export const getPlanPrice = query({
   handler: async (ctx, args) => {
     const config = await ctx.db
       .query("pricingConfig")
-      .withIndex("by_plan", (q: any) => q.eq("planId", args.planId))
-      .filter((q: any) => q.eq(q.field("isActive"), true))
+      .withIndex("by_plan", q => q.eq("planId", args.planId))
+      .filter(q => q.eq(q.field("isActive"), true))
       .first();
 
     return config ? config.priceAmount : null;
@@ -48,7 +48,7 @@ export const getAllPricing = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
 
     if (!user || !user.isAdmin) return [];
@@ -71,7 +71,7 @@ export const updatePricing = mutation({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
 
     if (!user || !user.isAdmin) throw new Error("Admin access required");
@@ -86,7 +86,7 @@ export const updatePricing = mutation({
 
     const existing = await ctx.db
       .query("pricingConfig")
-      .withIndex("by_plan", (q: any) => q.eq("planId", args.planId))
+      .withIndex("by_plan", q => q.eq("planId", args.planId))
       .first();
 
     if (existing) {

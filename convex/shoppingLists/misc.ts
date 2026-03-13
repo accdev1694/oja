@@ -271,7 +271,7 @@ async function findPriceForExactSize(
     .collect();
 
   const storePrice = prices.find(
-    (p: any) =>
+    p =>
       (p.normalizedStoreId === storeId || p.storeName?.toLowerCase() === storeId) &&
       p.size === size
   );

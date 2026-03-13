@@ -61,7 +61,7 @@ export default function PantryPickScreen() {
   const { pickCategories, pickCategoryCounts } = useMemo(() => {
     if (!items) return { pickCategories: [], pickCategoryCounts: {} };
     const countMap: Record<string, number> = {};
-    items.forEach((item: any) => {
+    items.forEach(item => {
       countMap[item.category] = (countMap[item.category] || 0) + 1;
     });
     return { pickCategories: Object.keys(countMap).sort(), pickCategoryCounts: countMap };
@@ -71,7 +71,7 @@ export default function PantryPickScreen() {
   const groupedItems = useMemo(() => {
     if (!items) return {};
     const filtered = pickCategoryFilter
-      ? items.filter((item: any) => item.category === pickCategoryFilter)
+      ? items.filter(item => item.category === pickCategoryFilter)
       : items;
     const groups: Record<string, typeof items> = {};
     const sorted = [...filtered].sort(
@@ -79,7 +79,7 @@ export default function PantryPickScreen() {
         (STOCK_SORT_ORDER[a.stockLevel] ?? 4) -
         (STOCK_SORT_ORDER[b.stockLevel] ?? 4)
     );
-    sorted.forEach((item: any) => {
+    sorted.forEach(item => {
       if (!groups[item.category]) {
         groups[item.category] = [];
       }

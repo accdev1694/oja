@@ -146,7 +146,7 @@ Return ONLY valid JSON in this exact format:
         priceDelta: swap.priceDelta ? parseFloat(String(swap.priceDelta).replace(/^\+/, '')) : undefined,
         scoreImpact: typeof swap.scoreImpact === 'number' ? swap.scoreImpact : 5
       };
-    }).filter((s: any) => s.originalId !== undefined || s.originalName === "Bonus");
+    }).filter(s => s.originalId !== undefined || s.originalName === "Bonus");
 
     const healthAnalysis: HealthAnalysis = {
       score: typeof parsed.score === 'number' ? parsed.score : 50,

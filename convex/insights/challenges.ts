@@ -21,7 +21,7 @@ export const getActiveChallenge = query({
 
     // Find active (not expired, not completed)
     const active = challenges.find(
-      (c: any) => c.endDate >= today && !c.completedAt
+      c => c.endDate >= today && !c.completedAt
     );
 
     return active || null;
@@ -44,7 +44,7 @@ export const generateChallenge = mutation({
       .withIndex("by_user", (q: any) => q.eq("userId", user._id))
       .collect();
 
-    const active = challenges.find((c: any) => c.endDate >= today && !c.completedAt);
+    const active = challenges.find(c => c.endDate >= today && !c.completedAt);
     if (active) return active;
 
     const endDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];

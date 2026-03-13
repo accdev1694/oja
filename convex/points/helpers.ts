@@ -8,7 +8,7 @@ import { getTierFromScans, getNextTierInfo, getMaxEarningScans, getPointsPerScan
 export async function getOrCreatePointsBalance(ctx: any, userId: any) {
   let balance = await ctx.db
     .query("pointsBalance")
-    .withIndex("by_user", (q: any) => q.eq("userId", userId))
+    .withIndex("by_user", q => q.eq("userId", userId))
     .first();
 
   if (!balance) {
@@ -54,7 +54,7 @@ export async function getOrCreatePointsBalance(ctx: any, userId: any) {
 export async function getPointsBalanceReadOnly(ctx: any, userId: any) {
   const balance = await ctx.db
     .query("pointsBalance")
-    .withIndex("by_user", (q: any) => q.eq("userId", userId))
+    .withIndex("by_user", q => q.eq("userId", userId))
     .first();
 
   return balance;
@@ -85,8 +85,8 @@ export async function processEarnPoints(ctx: any, userId: Id<"users">, receiptId
   const now = Date.now();
   const activeEvent = await ctx.db
     .query("seasonalEvents")
-    .withIndex("by_active", (q: any) => q.eq("isActive", true))
-    .filter((q: any) => q.and(
+    .withIndex("by_active", q => q.eq("isActive", true))
+    .filter(q => q.and(
       q.lte(q.field("startDate"), now),
       q.gte(q.field("endDate"), now)
     ))

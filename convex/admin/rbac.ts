@@ -44,7 +44,7 @@ export const getMyPermissions = query({
     return {
       role: role.name,
       displayName: role.displayName,
-      permissions: rolePerms.map((p: any) => p.permission),
+      permissions: rolePerms.map(p => p.permission),
     };
   },
 });

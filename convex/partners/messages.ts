@@ -40,7 +40,7 @@ export const addListMessage = mutation({
 
     const partners = await ctx.db
       .query("listPartners")
-      .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+      .withIndex("by_list", q => q.eq("listId", args.listId))
       .collect();
     for (const p of partners) {
       if (p.status === "accepted" && p.userId.toString() !== user._id.toString()) {
@@ -75,7 +75,7 @@ export const getListMessages = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) return [];
 
@@ -84,7 +84,7 @@ export const getListMessages = query({
 
     const messages = await ctx.db
       .query("listMessages")
-      .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+      .withIndex("by_list", q => q.eq("listId", args.listId))
       .order("asc")
       .collect();
 
@@ -110,7 +110,7 @@ export const getListMessageCount = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) return 0;
 
@@ -119,7 +119,7 @@ export const getListMessageCount = query({
 
     const messages = await ctx.db
       .query("listMessages")
-      .withIndex("by_list", (q: any) => q.eq("listId", args.listId))
+      .withIndex("by_list", q => q.eq("listId", args.listId))
       .collect();
     return messages.length;
   },

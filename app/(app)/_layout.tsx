@@ -169,7 +169,7 @@ const PersistentTabBar = React.memo(function PersistentTabBar() {
   const stockBadge = React.useMemo(() => {
     if (!pantryItems) return 0;
     return pantryItems.filter(
-      (item: any) => item.stockLevel === "low" || item.stockLevel === "out"
+      item => item.stockLevel === "low" || item.stockLevel === "out"
     ).length;
   }, [pantryItems]);
 

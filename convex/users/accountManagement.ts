@@ -111,7 +111,7 @@ export const resetMyAccount = mutation({
     const deleteByUser = async (table: string) => {
       const docs = await ctx.db
         .query(table as any)
-        .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+        .withIndex("by_user", q => q.eq("userId", user._id))
         .collect();
       for (const doc of docs) {
         await ctx.db.delete(doc._id);
@@ -232,7 +232,7 @@ export const internalDeleteUser = internalMutation({
     const deleteByUser = async (table: any) => {
       const docs = await ctx.db
         .query(table)
-        .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+        .withIndex("by_user", q => q.eq("userId", user._id))
         .collect();
       for (const doc of docs) {
         await ctx.db.delete(doc._id);
@@ -242,12 +242,12 @@ export const internalDeleteUser = internalMutation({
     // 1. Delete list items via their lists
     const shoppingLists = await ctx.db
       .query("shoppingLists")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
     for (const list of shoppingLists) {
       const items = await ctx.db
         .query("listItems")
-        .withIndex("by_list", (q: any) => q.eq("listId", list._id))
+        .withIndex("by_list", q => q.eq("listId", list._id))
         .collect();
       for (const item of items) {
         await ctx.db.delete(item._id);

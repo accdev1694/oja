@@ -23,7 +23,7 @@ export async function getPriceFromCurrentPrices(
   const normalizedName = itemName.toLowerCase().trim();
   const prices = await ctx.db
     .query("currentPrices")
-    .withIndex("by_item", (q: any) => q.eq("normalizedName", normalizedName))
+    .withIndex("by_item", q => q.eq("normalizedName", normalizedName))
     .collect();
 
   if (prices.length === 0) return undefined;
@@ -62,7 +62,7 @@ export const refreshListPrices = mutation({
           const canonicalNormalized = learnedMapping.canonicalName.toLowerCase().trim();
           const canonicalPersonal = await ctx.db
             .query("priceHistory")
-            .withIndex("by_user_item", (q: any) => q.eq("userId", user._id).eq("normalizedName", canonicalNormalized))
+            .withIndex("by_user_item", q => q.eq("userId", user._id).eq("normalizedName", canonicalNormalized))
             .order("desc").first();
 
           if (canonicalPersonal) {
@@ -76,7 +76,7 @@ export const refreshListPrices = mutation({
       if (newPrice === undefined) {
         const personal = await ctx.db
           .query("priceHistory")
-          .withIndex("by_user_item", (q: any) => q.eq("userId", user._id).eq("normalizedName", item.name.toLowerCase().trim()))
+          .withIndex("by_user_item", q => q.eq("userId", user._id).eq("normalizedName", item.name.toLowerCase().trim()))
           .order("desc").first();
         if (personal) {
           newPrice = personal.unitPrice;
@@ -88,7 +88,7 @@ export const refreshListPrices = mutation({
       if (newPrice === undefined && storeName) {
         const storePrice = await ctx.db
           .query("currentPrices")
-          .withIndex("by_item_store", (q: any) => q.eq("normalizedName", item.name.toLowerCase().trim()).eq("storeName", storeName))
+          .withIndex("by_item_store", q => q.eq("normalizedName", item.name.toLowerCase().trim()).eq("storeName", storeName))
           .first();
         if (storePrice) {
           newPrice = storePrice.unitPrice;
@@ -176,7 +176,7 @@ export const applyHealthSwap = mutation({
     });
 
     if (list.healthAnalysis) {
-      const updatedSwaps = list.healthAnalysis.swaps.filter((s: any) => s.originalId !== args.originalItemId);
+      const updatedSwaps = list.healthAnalysis.swaps.filter(s => s.originalId !== args.originalItemId);
       const newScore = Math.min(100, list.healthAnalysis.score + (args.scoreImpact || 0));
       await ctx.db.patch(args.listId, {
         healthAnalysis: { ...list.healthAnalysis, score: newScore, swaps: updatedSwaps }

@@ -25,7 +25,7 @@ export const getShared = query({
       .collect();
 
     const sharedLists = await Promise.all(
-      partners.map(async (p: any) => {
+      partners.map(async p => {
         const list = await ctx.db.get(p.listId);
         if (!list) return null;
         

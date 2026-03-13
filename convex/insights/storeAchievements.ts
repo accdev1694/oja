@@ -55,7 +55,7 @@ export const checkDealAchievements = mutation({
       .collect();
 
     const recentPriceHistory = priceHistory.filter(
-      (p: any) => p.purchaseDate >= ninetyDaysAgo
+      p => p.purchaseDate >= ninetyDaysAgo
     );
 
     if (recentPriceHistory.length === 0) {

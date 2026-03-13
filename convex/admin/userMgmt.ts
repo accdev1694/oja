@@ -32,7 +32,7 @@ export const searchUsers = query({
       .take(args.limit || 50);
 
     const results = [...byName];
-    const userIds = new Set(results.map((u: any) => u._id));
+    const userIds = new Set(results.map(u => u._id));
     
     for (const user of byEmail) {
       if (!userIds.has(user._id)) {
