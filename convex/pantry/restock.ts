@@ -23,9 +23,9 @@ export const autoRestockFromReceipt = mutation({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
-    const restockedItems[] = [];
-    const fuzzyMatches[] = [];
-    const itemsToAdd[] = [];
+    const restockedItems = [];
+    const fuzzyMatches = [];
+    const itemsToAdd = [];
     const now = Date.now();
 
     for (const receiptItem of receipt.items) {

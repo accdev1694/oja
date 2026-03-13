@@ -52,7 +52,7 @@ export const processWorkflows = internalMutation({
     
     for (const wf of workflows) {
       // Find users matching trigger
-      let users[] = [];
+      let users = [];
       const now = Date.now();
       
       if (wf.trigger === "user_inactive_30d") {

@@ -18,7 +18,7 @@ export function StoreMismatchCard({
   mismatchInfo,
   mismatchChoice,
   setMismatchChoice,
-} {
+}) {
   if (!mismatchInfo?.isMismatch) return null;
 
   // Already resolved
