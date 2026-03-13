@@ -102,7 +102,7 @@ export function AdminControlCenter({
             variant="primary"
             size="lg"
             icon="shield-crown"
-            onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.push("/(app)/admin" as any); }}
+            onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.push("/(app)/admin"); }}
             style={styles.mainAdminBtn}
           >
             Enter Admin Dashboard
@@ -110,7 +110,7 @@ export function AdminControlCenter({
 
           <View style={styles.quickActionRow}>
             <Pressable
-              onPress={() => router.push("/(app)/admin?tab=users" as any)}
+              onPress={() => router.push("/(app)/admin?tab=users")}
               style={({ pressed }) => [styles.quickActionBtn, pressed && { opacity: 0.7 }]}
             >
               <MaterialCommunityIcons name="account-search" size={24} color={colors.accent.primary} />
@@ -118,7 +118,7 @@ export function AdminControlCenter({
             </Pressable>
 
             <Pressable
-              onPress={() => router.push("/(app)/admin?tab=receipts" as any)}
+              onPress={() => router.push("/(app)/admin?tab=receipts")}
               style={({ pressed }) => [styles.quickActionBtn, pressed && { opacity: 0.7 }]}
             >
               <MaterialCommunityIcons name="receipt" size={24} color={colors.accent.primary} />

@@ -72,7 +72,7 @@ export default function SupportScreen() {
       
       setSubject("");
       setDescription("");
-    } catch (e: any) {
+    } catch e {
       showAlert("Error", e.message || "Failed to create ticket");
     } finally {
       setIsNewSubmitting(false);

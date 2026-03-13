@@ -94,7 +94,7 @@ export default function ConfirmReceiptScreen() {
   if (receipt === null) return <GlassScreen><SimpleHeader title="Confirm Receipt" subtitle="Error" /><View style={s.container}><GlassErrorState title="Receipt Not Found" message="This receipt could not be found" /></View></GlassScreen>;
 
   // ── Handlers ────────────────────────────────────────────────────────
-  function goBack() { router.canGoBack() ? router.back() : router.replace("/(app)/(tabs)/scan" as any); }
+  function goBack() { router.canGoBack() ? router.back() : router.replace("/(app)/(tabs)/scan"); }
   function closeEditModal() { setEditingItemIndex(null); setEditingField(null); setEditValue(""); }
   function saveEdit() {
     if (editingItemIndex === null) return;
@@ -119,7 +119,7 @@ export default function ConfirmReceiptScreen() {
   async function handleDeleteReceipt() {
     alert("Delete Receipt", "Are you sure? This cannot be undone.", [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: async () => { await deleteReceiptMut({ id: receiptId }); router.replace("/(app)/(tabs)/scan" as any); } },
+      { text: "Delete", style: "destructive", onPress: async () => { await deleteReceiptMut({ id: receiptId }); router.replace("/(app)/(tabs)/scan"); } },
     ]);
   }
   async function handlePostSaveUpdatePantry() {

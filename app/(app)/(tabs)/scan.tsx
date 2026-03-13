@@ -131,7 +131,7 @@ export default function ScanScreen() {
         
         alert("Success", `Added ${itemsToAdd.length} items to your list!`, [
           { text: "Stay Here", style: "cancel" },
-          { text: "View List", onPress: () => router.push(`/list/${listId}` as any) }
+          { text: "View List", onPress: () => router.push(`/list/${listId}`) }
         ]);
       } catch (err) {
         console.error("Bulk add failed:", err);
@@ -263,7 +263,7 @@ export default function ScanScreen() {
           <ReceiptMode 
             receipts={allReceipts} 
             isScanning={receiptScanner.isProcessing}
-            onSelectReceipt={(receipt) => router.push(`/receipt/${receipt._id}/confirm` as any)}
+            onSelectReceipt={(receipt) => router.push(`/receipt/${receipt._id}/confirm`)}
             onScanPress={handleScanAction}
             scanButtonRef={scanButtonRef}
           />

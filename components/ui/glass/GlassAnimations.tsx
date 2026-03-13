@@ -103,7 +103,7 @@ export function AnimatedPressable({
   });
 
   const handlePressIn = useCallback(
-    (event: any) => {
+    event => {
       if (enableHaptics) {
         const feedbackStyle =
           hapticStyle === "light"
@@ -123,7 +123,7 @@ export function AnimatedPressable({
   );
 
   const handlePressOut = useCallback(
-    (event: any) => {
+    event => {
       scale.value = withSpring(1, springConfig);
       opacity.value = withTiming(1, { duration: 100 });
 

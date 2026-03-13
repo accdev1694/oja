@@ -91,9 +91,9 @@ export default function ProfileScreen() {
 
   const handleSupportPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (myAdminPerms?.role === "super_admin") router.push("/(app)/admin?tab=monitoring" as any);
-    else if (convexUser?.isAdmin || myAdminPerms) router.push("/(app)/support?type=internal" as any);
-    else router.push("/(app)/support" as any);
+    if (myAdminPerms?.role === "super_admin") router.push("/(app)/admin?tab=monitoring");
+    else if (convexUser?.isAdmin || myAdminPerms) router.push("/(app)/support?type=internal");
+    else router.push("/(app)/support");
   };
 
   const handleSignOut = async () => {
@@ -115,7 +115,7 @@ export default function ProfileScreen() {
       try {
         await resetMyAccount();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.replace("/onboarding/welcome" as any);
+        router.replace("/onboarding/welcome");
       } catch (e) { console.error("Reset failed:", e); setIsResetting(false); }
     });
   };

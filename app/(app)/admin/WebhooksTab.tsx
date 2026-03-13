@@ -87,7 +87,7 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
 
   const handleTest = useCallback(async (id: string) => {
     try {
-      await testWebhook({ id: id as any });
+      await testWebhook({ id: id });
       showToast("Test event sent", "success");
     } catch (e) {
       showToast((e as Error).message, "error");
@@ -102,7 +102,7 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
         style: "destructive",
         onPress: async () => {
           try {
-            await deleteWebhook({ id: id as any });
+            await deleteWebhook({ id: id });
             showToast("Webhook deleted", "success");
           } catch (e) {
             showToast((e as Error).message, "error");
@@ -152,7 +152,7 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
                 value={wh.isEnabled} 
                 onValueChange={async () => {
                   try {
-                    await toggleWebhook({ id: wh._id as any });
+                    await toggleWebhook({ id: wh._id });
                   } catch (e) {
                     showToast((e as Error).message, "error");
                   }

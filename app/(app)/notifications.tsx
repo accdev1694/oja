@@ -49,20 +49,20 @@ export default function NotificationsScreen() {
     switch (notification.type) {
       case "achievement_unlocked":
       case "challenge_completed":
-        router.push("/(app)/insights" as any);
+        router.push("/(app)/insights");
         break;
       case "tier_upgrade":
       case "trial_started":
-        router.push("/(app)/subscription" as any);
+        router.push("/(app)/subscription");
         break;
       case "comment_added":
       case "list_message":
         if (notification.data?.listId) {
-          router.push(`/(app)/list/${notification.data.listId}` as any);
+          router.push(`/(app)/list/${notification.data.listId}`);
         }
         break;
       case "partner_joined":
-        router.push("/(app)/partners" as any);
+        router.push("/(app)/partners");
         break;
     }
   }
@@ -123,7 +123,7 @@ export default function NotificationsScreen() {
               <View style={styles.notifRow}>
                 <View style={[styles.iconCircle, { backgroundColor: `${typeColors[n.type] || colors.accent.primary}20` }]}>
                   <MaterialCommunityIcons
-                    name={(typeIcons[n.type] || "bell") as any}
+                    name={(typeIcons[n.type] || "bell")}
                     size={20}
                     color={typeColors[n.type] || colors.accent.primary}
                   />

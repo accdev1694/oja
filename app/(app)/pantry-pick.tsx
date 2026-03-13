@@ -281,7 +281,7 @@ export default function PantryPickScreen() {
                       color={isSelected ? colors.accent.primary : colors.text.tertiary}
                     />
                     <MaterialCommunityIcons
-                      name={iconName as any}
+                      name={iconName}
                       size={20}
                       color={colors.text.secondary}
                     />

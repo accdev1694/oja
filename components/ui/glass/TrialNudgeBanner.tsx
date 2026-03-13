@@ -22,7 +22,7 @@ export function TrialNudgeBanner() {
 
   const isTrial = subscription.status === "trial";
   const isExpired = subscription.status === "expired";
-  const trialEndsAt = (subscription as any)?.trialEndsAt;
+  const trialEndsAt = (subscription)?.trialEndsAt;
 
   const daysLeft = isTrial && trialEndsAt
     ? Math.max(0, Math.ceil((trialEndsAt - Date.now()) / (1000 * 60 * 60 * 24)))
@@ -56,7 +56,7 @@ export function TrialNudgeBanner() {
       style={[styles.banner, { borderColor: accentColor }]}
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.push("/(app)/subscription" as any);
+        router.push("/(app)/subscription");
       }}
     >
       <MaterialCommunityIcons
