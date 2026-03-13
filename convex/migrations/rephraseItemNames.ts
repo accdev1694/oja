@@ -238,7 +238,7 @@ export const patchListItemName = internalMutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id as any, { name: args.name, updatedAt: Date.now() });
+    await ctx.db.patch(args.id as unknown as import("./_generated/dataModel").Id<"listItems">, { name: args.name, updatedAt: Date.now() });
   },
 });
 
@@ -260,6 +260,6 @@ export const patchReceiptItems = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id as any, { items: args.items });
+    await ctx.db.patch(args.id as unknown as import("./_generated/dataModel").Id<"receipts">, { items: args.items });
   },
 });

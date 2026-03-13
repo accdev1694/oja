@@ -8,6 +8,7 @@ import { enrichGlobalFromReceipt } from "../lib/globalEnrichment";
 import { validateReceiptData } from "../lib/receiptValidation";
 import { processEarnPoints } from "../points";
 import { MutationCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 
 const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
 
@@ -25,7 +26,7 @@ export const cleanupOldImages = internalMutation({
     for (const receipt of oldReceipts) {
       if (receipt.imageStorageId) {
         try {
-          await ctx.storage.delete(receipt.imageStorageId as any);
+          await ctx.storage.delete(receipt.imageStorageId as Id<"_storage">);
           await ctx.db.patch(receipt._id, { imageStorageId: undefined });
           deletedCount++;
         } catch (error) {

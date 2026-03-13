@@ -116,7 +116,7 @@ export function CreateFromTemplateModal({
         {/* Category breakdown */}
         <View style={styles.categories}>
           <Text style={styles.sectionTitle}>Categories</Text>
-          {preview.itemsByCategory.map(({ category, count }: any) => (
+          {preview.itemsByCategory.map(({ category, count }: { category: string; count: number }) => (
             <View key={category} style={styles.categoryRow}>
               <Text style={styles.categoryName}>{category}</Text>
               <Text style={styles.categoryCount}>{count} items</Text>

@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 import {
   GlassCard,
   AnimatedSection,
@@ -22,12 +23,23 @@ const tierIcons: Record<string, string> = {
   platinum: "shield-star",
 };
 
+interface PointsBalance {
+  tier: string;
+  tierProgress: number;
+  nextTierInfo?: { nextTier?: string; scansToNextTier: number };
+  maxEarningScans: number;
+  earningScansThisMonth: number;
+  availablePoints: number;
+  monthlyEarningCap: number;
+  isPremium: boolean;
+}
+
 export function ScanRewardsCard({
   pointsBalance,
   isAdmin,
   onViewPointsHistory,
 }: {
-  pointsBalance: any;
+  pointsBalance: PointsBalance | null | undefined;
   isAdmin: boolean;
   onViewPointsHistory: () => void;
 }) {
@@ -40,7 +52,7 @@ export function ScanRewardsCard({
         <View style={styles.sectionHeader}>
           <View style={[styles.tierIconCircle, { backgroundColor: `${tierColors[pointsBalance.tier] || tierColors.bronze}20` }]}>
             <MaterialCommunityIcons
-              name={(tierIcons[pointsBalance.tier] || "shield-outline") as any}
+              name={(tierIcons[pointsBalance.tier] || "shield-outline") as ComponentProps<typeof MaterialCommunityIcons>["name"]}
               size={24}
               color={tierColors[pointsBalance.tier] || tierColors.bronze}
             />

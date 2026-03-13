@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { haptic } from "@/lib/haptics/safeHaptics";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit for receipts (can be larger than products)
 
@@ -74,7 +74,7 @@ export function useReceiptScanner(options?: UseReceiptScannerOptions) {
           options.onSuccess(receiptId);
         } else {
           // Default: go to receipt detail review
-          router.push(`/receipt/${receiptId}/confirm` as any);
+          router.push(`/receipt/${receiptId}/confirm` as Href);
         }
 
         return receiptId;

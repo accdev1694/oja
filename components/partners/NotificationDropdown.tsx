@@ -13,9 +13,11 @@ import Reanimated, {
   useAnimatedStyle,
 } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import type { ComponentProps } from "react";
+import { useRouter, type Href } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useNotifications } from "@/hooks/useNotifications";
+import type { Id } from "@/convex/_generated/dataModel";
 import { GlassModal } from "@/components/ui/glass";
 import { colors, spacing, typography } from "@/lib/design/glassTokens";
 
@@ -70,13 +72,13 @@ export function NotificationDropdown({
     const route = getRoute(notification);
     onClose();
     if (route) {
-      router.push(route as any);
+      router.push(route as Href);
     }
   };
 
   const handleDismiss = useCallback(async (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await dismiss(id as any).catch(console.warn);
+    await dismiss(id as Id<"notifications">).catch(console.warn);
   }, [dismiss]);
 
   const handleMarkAllRead = async () => {
@@ -162,7 +164,7 @@ export function NotificationDropdown({
                       ]}
                     >
                       <MaterialCommunityIcons
-                        name={typeConfig.icon as any}
+                        name={typeConfig.icon as ComponentProps<typeof MaterialCommunityIcons>["name"]}
                         size={18}
                         color={typeConfig.color}
                       />

@@ -5,7 +5,7 @@ import {
   Text,
   Linking,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href} from "expo-router";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useCallback } from "react";
@@ -49,10 +49,10 @@ export default function SubscriptionScreen() {
   const [showPaywall, setShowPaywall] = useState(false);
 
   const loading = subscription === undefined;
-  const isAdmin = (subscription as any)?.isAdminOverride;
+  const isAdmin = (subscription as { isAdminOverride?: boolean })?.isAdminOverride;
   const isPremium =
     subscription && "isActive" in subscription
-      ? (subscription as any).isActive
+      ? (subscription as { isActive?: boolean }).isActive
       : subscription?.plan !== "free";
   const isTrial = !isAdmin && subscription?.status === "trial";
   const isCancelled = !isAdmin && subscription?.status === "cancelled";
@@ -64,7 +64,7 @@ export default function SubscriptionScreen() {
       ? Math.max(
           0,
           Math.ceil(
-            (((subscription as any).trialEndsAt || 0) - Date.now()) /
+            (((subscription as { trialEndsAt?: number }).trialEndsAt || 0) - Date.now()) /
               (1000 * 60 * 60 * 24)
           )
         )
@@ -73,7 +73,7 @@ export default function SubscriptionScreen() {
   // Period end for active subs
   const periodEnd =
     !isAdmin && subscription && "currentPeriodEnd" in subscription
-      ? (subscription as any).currentPeriodEnd
+      ? (subscription as { currentPeriodEnd?: number }).currentPeriodEnd
       : null;
 
   // Handle manage subscription (Stripe portal)
@@ -85,8 +85,9 @@ export default function SubscriptionScreen() {
       if (result.url) {
         await Linking.openURL(result.url);
       }
-    } catch (error: any) {
-      alert("Error", error?.message || "Failed to open portal");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      alert("Error", message || "Failed to open portal");
     } finally {
       setPortalLoading(false);
     }
@@ -116,8 +117,9 @@ export default function SubscriptionScreen() {
         if (result.url) {
           await Linking.openURL(result.url);
         }
-      } catch (error: any) {
-        alert("Error", error?.message || "Failed to start checkout");
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        alert("Error", message || "Failed to start checkout");
       } finally {
         setCheckoutLoading(null);
       }
@@ -137,8 +139,9 @@ export default function SubscriptionScreen() {
         "Subscription Cancelled",
         "You'll keep access until the end of your billing period."
       );
-    } catch (error: any) {
-      alert("Error", error?.message || "Failed to cancel");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      alert("Error", message || "Failed to cancel");
     } finally {
       setCancelLoading(false);
     }
@@ -192,7 +195,7 @@ export default function SubscriptionScreen() {
         <ScanRewardsCard
           pointsBalance={pointsBalance}
           isAdmin={isAdmin}
-          onViewPointsHistory={() => router.push("/(app)/points-history" as any)}
+          onViewPointsHistory={() => router.push("/(app)/points-history" as Href)}
         />
 
         {/* Free user value prop -- hide for admins */}

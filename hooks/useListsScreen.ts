@@ -24,7 +24,7 @@ export function useListsScreen() {
     createFromTemplate,
   } = useShoppingList();
 
-  const activeShared = sharedLists?.filter((l: any) => l && l.status !== "archived" && l.status !== "completed") ?? [];
+  const activeShared = sharedLists?.filter((l) => l && l.status !== "archived" && l.status !== "completed") ?? [];
   const { unreadCount } = useNotifications();
 
   const [tabMode, setTabMode] = useState<"active" | "history">("active");

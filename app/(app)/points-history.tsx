@@ -16,7 +16,7 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 
-function GuideItem({ icon, title, desc }: { icon: any, title: string, desc: string }) {
+function GuideItem({ icon, title, desc }: { icon: string; title: string; desc: string }) {
   return (
     <View style={styles.guideItem}>
       <View style={styles.guideIconContainer}>
@@ -39,7 +39,7 @@ export default function PointsHistoryScreen() {
   const groupedHistory = useMemo(() => {
     if (!history) return [];
     
-    const groups: { month: string; transactions: any[] }[] = [];
+    const groups: { month: string; transactions: { _id: string; type: string; amount: number; description: string; _creationTime: number }[] }[] = [];
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
     history.forEach(tx => {

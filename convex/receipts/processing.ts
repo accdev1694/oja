@@ -31,7 +31,7 @@ export const linkToList = mutation({
     });
 
     if (receipt.items && receipt.items.length > 0) {
-      const listItems = await ctx.db.query("listItems").withIndex("by_list", (q: any) => q.eq("listId", args.listId)).collect();
+      const listItems = await ctx.db.query("listItems").withIndex("by_list", (q) => q.eq("listId", args.listId)).collect();
       for (const listItem of listItems) {
         const listItemLower = listItem.name.toLowerCase().trim();
         const match = receipt.items.find((ri) => {

@@ -10,7 +10,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface HintOverlayProps {
   visible: boolean;
-  targetRef: React.RefObject<any>;
+  targetRef: React.RefObject<View | null>;
   position?: 'above' | 'below' | 'left' | 'right';
   title: string;
   content: string;

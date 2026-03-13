@@ -7,7 +7,7 @@
 
 import React from 'react'
 import Svg, { Circle, Line, Text as SvgText } from 'react-native-svg'
-import Animated, { useAnimatedProps } from 'react-native-reanimated'
+import Animated, { useAnimatedProps, SharedValue } from 'react-native-reanimated'
 import { colors } from '@/lib/design/glassTokens'
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
@@ -33,7 +33,7 @@ export function DialSvgArcs({
   animInnerOver,
   animOuterOpacity,
   animInnerOpacity,
-}: any) {
+}: DialSvgArcsProps) {
   // Separator tick positions
   const outerSepY1 = center + outerRadius - 4
   const outerSepY2 = center + outerRadius + 4
@@ -179,7 +179,7 @@ export function DialSvgArcs({
         storeName
           .toUpperCase()
           .split('')
-          .map((char: any, i: any, arr: any) => {
+          .map((char: string, i: number, arr: string[]) => {
             const totalAngle = (arr.length - 1) * charAngle
             const angle = Math.PI / 2 + totalAngle / 2 - i * charAngle
             const cx2 = center + storeArcRadius * Math.cos(angle)

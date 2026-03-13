@@ -72,8 +72,9 @@ export default function SignUpScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.replace("/onboarding/welcome");
       }
-    } catch (err: any) {
-      const message = err?.errors?.[0]?.message || `${provider} sign up failed`;
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: { message?: string }[] };
+      const message = clerkErr?.errors?.[0]?.message || `${provider} sign up failed`;
       setError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
@@ -96,8 +97,9 @@ export default function SignUpScreen() {
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setPendingVerification(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (err: any) {
-      const message = err?.errors?.[0]?.message || "Sign up failed";
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: { message?: string }[] };
+      const message = clerkErr?.errors?.[0]?.message || "Sign up failed";
       setError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
@@ -135,8 +137,9 @@ export default function SignUpScreen() {
         setError("Verification incomplete");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-    } catch (err: any) {
-      const message = err?.errors?.[0]?.message || "Verification failed";
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: { message?: string }[] };
+      const message = clerkErr?.errors?.[0]?.message || "Verification failed";
       setError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {

@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href} from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
@@ -46,7 +46,7 @@ export default function AdminSetupScreen() {
     }
 
     // Redirect to Admin Dashboard
-    router.replace("/(app)/admin" as any);
+    router.replace("/(app)/admin" as Href);
   };
 
   const handleLaunchApp = async () => {
@@ -60,7 +60,7 @@ export default function AdminSetupScreen() {
     }
 
     // Redirect to Main App (Pantry)
-    router.replace("/(app)/(tabs)/" as any);
+    router.replace("/(app)/(tabs)/" as Href);
   };
 
   // If somehow a non-admin gets here, send them back to regular onboarding
@@ -168,7 +168,7 @@ export default function AdminSetupScreen() {
 // HELPER COMPONENTS
 // =============================================================================
 
-function SecurityItem({ icon, text }: { icon: any; text: string }) {
+function SecurityItem({ icon, text }: { icon: string; text: string }) {
   return (
     <View style={styles.securityItem}>
       <MaterialCommunityIcons name={icon} size={18} color={colors.text.secondary} />
@@ -177,7 +177,7 @@ function SecurityItem({ icon, text }: { icon: any; text: string }) {
   );
 }
 
-function PressableCard({ title, subtitle, icon, color, onPress }: any) {
+function PressableCard({ title, subtitle, icon, color, onPress }: { title: string; subtitle: string; icon: string; color: string; onPress: () => void }) {
   return (
     <GlassCard variant="standard" style={styles.pressableCard}>
       <View style={styles.pressableContent}>

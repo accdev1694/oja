@@ -50,8 +50,9 @@ export default function ForgotPasswordScreen() {
       setStep("reset");
       setSuccessMessage("Check your email for a reset code");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (err: any) {
-      const message = err?.errors?.[0]?.message || "Failed to send reset code";
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: { message?: string }[] };
+      const message = clerkErr?.errors?.[0]?.message || "Failed to send reset code";
       setError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
@@ -80,8 +81,9 @@ export default function ForgotPasswordScreen() {
         setError("Password reset incomplete. Please try again.");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-    } catch (err: any) {
-      const message = err?.errors?.[0]?.message || "Password reset failed";
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: { message?: string }[] };
+      const message = clerkErr?.errors?.[0]?.message || "Password reset failed";
       setError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {

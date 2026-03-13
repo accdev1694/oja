@@ -13,12 +13,12 @@ import { cleanItemForStorage } from "../itemNameParser";
 export async function executeListWriteTool(
   ctx: ActionCtx,
   functionName: string,
-  args: Record<string, any>
-): Promise<any> {
+  args: Record<string, unknown>
+): Promise<unknown> {
   switch (functionName) {
     case "create_shopping_list": {
       // Default name: "18th Feb '26 Shopping List"
-      let listName = args.name;
+      let listName = (args.name as string | undefined);
       if (!listName) {
         const now = new Date();
         const day = now.getDate();
@@ -30,24 +30,24 @@ export async function executeListWriteTool(
 
       const listId = await ctx.runMutation(api.shoppingLists.create, {
         name: listName,
-        budget: args.budget ?? 50,
-        storeName: args.storeName,
+        budget: (args.budget as number | undefined) ?? 50,
+        storeName: (args.storeName as string | undefined),
       });
       return {
         success: true,
         listId,
-        message: `Created your shopping list${args.budget ? ` with £${args.budget} budget` : ""}`,
+        message: `Created your shopping list${(args.budget as number | undefined) ? ` with £${(args.budget as number | undefined)} budget` : ""}`,
       };
     }
 
     case "add_items_to_list": {
-      let targetListId = args.listId as Id<"shoppingLists"> | undefined;
-      let targetList: any = null;
+      let targetListId = (args.listId as string) as Id<"shoppingLists"> | undefined;
+      let targetList: Record<string, unknown> | null = null;
 
-      if (!targetListId && args.listName) {
+      if (!targetListId && (args.listName as string)) {
         const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-        const match = lists.find((l: any) =>
-          l.name.toLowerCase().includes(args.listName.toLowerCase())
+        const match = lists.find((l) =>
+          l.name.toLowerCase().includes((args.listName as string).toLowerCase())
         );
         if (match) {
           targetListId = match._id;
@@ -66,15 +66,15 @@ export async function executeListWriteTool(
           return {
             success: false,
             error: "Multiple lists found. Please specify which list.",
-            availableLists: lists.map((l: any) => l.name),
+            availableLists: lists.map((l) => l.name),
           };
         }
       }
 
       const storeId = targetList?.normalizedStoreId || targetList?.storeName || "";
-      const addedItems: any[] = [];
+      const addedItems: { name: string; quantity: number; size?: string; price?: number }[] = [];
 
-      for (const item of args.items || []) {
+      for (const item of (args.items as { name: string; quantity?: number; size?: string; unit?: string }[] | undefined) || []) {
         const quantity = item.quantity || 1;
         let size: string | undefined = item.size;
         let unit: string | undefined = item.unit;
@@ -90,10 +90,10 @@ export async function executeListWriteTool(
 
             if (sizeData && sizeData.defaultSize) {
               size = sizeData.defaultSize;
-              const sizeInfo = sizeData.sizes.find((s: any) => s.size === size);
+              const sizeInfo = sizeData.sizes.find((s) => s.size === size);
               if (sizeInfo) {
                 estimatedPrice = sizeInfo.price ?? undefined;
-                priceSource = sizeInfo.source as any;
+                priceSource = sizeInfo.source as "personal" | "crowdsourced" | "ai" | "manual";
                 if (sizeInfo.sizeNormalized) {
                   const match = sizeInfo.sizeNormalized.match(/(\d+(?:\.\d+)?)\s*(.+)/);
                   if (match) unit = match[2];
@@ -112,7 +112,7 @@ export async function executeListWriteTool(
 
             if (sizeData && sizeData.sizes.length > 0) {
               const normalizedInputSize = size.toLowerCase().replace(/\s+/g, "");
-              const sizeInfo = sizeData.sizes.find((s: any) => {
+              const sizeInfo = sizeData.sizes.find((s) => {
                 const normalizedSize = s.size?.toLowerCase().replace(/\s+/g, "") || "";
                 const normalizedDisplay = s.sizeNormalized?.toLowerCase().replace(/\s+/g, "") || "";
                 return normalizedSize === normalizedInputSize || normalizedDisplay === normalizedInputSize;
@@ -120,7 +120,7 @@ export async function executeListWriteTool(
 
               if (sizeInfo) {
                 estimatedPrice = sizeInfo.price ?? undefined;
-                priceSource = sizeInfo.source as any;
+                priceSource = sizeInfo.source as "personal" | "crowdsourced" | "ai" | "manual";
               }
             }
           } catch { /* ignore */ }
@@ -162,7 +162,7 @@ export async function executeListWriteTool(
         });
       }
 
-      const formatItemMessage = (itemInfo: any): string => {
+      const formatItemMessage = (itemInfo: { name: string; quantity: number; size?: string; price?: number }): string => {
         const qty = itemInfo.quantity > 1 ? `${itemInfo.quantity} ` : "";
         const sizeText = itemInfo.size ? `${qty}${itemInfo.size} of ` : (itemInfo.quantity > 1 ? `${itemInfo.quantity} ` : "");
         const priceText = itemInfo.price ? ` at £${itemInfo.price.toFixed(2)}` : "";
@@ -189,16 +189,16 @@ export async function executeListWriteTool(
 
     case "update_list_budget": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      let targetList: any = null;
+      let targetList: Record<string, unknown> | null = null;
 
-      if (args.listName) {
-        targetList = lists.find((l: any) =>
-          l.name.toLowerCase().includes(args.listName.toLowerCase())
+      if ((args.listName as string)) {
+        targetList = lists.find((l) =>
+          l.name.toLowerCase().includes((args.listName as string).toLowerCase())
         );
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-        targetList = lists.find((l: any) => l.isInProgress) || lists[0];
+        targetList = lists.find((l) => l.isInProgress) || lists[0];
       }
 
       if (!targetList) {
@@ -207,28 +207,28 @@ export async function executeListWriteTool(
 
       await ctx.runMutation(api.shoppingLists.update, {
         id: targetList._id,
-        budget: args.budget,
+        budget: (args.budget as number | undefined),
       });
 
       return {
         success: true,
-        message: `Updated ${targetList.name} budget to £${args.budget}`,
+        message: `Updated ${targetList.name} budget to £${(args.budget as number | undefined)}`,
         listName: targetList.name,
-        newBudget: args.budget,
+        newBudget: (args.budget as number | undefined),
       };
     }
 
     case "delete_list": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      const targetList = lists.find((l: any) =>
-        l.name.toLowerCase().includes(args.listName.toLowerCase())
+      const targetList = lists.find((l) =>
+        l.name.toLowerCase().includes((args.listName as string).toLowerCase())
       );
 
       if (!targetList) {
-        return { success: false, error: `Couldn't find a list named "${args.listName}".` };
+        return { success: false, error: `Couldn't find a list named "${(args.listName as string)}".` };
       }
 
-      if (!args.confirmed) {
+      if (!(args.confirmed as boolean | undefined)) {
         const listItems = await ctx.runQuery(api.listItems.getByList, {
           listId: targetList._id,
         });
@@ -253,16 +253,16 @@ export async function executeListWriteTool(
 
     case "remove_list_item": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      let targetList: any = null;
+      let targetList: Record<string, unknown> | null = null;
 
-      if (args.listName) {
-        targetList = lists.find((l: any) =>
-          l.name.toLowerCase().includes(args.listName.toLowerCase())
+      if ((args.listName as string)) {
+        targetList = lists.find((l) =>
+          l.name.toLowerCase().includes((args.listName as string).toLowerCase())
         );
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-        targetList = lists.find((l: any) => l.isInProgress) || lists[0];
+        targetList = lists.find((l) => l.isInProgress) || lists[0];
       }
 
       if (!targetList) {
@@ -273,12 +273,12 @@ export async function executeListWriteTool(
         listId: targetList._id,
       });
 
-      const itemToRemove = listItems.find((i: any) =>
-        i.name.toLowerCase().includes(args.itemName.toLowerCase())
+      const itemToRemove = listItems.find((i) =>
+        i.name.toLowerCase().includes((args.itemName as string).toLowerCase())
       );
 
       if (!itemToRemove) {
-        return { success: false, error: `Couldn't find "${args.itemName}" on ${targetList.name}.` };
+        return { success: false, error: `Couldn't find "${(args.itemName as string)}" on ${targetList.name}.` };
       }
 
       await ctx.runMutation(api.listItems.remove, { id: itemToRemove._id });
@@ -291,16 +291,16 @@ export async function executeListWriteTool(
 
     case "clear_checked_items": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      let targetList: any = null;
+      let targetList: Record<string, unknown> | null = null;
 
-      if (args.listName) {
-        targetList = lists.find((l: any) =>
-          l.name.toLowerCase().includes(args.listName.toLowerCase())
+      if ((args.listName as string)) {
+        targetList = lists.find((l) =>
+          l.name.toLowerCase().includes((args.listName as string).toLowerCase())
         );
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-        targetList = lists.find((l: any) => l.isInProgress) || lists[0];
+        targetList = lists.find((l) => l.isInProgress) || lists[0];
       }
 
       if (!targetList) {
@@ -311,7 +311,7 @@ export async function executeListWriteTool(
         listId: targetList._id,
       });
 
-      const checkedItems = listItems.filter((i: any) => i.isChecked);
+      const checkedItems = listItems.filter((i) => i.isChecked);
 
       if (checkedItems.length === 0) {
         return { success: true, message: "No checked items to clear." };
@@ -333,8 +333,8 @@ export async function executeListWriteTool(
       if (lists.length === 0) return { success: false, message: "No active shopping lists to complete." };
 
       let targetList = lists[0];
-      if (args.listName) {
-        const match = lists.find((l: any) => l.name.toLowerCase().includes((args.listName as string).toLowerCase()));
+      if ((args.listName as string)) {
+        const match = lists.find((l) => l.name.toLowerCase().includes(((args.listName as string) as string).toLowerCase()));
         if (match) targetList = match;
       }
 

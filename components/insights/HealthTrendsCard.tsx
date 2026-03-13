@@ -4,8 +4,12 @@ import { LineChart } from "react-native-chart-kit";
 import { GlassCollapsible, colors } from "@/components/ui/glass";
 import { styles, CHART_WIDTH } from "./styles";
 
+interface HealthHistoryEntry {
+  score: number;
+}
+
 interface HealthTrendsCardProps {
-  healthHistory: any[];
+  healthHistory: HealthHistoryEntry[];
 }
 
 export const HealthTrendsCard = ({ healthHistory }: HealthTrendsCardProps) => {
@@ -20,10 +24,10 @@ export const HealthTrendsCard = ({ healthHistory }: HealthTrendsCardProps) => {
       >
         <LineChart
           data={{
-            labels: healthHistory.slice(-6).map((h: any, i: number) => `L${i + 1}`),
+            labels: healthHistory.slice(-6).map((_h, i) => `L${i + 1}`),
             datasets: [
               {
-                data: healthHistory.slice(-6).map((h: any) => h.score),
+                data: healthHistory.slice(-6).map((h) => h.score),
               },
             ],
           }}
@@ -58,7 +62,7 @@ export const HealthTrendsCard = ({ healthHistory }: HealthTrendsCardProps) => {
           Your average health score is{" "}
           <Text style={{ color: "#4ADE80", fontWeight: "700" }}>
             {Math.round(
-              healthHistory.reduce((s: number, h: any) => s + h.score, 0) /
+              healthHistory.reduce((s, h) => s + h.score, 0) /
                 healthHistory.length
             )}
           </Text>

@@ -117,7 +117,7 @@ export function ListPickerModal({ item, otherLists, onClose, onPick }: ListPicke
                 {otherList.name}
               </Text>
               <Text style={styles.optionMeta}>
-                {(otherList as any).isInProgress ? "Shopping" : "Active"}
+                {otherList.isInProgress ? "Shopping" : "Active"}
               </Text>
               <MaterialCommunityIcons
                 name="chevron-right"

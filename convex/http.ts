@@ -25,7 +25,7 @@ const stripeHandler = httpAction(async (ctx, request) => {
   // Verify webhook signature
   const Stripe = (await import("stripe")).default;
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2025-04-30.basil" as any,
+    apiVersion: "2025-04-30.basil" as const,
   });
 
   let event;
@@ -35,9 +35,10 @@ const stripeHandler = httpAction(async (ctx, request) => {
       sig,
       process.env.STRIPE_WEBHOOK_SECRET!
     );
-  } catch (err: any) {
-    console.error("Webhook signature verification failed:", err.message);
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Webhook signature verification failed:", message);
+    return new Response(`Webhook Error: ${message}`, { status: 400 });
   }
 
   // Process relevant events
@@ -56,7 +57,7 @@ const stripeHandler = httpAction(async (ctx, request) => {
         eventType: event.type,
         data: event.data.object,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error processing webhook:", err);
       return new Response("Webhook processing error", { status: 500 });
     }

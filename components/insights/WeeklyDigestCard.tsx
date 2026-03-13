@@ -1,4 +1,4 @@
-import React from "react";
+import React, { ComponentProps } from "react";
 import { View, Text } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LineChart } from "react-native-chart-kit";
@@ -121,7 +121,7 @@ const StatBox = React.memo(function StatBox({
 }) {
   return (
     <View style={styles.statBox}>
-      <MaterialCommunityIcons name={icon as any} size={18} color={color} />
+      <MaterialCommunityIcons name={icon as ComponentProps<typeof MaterialCommunityIcons>["name"]} size={18} color={color} />
       <Text style={[styles.statValue, { color }]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>

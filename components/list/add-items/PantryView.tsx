@@ -111,7 +111,7 @@ interface PantryViewProps {
   onFilterChange: (index: number) => void;
   onBulkAdd: (filter: "low" | "all") => void;
   bulkAddingFilter: "low" | "all" | null;
-  capsulePulseStyle: any;
+  capsulePulseStyle: { transform: { scale: number }[] };
   pantryListData: PantryItemData[];
   isItemOnList: (name: string) => boolean;
   onAddPantryItem: (item: PantryItemData) => void;

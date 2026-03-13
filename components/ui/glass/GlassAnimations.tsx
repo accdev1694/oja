@@ -96,7 +96,7 @@ export function AnimatedPressable({
     }
 
     if (transforms.length > 0) {
-      styleObj.transform = transforms as any;
+      styleObj.transform = transforms;
     }
 
     return styleObj;

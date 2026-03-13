@@ -39,7 +39,7 @@ const ListsModals = React.memo(function ListsModals({
   selectedTemplateName: string;
   editingListName: string;
   selectedHistoryLists: Set<Id<"shoppingLists">>;
-  historyLists: any[];
+  historyLists: HistoryList[];
   hasHistory: boolean;
   onCloseCreateOptions: () => void;
   onCreateFromScratch: () => void;

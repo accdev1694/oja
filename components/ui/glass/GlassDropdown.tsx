@@ -101,7 +101,7 @@ export function GlassDropdown({
                   <View style={styles.optionLeft}>
                     {option.icon && (
                       <MaterialCommunityIcons
-                        name={option.icon as any}
+                        name={option.icon as keyof typeof MaterialCommunityIcons.glyphMap}
                         size={20}
                         color={isActive ? colors.accent.primary : colors.text.secondary}
                         style={styles.optionIcon}

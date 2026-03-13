@@ -1,11 +1,18 @@
-import React from "react";
+import React, { ComponentProps } from "react";
 import { View, Text } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { GlassCollapsible, colors } from "@/components/ui/glass";
 import { styles } from "./styles";
 
+interface Achievement {
+  _id: string;
+  title: string;
+  description: string;
+  icon: string;
+}
+
 interface AchievementsCardProps {
-  achievements: any[] | undefined;
+  achievements: Achievement[] | undefined;
 }
 
 export const AchievementsCard = ({ achievements }: AchievementsCardProps) => {
@@ -19,7 +26,7 @@ export const AchievementsCard = ({ achievements }: AchievementsCardProps) => {
       >
         {achievements && achievements.length > 0 ? (
           <View style={styles.achievementsGrid}>
-            {achievements.map((a: any) => (
+            {achievements.map((a) => (
               <AchievementBadge
                 key={a._id}
                 icon={a.icon}
@@ -58,7 +65,7 @@ const AchievementBadge = React.memo(function AchievementBadge({
     <View style={styles.achievementBadge}>
       <View style={styles.achievementIconCircle}>
         <MaterialCommunityIcons
-          name={(icon as any) || "star"}
+          name={(icon || "star") as ComponentProps<typeof MaterialCommunityIcons>["name"]}
           size={24}
           color={colors.accent.secondary}
         />

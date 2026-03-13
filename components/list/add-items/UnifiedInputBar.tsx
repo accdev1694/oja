@@ -26,7 +26,7 @@ interface UnifiedInputBarProps {
   priceInputRef: React.RefObject<TextInput | null>;
   onFieldSubmit: () => void;
   priceEstimate?: { cheapest?: { price: number } } | null;
-  selectedSuggestion: any;
+  selectedSuggestion: { name: string; category?: string; size?: string; unit?: string; price?: number; [key: string]: unknown } | null;
 }
 
 export const UnifiedInputBar = ({

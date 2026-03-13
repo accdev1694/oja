@@ -36,7 +36,7 @@ export const findDuplicates = mutation({
     });
 
     const allUsers = await ctx.db.query("users").collect();
-    const emailMap = new Map<string, any[]>();
+    const emailMap = new Map<string, unknown[]>();
     
     for (const user of allUsers) {
       if (user.email) {
@@ -90,7 +90,7 @@ export const mergeDuplicateUsers = mutation({
     const master = sortedUsers[0];
     const duplicates = sortedUsers.slice(1);
 
-    const stats: any = {
+    const stats: Record<string, unknown> = {
       masterId: master._id,
       duplicatesRemoved: duplicates.length,
     };
@@ -131,12 +131,12 @@ export const mergeDuplicateUsers = mutation({
 
         // Reassign by specific index
         const docs = await ctx.db
-          .query(table as any)
-          .withIndex(index as any, (q: any) => q.eq("userId", duplicate._id))
+          .query(table)
+          .withIndex(index, (q) => q.eq("userId", duplicate._id))
           .collect();
         
         for (const doc of docs) {
-          const patch: any = {};
+          const patch: Record<string, unknown> = {};
           if (table === "adminLogs") {
             patch.adminUserId = master._id;
           } else {

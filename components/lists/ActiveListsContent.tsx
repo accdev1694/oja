@@ -16,6 +16,18 @@ import { EmptyLists } from "@/components/ui/glass/GlassErrorState";
 import { ListCard } from "@/components/lists/ListCard";
 import { SharedListCard } from "@/components/lists/SharedListCard";
 
+interface ShoppingListItem {
+  _id: Id<"shoppingLists">;
+  name: string;
+  [key: string]: unknown;
+}
+
+interface SharedListItem {
+  _id: Id<"shoppingLists">;
+  name: string;
+  [key: string]: unknown;
+}
+
 const ActiveListsContent = React.memo(function ActiveListsContent({
   displayList,
   activeShared,
@@ -30,8 +42,8 @@ const ActiveListsContent = React.memo(function ActiveListsContent({
   onSharedPress,
   formatDateTime,
 }: {
-  displayList: any[];
-  activeShared: any[];
+  displayList: ShoppingListItem[];
+  activeShared: SharedListItem[];
   hasAnyActiveLists: boolean;
   isCreating: boolean;
   animationKey: number;
@@ -111,7 +123,7 @@ const ActiveListsContent = React.memo(function ActiveListsContent({
         </View>
       </AnimatedSection>
 
-      {displayList.map((list: any, index: number) => (
+      {displayList.map((list, index) => (
         <AnimatedSection key={`${list._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={200 + (index * 50)}>
           <View style={styles.cardWrapper}>
             <ListCard
@@ -137,7 +149,7 @@ const ActiveListsContent = React.memo(function ActiveListsContent({
               <Text style={styles.sharedSectionTitle}>Shared With Me</Text>
             </View>
           </AnimatedSection>
-          {activeShared.map((list: any, index: number) =>
+          {activeShared.map((list, index) =>
             list ? (
               <AnimatedSection key={`${list._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={250 + (displayList.length * 50) + (index * 50)}>
                 <View style={styles.cardWrapper}>

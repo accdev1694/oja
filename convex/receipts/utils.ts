@@ -22,7 +22,7 @@ export const checkDuplicate = mutation({
     if (!user) throw new Error("User not found");
 
     const fingerprint = generateFingerprint(args.storeName, args.total, args.purchaseDate);
-    const existing = await ctx.db.query("receipts").withIndex("by_user_fingerprint", (q: any) => q.eq("userId", user._id).eq("fingerprint", fingerprint)).first();
+    const existing = await ctx.db.query("receipts").withIndex("by_user_fingerprint", (q) => q.eq("userId", user._id).eq("fingerprint", fingerprint)).first();
 
     if (existing && existing._id !== args.receiptId) {
       return { isDuplicate: true, existingReceipt: { id: existing._id, storeName: existing.storeName, total: existing.total, date: existing.purchaseDate } };

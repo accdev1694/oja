@@ -22,7 +22,7 @@ export function useScanLogic(options?: { returnTo?: string }) {
   const [showOnboardingTip, setShowOnboardingTip] = useState(false);
 
   // Receipt scanning state
-  const [viewingReceipt, setViewingReceipt] = useState<any | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [isContinuousMode, setIsContinuousMode] = useState(false);
 
   // Initialize Onboarding

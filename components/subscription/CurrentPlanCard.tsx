@@ -24,7 +24,7 @@ export function CurrentPlanCard({
   isPremium: boolean;
   isTrial: boolean;
   isCancelled: boolean;
-  subscription: any;
+  subscription: { plan?: string; status?: string } | null | undefined;
   periodEnd: number | null;
   portalLoading: boolean;
   onManageSubscription: () => void;

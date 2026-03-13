@@ -41,7 +41,7 @@ export const run = internalMutation({
       // Find current max listNumber for this user (in case some already have one)
       const existingLists = await ctx.db
         .query("shoppingLists")
-        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .withIndex("by_user", (q) => q.eq("userId", userId))
         .collect();
 
       let maxNumber = 0;

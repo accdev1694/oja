@@ -94,7 +94,7 @@ export async function resolvePrice(
   const normalizedStore = storeName?.toLowerCase().trim();
 
   // Layer 1: Personal priceHistory (user's own receipts)
-  let bestPersonal: any = null;
+  let bestPersonal: { unitPrice: number; purchaseDate: number; storeName: string } | null = null;
   if (userId) {
     const personalHistory = await ctx.db
       .query("priceHistory")
@@ -160,7 +160,7 @@ export async function resolvePrice(
 
     if (variantPrices.length > 0) {
       // Find the best crowdsourced match
-      let bestCrowdMatch: any = null;
+      let bestCrowdMatch: typeof variantPrices[number] | undefined = undefined;
       let crowdType: "store_region" | "store" | "region" | "global" = "global";
 
       // Priority 1: Exact Store + Region Match
@@ -169,33 +169,33 @@ export async function resolvePrice(
           (p) => (p.storeName?.toLowerCase() === normalizedStore || p.normalizedStoreId === normalizedStore) && 
                  p.region === userRegion
         );
-        if (bestCrowdMatch) crowdType = "store_region";
+        if (bestCrowdMatch !== undefined) crowdType = "store_region";
       }
 
       // Priority 2: Store Match (any region)
-      if (!bestCrowdMatch && normalizedStore) {
+      if (bestCrowdMatch === undefined && normalizedStore) {
         bestCrowdMatch = variantPrices.find(
           (p) => p.storeName?.toLowerCase() === normalizedStore ||
             p.normalizedStoreId === normalizedStore
         );
-        if (bestCrowdMatch) crowdType = "store";
+        if (bestCrowdMatch !== undefined) crowdType = "store";
       }
 
       // Priority 3: Region Match (any store)
-      if (!bestCrowdMatch) {
+      if (bestCrowdMatch === undefined) {
         bestCrowdMatch = variantPrices.find(p => p.region === userRegion);
-        if (bestCrowdMatch) crowdType = "region";
+        if (bestCrowdMatch !== undefined) crowdType = "region";
       }
 
       // Priority 4: Global Match (cheapest)
-      if (!bestCrowdMatch) {
+      if (bestCrowdMatch === undefined) {
         bestCrowdMatch = [...variantPrices].sort(
           (a, b) => (a.averagePrice ?? a.unitPrice) - (b.averagePrice ?? b.unitPrice)
         )[0];
         crowdType = "global";
       }
 
-      if (bestCrowdMatch) {
+      if (bestCrowdMatch !== undefined) {
         const age = now - bestCrowdMatch.lastSeenDate;
         const recencyMultiplier = Math.max(0.4, 1 - (age / (thirtyDaysMs * 3)));
         

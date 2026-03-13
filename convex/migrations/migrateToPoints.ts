@@ -40,14 +40,14 @@ export const run = internalMutation({
       // 1. Get legacy scan credits
       const legacyCredit = await ctx.db
         .query("scanCredits")
-        .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
         .order("desc")
         .first();
 
       // 2. Get legacy loyalty points
       const legacyLoyalty = await ctx.db
         .query("loyaltyPoints")
-        .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
         .first();
 
       const lifetimeScans = legacyCredit?.lifetimeScans ?? 0;

@@ -58,8 +58,9 @@ export default function SignInScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         // Navigation handled by _layout.tsx useEffect
       }
-    } catch (err: any) {
-      const message = err?.errors?.[0]?.message || `${provider} sign in failed`;
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: { message?: string }[] };
+      const message = clerkErr?.errors?.[0]?.message || `${provider} sign in failed`;
       setError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
@@ -120,9 +121,10 @@ export default function SignInScreen() {
       } else {
         setError(`Sign in incomplete (${signInAttempt.status}). Please try again.`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[SignIn] Error:", err);
-      const clerkError = err?.errors?.[0];
+      const clerkErr = err as { errors?: { longMessage?: string; message?: string }[] };
+      const clerkError = clerkErr?.errors?.[0];
       const message = clerkError?.longMessage || clerkError?.message || "Sign in failed";
       setError(message);
     } finally {
@@ -150,8 +152,9 @@ export default function SignInScreen() {
         setError("Verification incomplete. Please try again.");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-    } catch (err: any) {
-      const message = err?.errors?.[0]?.message || "Verification failed";
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: { message?: string }[] };
+      const message = clerkErr?.errors?.[0]?.message || "Verification failed";
       setError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {

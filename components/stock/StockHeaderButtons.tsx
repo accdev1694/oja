@@ -4,11 +4,17 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "@/components/ui/glass";
 import { stockStyles as styles } from "./stockStyles";
 
+interface StockHeaderButtonsProps {
+  activeFilterCount: number;
+  onOpenAddModal: () => void;
+  onOpenFilter: () => void;
+}
+
 export const StockHeaderButtons = React.memo(function StockHeaderButtons({
   activeFilterCount,
   onOpenAddModal,
   onOpenFilter,
-}: any) {
+}: StockHeaderButtonsProps) {
   return (
     <View style={styles.headerButtons}>
       <Pressable style={styles.addButton} onPress={onOpenAddModal}>

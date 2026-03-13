@@ -1,12 +1,13 @@
 import { useCallback } from "react";
 import * as ImagePicker from "expo-image-picker";
+import type { ScannedProduct } from "@/hooks/useProductScanner";
 import { haptic } from "@/lib/haptics/safeHaptics";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Camera + library image picking with permission handling
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function useImageCapture({ processImageUri, setIsProcessing, setLastError }: any) {
+export function useImageCapture({ processImageUri, setIsProcessing, setLastError }: ImageCaptureProps) {
   /**
    * Open camera, take photo, upload, and scan with AI.
    * Returns the scanned product if successful, or null if cancelled/failed/duplicate.

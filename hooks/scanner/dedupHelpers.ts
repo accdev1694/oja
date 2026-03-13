@@ -1,3 +1,4 @@
+import type { ScannedProduct } from "@/hooks/useProductScanner";
 import {
   normalizeItemName,
   calculateSimilarity,
@@ -16,7 +17,7 @@ const QUEUE_DEDUP_THRESHOLD = 92;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Two products match if normalised names are exact or >=92% similar, and sizes agree. */
-export function isSameQueueProduct(a: any, b: any) {
+export function isSameQueueProduct(a: ScannedProduct, b: ScannedProduct) {
   const normA = normalizeItemName(a.name);
   const normB = normalizeItemName(b.name);
   if (!normA || !normB) return false;
@@ -29,14 +30,14 @@ export function isSameQueueProduct(a: any, b: any) {
   return false;
 }
 
-function sizesMatch(a: any, b: any) {
+function sizesMatch(a: string | undefined, b: string | undefined) {
   const normA = normalizeSize(a);
   const normB = normalizeSize(b);
   // Both absent -> match; both present -> must be equal
   return normA === normB;
 }
 
-function normalizeSize(size: any) {
+function normalizeSize(size: string | undefined) {
   if (!size || !size.trim()) return "";
   return size.toLowerCase().trim().replace(/\s+/g, "");
 }

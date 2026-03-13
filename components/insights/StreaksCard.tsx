@@ -4,8 +4,15 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { GlassCollapsible, colors } from "@/components/ui/glass";
 import { styles } from "./styles";
 
+interface Streak {
+  _id: string;
+  type: string;
+  currentCount: number;
+  longestCount: number;
+}
+
 interface StreaksCardProps {
-  streaks: any[] | undefined;
+  streaks: Streak[] | undefined;
 }
 
 export const StreaksCard = ({ streaks }: StreaksCardProps) => {
@@ -17,7 +24,7 @@ export const StreaksCard = ({ streaks }: StreaksCardProps) => {
         iconColor={colors.semantic.fire}
       >
         {streaks && streaks.length > 0 ? (
-          streaks.map((streak: any) => (
+          streaks.map((streak) => (
             <View key={streak._id} style={styles.streakRow}>
               <View style={styles.streakLeft}>
                 <View style={styles.streakFlame}>

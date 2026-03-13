@@ -5,7 +5,7 @@ import * as Device from "expo-device";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 
 // Check if running in Expo Go (Store Client)
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -72,11 +72,11 @@ export function usePushNotifications() {
 
         // Navigate based on notification type
         if (data?.screen) {
-          router.push(`/(app)/${data.screen}` as any);
+          router.push(`/(app)/${data.screen}` as Href);
         } else if (data?.type === "ai_usage") {
-          router.push("/(app)/ai-usage" as any);
+          router.push("/(app)/ai-usage" as Href);
         } else if (data?.listId) {
-          router.push(`/(app)/list/${data.listId}` as any);
+          router.push(`/(app)/list/${data.listId}` as Href);
         }
       }
     );
@@ -153,15 +153,15 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
       projectId,
     });
     return tokenData.data;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Handle Firebase not initialized error gracefully
-    if (error?.message?.includes("FirebaseApp is not initialized")) {
+    if (error instanceof Error && error.message?.includes("FirebaseApp is not initialized")) {
       console.warn(
         "[Push] Firebase not configured. Push notifications require FCM setup for Android dev builds. " +
         "See: https://docs.expo.dev/push-notifications/fcm-credentials/"
       );
     } else {
-      console.warn("[Push] Failed to get token:", error?.message || error);
+      console.warn("[Push] Failed to get token:", error instanceof Error ? error.message : error);
     }
     return null;
   }

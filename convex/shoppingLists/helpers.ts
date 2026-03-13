@@ -26,12 +26,12 @@ export async function optionalUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"us
 
 /** Get next sequential list number for a user (max existing + 1). */
 export async function getNextListNumber(
-  ctx: { db: any },
+  ctx: QueryCtx | MutationCtx,
   userId: Id<"users">
 ): Promise<number> {
   const lists = await ctx.db
     .query("shoppingLists")
-    .withIndex("by_user", (q: any) => q.eq("userId", userId))
+    .withIndex("by_user", (q) => q.eq("userId", userId))
     .collect();
 
   let max = 0;

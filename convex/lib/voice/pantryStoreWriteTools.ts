@@ -10,27 +10,27 @@ import type { ActionCtx } from "../../_generated/server";
 export async function executePantryStoreWriteTool(
   ctx: ActionCtx,
   functionName: string,
-  args: Record<string, any>
-): Promise<any> {
+  args: Record<string, unknown>
+): Promise<unknown> {
   switch (functionName) {
     case "update_stock_level": {
       const items = await ctx.runQuery(api.pantryItems.getByUser, {});
-      const match = items.find((i: any) =>
-        i.name.toLowerCase().includes(args.itemName.toLowerCase())
+      const match = items.find((i) =>
+        i.name.toLowerCase().includes((args.itemName as string).toLowerCase())
       );
 
       if (!match) {
-        return { success: false, error: `Couldn't find "${args.itemName}" in your pantry.` };
+        return { success: false, error: `Couldn't find "${(args.itemName as string)}" in your pantry.` };
       }
 
       await ctx.runMutation(api.pantryItems.updateStockLevel, {
         id: match._id,
-        stockLevel: args.stockLevel,
+        stockLevel: (args.stockLevel as "stocked" | "low" | "out"),
       });
 
       return {
         success: true,
-        message: `Marked ${match.name} as ${args.stockLevel}`,
+        message: `Marked ${match.name} as ${(args.stockLevel as "stocked" | "low" | "out")}`,
       };
     }
 
@@ -40,7 +40,7 @@ export async function executePantryStoreWriteTool(
       if (pantryUser) {
         try {
           const priceResult = await ctx.runAction(api.ai.estimateItemPrice, {
-            itemName: args.name,
+            itemName: (args.name as string),
             userId: pantryUser._id,
           });
           if (priceResult) {
@@ -50,27 +50,27 @@ export async function executePantryStoreWriteTool(
       }
 
       await ctx.runMutation(api.pantryItems.create, {
-        name: args.name,
-        category: args.category || "Other",
-        stockLevel: args.stockLevel || "low",
+        name: (args.name as string),
+        category: (args.category as string | undefined) || "Other",
+        stockLevel: (args.stockLevel as "stocked" | "low" | "out") || "low",
         lastPrice,
         priceSource: lastPrice ? "ai_estimate" : undefined,
       });
 
       return {
         success: true,
-        message: `Added ${args.name} to your pantry`,
+        message: `Added ${(args.name as string)} to your pantry`,
       };
     }
 
     case "remove_pantry_item": {
       const items = await ctx.runQuery(api.pantryItems.getByUser, {});
-      const itemToRemove = items.find((i: any) =>
-        i.name.toLowerCase().includes(args.itemName.toLowerCase())
+      const itemToRemove = items.find((i) =>
+        i.name.toLowerCase().includes((args.itemName as string).toLowerCase())
       );
 
       if (!itemToRemove) {
-        return { success: false, error: `Couldn't find "${args.itemName}" in your pantry.` };
+        return { success: false, error: `Couldn't find "${(args.itemName as string)}" in your pantry.` };
       }
 
       await ctx.runMutation(api.pantryItems.remove, { id: itemToRemove._id });
@@ -86,9 +86,9 @@ export async function executePantryStoreWriteTool(
       const validStoreIds: string[] = [];
       const unrecognizedStores: string[] = [];
 
-      for (const storeName of args.stores || []) {
+      for (const storeName of (args.stores as string[] | undefined) || []) {
         const normalizedInput = storeName.toLowerCase().trim();
-        const match = allStores.find((s: any) => {
+        const match = allStores.find((s) => {
           const displayLower = s.displayName.toLowerCase();
           const idLower = s.id.toLowerCase();
           return (
@@ -100,7 +100,7 @@ export async function executePantryStoreWriteTool(
         });
 
         if (match) {
-          validStoreIds.push((match as any).id);
+          validStoreIds.push(match.id);
         } else {
           unrecognizedStores.push(storeName);
         }
@@ -119,8 +119,8 @@ export async function executePantryStoreWriteTool(
       });
 
       const savedStoreNames = validStoreIds.map((id) => {
-        const store = allStores.find((s: any) => s.id === id);
-        return store ? (store as any).displayName : id;
+        const store = allStores.find((s) => s.id === id);
+        return store ? store.displayName : id;
       });
 
       let message = `Lovely! I've set ${savedStoreNames.join(" and ")} as your preferred ${validStoreIds.length === 1 ? "store" : "stores"}.`;

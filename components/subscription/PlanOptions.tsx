@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 import {
   GlassCard,
   GlassButton,
@@ -53,7 +54,7 @@ export function FeatureComparison() {
           { icon: "shield-check", text: "Priority support access", premium: true },
         ].map((item, idx) => (
           <View key={idx} style={styles.featureBenefitRow}>
-            <MaterialCommunityIcons name={item.icon as any} size={20} color={colors.accent.primary} />
+            <MaterialCommunityIcons name={item.icon as ComponentProps<typeof MaterialCommunityIcons>["name"]} size={20} color={colors.accent.primary} />
             <Text style={styles.featureBenefitText}>{item.text}</Text>
             {item.premium && (
               <View style={styles.premiumOnlyBadge}>
@@ -67,6 +68,15 @@ export function FeatureComparison() {
   );
 }
 
+interface PlanOption {
+  id: string;
+  name: string;
+  price: number;
+  period: string;
+  savings?: string;
+  features: string[];
+}
+
 export function PlanOptionsList({
   plans,
   subscription,
@@ -74,8 +84,8 @@ export function PlanOptionsList({
   checkoutLoading,
   onCheckout,
 }: {
-  plans: any[];
-  subscription: any;
+  plans: PlanOption[];
+  subscription: { plan?: string; status?: string } | null | undefined;
   isPremium: boolean;
   checkoutLoading: string | null;
   onCheckout: (planId: "premium_monthly" | "premium_annual") => void;
@@ -86,8 +96,8 @@ export function PlanOptionsList({
         {isPremium ? "Change Plan" : "Choose a Plan"}
       </Text>
       {plans
-        .filter((p: any) => p.id !== "free")
-        .map((plan: any) => {
+        .filter((p) => p.id !== "free")
+        .map((plan) => {
           const isCurrentPlan = plan.id === subscription?.plan && subscription?.status === "active";
           const isLoading = checkoutLoading === plan.id;
           return (

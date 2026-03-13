@@ -1,4 +1,6 @@
 import React from "react";
+import { View } from "react-native";
+import { Id } from "@/convex/_generated/dataModel";
 import {
   SwipeOnboardingOverlay,
   AddedToListToast,
@@ -7,6 +9,44 @@ import {
   PantryListPickerModal,
 } from "@/components/pantry";
 import { HintOverlay } from "@/components/tutorial/HintOverlay";
+
+interface HintState {
+  shouldShow: boolean;
+  dismiss: () => void;
+}
+
+interface AddToListItem {
+  name: string;
+  lastPrice?: number;
+}
+
+interface ActiveList {
+  _id: Id<"shoppingLists">;
+  name: string;
+}
+
+interface StockModalsAndOverlaysProps {
+  toastVisible: boolean;
+  toastItemName: string;
+  flyStartPosition: { y: number };
+  filterVisible: boolean;
+  onCloseFilter: () => void;
+  stockFilters: Record<string, boolean>;
+  onToggleFilter: (key: string) => void;
+  onShowAll: () => void;
+  addModalVisible: boolean;
+  onCloseAddModal: () => void;
+  addToListItem: AddToListItem | null;
+  activeLists: ActiveList[] | undefined;
+  onPickList: (listId: Id<"shoppingLists">) => void;
+  onCloseListPicker: () => void;
+  showGestureOnboarding: boolean;
+  onDismissGesture: () => void;
+  levelsHint: HintState;
+  tabsRef: React.RefObject<View | null>;
+  lowHint: HintState;
+  itemRef: React.RefObject<View | null>;
+}
 
 export const StockModalsAndOverlays = React.memo(function StockModalsAndOverlays({
   toastVisible,
@@ -29,7 +69,7 @@ export const StockModalsAndOverlays = React.memo(function StockModalsAndOverlays
   tabsRef,
   lowHint,
   itemRef,
-}: any) {
+}: StockModalsAndOverlaysProps) {
   return (
     <>
       {/* Added-to-list Toast */}

@@ -19,7 +19,7 @@ export async function logToSIEM(
     severity: "low" | "medium" | "high" | "critical";
     details?: string;
     ipAddress?: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   }
 ) {
   const siemPayload = {

@@ -24,7 +24,7 @@ export function useUserSubscription() {
 
   const isPremium = useMemo(() => {
     if (!subscription) return false;
-    return (subscription as any).isActive || subscription.status === "trial";
+    return ("isActive" in subscription && subscription.isActive) || subscription.status === "trial";
   }, [subscription]);
 
   const tier = useMemo(() => {

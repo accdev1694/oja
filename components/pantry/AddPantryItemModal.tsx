@@ -73,9 +73,9 @@ export const AddPantryItemModal = React.memo(function AddPantryItemModal({
       });
       notificationAsync(NotificationFeedbackType.Success);
       handleClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to add item:", error);
-      const msg = error?.message ?? error?.data ?? "";
+      const msg = error instanceof Error ? error.message : (typeof error === "object" && error !== null && "data" in error ? String((error as Record<string, unknown>).data) : "");
       if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
         notificationAsync(NotificationFeedbackType.Warning);
         alert(

@@ -5,8 +5,13 @@ import { styles } from "./styles";
 
 const CATEGORY_COLORS = colors.chart;
 
+interface CategoryBreakdownItem {
+  category: string;
+  total: number;
+}
+
 interface CategoryBreakdownCardProps {
-  categoryBreakdown: any[];
+  categoryBreakdown: CategoryBreakdownItem[];
   categoryTotal: number;
 }
 
@@ -25,7 +30,7 @@ export const CategoryBreakdownCard = ({
         badge={categoryBreakdown.length}
       >
         <View style={styles.categoryList}>
-          {categoryBreakdown.map((cat: any, i: number) => {
+          {categoryBreakdown.map((cat, i) => {
             const pct = categoryTotal > 0 ? (cat.total / categoryTotal) * 100 : 0;
             const barColor = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
             return (

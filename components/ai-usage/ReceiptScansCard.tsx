@@ -12,7 +12,18 @@ import {
  * Receipt scan statistics card.
  * Shows scans this month, lifetime scans, and credits earned.
  */
-export function ReceiptScansCard({ receipts, isAdmin }: any) {
+interface ReceiptStats {
+  scansThisPeriod: number;
+  lifetimeScans: number;
+  creditsEarned: number;
+}
+
+interface ReceiptScansCardProps {
+  receipts: ReceiptStats;
+  isAdmin: boolean;
+}
+
+export function ReceiptScansCard({ receipts, isAdmin }: ReceiptScansCardProps) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Receipt Scans</Text>

@@ -345,7 +345,7 @@ export function AddItemsModal({
             quantity: item.quantity,
             storeId: item.storeId,
             storeName: item.storeName,
-          })) as any;
+          })) as typeof result;
         } else if (!item.category && !item.pantryItemId) {
           result = await addAndSeedPantry({
             listId,

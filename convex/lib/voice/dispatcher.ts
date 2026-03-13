@@ -11,16 +11,16 @@ import { executeWriteTool } from "./writeTools";
 
 export interface ToolResult {
   type: "data" | "confirm";
-  result: any;
+  result: unknown;
 }
 
 export async function executeVoiceTool(
   ctx: ActionCtx,
   functionName: string,
-  args: Record<string, any>
+  args: Record<string, unknown>
 ): Promise<ToolResult> {
   try {
-    let result: any;
+    let result: unknown;
 
     if (WRITE_TOOLS.has(functionName)) {
       result = await executeWriteTool(ctx, functionName, args);

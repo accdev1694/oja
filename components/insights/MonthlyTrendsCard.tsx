@@ -5,9 +5,16 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { GlassCollapsible, colors } from "@/components/ui/glass";
 import { styles, CHART_WIDTH } from "./styles";
 
+interface MonthlyTrendMonth {
+  month: string;
+  label: string;
+  total: number;
+  change: number;
+}
+
 interface MonthlyTrendsCardProps {
   monthlyTrends: {
-    months: any[];
+    months: MonthlyTrendMonth[];
   };
 }
 
@@ -23,10 +30,10 @@ export const MonthlyTrendsCard = ({ monthlyTrends }: MonthlyTrendsCardProps) => 
       >
         <LineChart
           data={{
-            labels: monthlyTrends.months.map((m: any) => m.label),
+            labels: monthlyTrends.months.map((m) => m.label),
             datasets: [
               {
-                data: monthlyTrends.months.map((m: any) => m.total || 0.01),
+                data: monthlyTrends.months.map((m) => m.total || 0.01),
               },
             ],
           }}
@@ -62,7 +69,7 @@ export const MonthlyTrendsCard = ({ monthlyTrends }: MonthlyTrendsCardProps) => 
 
         {/* Month-over-month changes */}
         <View style={styles.monthChanges}>
-          {monthlyTrends.months.slice(-3).map((m: any) => (
+          {monthlyTrends.months.slice(-3).map((m) => (
             <View key={m.month} style={styles.monthChangeItem}>
               <Text style={styles.monthChangeLabel}>{m.label}</Text>
               <Text style={styles.monthChangeAmount}>

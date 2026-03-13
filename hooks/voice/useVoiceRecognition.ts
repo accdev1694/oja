@@ -10,8 +10,8 @@ import * as Haptics from "expo-haptics";
 import type { VoiceAssistantState } from "@/lib/voice/voiceTypes";
 
 // ── Safe dynamic import of expo-speech-recognition ──────────────────
-let SpeechRecognitionModule: any = null;
-let useSpeechRecognitionEvent: any = null;
+let SpeechRecognitionModule: Record<string, unknown> | null = null;
+let useSpeechRecognitionEvent: ((event: string, cb: (...args: unknown[]) => void) => void) | null = null;
 
 try {
   const mod = require("expo-speech-recognition");
@@ -24,7 +24,7 @@ try {
 export const STT_AVAILABLE = SpeechRecognitionModule != null;
 
 // Noop hook when native module isn't available
-const noopEventHook = (_event: string, _cb: (...args: any[]) => void) => {};
+const noopEventHook = (_event: string, _cb: (...args: unknown[]) => void) => {};
 const useSpeechEvent = useSpeechRecognitionEvent ?? noopEventHook;
 
 const RATE_LIMIT_MS = 6000; // 1 request per 6 seconds
@@ -44,7 +44,7 @@ export function useVoiceRecognition(
     setState((s: VoiceAssistantState) => ({ ...s, isListening: false }));
   });
 
-  useSpeechEvent("result", (event: any) => {
+  useSpeechEvent("result", (event: { results: Array<{ transcript: string }>; isFinal: boolean }) => {
     const transcript = event.results[0]?.transcript || "";
     if (event.isFinal) {
       setState((s: VoiceAssistantState) => ({ ...s, transcript, partialTranscript: "" }));
@@ -54,7 +54,7 @@ export function useVoiceRecognition(
     }
   });
 
-  useSpeechEvent("error", (event: any) => {
+  useSpeechEvent("error", (event: { error: string; message: string }) => {
     console.warn("[useVoiceRecognition] STT error:", event.error, event.message);
     setState((s: VoiceAssistantState) => ({
       ...s,

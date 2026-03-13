@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import type { Id } from "../_generated/dataModel";
 import { mutation } from "../_generated/server";
 import { 
   matchReceiptItems, 
@@ -14,7 +15,7 @@ export const improveArchivedListPrices = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    const user = await ctx.db.query("users").withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject)).unique();
+    const user = await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject)).unique();
     if (!user) throw new Error("User not found");
 
     const receipt = await ctx.db.get(args.receiptId);
@@ -29,14 +30,14 @@ export const improveArchivedListPrices = mutation({
     }
     if (priceMap.size === 0) return { updated: 0 };
 
-    const archivedLists = await ctx.db.query("shoppingLists").withIndex("by_user_status", (q: any) => q.eq("userId", user._id).eq("status", "archived")).collect();
-    const completedLists = await ctx.db.query("shoppingLists").withIndex("by_user_status", (q: any) => q.eq("userId", user._id).eq("status", "completed")).collect();
+    const archivedLists = await ctx.db.query("shoppingLists").withIndex("by_user_status", (q) => q.eq("userId", user._id).eq("status", "archived")).collect();
+    const completedLists = await ctx.db.query("shoppingLists").withIndex("by_user_status", (q) => q.eq("userId", user._id).eq("status", "completed")).collect();
     const sameLists = [...archivedLists, ...completedLists].filter(l => l.normalizedStoreId === receiptStoreId);
 
     let updated = 0;
     const now = Date.now();
     for (const list of sameLists) {
-      const items = await ctx.db.query("listItems").withIndex("by_list", (q: any) => q.eq("listId", list._id)).collect();
+      const items = await ctx.db.query("listItems").withIndex("by_list", (q) => q.eq("listId", list._id)).collect();
       for (const item of items) {
         if (item.actualPrice != null) continue;
         const newPrice = priceMap.get(item.name.toLowerCase().trim());
@@ -55,7 +56,7 @@ export const refreshActiveListsFromReceipt = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    const user = await ctx.db.query("users").withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject)).unique();
+    const user = await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject)).unique();
     if (!user) throw new Error("User not found");
 
     const receipt = await ctx.db.get(args.receiptId);
@@ -72,7 +73,7 @@ export const refreshActiveListsFromReceipt = mutation({
     }));
     if (receiptItemsForMatching.length === 0) return { updated: 0, listsUpdated: 0, learned: 0 };
 
-    const activeLists = await ctx.db.query("shoppingLists").withIndex("by_user_status", (q: any) => q.eq("userId", user._id).eq("status", "active")).collect();
+    const activeLists = await ctx.db.query("shoppingLists").withIndex("by_user_status", (q) => q.eq("userId", user._id).eq("status", "active")).collect();
     const sameStoreLists = activeLists.filter(l => l.normalizedStoreId === receiptStoreId);
     if (sameStoreLists.length === 0) return { updated: 0, listsUpdated: 0, learned: 0 };
 
@@ -82,7 +83,7 @@ export const refreshActiveListsFromReceipt = mutation({
     let learned = 0;
 
     for (const list of sameStoreLists) {
-      const items = await ctx.db.query("listItems").withIndex("by_list", (q: any) => q.eq("listId", list._id)).collect();
+      const items = await ctx.db.query("listItems").withIndex("by_list", (q) => q.eq("listId", list._id)).collect();
       const candidates: CandidateItem[] = items.filter((item) => !item.isChecked && !item.priceOverride).map((item) => ({
         id: item._id,
         type: "list_item" as const,
@@ -100,7 +101,7 @@ export const refreshActiveListsFromReceipt = mutation({
         if (result.bestMatch && result.matchScore >= 70) {
           const listItem = items.find((i) => i._id === result.bestMatch!.id);
           if (listItem && result.receiptItem.unitPrice !== listItem.estimatedPrice) {
-            await ctx.db.patch(result.bestMatch.id as any, { estimatedPrice: result.receiptItem.unitPrice, priceSource: "personal", priceConfidence: 0.95, updatedAt: now });
+            await ctx.db.patch(result.bestMatch.id as Id<"listItems">, { estimatedPrice: result.receiptItem.unitPrice, priceSource: "personal", priceConfidence: 0.95, updatedAt: now });
             listItemsUpdated++;
             totalUpdated++;
             await learnMapping(ctx, receiptStoreId, result.receiptItem.name, result.bestMatch.name, result.bestMatch.category, result.receiptItem.unitPrice, user._id);

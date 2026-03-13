@@ -16,8 +16,8 @@ import { executePantryStoreWriteTool } from "./pantryStoreWriteTools";
 export async function executeWriteTool(
   ctx: ActionCtx,
   functionName: string,
-  args: Record<string, any>
-): Promise<any> {
+  args: Record<string, unknown>
+): Promise<unknown> {
   // Try each sub-module in turn; they return null for unrecognised names
   const listResult = await executeListWriteTool(ctx, functionName, args);
   if (listResult !== null) return listResult;

@@ -1,14 +1,15 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { haptic } from "@/lib/haptics/safeHaptics";
+import type { ScannedProduct } from "@/hooks/useProductScanner";
 import { STORAGE_KEY, isSameQueueProduct } from "./dedupHelpers";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Queue state management: products array, persistence, add/remove/update/clear
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function useScannerQueue(onDuplicate: any) {
-  const [scannedProducts, setScannedProducts] = useState<any[]>([]);
+export function useScannerQueue(onDuplicate?: (existing: ScannedProduct, duplicate: ScannedProduct) => void) {
+  const [scannedProducts, setScannedProducts] = useState<ScannedProduct[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const hydratedRef = useRef(false);
 
@@ -52,21 +53,21 @@ export function useScannerQueue(onDuplicate: any) {
   }, [scannedProducts]);
 
   // Keep a ref so callbacks always see the latest products
-  const productsRef = useRef<any[]>([]);
+  const productsRef = useRef<ScannedProduct[]>([]);
   productsRef.current = scannedProducts;
 
   const onDuplicateRef = useRef(onDuplicate);
   onDuplicateRef.current = onDuplicate;
 
   /** Helper: remove a pending item by its localImageUri */
-  const removePending = useCallback((uri: any) => {
+  const removePending = useCallback((uri: string) => {
     setScannedProducts((prev) =>
       prev.filter((p) => !(p.localImageUri === uri && p.status === "pending"))
     );
   }, []);
 
   /** Add a pending placeholder tile for immediate visual feedback */
-  const addPendingTile = useCallback((uri: any) => {
+  const addPendingTile = useCallback((uri: string) => {
     setScannedProducts((prev) => [
       ...prev,
       {
@@ -82,7 +83,7 @@ export function useScannerQueue(onDuplicate: any) {
   }, []);
 
   /** Replace a pending item with the ready product */
-  const promotePending = useCallback((uri: any, product: any) => {
+  const promotePending = useCallback((uri: string, product: ScannedProduct) => {
     setScannedProducts((prev) =>
       prev.map((p) =>
         p.localImageUri === uri && p.status === "pending" ? product : p
@@ -91,7 +92,7 @@ export function useScannerQueue(onDuplicate: any) {
   }, []);
 
   /** Check if a product is a duplicate of one already in the queue */
-  const checkDuplicate = useCallback((product: any) => {
+  const checkDuplicate = useCallback((product: ScannedProduct) => {
     const existingMatch = productsRef.current.find(
       (p) => p.status !== "pending" && isSameQueueProduct(p, product)
     );
@@ -103,20 +104,20 @@ export function useScannerQueue(onDuplicate: any) {
   }, []);
 
   /** Remove a scanned product by index */
-  const removeProduct = useCallback((index: any) => {
+  const removeProduct = useCallback((index: number) => {
     haptic("light");
     setScannedProducts((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   /** Update a scanned product (e.g., edit name or price) */
-  const updateProduct = useCallback((index: any, updates: any) => {
+  const updateProduct = useCallback((index: number, updates: Partial<ScannedProduct>) => {
     setScannedProducts((prev) =>
       prev.map((p, i) => (i === index ? { ...p, ...updates } : p))
     );
   }, []);
 
   /** Manually add a product (e.g. from pantry browser) with dedup check */
-  const addProduct = useCallback((product: any) => {
+  const addProduct = useCallback((product: ScannedProduct) => {
     if (checkDuplicate(product)) return false;
     setScannedProducts((prev) => [...prev, product]);
     haptic("success");

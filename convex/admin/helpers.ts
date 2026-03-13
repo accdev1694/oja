@@ -229,7 +229,7 @@ export async function requirePermissionQuery(ctx: QueryCtx, permission: AdminPer
   return user;
 }
 
-const queryCache = new Map<string, { data: any; expiresAt: number }>();
+const queryCache = new Map<string, { data: unknown; expiresAt: number }>();
 
 export async function getCachedOrCompute<T>(
   cacheKey: string,

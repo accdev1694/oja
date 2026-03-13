@@ -11,6 +11,25 @@ import {
 import { TipBanner } from "@/components/ui/TipBanner";
 import { stockStyles as styles } from "./stockStyles";
 
+interface DuplicateGroup {
+  canonical: string;
+  items: string[];
+}
+
+interface StockBannersProps {
+  pageAnimationKey: number;
+  dedupDismissed: boolean;
+  duplicateGroups: DuplicateGroup[] | undefined;
+  onMergeDuplicates: () => void;
+  attentionCount: number;
+  items: { length: number }[];
+  capsuleActiveIndex: number;
+  onViewModeSwitch: (index: number) => void;
+  tabsRef: React.RefObject<View | null>;
+  searchQuery: string;
+  onSearchChange: (text: string) => void;
+}
+
 export const StockBanners = React.memo(function StockBanners({
   pageAnimationKey,
   dedupDismissed,
@@ -23,7 +42,7 @@ export const StockBanners = React.memo(function StockBanners({
   tabsRef,
   searchQuery,
   onSearchChange,
-}: any) {
+}: StockBannersProps) {
   return (
     <>
       {/* Trial Nudge Banner */}

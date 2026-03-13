@@ -13,8 +13,8 @@ import { stockStyles as styles, ESSENTIALS_SECTION_TITLE } from "./stockStyles";
 // =============================================================================
 
 interface StockSectionListProps {
-  sections: { title: string; data: any[]; sectionDelay: number }[];
-  filteredItems: any[];
+  sections: { title: string; data: PantryItem[]; sectionDelay: number }[];
+  filteredItems: PantryItem[];
   collapsedCategories: Set<string>;
   animationKey: number;
   viewMode: "attention" | "all";
@@ -51,9 +51,9 @@ export const StockSectionList = React.memo(function StockSectionList({
   onToggleCategory,
   onToggleEssentials,
 }: StockSectionListProps) {
-  const keyExtractor = useCallback((item: any) => item._id, []);
+  const keyExtractor = useCallback((item: PantryItem) => item._id, []);
 
-  const renderItem = useCallback(({ item, section, index }: any) => {
+  const renderItem = useCallback(({ item, section, index }: { item: PantryItem; section: { title: string; data: PantryItem[]; sectionDelay: number }; index: number }) => {
     // If category is collapsed, render nothing
     if (collapsedCategories.has(section.title)) return null;
     const isArchivedResult = item.status === "archived";
@@ -80,7 +80,7 @@ export const StockSectionList = React.memo(function StockSectionList({
     );
   }, [collapsedCategories, animationKey, sections, itemRef, onSwipeDecrease, onSwipeIncrease, onRemove, onAddToList, onLongPress]);
 
-  const renderSectionHeader = useCallback(({ section }: any) => {
+  const renderSectionHeader = useCallback(({ section }: { section: { title: string; data: PantryItem[]; sectionDelay: number } }) => {
     const delay = section.sectionDelay - 50;
 
     return (

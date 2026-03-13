@@ -107,7 +107,7 @@ export function SafeKeyboardAwareScrollView({
  * (works with edge-to-edge mode) when available, falls back to RN's built-in.
  */
 export interface SafeKeyboardAvoidingViewProps extends ViewProps {
-  style?: any;
+  style?: ViewProps["style"];
   behavior?: "padding" | "height" | "position";
   keyboardVerticalOffset?: number;
   children: React.ReactNode;

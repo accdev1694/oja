@@ -54,7 +54,7 @@ export const compareListAcrossStores = query({
     if (list.userId !== user._id) {
       const partner = await ctx.db
         .query("listPartners")
-        .withIndex("by_list_user", (q: any) =>
+        .withIndex("by_list_user", (q) =>
           q.eq("listId", args.listId).eq("userId", user._id)
         )
         .unique();
@@ -236,7 +236,7 @@ export const switchStore = mutation({
         sizeChanged = true;
       }
 
-      const updates: any = { updatedAt: Date.now() };
+      const updates: Record<string, unknown> = { updatedAt: Date.now() };
       if (matchedPrice !== null) updates.estimatedPrice = matchedPrice;
       if (sizeChanged && matchedSize !== null) {
         if (!item.originalSize) updates.originalSize = item.size;
@@ -267,7 +267,7 @@ async function findPriceForExactSize(
 ): Promise<number | null> {
   const prices = await ctx.db
     .query("currentPrices")
-    .withIndex("by_item", (q: any) => q.eq("normalizedName", normalizedItemName))
+    .withIndex("by_item", (q) => q.eq("normalizedName", normalizedItemName))
     .collect();
 
   const storePrice = prices.find(

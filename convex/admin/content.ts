@@ -98,7 +98,7 @@ export const updateAnnouncement = mutation({
   handler: async (ctx, args) => {
     const admin = await requirePermission(ctx, "manage_announcements");
     
-    const updates: any = {};
+    const updates: Record<string, unknown> = {};
     if (args.title !== undefined) updates.title = args.title;
     if (args.body !== undefined) updates.body = args.body;
     if (args.active !== undefined) updates.active = args.active;

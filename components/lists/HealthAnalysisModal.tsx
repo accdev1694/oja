@@ -249,7 +249,7 @@ export function HealthAnalysisModal({ visible, onClose, listId, initialAnalysis,
               {regularSwaps.length > 0 && (
                 <View style={styles.swapsSection}>
                   <Text style={styles.sectionTitle}>Healthy Swaps</Text>
-                  {regularSwaps.map((swap: any, i: number) => (
+                  {regularSwaps.map((swap: HealthSwap, i: number) => (
                     <LinearGradient
                       key={i}
                       colors={[colors.glass.background, colors.glass.backgroundHover]}

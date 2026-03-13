@@ -11,15 +11,15 @@ import type { Id } from "../../_generated/dataModel";
 export async function executeItemWriteTool(
   ctx: ActionCtx,
   functionName: string,
-  args: Record<string, any>
-): Promise<any> {
+  args: Record<string, unknown>
+): Promise<unknown> {
   switch (functionName) {
     case "check_off_item": {
-      let targetListId = args.listId as Id<"shoppingLists"> | undefined;
+      let targetListId = (args.listId as string) as Id<"shoppingLists"> | undefined;
 
       if (!targetListId) {
         const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-        const inProgress = lists.find((l: any) => l.status === "in_progress");
+        const inProgress = lists.find((l) => l.status === "in_progress");
         if (inProgress) {
           targetListId = inProgress._id;
         } else if (lists.length === 1) {
@@ -30,12 +30,12 @@ export async function executeItemWriteTool(
       }
 
       const listItems = await ctx.runQuery(api.listItems.getByList, { listId: targetListId });
-      const itemMatch = listItems.find((i: any) =>
-        i.name.toLowerCase().includes(args.itemName.toLowerCase())
+      const itemMatch = listItems.find((i) =>
+        i.name.toLowerCase().includes((args.itemName as string).toLowerCase())
       );
 
       if (!itemMatch) {
-        return { success: false, error: `Couldn't find "${args.itemName}" on your list.` };
+        return { success: false, error: `Couldn't find "${(args.itemName as string)}" on your list.` };
       }
 
       await ctx.runMutation(api.listItems.toggleChecked, { id: itemMatch._id });
@@ -48,20 +48,20 @@ export async function executeItemWriteTool(
 
     case "change_item_size": {
       const list = await ctx.runQuery(api.shoppingLists.getById, {
-        id: args.listId as Id<"shoppingLists">,
+        id: (args.listId as string) as Id<"shoppingLists">,
       });
 
       if (!list) return { success: false, error: "List not found." };
 
       const listItems = await ctx.runQuery(api.listItems.getByList, {
-        listId: args.listId as Id<"shoppingLists">,
+        listId: (args.listId as string) as Id<"shoppingLists">,
       });
 
-      const itemMatch = listItems.find((i: any) =>
-        i.name.toLowerCase().includes(args.itemName.toLowerCase())
+      const itemMatch = listItems.find((i) =>
+        i.name.toLowerCase().includes((args.itemName as string).toLowerCase())
       );
 
-      if (!itemMatch) return { success: false, error: `Couldn't find "${args.itemName}" on your list.` };
+      if (!itemMatch) return { success: false, error: `Couldn't find "${(args.itemName as string)}" on your list.` };
 
       const storeName = list.normalizedStoreId || list.storeName || "tesco";
       const sizesResult = await ctx.runQuery(api.itemVariants.getSizesForStore, {
@@ -69,19 +69,19 @@ export async function executeItemWriteTool(
         store: storeName,
       });
 
-      const newSizeLower = args.newSize.toLowerCase().replace(/\s+/g, "");
-      const matchingSize = sizesResult.sizes.find((s: any) => {
+      const newSizeLower = (args.newSize as string).toLowerCase().replace(/\s+/g, "");
+      const matchingSize = sizesResult.sizes.find((s) => {
         const sizeLower = (s.size || "").toLowerCase().replace(/\s+/g, "");
         const sizeNormLower = (s.sizeNormalized || "").toLowerCase().replace(/\s+/g, "");
         return sizeLower === newSizeLower || sizeNormLower === newSizeLower || sizeLower.includes(newSizeLower) || newSizeLower.includes(sizeLower);
       });
 
       let newPrice = itemMatch.estimatedPrice;
-      let sizeDisplay = args.newSize;
+      let sizeDisplay = (args.newSize as string);
 
       if (matchingSize) {
         newPrice = matchingSize.price ?? itemMatch.estimatedPrice;
-        sizeDisplay = matchingSize.sizeNormalized || matchingSize.size || args.newSize;
+        sizeDisplay = matchingSize.sizeNormalized || matchingSize.size || (args.newSize as string);
       }
 
       await ctx.runMutation(api.listItems.update, {
@@ -99,31 +99,31 @@ export async function executeItemWriteTool(
 
     case "edit_last_item": {
       const listItems = await ctx.runQuery(api.listItems.getByList, {
-        listId: args.listId as Id<"shoppingLists">,
+        listId: (args.listId as string) as Id<"shoppingLists">,
       });
 
       if (listItems.length === 0) return { success: false, error: "No items on this list to edit." };
 
-      const sortedItems = [...listItems].sort((a: any, b: any) =>
+      const sortedItems = [...listItems].sort((a, b) =>
         (b._creationTime || 0) - (a._creationTime || 0)
       );
       const lastItem = sortedItems[0];
 
-      if (args.quantity === undefined && args.size === undefined) {
+      if ((args.quantity as number | undefined) === undefined && (args.size as string | undefined) === undefined) {
         return { success: false, error: "Please specify what to change (quantity or size)." };
       }
 
-      const updates: any = {};
+      const updates: Record<string, unknown> = {};
       const changes: string[] = [];
 
-      if (args.quantity !== undefined) {
-        updates.quantity = args.quantity;
-        changes.push(`quantity to ${args.quantity}`);
+      if ((args.quantity as number | undefined) !== undefined) {
+        updates.quantity = (args.quantity as number | undefined);
+        changes.push(`quantity to ${(args.quantity as number | undefined)}`);
       }
 
-      if (args.size !== undefined) {
+      if ((args.size as string | undefined) !== undefined) {
         const list = await ctx.runQuery(api.shoppingLists.getById, {
-          id: args.listId as Id<"shoppingLists">,
+          id: (args.listId as string) as Id<"shoppingLists">,
         });
         const storeName = list?.normalizedStoreId || list?.storeName || "tesco";
         const sizesResult = await ctx.runQuery(api.itemVariants.getSizesForStore, {
@@ -131,8 +131,8 @@ export async function executeItemWriteTool(
           store: storeName,
         });
 
-        const newSizeLower = args.size.toLowerCase().replace(/\s+/g, "");
-        const matchingSize = sizesResult.sizes.find((s: any) => {
+        const newSizeLower = (args.size as string).toLowerCase().replace(/\s+/g, "");
+        const matchingSize = sizesResult.sizes.find((s) => {
           const sizeLower = (s.size || "").toLowerCase().replace(/\s+/g, "");
           const sizeNormLower = (s.sizeNormalized || "").toLowerCase().replace(/\s+/g, "");
           return sizeLower === newSizeLower || sizeNormLower === newSizeLower || sizeLower.includes(newSizeLower) || newSizeLower.includes(sizeLower);
@@ -144,9 +144,9 @@ export async function executeItemWriteTool(
           updates.sizeOverride = true;
           changes.push(`${updates.size} at £${(matchingSize.price || 0).toFixed(2)}`);
         } else {
-          updates.size = args.size;
+          updates.size = args.size as string;
           updates.sizeOverride = true;
-          changes.push(args.size);
+          changes.push(args.size as string);
         }
       }
 
@@ -162,23 +162,23 @@ export async function executeItemWriteTool(
     }
 
     case "edit_list_item": {
-      if (!args.itemName) return { success: false, message: "Which item do you want to edit?" };
-      let listId = args.listId as Id<"shoppingLists"> | undefined;
+      if (!(args.itemName as string)) return { success: false, message: "Which item do you want to edit?" };
+      let listId = (args.listId as string) as Id<"shoppingLists"> | undefined;
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
       if (lists.length === 0) return { success: false, message: "No active lists to edit items from." };
 
-      const targetList = listId ? lists.find((l: any) => l._id === listId) : (lists.find((l: any) => l.status === 'active') || lists[0]);
+      const targetList = listId ? lists.find((l) => l._id === listId) : (lists.find((l) => l.status === 'active') || lists[0]);
       if (!targetList) return { success: false, message: "List not found." };
 
       const listItems = await ctx.runQuery(api.listItems.getByList, { listId: targetList._id });
-      const itemMatch = listItems.find(i => i.name.toLowerCase().includes(args.itemName.toLowerCase()));
-      if (!itemMatch) return { success: false, message: `Couldn't find "${args.itemName}" on your list.` };
+      const itemMatch = listItems.find(i => i.name.toLowerCase().includes((args.itemName as string).toLowerCase()));
+      if (!itemMatch) return { success: false, message: `Couldn't find "${(args.itemName as string)}" on your list.` };
 
-      const updates: any = {};
-      if (args.newQuantity !== undefined) updates.quantity = args.newQuantity;
-      if (args.newName !== undefined) updates.name = args.newName;
-      if (args.newSize !== undefined) {
-        updates.size = args.newSize;
+      const updates: Record<string, unknown> = {};
+      if ((args.newQuantity as number | undefined) !== undefined) updates.quantity = (args.newQuantity as number | undefined);
+      if ((args.newName as string | undefined) !== undefined) updates.name = (args.newName as string | undefined);
+      if ((args.newSize as string) !== undefined) {
+        updates.size = (args.newSize as string);
         updates.sizeOverride = true;
       }
 

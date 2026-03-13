@@ -10,6 +10,12 @@ import {
 } from "@/components/ui/glass";
 import { HistoryCard } from "@/components/lists/HistoryCard";
 
+interface HistoryListItem {
+  _id: Id<"shoppingLists">;
+  name: string;
+  [key: string]: unknown;
+}
+
 const HistoryListsContent = React.memo(function HistoryListsContent({
   displayList,
   animationKey,
@@ -20,7 +26,7 @@ const HistoryListsContent = React.memo(function HistoryListsContent({
   onToggleSelect,
   formatDateTime,
 }: {
-  displayList: any[];
+  displayList: HistoryListItem[];
   animationKey: number;
   isMultiSelectMode: boolean;
   selectedHistoryLists: Set<Id<"shoppingLists">>;
@@ -49,7 +55,7 @@ const HistoryListsContent = React.memo(function HistoryListsContent({
 
   return (
     <View>
-      {displayList.map((list: any, index: number) => (
+      {displayList.map((list, index) => (
         <AnimatedSection key={`${list._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={150 + (index * 50)}>
           <View style={styles.cardWrapper}>
             <HistoryCard

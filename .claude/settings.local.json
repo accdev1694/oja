@@ -172,7 +172,8 @@
       "Bash(for f in components/AddItemForm.tsx components/AddItemsModal.tsx components/UnmatchedItemsModal.tsx components/TripSummaryModal.tsx components/HealthAnalysisModal.tsx components/VariantPicker.tsx components/ListCard.tsx hooks/useVoiceAssistant.ts hooks/useProductScanner.ts)",
       "Bash(do if [ -f \"$f\" ])",
       "Bash(else echo \"GONE: $f\")",
-      "Bash(cut:*)"
+      "Bash(cut:*)",
+      "Bash(tee:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

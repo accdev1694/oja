@@ -86,7 +86,7 @@ export function deduplicateItems(
   };
 }
 
-function mergeItems(items: any[]): { item: any; keptFrom: string; reason: string } {
+function mergeItems(items: (ListItemInput & { _sourcelist: string })[]): { item: ListItemInput & { _sourcelist: string }; keptFrom: string; reason: string } {
   // Strategy: Keep highest quantity, best price, most complete info
   let best = items[0];
   let reason = "first occurrence";

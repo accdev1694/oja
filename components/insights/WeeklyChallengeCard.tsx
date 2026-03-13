@@ -1,11 +1,21 @@
-import React from "react";
+import React, { ComponentProps } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { GlassCard, GlassProgressBar, colors } from "@/components/ui/glass";
 import { styles } from "./styles";
 
+interface ActiveChallenge {
+  icon: string;
+  title: string;
+  description: string;
+  reward: number;
+  progress: number;
+  target: number;
+  completedAt?: number;
+}
+
 interface WeeklyChallengeCardProps {
-  activeChallenge: any;
+  activeChallenge: ActiveChallenge | null | undefined;
   challengeRef: React.RefObject<View | null>;
   challengeGenerating: boolean;
   onGenerate: () => void;
@@ -34,7 +44,7 @@ export const WeeklyChallengeCard = ({
             <View style={styles.challengeTop}>
               <View style={styles.challengeIconCircle}>
                 <MaterialCommunityIcons
-                  name={(activeChallenge.icon as any) || "star"}
+                  name={(activeChallenge.icon || "star") as ComponentProps<typeof MaterialCommunityIcons>["name"]}
                   size={24}
                   color={colors.accent.warning}
                 />

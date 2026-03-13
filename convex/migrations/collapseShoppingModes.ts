@@ -27,18 +27,18 @@ export const run = internalMutation({
     let pausedAtCleared = 0;
 
     for (const list of allLists) {
-      const updates: any = {};
+      const updates: Record<string, unknown> = {};
       let needsUpdate = false;
 
       // 1. Status conversion
-      if (list.status === ("shopping" as any) || list.status === ("paused" as any)) {
+      if (list.status === ("shopping" as string) || list.status === ("paused" as string)) {
         updates.status = "active";
         needsUpdate = true;
         statusChanges++;
       }
 
       // 2. Clear pausedAt if it exists
-      if ((list as any).pausedAt !== undefined) {
+      if ((list as unknown as Record<string, unknown>).pausedAt !== undefined) {
         updates.pausedAt = undefined;
         needsUpdate = true;
         pausedAtCleared++;

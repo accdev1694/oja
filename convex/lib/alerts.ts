@@ -14,7 +14,7 @@ export async function sendAlert(
     type: string;
     message: string;
     severity: "info" | "warning" | "critical";
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   }
 ) {
   // 1. Create internal alert record

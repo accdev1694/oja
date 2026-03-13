@@ -4,13 +4,34 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { GlassCollapsible, colors } from "@/components/ui/glass";
 import { styles } from "./styles";
 
+interface StoreBreakdownStore {
+  storeId: string;
+  displayName: string;
+  spending: number;
+  spendingPercent: number;
+  visits: number;
+  color: string;
+}
+
+interface AlternativeStore {
+  storeId: string;
+  storeName: string;
+  storeColor: string;
+  potentialSavings: number;
+}
+
+interface StoreRecommendation {
+  message: string;
+  alternativeStores?: AlternativeStore[];
+}
+
 interface StoreBreakdownCardProps {
   storeBreakdownData: {
-    stores: any[];
+    stores: StoreBreakdownStore[];
     totalSpending: number;
     totalVisits: number;
   } | null;
-  storeRecommendation: any;
+  storeRecommendation: StoreRecommendation | null | undefined;
 }
 
 export const StoreBreakdownCard = ({ 
@@ -119,7 +140,7 @@ export const StoreBreakdownCard = ({
                   <Text style={styles.alternativeStoresLabel}>
                     Other options:
                   </Text>
-                  {storeRecommendation.alternativeStores.map((alt: any) => (
+                  {storeRecommendation.alternativeStores.map((alt) => (
                     <View
                       key={alt.storeId}
                       style={[

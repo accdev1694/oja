@@ -36,21 +36,21 @@ export function CombineListsModal({
   
   const selectedLists = useMemo(() => {
     if (!history) return [];
-    return history.filter((l: any) => sourceListIds.includes(l._id));
+    return history.filter((l) => sourceListIds.includes(l._id));
   }, [history, sourceListIds]);
 
   const totalEstimatedCost = useMemo(() => {
-    return selectedLists.reduce((sum: number, list: any) => {
+    return selectedLists.reduce((sum, list) => {
       // Safely access properties that might exist depending on the query return type
-      const l = list as any;
-      return sum + (l.totalEstimatedCost || l.actualTotal || l.budget || 0);
+      const l = list as Record<string, unknown>;
+      return sum + (Number(l.totalEstimatedCost) || Number(l.actualTotal) || Number(l.budget) || 0);
     }, 0);
   }, [selectedLists]);
 
   const totalItemCount = useMemo(() => {
-    return selectedLists.reduce((sum: number, list: any) => {
-      const l = list as any;
-      return sum + (l.itemCount || 0);
+    return selectedLists.reduce((sum, list) => {
+      const l = list as Record<string, unknown>;
+      return sum + (Number(l.itemCount) || 0);
     }, 0);
   }, [selectedLists]);
 

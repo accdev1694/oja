@@ -13,11 +13,20 @@ import {
 } from "@/components/ui/glass";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+interface ScannedProductItem {
+  name: string;
+  category?: string;
+  estimatedPrice?: number;
+  size?: string;
+  unit?: string;
+  [key: string]: unknown;
+}
+
 interface ProductModeProps {
-  scannedProducts: any[];
+  scannedProducts: ScannedProductItem[];
   isScanning: boolean;
   onScanPress: () => void;
-  onProductPress: (product: any, index: number) => void;
+  onProductPress: (product: ScannedProductItem, index: number) => void;
   onClearAll: () => void;
   onAddAll: () => void;
   scanButtonRef?: React.RefObject<View | null>;

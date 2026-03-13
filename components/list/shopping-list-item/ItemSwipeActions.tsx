@@ -6,8 +6,8 @@ import { styles } from "./styles";
 
 interface ItemSwipeActionsProps {
   isShopping: boolean;
-  leftActionStyle: any;
-  rightActionStyle: any;
+  leftActionStyle: Record<string, unknown>;
+  rightActionStyle: Record<string, unknown>;
 }
 
 export const ItemSwipeActions = ({

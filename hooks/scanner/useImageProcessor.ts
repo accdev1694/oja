@@ -1,6 +1,15 @@
 import { useState, useCallback } from "react";
 import { useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { ScannedProduct } from "@/hooks/useProductScanner";
+
+interface ImageProcessorProps {
+  addPendingTile: (uri: string) => void;
+  removePending: (uri: string) => void;
+  promotePending: (uri: string, product: ScannedProduct) => void;
+  checkDuplicate: (product: ScannedProduct) => boolean;
+  setLastError: (msg: string | null) => void;
+}
 import { haptic } from "@/lib/haptics/safeHaptics";
 import { MAX_FILE_SIZE } from "./dedupHelpers";
 
@@ -8,7 +17,7 @@ import { MAX_FILE_SIZE } from "./dedupHelpers";
 // Image upload + AI scan pipeline
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function useImageProcessor({ addPendingTile, removePending, promotePending, checkDuplicate, setLastError }: any) {
+export function useImageProcessor({ addPendingTile, removePending, promotePending, checkDuplicate, setLastError }: ImageProcessorProps) {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const generateUploadUrl = useMutation(api.receipts.generateUploadUrl);
@@ -19,7 +28,7 @@ export function useImageProcessor({ addPendingTile, removePending, promotePendin
    * promote to ready or remove on failure.
    */
   const processImageUri = useCallback(
-    async (uri: any, errorHint: any) => {
+    async (uri: string, errorHint: string) => {
       setIsProcessing(true);
       haptic("medium");
 

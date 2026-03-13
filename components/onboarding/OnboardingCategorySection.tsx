@@ -3,11 +3,16 @@ import { View, Text } from "react-native";
 import { OnboardingItemCard } from "./OnboardingItemCard";
 import { styles } from "./styles";
 
+interface OnboardingItem {
+  name: string;
+  estimatedPrice?: number;
+}
+
 interface OnboardingCategorySectionProps {
   category: string;
-  categoryItems: any[];
+  categoryItems: OnboardingItem[];
   selectedItems: Set<number>;
-  allItems: any[];
+  allItems: OnboardingItem[];
   onToggleItem: (index: number) => void;
   accentColor: string;
 }

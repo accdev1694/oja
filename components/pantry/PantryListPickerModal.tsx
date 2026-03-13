@@ -109,7 +109,7 @@ export const PantryListPickerModal = React.memo(function PantryListPickerModal({
                 {list.name}
               </Text>
               <Text style={styles.optionMeta}>
-                {(list as any).isInProgress ? "Shopping" : "Active"}
+                {list.isInProgress ? "Shopping" : "Active"}
               </Text>
               <MaterialCommunityIcons
                 name="chevron-right"

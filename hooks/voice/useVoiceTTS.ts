@@ -11,7 +11,7 @@ import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
 // ── Safe dynamic import of expo-av ─────────────────────────────────────
-let AudioModule: any = null;
+let AudioModule: Record<string, unknown> | null = null;
 
 try {
   const mod = require("expo-av");
@@ -25,7 +25,7 @@ const MAX_TTS_CHARS = 4500;
 
 export function useVoiceTTS() {
   const textToSpeech = useAction(api.ai.textToSpeech);
-  const soundRef = useRef<any>(null);
+  const soundRef = useRef<{stopAsync():Promise<void>;unloadAsync():Promise<void>}|null>(null);
   const isSpeakingRef = useRef(false);
 
   const speakText = useCallback(
@@ -55,7 +55,7 @@ export function useVoiceTTS() {
             );
             soundRef.current = sound;
 
-            sound.setOnPlaybackStatusUpdate((status: any) => {
+            sound.setOnPlaybackStatusUpdate((status:{isLoaded:boolean;didJustFinish?:boolean}) => {
               if (status.isLoaded && status.didJustFinish) {
                 sound.unloadAsync();
                 soundRef.current = null;

@@ -1,5 +1,5 @@
 import { GenericMutationCtx, GenericQueryCtx } from "convex/server";
-import { Id } from "../_generated/dataModel";
+import { DataModel, Id } from "../_generated/dataModel";
 
 /**
  * Tracks a funnel event for analytics
@@ -9,10 +9,10 @@ import { Id } from "../_generated/dataModel";
  * @param eventData Optional metadata
  */
 export async function trackFunnelEvent(
-  ctx: GenericMutationCtx<any>,
+  ctx: GenericMutationCtx<DataModel>,
   userId: Id<"users">,
   eventName: string,
-  eventData?: any
+  eventData?: Record<string, unknown>
 ) {
   const now = Date.now();
   
@@ -49,10 +49,10 @@ export async function trackFunnelEvent(
  * @param metadata Additional context
  */
 export async function trackActivity(
-  ctx: GenericMutationCtx<any>,
+  ctx: GenericMutationCtx<DataModel>,
   userId: Id<"users">,
   eventType: string,
-  metadata?: any
+  metadata?: Record<string, unknown>
 ) {
   const now = Date.now();
   

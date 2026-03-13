@@ -7,7 +7,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 interface UseTripLogicProps {
   listId: Id<"shoppingLists">;
   onTripStarted?: () => void;
-  onTripFinished?: (stats: any) => void;
+  onTripFinished?: (stats: Record<string, unknown>) => void;
 }
 
 export function useTripLogic({ listId, onTripStarted, onTripFinished }: UseTripLogicProps) {

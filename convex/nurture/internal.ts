@@ -226,7 +226,7 @@ export const processNurtureSequence = internalMutation({
         }
 
         // Check inactivity triggers
-        if ("daysInactive" in config && daysInactive >= (config as any).daysInactive) {
+        if ("daysInactive" in config && daysInactive >= (config as unknown as {daysInactive:number}).daysInactive) {
           shouldSend = true;
         }
 

@@ -351,7 +351,7 @@ function DietaryButton({ diet, isSelected, onToggle }: DietaryButtonProps) {
           style={[styles.dietaryButton, isSelected && styles.dietaryButtonSelected]}
         >
           <MaterialCommunityIcons 
-            name={diet.icon as any} 
+            name={diet.icon as const} 
             size={24} 
             color={isSelected ? colors.accent.success : colors.text.secondary} 
           />

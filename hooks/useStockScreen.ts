@@ -99,7 +99,7 @@ export function useStockScreen() {
   // Migrate icons for items that don't have them yet
   useEffect(() => {
     if (items && items.length > 0) {
-      const needsMigration = items.some((item: any) => !item.icon);
+      const needsMigration = items.some((item) => !item.icon);
       if (needsMigration) {
         migrateIcons({}).catch((err) => {
           console.error("Migration failed:", err);
@@ -171,8 +171,8 @@ export function useStockScreen() {
   // Derive unique categories from items
   const categories = useMemo(() => {
     if (!items) return [];
-    const cats = new Set(items.map((item: any) => item.category));
-    return [...cats].sort((a: any, b: any) => a.localeCompare(b)) as string[];
+    const cats = new Set(items.map((item) => item.category));
+    return [...cats].sort((a, b) => a.localeCompare(b));
   }, [items]);
 
   // Initialize all categories as collapsed on first load
@@ -187,7 +187,7 @@ export function useStockScreen() {
   const attentionCount = useMemo(() => {
     if (!items) return 0;
     return items.filter(
-      (item: any) => item.stockLevel === "low" || item.stockLevel === "out"
+      (item) => item.stockLevel === "low" || item.stockLevel === "out"
     ).length;
   }, [items]);
 
@@ -196,7 +196,7 @@ export function useStockScreen() {
     const isSearching = searchQuery.trim().length > 0;
     const searchLower = searchQuery.toLowerCase();
 
-    const activeResults = items.filter((item: any) => {
+    const activeResults = items.filter((item) => {
       if (item.status === "archived") return false;
       const level = item.stockLevel as StockLevel;
       if (viewMode === "attention") {
@@ -212,7 +212,7 @@ export function useStockScreen() {
     });
 
     if (isSearching && archivedItems) {
-      const archivedResults = archivedItems.filter((item: any) =>
+      const archivedResults = archivedItems.filter((item) =>
         item.name.toLowerCase().includes(searchLower)
       );
       return [...activeResults, ...archivedResults];
@@ -225,7 +225,7 @@ export function useStockScreen() {
     const essentials: typeof filteredItems = [];
     const regular: typeof filteredItems = [];
 
-    filteredItems.forEach((item: any) => {
+    filteredItems.forEach((item) => {
       const tier = getItemTier(item);
       if (tier === 1) {
         essentials.push(item);
@@ -235,7 +235,7 @@ export function useStockScreen() {
     });
 
     const grouped: Record<string, typeof filteredItems> = {};
-    regular.forEach((item: any) => {
+    regular.forEach((item) => {
       if (!grouped[item.category]) {
         grouped[item.category] = [];
       }
@@ -346,7 +346,7 @@ export function useStockScreen() {
 
   const handleSwipeDecrease = useCallback(async (itemId: Id<"pantryItems">) => {
     if (showGestureOnboarding) dismissGestureOnboarding();
-    const item = items?.find((i: any) => i._id === itemId);
+    const item = items?.find((i) => i._id === itemId);
     if (!item) return;
 
     const nextLevel = getNextLowerLevel(item.stockLevel as StockLevel);
@@ -372,7 +372,7 @@ export function useStockScreen() {
 
   const handleSwipeIncrease = useCallback(async (itemId: Id<"pantryItems">) => {
     if (showGestureOnboarding) dismissGestureOnboarding();
-    const item = items?.find((i: any) => i._id === itemId);
+    const item = items?.find((i) => i._id === itemId);
     if (!item) return;
 
     const nextLevel = getNextHigherLevel(item.stockLevel as StockLevel);
@@ -394,7 +394,7 @@ export function useStockScreen() {
   }, [items, showGestureOnboarding, dismissGestureOnboarding, getNextHigherLevel, updateStockLevel]);
 
   const handleRemoveItem = useCallback((itemId: Id<"pantryItems">) => {
-    const item = items?.find((i: any) => i._id === itemId);
+    const item = items?.find((i) => i._id === itemId);
     if (!item) return;
 
     impactAsync(ImpactFeedbackStyle.Medium);
@@ -435,11 +435,11 @@ export function useStockScreen() {
   }, [addListItem, showToast]);
 
   const handleAddToList = useCallback((itemId: Id<"pantryItems">) => {
-    const item = items?.find((i: any) => i._id === itemId);
+    const item = items?.find((i) => i._id === itemId);
     if (!item) return;
 
     const planningLists = (activeLists ?? []).filter(
-      (l: any) => l.status === "active"
+      (l) => l.status === "active"
     );
 
     if (planningLists.length === 0) {
@@ -523,7 +523,7 @@ export function useStockScreen() {
   const handleMergeDuplicates = useCallback(async () => {
     if (!duplicateGroups || duplicateGroups.length === 0) return;
 
-    const totalDupes = duplicateGroups.reduce((sum: number, g: any) => sum + g.length - 1, 0);
+    const totalDupes = duplicateGroups.reduce((sum, g) => sum + g.length - 1, 0);
     const groupCount = duplicateGroups.length;
 
     alert(
@@ -543,14 +543,14 @@ export function useStockScreen() {
                 const priceRank = (source?: string) =>
                   source === "receipt" ? 3 : source === "user" ? 2 : source === "ai_estimate" ? 1 : 0;
 
-                const sorted = [...group].sort((a: any, b: any) => {
+                const sorted = [...group].sort((a, b) => {
                   const priceDiff = priceRank(b.priceSource) - priceRank(a.priceSource);
                   if (priceDiff !== 0) return priceDiff;
                   return (b.purchaseCount ?? 0) - (a.purchaseCount ?? 0);
                 });
 
                 const keepId = sorted[0]._id;
-                const deleteIds = sorted.slice(1).map((item: any) => item._id);
+                const deleteIds = sorted.slice(1).map((item) => item._id);
 
                 await mergeDuplicatesMut({ keepId, deleteIds });
               }

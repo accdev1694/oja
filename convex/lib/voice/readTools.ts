@@ -11,15 +11,15 @@ import type { Id } from "../../_generated/dataModel";
 export async function executeReadTool(
   ctx: ActionCtx,
   functionName: string,
-  args: Record<string, any>
-): Promise<any> {
+  args: Record<string, unknown>
+): Promise<unknown> {
   switch (functionName) {
     case "get_pantry_items": {
       const items = await ctx.runQuery(api.pantryItems.getByUser, {});
-      const filtered = args.stockFilter
-        ? items.filter((i: any) => i.stockLevel === args.stockFilter)
+      const filtered = (args.stockFilter as string)
+        ? items.filter((i) => i.stockLevel === (args.stockFilter as string))
         : items;
-      return filtered.map((i: any) => ({
+      return filtered.map((i) => ({
         name: i.name,
         category: i.category,
         stockLevel: i.stockLevel,
@@ -31,7 +31,7 @@ export async function executeReadTool(
 
     case "get_active_lists": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      return lists.map((l: any) => ({
+      return lists.map((l) => ({
         id: l._id,
         name: l.name,
         status: l.status,
@@ -43,9 +43,9 @@ export async function executeReadTool(
 
     case "get_list_items": {
       const items = await ctx.runQuery(api.listItems.getByList, {
-        listId: args.listId as Id<"shoppingLists">,
+        listId: (args.listId as string) as Id<"shoppingLists">,
       });
-      return items.map((i: any) => ({
+      return items.map((i) => ({
         name: i.name,
         quantity: i.quantity,
         estimatedPrice: i.estimatedPrice,
@@ -56,19 +56,19 @@ export async function executeReadTool(
 
     case "get_price_estimate": {
       return await ctx.runQuery(api.currentPrices.getEstimate, {
-        itemName: args.itemName,
+        itemName: (args.itemName as string),
       });
     }
 
     case "get_price_stats": {
       return await ctx.runQuery(api.priceHistory.getPriceStats, {
-        itemName: args.itemName,
+        itemName: (args.itemName as string),
       });
     }
 
     case "get_price_trend": {
       return await ctx.runQuery(api.priceHistory.getPriceTrend, {
-        itemName: args.itemName,
+        itemName: (args.itemName as string),
       });
     }
 
@@ -90,7 +90,7 @@ export async function executeReadTool(
 
     case "get_item_variants": {
       return await ctx.runQuery(api.itemVariants.getWithPrices, {
-        baseItem: args.baseItem,
+        baseItem: (args.baseItem as string),
       });
     }
 
@@ -100,16 +100,16 @@ export async function executeReadTool(
 
     case "get_budget_status": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      let targetList: any = null;
+      let targetList: (typeof lists)[number] | undefined = undefined;
 
-      if (args.listName) {
-        targetList = lists.find((l: any) =>
-          l.name.toLowerCase().includes(args.listName.toLowerCase())
+      if ((args.listName as string)) {
+        targetList = lists.find((l) =>
+          l.name.toLowerCase().includes((args.listName as string).toLowerCase())
         );
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-        targetList = lists.find((l: any) => l.isInProgress) || lists[0];
+        targetList = lists.find((l) => l.isInProgress) || lists[0];
       }
 
       if (!targetList) {
@@ -133,16 +133,16 @@ export async function executeReadTool(
 
     case "get_list_details": {
       const allLists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      let list: any = null;
+      let list: (typeof allLists)[number] | undefined = undefined;
 
-      if (args.listName) {
-        list = allLists.find((l: any) =>
-          l.name.toLowerCase().includes(args.listName.toLowerCase())
+      if ((args.listName as string)) {
+        list = allLists.find((l) =>
+          l.name.toLowerCase().includes((args.listName as string).toLowerCase())
         );
       } else if (allLists.length === 1) {
         list = allLists[0];
       } else if (allLists.length > 1) {
-        list = allLists.find((l: any) => l.isInProgress) || allLists[0];
+        list = allLists.find((l) => l.isInProgress) || allLists[0];
       }
 
       if (!list) {
@@ -155,7 +155,7 @@ export async function executeReadTool(
 
       const budget = list.budget || 0;
       const spent = list.totalEstimatedCost || 0;
-      const checkedCount = listItems.filter((i: any) => i.isChecked).length;
+      const checkedCount = listItems.filter((i) => i.isChecked).length;
 
       return {
         name: list.name,
@@ -167,7 +167,7 @@ export async function executeReadTool(
         checkedCount,
         uncheckedCount: listItems.length - checkedCount,
         storeName: list.storeName,
-        items: listItems.slice(0, 10).map((i: any) => ({
+        items: listItems.slice(0, 10).map((i) => ({
           name: i.name,
           quantity: i.quantity,
           price: i.estimatedPrice,
@@ -182,18 +182,18 @@ export async function executeReadTool(
       const savingsJar = await ctx.runQuery(api.insights.getSavingsJar, {});
       const weeklyDigest = await ctx.runQuery(api.insights.getWeeklyDigest, {});
 
-      const lowStockItems = pantryItems.filter((i: any) => i.stockLevel === "low" || i.stockLevel === "out");
-      const totalBudget = activeLists.reduce((sum: number, l: any) => sum + (l.budget || 0), 0);
-      const totalEstimated = activeLists.reduce((sum: number, l: any) => sum + (l.totalEstimatedCost || 0), 0);
+      const lowStockItems = pantryItems.filter((i) => i.stockLevel === "low" || i.stockLevel === "out");
+      const totalBudget = activeLists.reduce((sum: number, l) => sum + (l.budget || 0), 0);
+      const totalEstimated = activeLists.reduce((sum: number, l) => sum + (l.totalEstimatedCost || 0), 0);
 
       return {
         activeListsCount: activeLists.length,
-        activeListNames: activeLists.map((l: any) => l.name),
+        activeListNames: activeLists.map((l) => l.name),
         totalBudgetAcrossLists: totalBudget,
         totalEstimatedSpend: totalEstimated,
         pantryItemsCount: pantryItems.length,
         lowStockCount: lowStockItems.length,
-        lowStockItems: lowStockItems.slice(0, 5).map((i: any) => i.name),
+        lowStockItems: lowStockItems.slice(0, 5).map((i) => i.name),
         totalSavings: savingsJar?.totalSaved || 0,
         thisWeekSpent: weeklyDigest?.thisWeekTotal || 0,
         thisWeekTrips: weeklyDigest?.tripsCount || 0,
@@ -202,19 +202,19 @@ export async function executeReadTool(
 
     case "compare_store_prices": {
       const allStores = await ctx.runQuery(api.stores.getAll, {});
-      const storeIds = allStores.map((s: any) => s.id);
+      const storeIds = allStores.map((s) => s.id);
 
       const comparison = await ctx.runQuery(api.currentPrices.getComparisonByStores, {
-        itemName: args.itemName,
-        size: args.size,
+        itemName: (args.itemName as string),
+        size: (args.size as string),
         storeIds,
       });
 
       if (comparison.storesWithData === 0) {
         return {
-          itemName: args.itemName,
-          size: args.size,
-          message: `I don't have price data for ${args.itemName} yet. Keep scanning receipts and I'll learn!`,
+          itemName: (args.itemName as string),
+          size: (args.size as string),
+          message: `I don't have price data for ${(args.itemName as string)} yet. Keep scanning receipts and I'll learn!`,
           noData: true,
         };
       }
@@ -222,13 +222,13 @@ export async function executeReadTool(
       const pricesWithStores = Object.entries(comparison.byStore)
         .filter(([, data]) => data !== null)
         .map(([storeId, data]) => {
-          const storeInfo = allStores.find((s: any) => s.id === storeId);
+          const storeInfo = allStores.find((s) => s.id === storeId);
           return {
             storeId,
             storeName: storeInfo?.displayName ?? storeId,
-            price: (data as any).price,
-            size: (data as any).size,
-            unit: (data as any).unit,
+            price: (data as { price: number }).price,
+            size: (data as { size: string }).size,
+            unit: (data as { unit: string }).unit,
           };
         })
         .sort((a, b) => a.price - b.price);
@@ -238,15 +238,15 @@ export async function executeReadTool(
       const savings = mostExpensive.price - cheapest.price;
 
       return {
-        itemName: args.itemName,
-        size: args.size,
+        itemName: (args.itemName as string),
+        size: (args.size as string),
         cheapestStore: cheapest.storeName,
         cheapestPrice: cheapest.price,
         averagePrice: comparison.averagePrice,
         storesCompared: pricesWithStores.length,
         allPrices: pricesWithStores.slice(0, 5),
         potentialSavings: Math.round(savings * 100) / 100,
-        message: `${args.itemName} is cheapest at ${cheapest.storeName} for £${cheapest.price.toFixed(2)}${savings > 0 ? ` — you could save £${savings.toFixed(2)} compared to ${mostExpensive.storeName}` : ""}`,
+        message: `${(args.itemName as string)} is cheapest at ${cheapest.storeName} for £${cheapest.price.toFixed(2)}${savings > 0 ? ` — you could save £${savings.toFixed(2)} compared to ${mostExpensive.storeName}` : ""}`,
       };
     }
 
@@ -265,7 +265,7 @@ export async function executeReadTool(
         potentialMonthlySavings: recommendation.potentialMonthlySavings,
         itemCount: recommendation.itemCount,
         message: recommendation.message,
-        alternatives: recommendation.alternativeStores?.slice(0, 2).map((s: any) => ({
+        alternatives: recommendation.alternativeStores?.slice(0, 2).map((s) => ({
           store: s.storeName,
           savings: s.potentialSavings,
         })),

@@ -78,7 +78,7 @@ export const runScheduledReports = internalMutation({
 
     if (activeConfigs.length === 0) return { status: "no_active_configs" };
 
-    let reportData: any = {};
+    let reportData: Record<string, unknown> = {};
     if (args.type === "weekly_summary") {
       // @ts-ignore
       reportData = await ctx.runQuery(api.admin.getAnalytics, {});
@@ -98,7 +98,7 @@ export const runScheduledReports = internalMutation({
       await ctx.db.patch(config._id, { lastRunAt: Date.now() });
 
       await ctx.db.insert("adminLogs", {
-        adminUserId: config.recipientEmails[0] as any,
+        adminUserId: config.recipientEmails[0] as unknown as typeof config._id,
         action: "report_generated",
         targetType: "report",
         targetId: config._id,

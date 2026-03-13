@@ -13,11 +13,20 @@ import {
 } from "@/components/ui/glass";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { Id } from "@/convex/_generated/dataModel";
+
+interface ReceiptItem {
+  _id: Id<"receipts">;
+  storeName: string;
+  purchaseDate: number;
+  total: number;
+  [key: string]: unknown;
+}
 
 interface ReceiptModeProps {
-  receipts: any[] | undefined;
+  receipts: ReceiptItem[] | undefined;
   isScanning?: boolean;
-  onSelectReceipt: (receipt: any) => void;
+  onSelectReceipt: (receipt: ReceiptItem) => void;
   onScanPress: () => void;
   scanButtonRef?: React.RefObject<View | null>;
 }

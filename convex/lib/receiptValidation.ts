@@ -1,5 +1,7 @@
 // Receipt validation for fraud prevention
 import { getTierFromScans, checkFeatureAccess, getMaxEarningScans } from "./featureGating";
+import { GenericMutationCtx } from "convex/server";
+import { DataModel, Id } from "../_generated/dataModel";
 
 // Generate SHA-256 hash from ArrayBuffer
 export async function generateImageHash(arrayBuffer: ArrayBuffer): Promise<string> {
@@ -27,14 +29,19 @@ export function isValidUKStore(storeName: string): boolean {
   return false;
 }
 
-export function detectAnomalousPattern(recentScans: any[], newScan: any): boolean {
+interface ScanData {
+  total?: number;
+  items?: { length: number };
+}
+
+export function detectAnomalousPattern(recentScans: ScanData[], newScan: ScanData): boolean {
   if (recentScans.length === 0) return false;
   
   let sameTotalCount = 0;
   let sameItemCount = 0;
 
   for (const scan of recentScans) {
-    if (scan.total > 0 && Math.abs(scan.total - newScan.total) < 0.01) {
+    if (scan.total != null && scan.total > 0 && newScan.total != null && Math.abs(scan.total - newScan.total) < 0.01) {
       sameTotalCount++;
     }
     if (scan.items?.length === newScan.items?.length) {
@@ -57,11 +64,19 @@ export interface ValidationResult {
   reason?: string;
 }
 
+interface OcrData {
+  imageQuality?: number;
+  purchaseDate?: string | number;
+  storeName?: string;
+  total: number;
+  items?: { unitPrice: number }[];
+}
+
 export async function validateReceiptData(
-  ctx: any, 
-  userId: any, 
+  ctx: GenericMutationCtx<DataModel>, 
+  userId: Id<"users">, 
   imageHash: string, 
-  ocrData: any
+  ocrData: OcrData
 ): Promise<ValidationResult> {
   const flags: string[] = [];
   let isValid = true;
@@ -70,7 +85,7 @@ export async function validateReceiptData(
   // 1. Duplicate detection
   const duplicates = await ctx.db
     .query("receiptHashes")
-    .withIndex("by_hash", (q: any) => q.eq("imageHash", imageHash))
+    .withIndex("by_hash", (q) => q.eq("imageHash", imageHash))
     .collect();
     
   if (duplicates.length > 0) {
@@ -126,7 +141,7 @@ export async function validateReceiptData(
   
   const todayScans = await ctx.db
     .query("receipts")
-    .withIndex("by_user_date", (q: any) => q.eq("userId", userId).gte("purchaseDate", todayStart.getTime()))
+    .withIndex("by_user_date", (q) => q.eq("userId", userId).gte("purchaseDate", todayStart.getTime()))
     .collect();
     
   if (todayScans.length >= 2) { // Max 2 per day to prevent spam
@@ -139,7 +154,7 @@ export async function validateReceiptData(
   // 7. Pattern Detection
   const recentScans = await ctx.db
     .query("receipts")
-    .withIndex("by_user", (q: any) => q.eq("userId", userId))
+    .withIndex("by_user", (q) => q.eq("userId", userId))
     .order("desc")
     .take(10);
     

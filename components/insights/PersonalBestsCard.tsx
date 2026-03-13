@@ -1,4 +1,4 @@
-import React from "react";
+import React, { ComponentProps } from "react";
 import { View, Text } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { GlassCollapsible, colors } from "@/components/ui/glass";
@@ -70,7 +70,7 @@ const BestItem = React.memo(function BestItem({
   return (
     <View style={styles.bestItem}>
       <View style={[styles.bestIconCircle, { backgroundColor: `${color}20` }]}>
-        <MaterialCommunityIcons name={icon as any} size={20} color={color} />
+        <MaterialCommunityIcons name={icon as ComponentProps<typeof MaterialCommunityIcons>["name"]} size={20} color={color} />
       </View>
       <Text style={styles.bestValue}>{value}</Text>
       <Text style={styles.bestLabel}>{label}</Text>

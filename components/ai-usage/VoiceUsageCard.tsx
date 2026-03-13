@@ -13,7 +13,18 @@ import {
  * Voice Assistant usage card with progress bar and status message.
  * Shows Tobi request count, percentage, and limit status.
  */
-export function VoiceUsageCard({ voice, isAdmin }: any) {
+interface VoiceStats {
+  usage: number;
+  limit: number;
+  percentage: number;
+}
+
+interface VoiceUsageCardProps {
+  voice: VoiceStats;
+  isAdmin: boolean;
+}
+
+export function VoiceUsageCard({ voice, isAdmin }: VoiceUsageCardProps) {
   const getStatusColor = (percentage: number) => {
     if (percentage >= 100) return colors.semantic.danger;
     if (percentage >= 80) return colors.accent.warm;
