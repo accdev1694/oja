@@ -175,7 +175,11 @@
       "Bash(cut:*)",
       "Bash(tee:*)",
       "Bash(for file in convex/stripe/credits.ts convex/stripe/checkout.ts convex/points/helpers.ts convex/listItems/pricing.ts convex/partners/helpers.ts convex/partners/messages.ts convex/partners/comments.ts convex/partners/members.ts convex/users/accountManagement.ts convex/pricingConfig.ts convex/listItems/core.ts convex/pantry/restock.ts)",
-      "Bash(do sed -i 's/\\(q: any\\) =>/q =>/g' \"$file\")"
+      "Bash(do sed -i 's/\\(q: any\\) =>/q =>/g' \"$file\")",
+      "Bash(for file in convex/insights/monthlyTrends.ts convex/insights/personalBests.ts convex/insights/streaks.ts convex/insights/helpers.ts convex/insights/challenges.ts)",
+      "Bash(do sed -i 's/\\(q: any\\)/q/g; s/\\(item: any\\)/item/g; s/\\(r: any\\)/r/g; s/\\(s: any\\)/s/g; s/\\(a: any, b: any\\)/\\(a, b\\)/g; s/\\(a: any\\)/a/g; s/\\(i: any\\)/i/g; s/\\(p: any\\)/p/g; s/\\(u: any\\)/u/g; s/\\(c: any\\)/c/g; s/: any\\)/\\)\\\\/g; s/handler: async \\(ctx: any, args: any\\)/handler: async \\(ctx, args\\)/g' \"$file\")",
+      "Bash(for:*)",
+      "Bash(do sed -i 's/\\(q: any\\)/q/g; s/\\(item: any\\)/item/g; s/\\(r: any\\)/r/g; s/\\(s: any\\)/s/g; s/\\(a: any, b: any\\)/\\(a, b\\)/g; s/\\(a: any\\)/a/g; s/\\(i: any\\)/i/g; s/\\(p: any\\)/p/g; s/\\(u: any\\)/u/g; s/\\(c: any\\)/c/g' \"$file\")"
     ]
   },
   "enableAllProjectMcpServers": true,

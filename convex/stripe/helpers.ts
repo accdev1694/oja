@@ -6,7 +6,7 @@ export const getUserByClerkId = internalQuery({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", args.clerkId))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", args.clerkId))
       .unique();
   },
 });
@@ -16,7 +16,7 @@ export const getSubscriptionByUser = internalQuery({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("subscriptions")
-      .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+      .withIndex("by_user", q => q.eq("userId", args.userId))
       .order("desc")
       .first();
   },
@@ -27,7 +27,7 @@ export const cleanupOldWebhooks = internalMutation({
     const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
     const oldWebhooks = await ctx.db
       .query("processedWebhooks")
-      .withIndex("by_processed_at", (q: any) => q.lt("processedAt", ninetyDaysAgo))
+      .withIndex("by_processed_at", q => q.lt("processedAt", ninetyDaysAgo))
       .collect();
 
     for (const webhook of oldWebhooks) {

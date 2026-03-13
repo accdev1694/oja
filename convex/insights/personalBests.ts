@@ -9,7 +9,7 @@ export const getPersonalBests = query({
 
     const completedLists = await ctx.db
       .query("shoppingLists")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
     const completed = completedLists.filter((l: any) => l.status === "completed");
@@ -22,7 +22,7 @@ export const getPersonalBests = query({
     for (const list of completed) {
       const items = await ctx.db
         .query("listItems")
-        .withIndex("by_list", (q: any) => q.eq("listId", list._id))
+        .withIndex("by_list", q => q.eq("listId", list._id))
         .collect();
 
       const spent = items.reduce(
@@ -41,7 +41,7 @@ export const getPersonalBests = query({
 
     const streaks = await ctx.db
       .query("streaks")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
     for (const s of streaks) {

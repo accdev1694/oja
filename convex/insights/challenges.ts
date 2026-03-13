@@ -16,7 +16,7 @@ export const getActiveChallenge = query({
 
     const challenges = await ctx.db
       .query("weeklyChallenges")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
     // Find active (not expired, not completed)
@@ -41,7 +41,7 @@ export const generateChallenge = mutation({
     // Check if there's already an active one
     const challenges = await ctx.db
       .query("weeklyChallenges")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
     const active = challenges.find(c => c.endDate >= today && !c.completedAt);
@@ -105,7 +105,7 @@ export const updateChallengeProgress = mutation({
       // Award achievement for first challenge completion
       const existingAch = await ctx.db
         .query("achievements")
-        .withIndex("by_user_type", (q: any) => q.eq("userId", user._id).eq("type", "first_challenge"))
+        .withIndex("by_user_type", q => q.eq("userId", user._id).eq("type", "first_challenge"))
         .unique();
 
       if (!existingAch) {

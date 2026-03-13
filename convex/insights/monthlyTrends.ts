@@ -15,9 +15,9 @@ export const getMonthlyTrends = query({
     // Receipts for monthly totals + categories
     const receipts = await ctx.db
       .query("receipts")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
-    const recentReceipts = receipts.filter((r: any) => r.purchaseDate >= sixMonthsAgo);
+    const recentReceipts = receipts.filter(r => r.purchaseDate >= sixMonthsAgo);
 
     const monthlyData: Record<string, { total: number; count: number }> = {};
     const categoryTotals: Record<string, number> = {};
@@ -64,7 +64,7 @@ export const getMonthlyTrends = query({
     // Budget adherence from completed lists
     const lists = await ctx.db
       .query("shoppingLists")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
     const completedWithBudget = lists.filter(
       (l: any) => l.status === "completed" && l.budget && l.completedAt && l.completedAt >= sixMonthsAgo
@@ -75,7 +75,7 @@ export const getMonthlyTrends = query({
     for (const list of completedWithBudget) {
       const items = await ctx.db
         .query("listItems")
-        .withIndex("by_list", (q: any) => q.eq("listId", list._id))
+        .withIndex("by_list", q => q.eq("listId", list._id))
         .collect();
       const spent = items.reduce(
         (sum: number, item: any) => sum + (item.actualPrice || item.estimatedPrice || 0) * item.quantity,

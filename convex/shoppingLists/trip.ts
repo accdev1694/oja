@@ -152,7 +152,7 @@ export const getTripStats = query({
     if (list.userId !== user._id) {
       const partner = await ctx.db
         .query("listPartners")
-        .withIndex("by_list_user", (q: any) =>
+        .withIndex("by_list_user", q =>
           q.eq("listId", args.id).eq("userId", user._id)
         )
         .unique();
@@ -211,7 +211,7 @@ export const getTripSummary = query({
     if (list.userId !== user._id) {
       const partner = await ctx.db
         .query("listPartners")
-        .withIndex("by_list_user", (q: any) =>
+        .withIndex("by_list_user", q =>
           q.eq("listId", args.id).eq("userId", user._id)
         )
         .unique();

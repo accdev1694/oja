@@ -14,7 +14,7 @@ export const updateStreak = mutation({
 
     const existing = await ctx.db
       .query("streaks")
-      .withIndex("by_user_type", (q: any) => q.eq("userId", user._id).eq("type", args.type))
+      .withIndex("by_user_type", q => q.eq("userId", user._id).eq("type", args.type))
       .unique();
 
     if (existing) {
@@ -71,7 +71,7 @@ async function checkStreakAchievement(ctx: any, userId: any, type: string, count
       const achievementType = `streak_${type}_${m.count}`;
       const existing = await ctx.db
         .query("achievements")
-        .withIndex("by_user_type", (q: any) => q.eq("userId", userId).eq("type", achievementType))
+        .withIndex("by_user_type", q => q.eq("userId", userId).eq("type", achievementType))
         .unique();
 
       if (!existing) {
@@ -104,7 +104,7 @@ export const getStreaks = query({
     if (!user) return [];
     return await ctx.db
       .query("streaks")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
   },
 });
