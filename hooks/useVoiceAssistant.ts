@@ -1,69 +1,24 @@
 /**
- * Voice Assistant Hook
+ * Voice Assistant Hook (Composed)
  *
- * Manages the full voice assistant lifecycle:
- * - Speech recognition via expo-speech-recognition
- * - Sending transcripts to the voiceAssistant Convex action
- * - Conversation history (multi-turn, max 6 turns)
- * - TTS via Google Cloud Neural2 (fallback: expo-speech)
- * - Continuous conversation mode
- * - Rate limiting (1 req / 6s, 200/day)
+ * Orchestrates the full voice assistant lifecycle by composing:
+ * - useConversationHistory — persistence + turn management
+ * - useVoiceRecognition — STT via expo-speech-recognition
+ * - useVoiceTTS — Neural TTS + device fallback
+ * - useVoiceToolExecution — Convex actions, pending action confirm/cancel
  *
  * Gracefully degrades in Expo Go (native module unavailable).
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import * as Speech from "expo-speech";
-import { useAction } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import type {
-  ConversationMessage,
-  PendingAction,
-  VoiceAssistantState,
-} from "@/lib/voice/voiceTypes";
+import { INITIAL_VOICE_STATE } from "@/lib/voice/voiceTypes";
+import { useConversationHistory } from "./voice/useConversationHistory";
+import { useVoiceTTS } from "./voice/useVoiceTTS";
+import { useVoiceRecognition, STT_AVAILABLE } from "./voice/useVoiceRecognition";
+import { useVoiceToolExecution } from "./voice/useVoiceToolExecution";
+import type { VoiceAssistantState } from "@/lib/voice/voiceTypes";
 import type { Id } from "@/convex/_generated/dataModel";
-
-// ── Safe dynamic import of expo-av ─────────────────────────────────────
-// The native module crashes if not in the dev build, so we try/catch.
-
-let AudioModule: any = null;
-
-try {
-  const mod = require("expo-av");
-  AudioModule = mod.Audio;
-} catch {
-  // Native module not available — will fall back to device TTS
-}
-
-const AUDIO_AVAILABLE = AudioModule != null;
-
-// ── Safe dynamic import of expo-speech-recognition ──────────────────
-// The native module crashes in Expo Go, so we try/catch the require.
-
-let SpeechRecognitionModule: any = null;
-let useSpeechRecognitionEvent: any = null;
-
-try {
-  const mod = require("expo-speech-recognition");
-  SpeechRecognitionModule = mod.ExpoSpeechRecognitionModule;
-  useSpeechRecognitionEvent = mod.useSpeechRecognitionEvent;
-} catch {
-  // Native module not available (Expo Go) — voice will be disabled
-}
-
-const STT_AVAILABLE = SpeechRecognitionModule != null;
-
-// Noop hook when native module isn't available
-const noopEventHook = (_event: string, _cb: (...args: any[]) => void) => {};
-const useSpeechEvent = useSpeechRecognitionEvent ?? noopEventHook;
-
-const MAX_HISTORY = 12; // 6 turns (user + model each)
-const RATE_LIMIT_MS = 6000; // 1 request per 6 seconds
-const CONVERSATION_HISTORY_KEY = "oja_voice_history";
-const CONVERSATION_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes — history expires after inactivity
-const PENDING_ACTION_TIMEOUT_MS = 30_000; // 30 seconds to confirm a pending action
 
 interface UseVoiceAssistantOptions {
   currentScreen: string;
@@ -74,443 +29,82 @@ interface UseVoiceAssistantOptions {
 }
 
 export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
-  const [state, setState] = useState<VoiceAssistantState>({
-    isListening: false,
-    isProcessing: false,
-    transcript: "",
-    partialTranscript: "",
-    response: "",
-    pendingAction: null,
-    error: null,
-    conversationHistory: [],
-    isSheetOpen: false,
-  });
+  const [state, setState] = useState<VoiceAssistantState>(INITIAL_VOICE_STATE);
 
-  const voiceAssistant = useAction(api.ai.voiceAssistant);
-  const executeAction = useAction(api.ai.executeVoiceAction);
-  const textToSpeech = useAction(api.ai.textToSpeech);
-  const historyRef = useRef<ConversationMessage[]>([]);
-  const lastRequestTime = useRef(0);
   const ttsEnabled = options.ttsEnabled ?? true;
-  const sheetOpenRef = useRef(false); // Track sheet state for continuous mode
-  const startListeningRef = useRef<((isAutoResume?: boolean) => Promise<void>) | null>(null); // For auto-listen callback
-  const soundRef = useRef<any>(null); // For audio playback cleanup (expo-av Sound)
-  const isSpeakingRef = useRef(false); // Gap 6: Track TTS playback to mute mic
-  const pendingActionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Gap 7: Auto-cancel timer
+  const sheetOpenRef = useRef(false);
+  const startListeningRef = useRef<((isAutoResume?: boolean) => Promise<void>) | null>(null);
 
-  // ── Gap 1: Conversation persistence helpers ─────────────────────────────
+  // ── Sub-hooks ──────────────────────────────────────────────────────
 
-  const saveHistory = useCallback(async (history: ConversationMessage[]) => {
-    try {
-      await AsyncStorage.setItem(
-        CONVERSATION_HISTORY_KEY,
-        JSON.stringify({ history, savedAt: Date.now() })
-      );
-    } catch {
-      // Silently fail — persistence is best-effort
-    }
+  const { historyRef, loadHistory, appendTurn, resetHistory } =
+    useConversationHistory();
+
+  const { speakText, stopSpeaking, cleanupTTS, isSpeakingRef } =
+    useVoiceTTS();
+
+  // useVoiceRecognition needs processTranscript as callback, but
+  // processTranscript comes from useVoiceToolExecution which needs
+  // checkRateLimit from useVoiceRecognition — circular dependency.
+  // Break it with a ref-based callback.
+  const processTranscriptRef = useRef<(transcript: string) => void>(() => {});
+
+  const onFinalTranscript = useCallback((transcript: string) => {
+    processTranscriptRef.current(transcript);
   }, []);
 
-  const loadHistory = useCallback(async (): Promise<ConversationMessage[]> => {
-    try {
-      const raw = await AsyncStorage.getItem(CONVERSATION_HISTORY_KEY);
-      if (!raw) return [];
-      const { history, savedAt } = JSON.parse(raw);
-      // Expire after 30 minutes of inactivity
-      if (Date.now() - savedAt > CONVERSATION_EXPIRY_MS) {
-        await AsyncStorage.removeItem(CONVERSATION_HISTORY_KEY);
-        return [];
-      }
-      return history || [];
-    } catch {
-      return [];
-    }
-  }, []);
+  const { startListening: sttStart, stopListening, checkRateLimit, cleanupSTT } =
+    useVoiceRecognition(setState, onFinalTranscript);
 
-  const clearPersistedHistory = useCallback(async () => {
-    try {
-      await AsyncStorage.removeItem(CONVERSATION_HISTORY_KEY);
-    } catch {
-      // Silently fail
-    }
-  }, []);
+  const { processTranscript, confirmAction: toolConfirm, cancelAction: toolCancel, cleanupTimers } =
+    useVoiceToolExecution(setState, {
+      currentScreen: options.currentScreen,
+      activeListId: options.activeListId,
+      activeListName: options.activeListName,
+      userName: options.userName,
+      ttsEnabled,
+      speakText,
+      historyRef,
+      appendTurn,
+      checkRateLimit,
+      sheetOpenRef,
+      startListeningRef,
+    });
 
-  // ── Neural TTS with fallback to device TTS ────────────────────────────
+  // Wire the ref so useVoiceRecognition's onFinalTranscript calls processTranscript
+  useEffect(() => {
+    processTranscriptRef.current = processTranscript;
+  }, [processTranscript]);
 
-  const speakText = useCallback(
-    async (text: string, onDone?: () => void) => {
+  // ── Wrap startListening to inject isSpeakingRef ────────────────────
 
-      // Gap 5: Truncate TTS text to stay within cloud TTS character limits (5000 chars)
-      const MAX_TTS_CHARS = 4500;
-      const ttsText = text.length > MAX_TTS_CHARS
-        ? text.substring(0, MAX_TTS_CHARS) + "... That's the summary."
-        : text;
-
-      // Gap 6: Mark speaking state — mic won't auto-resume while speaking
-      isSpeakingRef.current = true;
-
-      const wrappedOnDone = () => {
-        isSpeakingRef.current = false;
-        onDone?.();
-      };
-
-      // Only try neural TTS if expo-av is available
-      if (AUDIO_AVAILABLE) {
-        try {
-          // Try Google Cloud / Azure Neural TTS first
-          const result = await textToSpeech({ text: ttsText, voiceGender: "MALE" });
-
-          if (result.audioBase64) {
-            // Play the neural voice audio
-            const { sound } = await AudioModule.Sound.createAsync(
-              { uri: `data:audio/mp3;base64,${result.audioBase64}` },
-              { shouldPlay: true }
-            );
-            soundRef.current = sound;
-
-            // Set up completion callback
-            sound.setOnPlaybackStatusUpdate((status: any) => {
-              if (status.isLoaded && status.didJustFinish) {
-                sound.unloadAsync();
-                soundRef.current = null;
-                wrappedOnDone();
-              }
-            });
-            return;
-          }
-        } catch (error) {
-          console.warn("[speakText] Neural TTS failed, using device TTS:", error);
-        }
-      }
-
-      // Fallback to device TTS (expo-speech) — try to find best voice
-      try {
-        const voices = await Speech.getAvailableVoicesAsync();
-        // Prefer enhanced/premium British voices
-        const britishVoice = voices.find(
-          (v) =>
-            v.language?.startsWith("en-GB") &&
-            (v.quality === "Enhanced" ||
-              v.name?.includes("Enhanced") ||
-              v.name?.includes("Premium") ||
-              v.identifier?.includes("premium") ||
-              v.identifier?.includes("enhanced"))
-        ) ||
-          voices.find((v) => v.language?.startsWith("en-GB")) ||
-          undefined;
-
-        Speech.speak(ttsText, {
-          language: "en-GB",
-          voice: britishVoice?.identifier,
-          rate: 0.92,
-          pitch: 1.05,
-          onDone: wrappedOnDone,
-        });
-      } catch {
-        // If voice selection fails, use defaults
-        Speech.speak(ttsText, {
-          language: "en-GB",
-          rate: 0.92,
-          pitch: 1.05,
-          onDone: wrappedOnDone,
-        });
-      }
+  const startListening = useCallback(
+    async (isAutoResume = false) => {
+      await sttStart(isAutoResume, isSpeakingRef.current);
     },
-    [textToSpeech]
+    [sttStart, isSpeakingRef]
   );
 
-  // Stop any playing audio
-  const stopSpeaking = useCallback(async () => {
-    isSpeakingRef.current = false;
-    Speech.stop();
-    if (soundRef.current) {
-      try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-      } catch {
-        // Ignore cleanup errors
-      }
-      soundRef.current = null;
-    }
-  }, []);
-
-  // ── Speech Recognition Events ──────────────────────────────────────
-
-  useSpeechEvent("start", () => {
-    setState((s: VoiceAssistantState) => ({ ...s, isListening: true, error: null }));
-  });
-
-  useSpeechEvent("end", () => {
-    setState((s: VoiceAssistantState) => ({ ...s, isListening: false }));
-  });
-
-  useSpeechEvent("result", (event: any) => {
-    const transcript = event.results[0]?.transcript || "";
-    if (event.isFinal) {
-      setState((s: VoiceAssistantState) => ({ ...s, transcript, partialTranscript: "" }));
-      processTranscript(transcript);
-    } else {
-      setState((s: VoiceAssistantState) => ({ ...s, partialTranscript: transcript }));
-    }
-  });
-
-  useSpeechEvent("error", (event: any) => {
-    console.warn("[useVoiceAssistant] STT error:", event.error, event.message);
-    setState((s: VoiceAssistantState) => ({
-      ...s,
-      isListening: false,
-      error: "Couldn't hear you clearly. Tap the mic and try again?",
-    }));
-  });
-
-  // ── Rate Limiting (Gap 10: only per-request throttle; monthly limits enforced server-side) ──
-
-  const checkRateLimit = useCallback((): boolean => {
-    const now = Date.now();
-    if (now - lastRequestTime.current < RATE_LIMIT_MS) {
-      setState((s) => ({
-        ...s,
-        error: "Give me a moment before your next question.",
-      }));
-      return false;
-    }
-    lastRequestTime.current = now;
-    return true;
-  }, []);
-
-  // ── Core Actions ───────────────────────────────────────────────────
-
-  const startListening = useCallback(async (isAutoResume = false) => {
-
-    if (!STT_AVAILABLE) {
-      setState((s) => ({
-        ...s,
-        error: "Voice requires a dev build. Not available in Expo Go.",
-      }));
-      return;
-    }
-
-    // Gap 6: Don't start listening while Tobi is still speaking (prevents echo)
-    if (isSpeakingRef.current && isAutoResume) {
-      return;
-    }
-
-    // Softer haptic for auto-resume, stronger for manual tap
-    Haptics.impactAsync(
-      isAutoResume
-        ? Haptics.ImpactFeedbackStyle.Light
-        : Haptics.ImpactFeedbackStyle.Medium
-    );
-
-    const permResult =
-      await SpeechRecognitionModule.requestPermissionsAsync();
-
-    if (!permResult.granted) {
-      setState((s) => ({
-        ...s,
-        error: "Microphone permission is needed for voice commands.",
-      }));
-      return;
-    }
-
-    setState((s) => ({
-      ...s,
-      isListening: true,
-      transcript: "",
-      partialTranscript: "",
-      error: null,
-    }));
-
-    SpeechRecognitionModule.start({
-      lang: "en-GB",
-      interimResults: true,
-      continuous: false,
-    });
-  }, []);
-
-  // Store ref for use in TTS onDone callback
+  // Keep startListeningRef current for auto-resume callbacks in tool execution
   useEffect(() => {
     startListeningRef.current = startListening;
   }, [startListening]);
 
-  const stopListening = useCallback(() => {
-    if (STT_AVAILABLE) {
-      SpeechRecognitionModule.stop();
-    }
-    setState((s) => ({ ...s, isListening: false }));
-  }, []);
-
-  const processTranscript = useCallback(
-    async (transcript: string) => {
-      if (!transcript.trim()) return;
-
-      const allowed = checkRateLimit();
-      if (!allowed) return;
-
-      setState((s) => ({ ...s, isProcessing: true, error: null }));
-
-      try {
-        const result = await voiceAssistant({
-          transcript,
-          currentScreen: options.currentScreen,
-          activeListId: options.activeListId,
-          activeListName: options.activeListName,
-          userName: options.userName,
-          conversationHistory: historyRef.current,
-        });
-
-        // Update conversation history + persist (Gap 1)
-        historyRef.current.push({ role: "user", text: transcript });
-        historyRef.current.push({ role: "model", text: result.text });
-        if (historyRef.current.length > MAX_HISTORY) {
-          historyRef.current = historyRef.current.slice(-MAX_HISTORY);
-        }
-        saveHistory(historyRef.current);
-
-        const hasPendingAction = !!result.pendingAction;
-
-        setState((s) => ({
-          ...s,
-          isProcessing: false,
-          response: result.text,
-          pendingAction: result.pendingAction || null,
-          conversationHistory: [...historyRef.current],
-        }));
-
-        // Gap 7: Start pending action timeout — auto-cancel after 30s
-        if (hasPendingAction) {
-          if (pendingActionTimerRef.current) clearTimeout(pendingActionTimerRef.current);
-          pendingActionTimerRef.current = setTimeout(() => {
-            setState((s) => {
-              if (!s.pendingAction) return s;
-              return { ...s, pendingAction: null, response: "That confirmation timed out. Just ask again if you'd like." };
-            });
-            pendingActionTimerRef.current = null;
-          }, PENDING_ACTION_TIMEOUT_MS);
-        }
-
-        // TTS with auto-resume listening when done
-        if (ttsEnabled && result.text) {
-          speakText(result.text, () => {
-            // Auto-resume listening if sheet is open and no pending action
-            if (sheetOpenRef.current && !hasPendingAction && startListeningRef.current) {
-              setTimeout(() => {
-                if (sheetOpenRef.current) {
-                  startListeningRef.current?.(true); // true = auto-resume (softer haptic)
-                }
-              }, 500);
-            }
-          });
-        } else if (!hasPendingAction && sheetOpenRef.current) {
-          // No TTS, but still auto-resume if appropriate
-          setTimeout(() => {
-            if (sheetOpenRef.current) {
-              startListeningRef.current?.(true);
-            }
-          }, 500);
-        }
-
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (error) {
-        console.error("[useVoiceAssistant] Action failed:", error);
-        setState((s) => ({
-          ...s,
-          isProcessing: false,
-          error: "Something went wrong. Try again?",
-        }));
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      }
-    },
-    [
-      options.currentScreen,
-      options.activeListId,
-      options.activeListName,
-      options.userName,
-      ttsEnabled,
-      speakText,
-      voiceAssistant,
-      checkRateLimit,
-      saveHistory,
-    ]
-  );
+  // ── Wrap confirmAction to pass pendingAction from state ────────────
 
   const confirmAction = useCallback(async () => {
-    if (!state.pendingAction) return;
-
-    // Gap 7: Clear pending action timer on confirm
-    if (pendingActionTimerRef.current) {
-      clearTimeout(pendingActionTimerRef.current);
-      pendingActionTimerRef.current = null;
-    }
-
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setState((s) => ({ ...s, isProcessing: true }));
-
-    try {
-      const result = await executeAction({
-        actionName: state.pendingAction.action,
-        params: state.pendingAction.params,
-      });
-
-      const message = result?.message || "Done!";
-      setState((s) => ({
-        ...s,
-        isProcessing: false,
-        pendingAction: null,
-        response: message,
-      }));
-
-      if (ttsEnabled) {
-        speakText(message, () => {
-          // Auto-resume listening after action confirmation
-          if (sheetOpenRef.current && startListeningRef.current) {
-            setTimeout(() => {
-              if (sheetOpenRef.current) {
-                startListeningRef.current?.(true);
-              }
-            }, 500);
-          }
-        });
-      } else if (sheetOpenRef.current) {
-        setTimeout(() => {
-          if (sheetOpenRef.current) {
-            startListeningRef.current?.(true);
-          }
-        }, 500);
-      }
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      setState((s) => ({
-        ...s,
-        isProcessing: false,
-        error: "Couldn't complete that. Try again?",
-      }));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    }
-  }, [state.pendingAction, executeAction, ttsEnabled, speakText]);
+    await toolConfirm(state.pendingAction);
+  }, [toolConfirm, state.pendingAction]);
 
   const cancelAction = useCallback(() => {
-    // Gap 7: Clear pending action timer on cancel
-    if (pendingActionTimerRef.current) {
-      clearTimeout(pendingActionTimerRef.current);
-      pendingActionTimerRef.current = null;
-    }
-    setState((s) => ({ ...s, pendingAction: null }));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Auto-resume listening after cancel
-    if (sheetOpenRef.current && startListeningRef.current) {
-      setTimeout(() => {
-        if (sheetOpenRef.current) {
-          startListeningRef.current?.(true);
-        }
-      }, 300);
-    }
-  }, []);
+    toolCancel();
+  }, [toolCancel]);
+
+  // ── Sheet open / close ─────────────────────────────────────────────
 
   const openSheet = useCallback(async () => {
     sheetOpenRef.current = true;
-    // Gap 1: Restore persisted conversation history
+    // Restore persisted conversation history
     const restored = await loadHistory();
     if (restored.length > 0) {
       historyRef.current = restored;
@@ -523,24 +117,22 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
       setState((s) => ({ ...s, isSheetOpen: true }));
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [loadHistory]);
+  }, [loadHistory, historyRef]);
 
   const closeSheet = useCallback(() => {
-    sheetOpenRef.current = false; // Stop continuous mode
-    stopSpeaking(); // Stop neural TTS or device TTS
+    sheetOpenRef.current = false;
+    stopSpeaking();
     if (STT_AVAILABLE) {
-      SpeechRecognitionModule.stop();
+      stopListening();
     }
     setState((s) => ({ ...s, isSheetOpen: false, isListening: false }));
-  }, [stopSpeaking]);
+  }, [stopSpeaking, stopListening]);
+
+  // ── Reset conversation ─────────────────────────────────────────────
 
   const resetConversation = useCallback(() => {
-    historyRef.current = [];
-    clearPersistedHistory();
-    if (pendingActionTimerRef.current) {
-      clearTimeout(pendingActionTimerRef.current);
-      pendingActionTimerRef.current = null;
-    }
+    resetHistory();
+    cleanupTimers();
     setState((s) => ({
       ...s,
       transcript: "",
@@ -550,23 +142,17 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
       error: null,
       conversationHistory: [],
     }));
-  }, [clearPersistedHistory]);
+  }, [resetHistory, cleanupTimers]);
 
-  // Clean up on unmount
+  // ── Cleanup on unmount ─────────────────────────────────────────────
+
   useEffect(() => {
     return () => {
-      Speech.stop();
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
-      if (STT_AVAILABLE) {
-        SpeechRecognitionModule.stop();
-      }
-      if (pendingActionTimerRef.current) {
-        clearTimeout(pendingActionTimerRef.current);
-      }
+      cleanupTTS();
+      cleanupSTT();
+      cleanupTimers();
     };
-  }, []);
+  }, [cleanupTTS, cleanupSTT, cleanupTimers]);
 
   return {
     ...state,

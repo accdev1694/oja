@@ -71,12 +71,13 @@ export const experimentTables = {
   })
     .index("by_enabled", ["isEnabled"]),
 
-  // Stripe webhook idempotency (Phase 1.3)
+  // Webhook idempotency (Stripe + Clerk)
   processedWebhooks: defineTable({
-    eventId: v.string(),          // Stripe webhook event.id
-    eventType: v.string(),        // "checkout.session.completed"
+    eventId: v.string(),          // Webhook event ID (Stripe event.id or Svix svix-id)
+    eventType: v.string(),        // "checkout.session.completed", "user.updated", etc.
+    source: v.optional(v.string()), // "stripe" or "clerk"
     processedAt: v.number(),      // Timestamp
-    status: v.union(v.literal("processing"), v.literal("completed"), v.literal("failed")),
+    status: v.optional(v.union(v.literal("processing"), v.literal("completed"), v.literal("failed"))),
     error: v.optional(v.string()),
   })
     .index("by_event_id", ["eventId"])

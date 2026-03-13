@@ -95,6 +95,8 @@ export const getMfaGracePeriodStatus = query({
 export const getRoles = query({
   args: {},
   handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user?.isAdmin) return [];
     return await ctx.db.query("adminRoles").collect();
   },
 });

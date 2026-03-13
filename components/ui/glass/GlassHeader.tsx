@@ -17,7 +17,6 @@ import {
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Animated, {
   useAnimatedStyle,
@@ -34,6 +33,7 @@ import {
   blur as blurConfig,
 } from "@/lib/design/glassTokens";
 import { headerLayout } from "@/lib/design/layoutPatterns";
+import { BackButton } from "./SimpleHeader";
 
 // =============================================================================
 // TYPES
@@ -114,52 +114,6 @@ function ActionButton({ action }: ActionButtonProps) {
           name={action.icon}
           size={24}
           color={action.color || colors.text.primary}
-        />
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-// =============================================================================
-// BACK BUTTON COMPONENT
-// =============================================================================
-
-interface BackButtonProps {
-  onPress: () => void;
-}
-
-function BackButton({ onPress }: BackButtonProps) {
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.85, animations.spring.stiff);
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, animations.spring.gentle);
-  };
-
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress();
-  };
-
-  return (
-    <Animated.View style={animatedStyle}>
-      <Pressable
-        onPress={handlePress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={styles.backButton}
-      >
-        <MaterialCommunityIcons
-          name="chevron-left"
-          size={28}
-          color={colors.text.primary}
         />
       </Pressable>
     </Animated.View>
@@ -318,14 +272,6 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing.xs,
   },
-  backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.glass.background,
-  },
   actionButton: {
     width: 40,
     height: 40,
@@ -336,142 +282,6 @@ const styles = StyleSheet.create({
   },
   actionButtonDisabled: {
     opacity: 0.5,
-  },
-});
-
-// =============================================================================
-// SIMPLE HEADER
-// =============================================================================
-
-export interface SimpleHeaderProps {
-  title: string;
-  /** Subtitle string — rendered in bottom row left container */
-  subtitle?: string;
-  /** Custom left element for bottom row (replaces subtitle text) */
-  subtitleElement?: React.ReactNode;
-  /** Right container in bottom row (action icons/buttons) */
-  rightElement?: React.ReactNode;
-  /** Show back button */
-  showBack?: boolean;
-  /** Custom back handler (defaults to router.back) */
-  onBack?: () => void;
-  /** Include safe area top padding (set false when used inside GlassScreen) */
-  includeSafeArea?: boolean;
-  /** Optional accent color shown as a subtle dot next to the title */
-  accentColor?: string;
-  /** Override title text styles */
-  titleStyle?: StyleProp<import("react-native").TextStyle>;
-  style?: StyleProp<ViewStyle>;
-  /** Optional title press handler */
-  onTitlePress?: () => void;
-}
-
-export function SimpleHeader({
-  title,
-  subtitle,
-  subtitleElement,
-  rightElement,
-  showBack = false,
-  onBack,
-  includeSafeArea = false,
-  accentColor,
-  titleStyle,
-  style,
-  onTitlePress,
-}: SimpleHeaderProps) {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
-
-  const handleBack = () => {
-    if (onBack) {
-      onBack();
-    } else {
-      router.back();
-    }
-  };
-
-  const handleTitlePress = () => {
-    if (onTitlePress) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      onTitlePress();
-    }
-  };
-
-  const leftContent = subtitleElement ?? (subtitle ? (
-    <Text style={simpleHeaderStyles.subtitle} numberOfLines={1}>{subtitle}</Text>
-  ) : null);
-
-  const hasBottomRow = leftContent || rightElement;
-
-  return (
-    <View
-      style={[
-        simpleHeaderStyles.container,
-        includeSafeArea && { paddingTop: insets.top },
-        style,
-      ]}
-    >
-      {/* Row 1: Back button (optional) + Title (flex: 1, left-aligned) */}
-      <View style={headerLayout.topRow}>
-        {showBack && <BackButton onPress={handleBack} />}
-        <Pressable
-          onPress={handleTitlePress}
-          disabled={!onTitlePress}
-          style={{ flexShrink: 1 }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
-            <Text style={[simpleHeaderStyles.title, titleStyle]}>{title}</Text>
-            {accentColor && (
-              <View
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor: accentColor,
-                }}
-              />
-            )}
-          </View>
-        </Pressable>
-      </View>
-
-      {/* Row 2: [Left container] ← space-between → [Right container] */}
-      {hasBottomRow && (
-        <View style={headerLayout.bottomRow}>
-          <View style={headerLayout.bottomRowLeft}>
-            {leftContent}
-          </View>
-          {rightElement && (
-            <View style={headerLayout.bottomRowRight}>
-              {rightElement}
-            </View>
-          )}
-        </View>
-      )}
-    </View>
-  );
-}
-
-const simpleHeaderStyles = StyleSheet.create({
-  container: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-    marginBottom: spacing.md,
-    backgroundColor: `${colors.background.secondary}F5`,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.glass.border,
-  },
-  title: {
-    ...typography.displaySmall,
-    color: colors.text.primary,
-    paddingVertical: 2,
-  },
-  subtitle: {
-    ...typography.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.text.secondary,
   },
 });
 

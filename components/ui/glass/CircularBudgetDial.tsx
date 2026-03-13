@@ -10,40 +10,27 @@
 
 import React, { useEffect } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
-import Svg, { Circle, Line, Text as SvgText } from 'react-native-svg'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import Animated, {
   useSharedValue,
-  useAnimatedProps,
   useAnimatedStyle,
   withTiming,
   withSequence,
   Easing,
 } from 'react-native-reanimated'
 import { colors, typography, spacing } from '@/lib/design/glassTokens'
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle)
+import { DialSvgArcs } from './DialSvgArcs'
 
 interface CircularBudgetDialProps {
-  /** User-set spending limit */
   budget: number
-  /** Sum of estimated prices for all items on the list */
   planned: number
-  /** Cost of checked-off items (actualPrice || estimatedPrice fallback) */
   spent: number
-  /** List status: determines which arc is prominent */
   mode: string
-  /** Component outer dimension */
   size?: number
-  /** Currency symbol */
   currency?: string
-  /** Tap handler (edit budget) */
   onPress?: () => void
-  /** Selected store display name */
   storeName?: string
-  /** Store brand color */
   storeColor?: string
-  /** When true, plays a brief scale-pulse entrance animation */
   transitioning?: boolean
 }
 
@@ -77,7 +64,6 @@ export function CircularBudgetDial({
   const startRotation = 90
 
   const isPlanning = mode === 'active'
-  const isShopping = mode === 'shopping'
   const isFinished = mode === 'completed' || mode === 'archived'
 
   // "Left" is always relative to budget (the financial constraint)
@@ -95,43 +81,27 @@ export function CircularBudgetDial({
     budget > 0 ? Math.min(Math.max((spent - budget) / budget, 0), 1) : 0
 
   // --- Spent arc color (dynamic by ratio) ---
-  const getSpentColor = () => {
-    if (budget <= 0) return colors.semantic.success
-    const ratio = spent / budget
-    if (ratio > 1.0) return colors.semantic.danger
-    if (ratio > 0.8) return colors.semantic.warning
-    return colors.semantic.success
-  }
-  const spentColor = getSpentColor()
+  const spentRatioForColor = budget > 0 ? spent / budget : 0
+  const spentColor = spentRatioForColor > 1.0
+    ? colors.semantic.danger
+    : spentRatioForColor > 0.8
+      ? colors.semantic.warning
+      : colors.semantic.success
 
-  // --- Opacity (both arcs always visible - no mode switching) ---
-  // Outer arc (planned): subtle but visible for reference
-  // Inner arc (spent): always prominent since it's what matters
+  // --- Opacity ---
   const outerFillOpacity = isFinished ? 0.3 : 0.5
   const innerFillOpacity = 1.0
 
   // --- Sentiment (unified - always based on spent vs budget) ---
   const getSentiment = () => {
     if (budget <= 0) return null
-
-    // Always show spent vs budget (actual spending is what matters)
     const spentRatio = spent / budget
     const plannedRatio = planned / budget
-
-    // If overspent, show by how much
-    if (spentRatio > 1)
-      return `Over budget by ${currency}${(spent - budget).toFixed(2)}`
-
-    // If planning and planned is over budget, warn early
-    if (spent === 0 && plannedRatio > 1)
-      return `Planned exceeds budget by ${currency}${(planned - budget).toFixed(2)}`
-
-    // Normal progress messages
+    if (spentRatio > 1) return `Over budget by ${currency}${(spent - budget).toFixed(2)}`
+    if (spent === 0 && plannedRatio > 1) return `Planned exceeds budget by ${currency}${(planned - budget).toFixed(2)}`
     if (spentRatio > 0.8) return 'Getting close — nearly there'
     if (spentRatio > 0.5) return 'On track — stay focused'
     if (spent > 0) return 'On track — doing well'
-
-    // No items checked yet - show planned vs budget
     if (plannedRatio > 0.8) return 'Tight fit — almost at your limit'
     if (plannedRatio > 0.5) return 'Fits your budget — looking good'
     return 'Fits your budget — lots of room'
@@ -185,31 +155,6 @@ export function CircularBudgetDial({
     innerFillOpacity,
   ])
 
-  // --- Animated props for each arc ---
-  const outerFillProps = useAnimatedProps(() => ({
-    strokeDashoffset:
-      outerCircumference - outerCircumference * animOuterFill.value,
-    opacity: animOuterOpacity.value,
-  }))
-
-  const outerOverProps = useAnimatedProps(() => ({
-    strokeDashoffset:
-      outerCircumference - outerCircumference * animOuterOver.value,
-    opacity: animOuterOpacity.value,
-  }))
-
-  const innerFillProps = useAnimatedProps(() => ({
-    strokeDashoffset:
-      innerCircumference - innerCircumference * animInnerFill.value,
-    opacity: animInnerOpacity.value,
-  }))
-
-  const innerOverProps = useAnimatedProps(() => ({
-    strokeDashoffset:
-      innerCircumference - innerCircumference * animInnerOver.value,
-    opacity: animInnerOpacity.value,
-  }))
-
   // --- Transition entrance animation ---
   useEffect(() => {
     if (transitioning) {
@@ -224,12 +169,6 @@ export function CircularBudgetDial({
     transform: [{ scale: transitionScale.value }],
   }))
 
-  // --- Separator tick positions ---
-  const outerSepY1 = center + outerRadius - 4
-  const outerSepY2 = center + outerRadius + 4
-  const innerSepY1 = center + innerRadius - 4
-  const innerSepY2 = center + innerRadius + 4
-
   const Wrapper = onPress ? Pressable : View
 
   return (
@@ -238,140 +177,28 @@ export function CircularBudgetDial({
       style={[styles.container, { marginBottom: spacing.md }]}
     >
       <Animated.View style={[{ width: size, height: size }, transitionAnimStyle]}>
-        <Svg width={size} height={size}>
-          {/* ── Outer Arc System (planned) ── */}
-
-          {/* Outer track */}
-          <Circle
-            cx={center}
-            cy={center}
-            r={outerRadius}
-            stroke="rgba(255, 255, 255, 0.08)"
-            strokeWidth={strokeWidth}
-            fill="none"
-          />
-          {/* Outer fill — indigo */}
-          <AnimatedCircle
-            cx={center}
-            cy={center}
-            r={outerRadius}
-            stroke={colors.accent.secondary}
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={`${outerCircumference} ${outerCircumference}`}
-            strokeLinecap="round"
-            rotation={startRotation}
-            origin={`${center}, ${center}`}
-            animatedProps={outerFillProps}
-          />
-          {/* Outer overflow — red */}
-          <AnimatedCircle
-            cx={center}
-            cy={center}
-            r={outerRadius}
-            stroke={colors.semantic.danger}
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={`${outerCircumference} ${outerCircumference}`}
-            strokeLinecap="round"
-            rotation={startRotation}
-            origin={`${center}, ${center}`}
-            animatedProps={outerOverProps}
-          />
-
-          {/* ── Inner Arc System (spent) ── */}
-
-          {/* Inner track — only visible when inner arc is active */}
-          <AnimatedCircle
-            cx={center}
-            cy={center}
-            r={innerRadius}
-            stroke="rgba(255, 255, 255, 0.08)"
-            strokeWidth={strokeWidth}
-            fill="none"
-            animatedProps={useAnimatedProps(() => ({
-              opacity: animInnerOpacity.value,
-            }))}
-          />
-          {/* Inner fill — green/amber/red */}
-          <AnimatedCircle
-            cx={center}
-            cy={center}
-            r={innerRadius}
-            stroke={spentColor}
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={`${innerCircumference} ${innerCircumference}`}
-            strokeLinecap="round"
-            rotation={startRotation}
-            origin={`${center}, ${center}`}
-            animatedProps={innerFillProps}
-          />
-          {/* Inner overflow — red */}
-          <AnimatedCircle
-            cx={center}
-            cy={center}
-            r={innerRadius}
-            stroke={colors.semantic.danger}
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={`${innerCircumference} ${innerCircumference}`}
-            strokeLinecap="round"
-            rotation={startRotation}
-            origin={`${center}, ${center}`}
-            animatedProps={innerOverProps}
-          />
-
-          {/* ── Separator ticks at 6 o'clock ── */}
-          <Line
-            x1={center}
-            y1={outerSepY1}
-            x2={center}
-            y2={outerSepY2}
-            stroke="rgba(255, 255, 255, 0.25)"
-            strokeWidth={1.5}
-            strokeLinecap="round"
-          />
-          {!isPlanning && (
-            <Line
-              x1={center}
-              y1={innerSepY1}
-              x2={center}
-              y2={innerSepY2}
-              stroke="rgba(255, 255, 255, 0.25)"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-            />
-          )}
-          {/* ── Store name curved along bottom ── */}
-          {storeName &&
-            storeName
-              .toUpperCase()
-              .split('')
-              .map((char, i, arr) => {
-                const totalAngle = (arr.length - 1) * charAngle
-                const angle = Math.PI / 2 + totalAngle / 2 - i * charAngle
-                const cx2 = center + storeArcRadius * Math.cos(angle)
-                const cy2 = center + storeArcRadius * Math.sin(angle)
-                const deg = (angle * 180) / Math.PI - 90
-                return (
-                  <SvgText
-                    key={`${char}-${i}`}
-                    x={cx2}
-                    y={cy2}
-                    fill={colors.semantic.fire}
-                    fontSize={storeFontSize}
-                    fontWeight="700"
-                    textAnchor="middle"
-                    alignmentBaseline="middle"
-                    rotation={deg}
-                    origin={`${cx2},${cy2}`}
-                  >
-                    {char}
-                  </SvgText>
-                )
-              })}
-        </Svg>
+        <DialSvgArcs
+          size={size}
+          center={center}
+          outerRadius={outerRadius}
+          innerRadius={innerRadius}
+          outerCircumference={outerCircumference}
+          innerCircumference={innerCircumference}
+          strokeWidth={strokeWidth}
+          startRotation={startRotation}
+          spentColor={spentColor}
+          isPlanning={isPlanning}
+          storeName={storeName}
+          storeArcRadius={storeArcRadius}
+          storeFontSize={storeFontSize}
+          charAngle={charAngle}
+          animOuterFill={animOuterFill}
+          animOuterOver={animOuterOver}
+          animInnerFill={animInnerFill}
+          animInnerOver={animInnerOver}
+          animOuterOpacity={animOuterOpacity}
+          animInnerOpacity={animInnerOpacity}
+        />
 
         {/* Pencil badge – top-left inside the dial */}
         {onPress && (

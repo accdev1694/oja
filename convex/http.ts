@@ -6,7 +6,7 @@
 
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 const http = httpRouter();
 
@@ -73,17 +73,103 @@ const stripeHandler = httpAction(async (ctx, request) => {
 // =============================================================================
 
 const clerkHandler = httpAction(async (ctx, request) => {
-  const payload = await request.json();
-  
+  const body = await request.text();
+
+  // Verify Svix signature (Clerk uses Svix for webhook delivery)
+  const svixId = request.headers.get("svix-id");
+  const svixTimestamp = request.headers.get("svix-timestamp");
+  const svixSignature = request.headers.get("svix-signature");
+
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    return new Response("Missing Svix headers", { status: 400 });
+  }
+
+  // Verify timestamp is within tolerance (5 minutes)
+  const timestampSeconds = parseInt(svixTimestamp, 10);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (isNaN(timestampSeconds) || Math.abs(nowSeconds - timestampSeconds) > 300) {
+    return new Response("Timestamp outside tolerance", { status: 400 });
+  }
+
+  // Verify HMAC signature
+  const secret = process.env.CLERK_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error("[Clerk Webhook] CLERK_WEBHOOK_SECRET not configured");
+    return new Response("Server configuration error", { status: 500 });
+  }
+
+  // Decode the webhook secret (base64) using Web Crypto API (no Node.js required)
+  const secretBase64 = secret.startsWith("whsec_") ? secret.slice(6) : secret;
+  const secretBinary = atob(secretBase64);
+  const secretBytes = new Uint8Array(secretBinary.length);
+  for (let i = 0; i < secretBinary.length; i++) {
+    secretBytes[i] = secretBinary.charCodeAt(i);
+  }
+
+  // Compute HMAC-SHA256 using Web Crypto API
+  const signedContent = `${svixId}.${svixTimestamp}.${body}`;
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    secretBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signatureBytes = await crypto.subtle.sign("HMAC", key, encoder.encode(signedContent));
+  const expectedSignature = btoa(String.fromCharCode(...new Uint8Array(signatureBytes)));
+
+  const signatures = svixSignature.split(" ");
+  const verified = signatures.some((sig) => {
+    const sigValue = sig.startsWith("v1,") ? sig.slice(3) : sig;
+    return sigValue === expectedSignature;
+  });
+
+  if (!verified) {
+    console.error("[Clerk Webhook] Signature verification failed");
+    return new Response("Invalid signature", { status: 401 });
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return new Response("Invalid JSON body", { status: 400 });
+  }
+
+  // Idempotency: skip already-processed events via processedWebhooks table
+  const existing = await ctx.runQuery(internal.stripe.checkWebhookProcessed, {
+    eventId: svixId,
+  });
+  if (existing) {
+    return new Response(JSON.stringify({ received: true, deduplicated: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   // Process known user events
   if (payload.type === "user.deleted" || payload.type === "user.updated") {
     try {
+      await ctx.runMutation(internal.stripe.markWebhookProcessing, {
+        eventId: svixId,
+        eventType: payload.type,
+      });
+
       await ctx.runAction(api.users.handleClerkWebhook, {
         type: payload.type,
         data: payload.data,
       });
+
+      await ctx.runMutation(internal.stripe.markWebhookComplete, {
+        eventId: svixId,
+      });
     } catch (err) {
       console.error("[Clerk Webhook] Error:", err);
+      await ctx.runMutation(internal.stripe.markWebhookFailed, {
+        eventId: svixId,
+        error: String(err),
+      });
       return new Response("Webhook processing error", { status: 500 });
     }
   }

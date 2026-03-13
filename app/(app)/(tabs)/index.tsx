@@ -1,79 +1,52 @@
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
-  Pressable,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
-import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import * as Haptics from "expo-haptics";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import React, { useRef } from "react";
 
 import {
   GlassScreen,
-  GlassCard,
   SimpleHeader,
   GlassCapsuleSwitcher,
   TrialNudgeBanner,
   AnimatedSection,
   SkeletonCard,
   colors,
-  typography,
   spacing,
-  borderRadius,
-  useGlassAlert,
 } from "@/components/ui/glass";
-import {
-  useCurrentUser,
-  useIsSwitchingUsers,
-  useNotifications,
-  useShoppingList,
-} from "@/hooks";
-import { EmptyLists } from "@/components/ui/glass/GlassErrorState";
-import { ListCard } from "@/components/lists/ListCard";
-import { SharedListCard } from "@/components/lists/SharedListCard";
-import { HistoryCard } from "@/components/lists/HistoryCard";
-import { CreateFromTemplateModal } from "@/components/lists/CreateFromTemplateModal";
-import { CombineListsModal } from "@/components/lists/CombineListsModal";
-import { CreateListOptionsModal } from "@/components/lists/CreateListOptionsModal";
-import { TemplatePickerModal } from "@/components/lists/TemplatePickerModal";
-import { EditListNameModal } from "@/components/lists/EditListNameModal";
-import { defaultListName } from "@/lib/list/helpers";
+import { useCurrentUser } from "@/hooks";
+import { ActiveListsContent } from "@/components/lists/ActiveListsContent";
+import { HistoryListsContent } from "@/components/lists/HistoryListsContent";
+import { ListsHeaderActions } from "@/components/lists/ListsHeaderActions";
+import { ListsModals } from "@/components/lists/ListsModals";
+import { ListsTutorialHints } from "@/components/lists/ListsTutorialHints";
+import { CombineActionBar } from "@/components/lists/CombineActionBar";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { SeasonalEventBanner } from "@/components/ui/SeasonalEventBanner";
 import { NotificationDropdown } from "@/components/partners/NotificationDropdown";
-
 import { useHint } from "@/hooks/useHint";
 import { useHintSequence } from "@/hooks/useHintSequence";
-import { HintOverlay } from "@/components/tutorial/HintOverlay";
-import { hasViewedHint as hasViewedHintLocal } from "@/lib/storage/hintStorage";
-
-type TabMode = "active" | "history";
+import { useListsScreen } from "@/hooks/useListsScreen";
 
 export default function ListsScreen() {
-  const router = useRouter();
-  const { alert } = useGlassAlert();
   const { firstName } = useCurrentUser();
-  const [tabMode, setTabMode] = useState<TabMode>("active");
 
   const {
-    activeLists: lists,
-    historyLists: history,
-    sharedLists,
-    isLoading,
-    createList,
-    deleteList,
-    updateListName,
-    createFromMultiple,
-    createFromTemplate,
-  } = useShoppingList();
-
-  const activeShared = sharedLists?.filter((l: any) => l && l.status !== "archived" && l.status !== "completed") ?? [];
+    lists, history, activeShared, displayList, isLoaded, hasAnyActiveLists, unreadCount,
+    tabMode, isCreating, isMultiSelectMode, animationKey, pageAnimationKey, showNotifications,
+    showCreateOptionsModal, showTemplatePickerModal, showTemplateModal,
+    showCombineModal, showEditNameModal, selectedTemplateId, selectedTemplateName,
+    editingListName, selectedHistoryLists,
+    handleTabSwitch, handleToggleSelect, handleConfirmCombine,
+    handleListPress, handleDeletePress, handleEditName, handleSaveListName,
+    handleHistoryPress, handleSharedPress, handleUseAsTemplate, handleConfirmTemplate,
+    stableFormatDateTime, handleCreateListFlow, handleCreateFromScratch,
+    handleShowTemplatePicker, handlePickTemplate, handleToggleMultiSelect,
+    handleShowNotifications, handleCloseTemplate,
+    setShowNotifications, setShowCreateOptionsModal, setShowTemplatePickerModal,
+    setShowCombineModal, setShowEditNameModal,
+  } = useListsScreen();
 
   // Hint targets
   const headerRef = useRef<View>(null);
@@ -84,222 +57,17 @@ export default function ListsScreen() {
   const createHint = useHint("lists_create", "manual");
   const templateHint = useHint("lists_templates", "manual");
 
-  // Strict sequencing: Only ONE hint visible at a time
   useHintSequence([
     { hint: welcomeHint, hintId: "lists_welcome" },
     { hint: createHint, hintId: "lists_create", condition: tabMode === "active" },
-    { 
-      hint: templateHint, 
-      hintId: "lists_templates", 
-      condition: (lists?.length ?? 0) + activeShared.length >= 3 
+    {
+      hint: templateHint,
+      hintId: "lists_templates",
+      condition: (lists?.length ?? 0) + activeShared.length >= 3,
     },
   ]);
 
-  const [isCreating, setIsCreating] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const { unreadCount } = useNotifications();
-  const [animationKey, setAnimationKey] = useState(0);
-  const [pageAnimationKey, setPageAnimationKey] = useState(0);
-
-  // Create List Flow State
-  const [showCreateOptionsModal, setShowCreateOptionsModal] = useState(false);
-  const [showTemplatePickerModal, setShowTemplatePickerModal] = useState(false);
-
-  // Template Modal State
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<Id<"shoppingLists"> | null>(null);
-  const [selectedTemplateName, setSelectedTemplateName] = useState("");
-
-  // Multi-Select Template State
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-  const [selectedHistoryLists, setSelectedHistoryLists] = useState<Set<Id<"shoppingLists">>>(new Set());
-  const [showCombineModal, setShowCombineModal] = useState(false);
-
-  // Edit List Name State
-  const [showEditNameModal, setShowEditNameModal] = useState(false);
-  const [editingListId, setEditingListId] = useState<Id<"shoppingLists"> | null>(null);
-  const [editingListName, setEditingListName] = useState("");
-
-  // Trigger animations every time this tab gains focus
-  useFocusEffect(
-    useCallback(() => {
-      setAnimationKey((prev) => prev + 1);
-      setPageAnimationKey((prev) => prev + 1);
-    }, [])
-  );
-
-  const handleTabSwitch = useCallback((index: number) => {
-    const mode: TabMode = index === 0 ? "active" : "history";
-    if (mode === tabMode) return;
-    setTabMode(mode);
-    setIsMultiSelectMode(false);
-    setSelectedHistoryLists(new Set());
-    setAnimationKey((prev) => prev + 1);
-  }, [tabMode]);
-
-  const handleToggleSelect = useCallback((id: Id<"shoppingLists">) => {
-    setSelectedHistoryLists(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const handleConfirmCombine = useCallback(async (newName: string, budget?: number) => {
-    if (selectedHistoryLists.size === 0) return;
-
-    try {
-      const result = await createFromMultiple(
-        Array.from(selectedHistoryLists),
-        newName,
-        budget
-      );
-
-      setShowCombineModal(false);
-      setIsMultiSelectMode(false);
-      setSelectedHistoryLists(new Set());
-
-      // Navigate to new list
-      router.push(`/list/${result.listId}`);
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        alert(
-          "List Limit Reached",
-          "Free plan allows up to 2 active lists. Upgrade to Premium for unlimited lists.",
-          [
-            { text: "Maybe Later", style: "cancel" },
-            { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
-          ]
-        );
-      }
-    }
-  }, [selectedHistoryLists, createFromMultiple, router, alert]);
-
-  // Stable callbacks for cards — avoids inline closures that defeat React.memo
-  const handleListPress = useCallback((id: Id<"shoppingLists">) => {
-    router.push(`/list/${id}`);
-  }, [router]);
-
-  const handleDeletePress = useCallback((id: Id<"shoppingLists">, name: string) => {
-    deleteList(id, name);
-  }, [deleteList]);
-
-  const handleEditName = useCallback((id: Id<"shoppingLists">, currentName: string) => {
-    setEditingListId(id);
-    setEditingListName(currentName);
-    setShowEditNameModal(true);
-  }, []);
-
-  const handleSaveListName = useCallback(async (newName: string) => {
-    if (!editingListId) return;
-    const success = await updateListName(editingListId, newName);
-    if (success) setShowEditNameModal(false);
-  }, [updateListName, editingListId]);
-
-  const handleHistoryPress = useCallback((id: Id<"shoppingLists">) => {
-    router.push(`/trip-summary?id=${id}`);
-  }, [router]);
-
-  const handleSharedPress = useCallback((id: Id<"shoppingLists">) => {
-    router.push(`/list/${id}`);
-  }, [router]);
-
-  const handleUseAsTemplate = useCallback((listId: Id<"shoppingLists">, listName: string) => {
-    setSelectedTemplateId(listId);
-    setSelectedTemplateName(listName);
-    setShowTemplateModal(true);
-  }, []);
-
-  const handleConfirmTemplate = useCallback(async (newName: string) => {
-    if (!selectedTemplateId) return;
-
-    try {
-      const result = await createFromTemplate(selectedTemplateId, newName);
-      setShowTemplateModal(false);
-      router.push(`/list/${result.listId}`);
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        alert(
-          "List Limit Reached",
-          "Free plan allows up to 2 active lists. Upgrade to Premium for unlimited lists.",
-          [
-            { text: "Maybe Later", style: "cancel" },
-            { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
-          ]
-        );
-      }
-    }
-  }, [selectedTemplateId, createFromTemplate, router, alert]);
-
-  const stableFormatDateTime = useCallback((timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }, []);
-
-  function handleCreateListFlow() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setShowCreateOptionsModal(true);
-  }
-
-  const handleCreateFromScratch = useCallback(async () => {
-    setShowCreateOptionsModal(false);
-    if (isCreating) return;
-    setIsCreating(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    const name = defaultListName();
-
-    try {
-      const listId = await createList({ name, budget: 50 });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.push(`/list/${listId}`);
-    } catch (error: unknown) {
-      console.error("Failed to create list:", error);
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium")) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        alert(
-          "List Limit Reached",
-          "Free plan allows up to 2 active lists. Upgrade to Premium for unlimited lists.",
-          [
-            { text: "Maybe Later", style: "cancel" },
-            { text: "Upgrade", onPress: () => router.push("/(app)/subscription") },
-          ]
-        );
-      } else {
-        alert("Error", "Failed to create shopping list");
-      }
-    } finally {
-      setIsCreating(false);
-    }
-  }, [isCreating, createList, router, alert]);
-
-  const handleShowTemplatePicker = useCallback(() => {
-    setShowCreateOptionsModal(false);
-    setShowTemplatePickerModal(true);
-  }, []);
-
-  const handlePickTemplate = useCallback((listId: Id<"shoppingLists">, listName: string) => {
-    setShowTemplatePickerModal(false);
-    setSelectedTemplateId(listId);
-    setSelectedTemplateName(listName);
-    setShowTemplateModal(true);
-  }, []);
-
-  const currentData = tabMode === "active" ? lists : history;
-  const isLoaded = currentData !== undefined;
-  const displayList = currentData ?? [];
-  const hasAnyActiveLists = displayList.length > 0 || activeShared.length > 0;
-
-  // Loading state with skeletons (Smooth transition pattern)
+  // Loading state with skeletons
   if (!isLoaded) {
     return (
       <GlassScreen>
@@ -319,7 +87,7 @@ export default function ListsScreen() {
 
   return (
     <GlassScreen>
-      {/* Header with New List button */}
+      {/* Header with actions */}
       <View ref={headerRef}>
         <SimpleHeader
           title={firstName ? `${firstName}'s Lists` : "Shopping Lists"}
@@ -330,53 +98,16 @@ export default function ListsScreen() {
               : `${history?.length ?? 0} archived list${(history?.length ?? 0) !== 1 ? "s" : ""}`
           }
           rightElement={
-            <View style={styles.headerActions}>
-              {tabMode === "active" ? (
-                <Pressable
-                  style={[styles.addButton, isCreating && { opacity: 0.5 }]}
-                  onPress={handleCreateListFlow}
-                  disabled={isCreating}
-                >
-                  <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
-                </Pressable>
-              ) : (
-                history && history.length > 0 && (
-                  <Pressable
-                    style={styles.selectTextButton}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setIsMultiSelectMode(!isMultiSelectMode);
-                      if (isMultiSelectMode) setSelectedHistoryLists(new Set());
-                    }}
-                  >
-                    <Text style={styles.selectTextButtonLabel}>
-                      {isMultiSelectMode ? "Cancel" : "Select"}
-                    </Text>
-                  </Pressable>
-                )
-              )}
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setShowNotifications(true);
-                }}
-                style={styles.bellButton}
-                hitSlop={8}
-              >
-                <MaterialCommunityIcons
-                  name="bell-outline"
-                  size={22}
-                  color={colors.text.secondary}
-                />
-                {unreadCount > 0 && (
-                  <View style={styles.bellBadge}>
-                    <Text style={styles.bellBadgeText}>
-                      {unreadCount > 9 ? "9+" : unreadCount}
-                    </Text>
-                  </View>
-                )}
-              </Pressable>
-            </View>
+            <ListsHeaderActions
+              tabMode={tabMode}
+              isCreating={isCreating}
+              isMultiSelectMode={isMultiSelectMode}
+              hasHistory={(history?.length ?? 0) > 0}
+              unreadCount={unreadCount}
+              onCreateListFlow={handleCreateListFlow}
+              onToggleMultiSelect={handleToggleMultiSelect}
+              onShowNotifications={handleShowNotifications}
+            />
           }
         />
       </View>
@@ -429,170 +160,32 @@ export default function ListsScreen() {
 
           {/* Content */}
           <View key={animationKey}>
-            {tabMode === "active" && !hasAnyActiveLists ? (
-              <AnimatedSection key={`empty-${animationKey}`} animation="fadeInDown" duration={400} delay={150}>
-                <View style={styles.emptyScrollContentInner}>
-                  <EmptyLists
-                    onAction={handleCreateListFlow}
-                    actionText="Create a New List"
-                  />
-                  {/* Join a shared list — always visible even with no lists */}
-                  <View style={styles.joinCardEmpty}>
-                    <Pressable
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        router.push("/join-list");
-                      }}
-                    >
-                      <GlassCard variant="bordered" style={styles.joinCard}>
-                        <View style={styles.joinCardContent}>
-                          <MaterialCommunityIcons
-                            name="link-variant"
-                            size={18}
-                            color={colors.text.tertiary}
-                          />
-                          <Text style={styles.joinCardText}>Accept Invite</Text>
-                          <MaterialCommunityIcons
-                            name="chevron-right"
-                            size={18}
-                            color={colors.text.tertiary}
-                          />
-                        </View>
-                      </GlassCard>
-                    </Pressable>
-                  </View>
-                </View>
-              </AnimatedSection>
-            ) : tabMode === "history" && displayList.length === 0 ? (
-              <AnimatedSection key={`empty-history-${animationKey}`} animation="fadeInDown" duration={400} delay={150}>
-                <View style={styles.emptyHistoryContainer}>
-                  <MaterialCommunityIcons
-                    name="clipboard-check-outline"
-                    size={64}
-                    color={colors.text.tertiary}
-                  />
-                  <Text style={styles.emptyHistoryTitle}>No trips yet</Text>
-                  <Text style={styles.emptyHistorySubtitle}>
-                    Complete a shopping trip and it&apos;ll show up here — great for tracking your spending over time.
-                  </Text>
-                </View>
-              </AnimatedSection>
-            ) : tabMode === "active" ? (
-              <View>
-                {/* Inline create-list card — always visible as first item */}
-                <AnimatedSection key={`create-${animationKey}`} animation="fadeInDown" duration={400} delay={150}>
-                  <View ref={createCardRef}>
-                    <Pressable
-                      onPress={handleCreateListFlow}
-                      disabled={isCreating}
-                      style={({ pressed }) => [
-                        styles.createCard,
-                        isCreating && { opacity: 0.5 },
-                        pressed && { opacity: 0.7 },
-                      ]}
-                    >
-                      <View style={styles.createCardInner}>
-                        <View style={styles.createCardIcon}>
-                          <MaterialCommunityIcons name="plus" size={24} color={colors.accent.primary} />
-                        </View>
-                        <View style={styles.createCardText}>
-                          <Text style={styles.createCardTitle}>Create a new list</Text>
-                          <Text style={styles.createCardSubtitle}>Set a budget and start adding items</Text>
-                        </View>
-                        <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text.tertiary} />
-                      </View>
-                    </Pressable>
-                  </View>
-                </AnimatedSection>
-
-                {displayList.map((list: any, index: number) => (
-                  <AnimatedSection key={`${list._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={200 + (index * 50)}>
-                    <View style={styles.cardWrapper}>
-                      <ListCard
-                        list={list}
-                        onPress={handleListPress}
-                        onDelete={handleDeletePress}
-                        onEditName={handleEditName}
-                      />
-                    </View>
-                  </AnimatedSection>
-                ))}
-
-                {/* Shared With Me section */}
-                {activeShared.length > 0 && (
-                  <View>
-                    <AnimatedSection key={`shared-title-${animationKey}`} animation="fadeInDown" duration={400} delay={200 + (displayList.length * 50)}>
-                      <View style={styles.sharedSectionHeader}>
-                        <MaterialCommunityIcons
-                          name="account-group"
-                          size={18}
-                          color={colors.text.secondary}
-                        />
-                        <Text style={styles.sharedSectionTitle}>Shared With Me</Text>
-                      </View>
-                    </AnimatedSection>
-                    {activeShared.map((list: any, index: number) =>
-                      list ? (
-                        <AnimatedSection key={`${list._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={250 + (displayList.length * 50) + (index * 50)}>
-                          <View style={styles.cardWrapper}>
-                            <SharedListCard
-                              list={list}
-                              onPress={handleSharedPress}
-                              formatDateTime={stableFormatDateTime}
-                            />
-                          </View>
-                        </AnimatedSection>
-                      ) : null
-                    )}
-                  </View>
-                )}
-
-                {/* Join a shared list — inline card */}
-                <AnimatedSection key={`join-${animationKey}`} animation="fadeInDown" duration={400} delay={200 + ((displayList.length + activeShared.length) * 50)}>
-                  <View style={styles.joinCardWrapper}>
-                    <Pressable
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        router.push("/join-list");
-                      }}
-                    >
-                      <GlassCard variant="bordered" style={styles.joinCard}>
-                        <View style={styles.joinCardContent}>
-                          <MaterialCommunityIcons
-                            name="link-variant"
-                            size={18}
-                            color={colors.text.tertiary}
-                          />
-                          <Text style={styles.joinCardText}>Accept Invite</Text>
-                          <MaterialCommunityIcons
-                            name="chevron-right"
-                            size={18}
-                            color={colors.text.tertiary}
-                          />
-                        </View>
-                      </GlassCard>
-                    </Pressable>
-                  </View>
-                </AnimatedSection>
-              </View>
+            {tabMode === "active" ? (
+              <ActiveListsContent
+                displayList={displayList}
+                activeShared={activeShared}
+                hasAnyActiveLists={hasAnyActiveLists}
+                isCreating={isCreating}
+                animationKey={animationKey}
+                createCardRef={createCardRef}
+                onCreateListFlow={handleCreateListFlow}
+                onListPress={handleListPress}
+                onDeletePress={handleDeletePress}
+                onEditName={handleEditName}
+                onSharedPress={handleSharedPress}
+                formatDateTime={stableFormatDateTime}
+              />
             ) : (
-              <View>
-                {displayList.map((list: any, index: number) => (
-                  <AnimatedSection key={`${list._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={150 + (index * 50)}>
-                    <View style={styles.cardWrapper}>
-                      <HistoryCard
-                        list={list}
-                        onPress={handleHistoryPress}
-                        formatDateTime={stableFormatDateTime}
-                        onUseAsTemplate={handleUseAsTemplate}
-                        selectable={isMultiSelectMode}
-                        selected={selectedHistoryLists.has(list._id)}
-                        onToggleSelect={handleToggleSelect}
-                      />
-                    </View>
-                  </AnimatedSection>
-                ))}
-              </View>
+              <HistoryListsContent
+                displayList={displayList}
+                animationKey={animationKey}
+                isMultiSelectMode={isMultiSelectMode}
+                selectedHistoryLists={selectedHistoryLists}
+                onHistoryPress={handleHistoryPress}
+                onUseAsTemplate={handleUseAsTemplate}
+                onToggleSelect={handleToggleSelect}
+                formatDateTime={stableFormatDateTime}
+              />
             )}
           </View>
         </View>
@@ -601,18 +194,11 @@ export default function ListsScreen() {
       </ScrollView>
 
       {/* Multi-Select Combine Action */}
-      {isMultiSelectMode && selectedHistoryLists.size > 0 && (
-        <AnimatedSection animation="fadeInUp" duration={300} style={styles.combineActionContainer}>
-          <Pressable
-            style={styles.combineActionButton}
-            onPress={() => setShowCombineModal(true)}
-          >
-            <MaterialCommunityIcons name="layers-plus" size={20} color={colors.text.inverse} />
-            <Text style={styles.combineActionText}>
-              Combine {selectedHistoryLists.size} List{selectedHistoryLists.size > 1 ? "s" : ""}
-            </Text>
-          </Pressable>
-        </AnimatedSection>
+      {isMultiSelectMode && (
+        <CombineActionBar
+          selectedCount={selectedHistoryLists.size}
+          onCombine={() => setShowCombineModal(true)}
+        />
       )}
 
       {/* Notifications Dropdown */}
@@ -621,84 +207,39 @@ export default function ListsScreen() {
         onClose={() => setShowNotifications(false)}
       />
 
-      {/* Create List Options Modal */}
-      <CreateListOptionsModal
-        visible={showCreateOptionsModal}
-        onClose={() => setShowCreateOptionsModal(false)}
-        onFromScratch={handleCreateFromScratch}
-        onUseTemplate={handleShowTemplatePicker}
-        hasHistory={(history?.length ?? 0) > 0}
-      />
-
-      {/* Template Picker Modal */}
-      <TemplatePickerModal
-        visible={showTemplatePickerModal}
-        onClose={() => setShowTemplatePickerModal(false)}
-        onSelectTemplate={handlePickTemplate}
+      {/* All Modals */}
+      <ListsModals
+        showCreateOptionsModal={showCreateOptionsModal}
+        showTemplatePickerModal={showTemplatePickerModal}
+        showTemplateModal={showTemplateModal}
+        showCombineModal={showCombineModal}
+        showEditNameModal={showEditNameModal}
+        selectedTemplateId={selectedTemplateId}
+        selectedTemplateName={selectedTemplateName}
+        editingListName={editingListName}
+        selectedHistoryLists={selectedHistoryLists}
         historyLists={history || []}
+        hasHistory={(history?.length ?? 0) > 0}
+        onCloseCreateOptions={() => setShowCreateOptionsModal(false)}
+        onCreateFromScratch={handleCreateFromScratch}
+        onShowTemplatePicker={handleShowTemplatePicker}
+        onCloseTemplatePicker={() => setShowTemplatePickerModal(false)}
+        onPickTemplate={handlePickTemplate}
+        onCloseTemplate={handleCloseTemplate}
+        onConfirmTemplate={handleConfirmTemplate}
+        onCloseCombine={() => setShowCombineModal(false)}
+        onConfirmCombine={handleConfirmCombine}
+        onCloseEditName={() => setShowEditNameModal(false)}
+        onSaveListName={handleSaveListName}
       />
 
-      {/* Template Preview Modal */}
-      <CreateFromTemplateModal
-        visible={showTemplateModal}
-        sourceListId={selectedTemplateId}
-        sourceListName={selectedTemplateName}
-        onClose={() => {
-          setShowTemplateModal(false);
-          setSelectedTemplateId(null);
-          setSelectedTemplateName("");
-        }}
-        onConfirm={handleConfirmTemplate}
-      />
-
-      {/* Combine Lists Modal */}
-      <CombineListsModal
-        visible={showCombineModal}
-        sourceListIds={Array.from(selectedHistoryLists)}
-        onClose={() => setShowCombineModal(false)}
-        onConfirm={handleConfirmCombine}
-      />
-
-      {/* Edit List Name Modal */}
-      <EditListNameModal
-        visible={showEditNameModal}
-        currentName={editingListName}
-        onClose={() => setShowEditNameModal(false)}
-        onSave={handleSaveListName}
-      />
-
-      {/* Tutorial Hints - STRICT: Only one hint visible at a time */}
-      <HintOverlay
-        visible={welcomeHint.shouldShow && !createHint.shouldShow && !templateHint.shouldShow}
-        targetRef={headerRef}
-        title="Welcome to Oja!"
-        content="Shopping lists are your command center. Add items here and watch your budget and pantry sync automatically."
-        onDismiss={welcomeHint.dismiss}
-        position="below"
-        currentStep={1}
-        totalSteps={3}
-      />
-
-      <HintOverlay
-        visible={createHint.shouldShow && !welcomeHint.shouldShow && !templateHint.shouldShow}
-        targetRef={createCardRef}
-        title="Start Your First List"
-        content="Tap here to create a list. We'll suggest items you buy frequently to speed things up."
-        onDismiss={createHint.dismiss}
-        position="below"
-        currentStep={2}
-        totalSteps={3}
-      />
-
-      <HintOverlay
-        visible={templateHint.shouldShow && !welcomeHint.shouldShow && !createHint.shouldShow}
-        targetRef={createCardRef}
-        title="Reuse with Templates"
-        content="Tap 'From Template' to save and reuse common lists. Perfect for weekly groceries or meal plans."
-        onDismiss={templateHint.dismiss}
-        position="below"
-        currentStep={3}
-        totalSteps={3}
+      {/* Tutorial Hints */}
+      <ListsTutorialHints
+        welcomeHint={welcomeHint}
+        createHint={createHint}
+        templateHint={templateHint}
+        headerRef={headerRef}
+        createCardRef={createCardRef}
       />
 
     </GlassScreen>
@@ -712,209 +253,17 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     gap: spacing.md,
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: spacing.xl,
-  },
-  emptyScrollContent: {
-    flexGrow: 1,
-    paddingTop: spacing.xl,
-  },
-  emptyScrollContentInner: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: spacing.xl,
-  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingTop: spacing.sm,
   },
-  cardWrapper: {
-    marginHorizontal: spacing.lg,
-  },
   bottomSpacer: {
     height: 140,
   },
-  joinCardWrapper: {
-    alignItems: "center",
-    marginTop: spacing.lg,
-  },
-  joinCard: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  joinCardContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  joinCardText: {
-    ...typography.bodyMedium,
-    color: colors.text.secondary,
-  },
-  joinCardEmpty: {
-    alignItems: "center",
-    marginTop: spacing.lg,
-  },
-
-  // Inline create-list card
-  createCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderColor: `${colors.accent.primary}50`,
-    borderRadius: borderRadius.lg,
-    backgroundColor: `${colors.accent.primary}08`,
-    padding: spacing.md,
-  },
-  createCardInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  createCardIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.full,
-    backgroundColor: `${colors.accent.primary}20`,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  createCardText: {
-    flex: 1,
-  },
-  createCardTitle: {
-    ...typography.bodyLarge,
-    color: colors.accent.primary,
-    fontWeight: "600",
-  },
-  createCardSubtitle: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-    marginTop: 2,
-  },
-
-  // Tab toggle
   tabContainer: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
-  },
-
-  // Empty history
-  emptyHistoryContainer: {
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  emptyHistoryTitle: {
-    ...typography.headlineMedium,
-    color: colors.text.secondary,
-  },
-  emptyHistorySubtitle: {
-    ...typography.bodyMedium,
-    color: colors.text.tertiary,
-    textAlign: "center",
-    lineHeight: 22,
-  },
-
-  // Shared lists section
-  sharedSectionHeader: {
-    marginHorizontal: spacing.lg,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.glass.border,
-  },
-  sharedSectionTitle: {
-    ...typography.labelMedium,
-    color: colors.text.secondary,
-    fontWeight: "600",
-  },
-
-  // Header actions (add + bell)
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.full,
-    backgroundColor: `${colors.accent.primary}20`,
-    borderWidth: 1,
-    borderColor: `${colors.accent.primary}40`,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bellButton: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.glass.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bellBadge: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    backgroundColor: colors.accent.error,
-    borderRadius: 18,
-    minWidth: 18,
-    height: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing.xs,
-  },
-  bellBadgeText: {
-    ...typography.labelSmall,
-    color: colors.text.inverse,
-    fontSize: 10,
-  },
-  selectTextButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    justifyContent: "center",
-  },
-  selectTextButtonLabel: {
-    ...typography.labelMedium,
-    color: colors.accent.primary,
-    fontWeight: "600",
-  },
-  combineActionContainer: {
-    position: "absolute",
-    bottom: spacing.lg + 80, // Above bottom tabs
-    left: spacing.lg,
-    right: spacing.lg,
-    alignItems: "center",
-  },
-  combineActionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.accent.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.full,
-    gap: spacing.sm,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  combineActionText: {
-    ...typography.labelLarge,
-    color: colors.text.inverse,
-    fontWeight: "600",
   },
 });

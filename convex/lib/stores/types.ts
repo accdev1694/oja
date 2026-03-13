@@ -1,0 +1,97 @@
+/**
+ * Types for the UK Store Normalizer system.
+ *
+ * Defines canonical store identifiers, store categories, cuisine mappings,
+ * and the StoreInfo shape used throughout the app.
+ */
+
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
+
+/**
+ * Canonical store identifiers for UK retailers.
+ * These are the normalized IDs stored in the database.
+ */
+export type UKStoreId =
+  | "tesco"
+  | "sainsburys"
+  | "asda"
+  | "aldi"
+  | "morrisons"
+  | "lidl"
+  | "coop"
+  | "waitrose"
+  | "marks"
+  | "iceland"
+  | "nisa"
+  | "spar"
+  | "londis"
+  | "costcutter"
+  | "premier"
+  | "onestop"
+  | "budgens"
+  | "farmfoods"
+  | "costco"
+  | "booker"
+  // Specialty / ethnic stores
+  | "wingyip"
+  | "loonfung"
+  | "seewoo"
+  | "hoo_hing"
+  | "asian_supermarket"
+  | "african_grocery"
+  | "southasian_grocery"
+  | "middleeastern_grocery"
+  | "latin_grocery";
+
+/**
+ * Store type categories for grouping and filtering.
+ */
+export type StoreType =
+  | "supermarket"
+  | "discounter"
+  | "convenience"
+  | "premium"
+  | "frozen"
+  | "wholesale"
+  | "specialty";
+
+/**
+ * Cuisine identifiers matching the onboarding cuisine-selection screen.
+ */
+export type CuisineId =
+  | "british"
+  | "nigerian"
+  | "indian"
+  | "chinese"
+  | "italian"
+  | "pakistani"
+  | "caribbean"
+  | "mexican"
+  | "middle-eastern"
+  | "japanese"
+  | "korean"
+  | "thai"
+  | "vietnamese"
+  | "ethiopian";
+
+/**
+ * Complete store information including display metadata and aliases.
+ */
+export interface StoreInfo {
+  /** Canonical lowercase ID (matches UKStoreId) */
+  id: UKStoreId;
+  /** Human-readable display name */
+  displayName: string;
+  /** Brand hex color for UI theming */
+  color: string;
+  /** Store category */
+  type: StoreType;
+  /** All variations/aliases that should match to this store */
+  aliases: string[];
+  /** Approximate UK market share (for sorting) */
+  marketShare: number;
+  /** Cuisines this specialty store is relevant for */
+  cuisines?: CuisineId[];
+}

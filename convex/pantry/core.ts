@@ -11,6 +11,7 @@ import { getIconForItem } from "../iconMapping";
 import { canAddPantryItem } from "../lib/featureGating";
 import { isDuplicateItem } from "../lib/fuzzyMatch";
 import { toGroceryTitleCase } from "../lib/titleCase";
+import { cleanItemForStorage } from "../lib/itemNameParser";
 import { enrichGlobalFromProductScan } from "../lib/globalEnrichment";
 
 export const getByUser = query({
@@ -280,19 +281,20 @@ export const addBatchFromScan = mutation({
 
         await enforceActiveCap(ctx, user._id);
 
+        const cleaned = cleanItemForStorage(toGroceryTitleCase(item.name), item.size, item.unit);
         await ctx.db.insert("pantryItems", {
           userId: user._id,
-          name: toGroceryTitleCase(item.name),
+          name: cleaned.name,
           category: item.category,
-          icon: getIconForItem(toGroceryTitleCase(item.name), item.category),
+          icon: getIconForItem(cleaned.name, item.category),
           stockLevel: "stocked",
           status: "active",
           nameSource: "system",
           autoAddToList: false,
           purchaseCount: 1,
           lastPurchasedAt: now,
-          ...(item.size ? { defaultSize: item.size } : {}),
-          ...(item.unit ? { defaultUnit: item.unit } : {}),
+          ...(cleaned.size ? { defaultSize: cleaned.size } : {}),
+          ...(cleaned.unit ? { defaultUnit: cleaned.unit } : {}),
           ...(item.quantity ? { quantity: item.quantity } : {}),
           ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "ai_estimate" } : {}),
           createdAt: now,

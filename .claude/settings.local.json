@@ -166,7 +166,13 @@
       "Bash(timeout 15 npx expo start:*)",
       "Bash(while read f)",
       "Bash(do wc -l \"$f\")",
-      "Bash(do grep -l \"useHint\\\\|HintOverlay\" \"$f\")"
+      "Bash(do grep -l \"useHint\\\\|HintOverlay\" \"$f\")",
+      "Skill(bmad:bmm:workflows:code-review)",
+      "Bash(timeout 10 npx expo start:*)",
+      "Bash(for f in components/AddItemForm.tsx components/AddItemsModal.tsx components/UnmatchedItemsModal.tsx components/TripSummaryModal.tsx components/HealthAnalysisModal.tsx components/VariantPicker.tsx components/ListCard.tsx hooks/useVoiceAssistant.ts hooks/useProductScanner.ts)",
+      "Bash(do if [ -f \"$f\" ])",
+      "Bash(else echo \"GONE: $f\")",
+      "Bash(cut:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

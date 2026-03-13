@@ -137,7 +137,7 @@ export async function checkFeatureAccess(ctx: any, userId: any) {
 
 /**
  * Check if user can create a new shopping list.
- * Free tier: max 3 active lists.
+ * Free tier: max 2 active lists.
  */
 export async function canCreateList(ctx: any, userId: any): Promise<{ allowed: boolean; reason?: string; currentCount?: number; maxCount?: number }> {
   const { isPremium, features } = await checkFeatureAccess(ctx, userId);
@@ -147,12 +147,10 @@ export async function canCreateList(ctx: any, userId: any): Promise<{ allowed: b
 
   const activeLists = await ctx.db
     .query("shoppingLists")
-    .withIndex("by_user", (q: any) => q.eq("userId", userId))
-    .collect();
+    .withIndex("by_user_status", (q: any) => q.eq("userId", userId).eq("status", "active"))
+    .take(features.maxLists + 1);
 
-  const activeCount = activeLists.filter(
-    (l: any) => l.status === "active"
-  ).length;
+  const activeCount = activeLists.length;
 
   if (activeCount >= features.maxLists) {
     return {
@@ -168,7 +166,7 @@ export async function canCreateList(ctx: any, userId: any): Promise<{ allowed: b
 
 /**
  * Check if user can add a new pantry item.
- * Free tier: max 50 items.
+ * Free tier: max 30 items.
  */
 export async function canAddPantryItem(ctx: any, userId: any): Promise<{ allowed: boolean; reason?: string; currentCount?: number; maxCount?: number }> {
   const { isPremium, features } = await checkFeatureAccess(ctx, userId);
@@ -178,8 +176,8 @@ export async function canAddPantryItem(ctx: any, userId: any): Promise<{ allowed
 
   const items = await ctx.db
     .query("pantryItems")
-    .withIndex("by_user", (q: any) => q.eq("userId", userId))
-    .collect();
+    .withIndex("by_user_status", (q: any) => q.eq("userId", userId).eq("status", "active"))
+    .take(features.maxPantryItems + 1);
 
   if (items.length >= features.maxPantryItems) {
     return {

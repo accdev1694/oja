@@ -309,10 +309,13 @@ export const addItemMidShop = mutation({
     const perms = await getUserListPermissions(ctx, args.listId, user._id);
     if (!perms.canEdit) throw new Error("Unauthorized");
 
+    const cleaned = cleanItemForStorage(toGroceryTitleCase(args.name), undefined, undefined);
     const itemId = await ctx.db.insert("listItems", {
       listId: args.listId,
       userId: user._id,
-      name: toGroceryTitleCase(args.name),
+      name: cleaned.name,
+      size: cleaned.size,
+      unit: cleaned.unit,
       quantity: args.quantity,
       actualPrice: args.actualPrice,
       estimatedPrice: args.actualPrice,
@@ -354,15 +357,16 @@ export const addFromPantryBulk = mutation({
       const existing = await findDuplicateListItem(ctx, args.listId, pantryItem.name, pantryItem.defaultSize);
       if (existing) continue;
 
+      const cleaned = cleanItemForStorage(pantryItem.name, pantryItem.defaultSize, pantryItem.defaultUnit);
       await ctx.db.insert("listItems", {
         listId: args.listId,
         userId: user._id,
         pantryItemId: pid,
-        name: pantryItem.name,
+        name: cleaned.name,
         category: pantryItem.category,
         quantity: 1,
-        size: pantryItem.defaultSize,
-        unit: pantryItem.defaultUnit,
+        size: cleaned.size,
+        unit: cleaned.unit,
         estimatedPrice: pantryItem.lastPrice,
         priceSource: "personal",
         isChecked: false,

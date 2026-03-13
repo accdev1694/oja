@@ -155,11 +155,14 @@ export {
 
 export {
   GlassHeader,
-  SimpleHeader,
   type GlassHeaderProps,
-  type SimpleHeaderProps,
   type HeaderAction,
 } from "./GlassHeader";
+
+export {
+  SimpleHeader,
+  type SimpleHeaderProps,
+} from "./SimpleHeader";
 
 // =============================================================================
 // BACKGROUND COMPONENTS
