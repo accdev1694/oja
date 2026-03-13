@@ -63,16 +63,16 @@ async function getLiveAnalytics(ctx: QueryCtx, dateFrom?: number, dateTo?: numbe
       const monthAgo = now - 30 * 24 * 60 * 60 * 1000;
       const yearAgo = now - 365 * 24 * 60 * 60 * 1000;
       
-      const usersQuery = dateFrom 
-        ? ctx.db.query("users").withIndex("by_created", (q: any) => q.gte("createdAt", dateFrom))
+      const usersQuery = dateFrom
+        ? ctx.db.query("users").withIndex("by_created", q => q.gte("createdAt", dateFrom))
         : ctx.db.query("users").withIndex("by_created");
-        
+
       const listsQuery = dateFrom
-        ? ctx.db.query("shoppingLists").withIndex("by_created", (q: any) => q.gte("createdAt", dateFrom))
+        ? ctx.db.query("shoppingLists").withIndex("by_created", q => q.gte("createdAt", dateFrom))
         : ctx.db.query("shoppingLists").withIndex("by_created");
-      
+
       const receiptsQuery = dateFrom
-        ? ctx.db.query("receipts").withIndex("by_created", (q: any) => q.gte("createdAt", dateFrom))
+        ? ctx.db.query("receipts").withIndex("by_created", q => q.gte("createdAt", dateFrom))
         : ctx.db.query("receipts").withIndex("by_created");
 
       let u = await usersQuery.collect();
@@ -80,27 +80,27 @@ async function getLiveAnalytics(ctx: QueryCtx, dateFrom?: number, dateTo?: numbe
       let r = await receiptsQuery.collect();
 
       if (dateTo) {
-        u = u.filter((x: any) => x.createdAt <= dateTo);
-        l = l.filter((x: any) => x.createdAt <= dateTo);
-        r = r.filter((x: any) => x.createdAt <= dateTo);
+        u = u.filter(x => x.createdAt <= dateTo);
+        l = l.filter(x => x.createdAt <= dateTo);
+        r = r.filter(x => x.createdAt <= dateTo);
       }
 
-      const computeGMV = (receipts: any[]) => Math.round(receipts.reduce((s: number, x: any) => s + (x.total || 0), 0) * 100) / 100;
+      const computeGMV = (receipts: typeof r) => Math.round(receipts.reduce((s, x) => s + (x.total || 0), 0) * 100) / 100;
 
       return {
         totalUsers: u.length,
-        newUsersThisWeek: u.filter((x: any) => x.createdAt >= weekAgo).length,
-        newUsersThisMonth: u.filter((x: any) => x.createdAt >= monthAgo).length,
-        activeUsersThisWeek: new Set(l.filter((x: any) => x.updatedAt >= weekAgo).map((x: any) => x.userId.toString())).size,
+        newUsersThisWeek: u.filter(x => x.createdAt >= weekAgo).length,
+        newUsersThisMonth: u.filter(x => x.createdAt >= monthAgo).length,
+        activeUsersThisWeek: new Set(l.filter(x => x.updatedAt >= weekAgo).map(x => x.userId.toString())).size,
         totalLists: l.length,
-        completedLists: l.filter((x: any) => x.status === "completed").length,
+        completedLists: l.filter(x => x.status === "completed").length,
         totalReceipts: r.length,
-        receiptsThisWeek: r.filter((x: any) => x.createdAt >= weekAgo).length,
-        receiptsThisMonth: r.filter((x: any) => x.createdAt >= monthAgo).length,
+        receiptsThisWeek: r.filter(x => x.createdAt >= weekAgo).length,
+        receiptsThisMonth: r.filter(x => x.createdAt >= monthAgo).length,
         totalGMV: computeGMV(r),
-        gmvThisWeek: computeGMV(r.filter((x: any) => x.createdAt >= weekAgo)),
-        gmvThisMonth: computeGMV(r.filter((x: any) => x.createdAt >= monthAgo)),
-        gmvThisYear: computeGMV(r.filter((x: any) => x.createdAt >= yearAgo)),
+        gmvThisWeek: computeGMV(r.filter(x => x.createdAt >= weekAgo)),
+        gmvThisMonth: computeGMV(r.filter(x => x.createdAt >= monthAgo)),
+        gmvThisYear: computeGMV(r.filter(x => x.createdAt >= yearAgo)),
         computedAt: now,
         isPrecomputed: false,
       };
@@ -213,10 +213,10 @@ export const getRevenueReport = query({
       let subs = await subsQuery.collect();
       if (args.dateTo) subs = subs.filter(s => s.createdAt <= args.dateTo!);
 
-      const activeSubs = subs.filter((s: any) => s.status === "active");
-      const monthlyCount = activeSubs.filter((s: any) => s.plan === "premium_monthly").length;
-      const annualCount = activeSubs.filter((s: any) => s.plan === "premium_annual").length;
-      const trialsActive = subs.filter((s: any) => s.status === "trial").length;
+      const activeSubs = subs.filter(s => s.status === "active");
+      const monthlyCount = activeSubs.filter(s => s.plan === "premium_monthly").length;
+      const annualCount = activeSubs.filter(s => s.plan === "premium_annual").length;
+      const trialsActive = subs.filter(s => s.status === "trial").length;
 
       const mrr = monthlyCount * monthlyPrice + (annualCount * annualPrice) / 12;
       const arr = mrr * 12;
@@ -242,14 +242,13 @@ export const getFinancialReport = query({
   },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    
-    // @ts-ignore
-    const rev: any = await ctx.runQuery(api.admin.getRevenueReport, args);
+
+    const rev = await ctx.runQuery(api.admin.getRevenueReport, args);
 
     const grossRevenue: number = rev?.mrr || 0;
     const estimatedTax: number = grossRevenue * 0.20; // 20% VAT
 
-    const analytics: any = await ctx.runQuery(api.admin.getAnalytics, {});
+    const analytics = await ctx.runQuery(api.admin.getAnalytics, {});
     const activeUsers: number = analytics?.activeUsersThisWeek || 0;
     const estimatedCOGS: number = activeUsers * 0.50;
     
@@ -397,12 +396,11 @@ export const getAdminSupportSummary = query({
       ctx.db.query("supportTickets").withIndex("by_status", q => q.eq("status", "resolved")).collect().then(res => res.length),
     ]);
     
-    const unassigned = await ctx.db
+    const unassignedTickets = await ctx.db
       .query("supportTickets")
-      .withIndex("by_assigned", q => q.eq("assignedTo", undefined as any))
-      .filter(q => q.neq(q.field("status"), "resolved"))
-      .collect()
-      .then(res => res.length);
+      .filter(q => q.eq(q.field("assignedTo"), undefined) && q.neq(q.field("status"), "resolved"))
+      .collect();
+    const unassigned = unassignedTickets.length;
     
     return {
       total: open + inProgress + resolved,
@@ -421,9 +419,10 @@ export const getAdminTickets = query({
     
     let ticketsQuery;
     if (args.status) {
+      const status = args.status as "open" | "in_progress" | "resolved";
       ticketsQuery = ctx.db
         .query("supportTickets")
-        .withIndex("by_status", (q) => q.eq("status", args.status as any));
+        .withIndex("by_status", q => q.eq("status", status));
     } else {
       ticketsQuery = ctx.db.query("supportTickets");
     }

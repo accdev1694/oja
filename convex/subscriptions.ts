@@ -11,12 +11,12 @@ import {
 } from "./lib/featureGating";
 import { trackFunnelEvent } from "./lib/analytics";
 
-async function requireUser(ctx: any) {
+async function requireUser(ctx: Parameters<typeof getCurrentSubscription.handler>[0]) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
   const user = await ctx.db
     .query("users")
-    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+    .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
     .unique();
   if (!user) throw new Error("User not found");
   return user;
@@ -37,13 +37,13 @@ export const getCurrentSubscription = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) return null;
 
     const sub = await ctx.db
       .query("subscriptions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .order("desc")
       .first();
 
@@ -101,7 +101,7 @@ export const upsertSubscription = mutation({
 
     const existing = await ctx.db
       .query("subscriptions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .order("desc")
       .first();
 
@@ -133,7 +133,7 @@ export const startFreeTrial = mutation({
 
     const existing = await ctx.db
       .query("subscriptions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .first();
 
     if (existing) throw new Error("Already has a subscription");
@@ -177,7 +177,7 @@ export const cancelSubscription = mutation({
 
     const sub = await ctx.db
       .query("subscriptions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .order("desc")
       .first();
 
@@ -203,7 +203,7 @@ export const hasPremium = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) return false;
 
@@ -211,7 +211,7 @@ export const hasPremium = query({
 
     const sub = await ctx.db
       .query("subscriptions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .order("desc")
       .first();
 
@@ -232,7 +232,7 @@ export const requirePremium = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
@@ -242,7 +242,7 @@ export const requirePremium = query({
 
     const sub = await ctx.db
       .query("subscriptions")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .order("desc")
       .first();
 
@@ -261,12 +261,12 @@ export const getPlans = query({
   handler: async (ctx) => {
     // Get dynamic pricing from config, fallback to hard-coded values if unseeded
     const pricing = await ctx.db.query("pricingConfig")
-      .withIndex("by_active", (q: any) => q.eq("isActive", true))
+      .withIndex("by_active", q => q.eq("isActive", true))
       .collect();
 
     // Fallbacks: £2.99/mo, £21.99/yr
-    const monthlyPrice = pricing.find((p: any) => p.planId === "premium_monthly")?.priceAmount ?? 2.99;
-    const annualPrice = pricing.find((p: any) => p.planId === "premium_annual")?.priceAmount ?? 21.99;
+    const monthlyPrice = pricing.find(p => p.planId === "premium_monthly")?.priceAmount ?? 2.99;
+    const annualPrice = pricing.find(p => p.planId === "premium_annual")?.priceAmount ?? 21.99;
 
     // Calculate savings
     const yearlyIfMonthly = monthlyPrice * 12;
@@ -349,7 +349,7 @@ export const expireTrials = internalMutation({
 
     const trialSubs = await ctx.db
       .query("subscriptions")
-      .withIndex("by_status", (q: any) => q.eq("status", "trial"))
+      .withIndex("by_status", q => q.eq("status", "trial"))
       .collect();
 
     let expired = 0;
@@ -384,7 +384,7 @@ export const migrateToUnifiedRewards = internalMutation({
   args: {},
   handler: async (ctx) => {
     const allCredits = await ctx.db.query("scanCredits").collect();
-    const userIds = [...new Set(allCredits.map((c: any) => c.userId))];
+    const userIds = [...new Set(allCredits.map(c => c.userId))];
 
     let migrated = 0;
 
@@ -392,20 +392,20 @@ export const migrateToUnifiedRewards = internalMutation({
       // Count scan credit transactions
       const scanTxns = await ctx.db
         .query("scanCreditTransactions")
-        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .withIndex("by_user", q => q.eq("userId", userId))
         .collect();
 
-      const receiptIds = new Set(scanTxns.map((t: any) => t.receiptId?.toString()).filter(Boolean));
+      const receiptIds = new Set(scanTxns.map(t => t.receiptId?.toString()).filter(Boolean));
 
       // Count point transactions from receipt scans (pre-credit era)
       const pointTxns = await ctx.db
         .query("pointTransactions")
-        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .withIndex("by_user", q => q.eq("userId", userId))
         .collect();
 
       for (const pt of pointTxns) {
-        if ((pt as any).source === "receipt_scan" && (pt as any).receiptId) {
-          const rid = (pt as any).receiptId.toString();
+        if (pt.source === "receipt_scan" && pt.receiptId) {
+          const rid = pt.receiptId.toString();
           if (!receiptIds.has(rid)) {
             receiptIds.add(rid);
           }
@@ -417,8 +417,8 @@ export const migrateToUnifiedRewards = internalMutation({
 
       // Update latest scanCredits record for this user
       const latestCredit = allCredits
-        .filter((c: any) => c.userId === userId)
-        .sort((a: any, b: any) => (b._creationTime || 0) - (a._creationTime || 0))[0];
+        .filter(c => c.userId === userId)
+        .sort((a, b) => (b._creationTime || 0) - (a._creationTime || 0))[0];
 
       if (latestCredit) {
         await ctx.db.patch(latestCredit._id, {

@@ -8,7 +8,7 @@ import { processExpirePoints } from "../points";
 async function getStripeClient() {
   const Stripe = (await import("stripe")).default;
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2025-04-30.basil" as any,
+    apiVersion: "2025-04-30.basil" as const,
   });
 }
 
@@ -33,7 +33,7 @@ export const processWebhookEvent = action({
   handler: async (ctx, args): Promise<{ success: boolean }> => {
     const { eventId, eventType, data } = args;
 
-    const existing: any = await ctx.runQuery(internal.stripe.checkWebhookProcessed, { eventId });
+    const existing = await ctx.runQuery(internal.stripe.checkWebhookProcessed, { eventId });
     if (existing) {
       if (existing.status === "completed") return { success: true };
       if (existing.status === "processing") return { success: true };
@@ -77,7 +77,7 @@ export const processWebhookEvent = action({
         case "invoice.created": {
           const isSubscriptionInvoice = data.billing_reason === "subscription_cycle" || data.billing_reason === "subscription_create";
           if (isSubscriptionInvoice && data.status === "draft") {
-            const creditResult: any = await ctx.runMutation(internal.stripe.reservePoints, {
+            const creditResult = await ctx.runMutation(internal.stripe.reservePoints, {
               stripeCustomerId: data.customer,
               stripeInvoiceId: data.id,
             });
@@ -93,7 +93,7 @@ export const processWebhookEvent = action({
                   description: `Oja Points redemption (${creditResult.pointsApplied} pts applied)`,
                 });
                 await ctx.runMutation(internal.stripe.confirmPointsRedemption, { reservationId: creditResult.reservationId });
-              } catch (stripeError: any) {
+              } catch (stripeError: unknown) {
                 console.error(`[Webhook] Stripe invoice item creation failed for ${data.id}:`, stripeError);
                 await ctx.runMutation(internal.stripe.releasePoints, { reservationId: creditResult.reservationId });
                 throw stripeError;
@@ -116,7 +116,7 @@ export const processWebhookEvent = action({
 export const checkWebhookProcessed = internalQuery({
   args: { eventId: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db.query("processedWebhooks").withIndex("by_event_id", (q: any) => q.eq("eventId", args.eventId)).first();
+    return await ctx.db.query("processedWebhooks").withIndex("by_event_id", q => q.eq("eventId", args.eventId)).first();
   },
 });
 
@@ -135,7 +135,7 @@ export const markWebhookProcessing = internalMutation({
 export const markWebhookComplete = internalMutation({
   args: { eventId: v.string() },
   handler: async (ctx, args) => {
-    const existing = await ctx.db.query("processedWebhooks").withIndex("by_event_id", (q: any) => q.eq("eventId", args.eventId)).first();
+    const existing = await ctx.db.query("processedWebhooks").withIndex("by_event_id", q => q.eq("eventId", args.eventId)).first();
     if (existing) await ctx.db.patch(existing._id, { status: "completed", processedAt: Date.now() });
   },
 });
@@ -143,7 +143,7 @@ export const markWebhookComplete = internalMutation({
 export const markWebhookFailed = internalMutation({
   args: { eventId: v.string(), error: v.string() },
   handler: async (ctx, args) => {
-    const existing = await ctx.db.query("processedWebhooks").withIndex("by_event_id", (q: any) => q.eq("eventId", args.eventId)).first();
+    const existing = await ctx.db.query("processedWebhooks").withIndex("by_event_id", q => q.eq("eventId", args.eventId)).first();
     if (existing) await ctx.db.patch(existing._id, { status: "failed", error: args.error, processedAt: Date.now() });
   },
 });
@@ -156,12 +156,12 @@ export const handleCheckoutCompleted = internalMutation({
     const user = await ctx.db.get(userId);
     if (!user) throw new Error(`User not found: ${args.userId}`);
 
-    const existing = await ctx.db.query("subscriptions").withIndex("by_user", (q: any) => q.eq("userId", userId)).order("desc").first();
+    const existing = await ctx.db.query("subscriptions").withIndex("by_user", q => q.eq("userId", userId)).order("desc").first();
     const plan = args.planId === "premium_annual" ? "premium_annual" : "premium_monthly";
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        plan: plan as any,
+        plan: plan as "free" | "premium_monthly" | "premium_annual",
         status: "active",
         stripeCustomerId: args.stripeCustomerId,
         stripeSubscriptionId: args.stripeSubscriptionId,
@@ -170,7 +170,7 @@ export const handleCheckoutCompleted = internalMutation({
     } else {
       await ctx.db.insert("subscriptions", {
         userId,
-        plan: plan as any,
+        plan: plan as "free" | "premium_monthly" | "premium_annual",
         status: "active",
         stripeCustomerId: args.stripeCustomerId,
         stripeSubscriptionId: args.stripeSubscriptionId,
@@ -207,7 +207,7 @@ export const handleCheckoutCompleted = internalMutation({
 export const handleSubscriptionUpdated = internalMutation({
   args: { stripeCustomerId: v.string(), stripeSubscriptionId: v.string(), status: v.union(v.literal("active"), v.literal("cancelled"), v.literal("expired"), v.literal("trial")), currentPeriodStart: v.number(), currentPeriodEnd: v.number() },
   handler: async (ctx, args) => {
-    const sub = await ctx.db.query("subscriptions").withIndex("by_stripe_customer", (q: any) => q.eq("stripeCustomerId", args.stripeCustomerId)).first();
+    const sub = await ctx.db.query("subscriptions").withIndex("by_stripe_customer", q => q.eq("stripeCustomerId", args.stripeCustomerId)).first();
     if (!sub) return;
     await ctx.db.patch(sub._id, {
       status: args.status,
@@ -222,7 +222,7 @@ export const handleSubscriptionUpdated = internalMutation({
 export const handleSubscriptionDeleted = internalMutation({
   args: { stripeCustomerId: v.string() },
   handler: async (ctx, args) => {
-    const sub = await ctx.db.query("subscriptions").withIndex("by_stripe_customer", (q: any) => q.eq("stripeCustomerId", args.stripeCustomerId)).first();
+    const sub = await ctx.db.query("subscriptions").withIndex("by_stripe_customer", q => q.eq("stripeCustomerId", args.stripeCustomerId)).first();
     if (!sub) return;
     await ctx.db.patch(sub._id, { status: "expired", updatedAt: Date.now() });
     await ctx.db.insert("notifications", {
@@ -233,7 +233,7 @@ export const handleSubscriptionDeleted = internalMutation({
       read: false,
       createdAt: Date.now(),
     });
-    const balance = await ctx.db.query("pointsBalance").withIndex("by_user", (q: any) => q.eq("userId", sub.userId)).first();
+    const balance = await ctx.db.query("pointsBalance").withIndex("by_user", q => q.eq("userId", sub.userId)).first();
     if (balance && balance.availablePoints > 0) {
       await processExpirePoints(ctx, sub.userId, balance.availablePoints, "subscription_cancelled");
     }
@@ -243,7 +243,7 @@ export const handleSubscriptionDeleted = internalMutation({
 export const handlePaymentFailed = internalMutation({
   args: { stripeCustomerId: v.string() },
   handler: async (ctx, args) => {
-    const sub = await ctx.db.query("subscriptions").withIndex("by_stripe_customer", (q: any) => q.eq("stripeCustomerId", args.stripeCustomerId)).first();
+    const sub = await ctx.db.query("subscriptions").withIndex("by_stripe_customer", q => q.eq("stripeCustomerId", args.stripeCustomerId)).first();
     if (!sub) return;
     await ctx.db.insert("notifications", {
       userId: sub.userId,

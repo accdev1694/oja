@@ -16,16 +16,16 @@ export const getWeeklyDigest = query({
 
     const allReceipts = await ctx.db
       .query("receipts")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
-    const thisWeek = allReceipts.filter((r: any) => r.purchaseDate >= weekAgo);
+    const thisWeek = allReceipts.filter(r => r.purchaseDate >= weekAgo);
     const lastWeek = allReceipts.filter(
-      (r: any) => r.purchaseDate >= twoWeeksAgo && r.purchaseDate < weekAgo
+      r => r.purchaseDate >= twoWeeksAgo && r.purchaseDate < weekAgo
     );
 
-    const thisWeekTotal = thisWeek.reduce((sum: number, r: any) => sum + r.total, 0);
-    const lastWeekTotal = lastWeek.reduce((sum: number, r: any) => sum + r.total, 0);
+    const thisWeekTotal = thisWeek.reduce((sum, r) => sum + r.total, 0);
+    const lastWeekTotal = lastWeek.reduce((sum, r) => sum + r.total, 0);
     const percentChange = lastWeekTotal > 0
       ? ((thisWeekTotal - lastWeekTotal) / lastWeekTotal) * 100
       : 0;
@@ -36,19 +36,19 @@ export const getWeeklyDigest = query({
       const dayStart = now - (i + 1) * 24 * 60 * 60 * 1000;
       const dayEnd = now - i * 24 * 60 * 60 * 1000;
       const dayTotal = thisWeek
-        .filter((r: any) => r.purchaseDate >= dayStart && r.purchaseDate < dayEnd)
-        .reduce((sum: number, r: any) => sum + r.total, 0);
+        .filter(r => r.purchaseDate >= dayStart && r.purchaseDate < dayEnd)
+        .reduce((sum, r) => sum + r.total, 0);
       dailyTotals.push(Math.round(dayTotal * 100) / 100);
     }
 
     // Completed lists this week for budget tracking
     const lists = await ctx.db
       .query("shoppingLists")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
     const completedThisWeek = lists.filter(
-      (l: any) => l.status === "completed" && l.completedAt && l.completedAt >= weekAgo
+      l => l.status === "completed" && l.completedAt && l.completedAt >= weekAgo
     );
 
     let totalBudget = 0;
@@ -57,10 +57,10 @@ export const getWeeklyDigest = query({
       if (list.budget) totalBudget += list.budget;
       const items = await ctx.db
         .query("listItems")
-        .withIndex("by_list", (q: any) => q.eq("listId", list._id))
+        .withIndex("by_list", q => q.eq("listId", list._id))
         .collect();
       totalSpent += items.reduce(
-        (sum: number, item: any) => sum + (item.actualPrice || item.estimatedPrice || 0) * item.quantity,
+        (sum, item) => sum + (item.actualPrice || item.estimatedPrice || 0) * item.quantity,
         0
       );
     }
@@ -80,7 +80,7 @@ export const getWeeklyDigest = query({
   },
 });
 
-function getTopCategories(receipts: any[]) {
+function getTopCategories(receipts: Awaited<ReturnType<typeof ctx.db.query<"receipts">>["collect"]>) {
   const categoryTotals: Record<string, number> = {};
   for (const receipt of receipts) {
     for (const item of receipt.items || []) {

@@ -13,13 +13,13 @@ export const getByUser = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) return [];
 
     return await ctx.db
       .query("notifications")
-      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user", q => q.eq("userId", user._id))
       .order("desc")
       .take(50);
   },
@@ -33,13 +33,13 @@ export const getUnreadCount = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) return 0;
 
     const unread = await ctx.db
       .query("notifications")
-      .withIndex("by_user_read", (q: any) => q.eq("userId", user._id).eq("read", false))
+      .withIndex("by_user_read", q => q.eq("userId", user._id).eq("read", false))
       .collect();
 
     return unread.length;
@@ -54,7 +54,7 @@ export const markAsRead = mutation({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
@@ -75,13 +75,13 @@ export const markItemNotificationsRead = mutation({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
     const unread = await ctx.db
       .query("notifications")
-      .withIndex("by_user_read", (q: any) => q.eq("userId", user._id).eq("read", false))
+      .withIndex("by_user_read", q => q.eq("userId", user._id).eq("read", false))
       .collect();
 
     let count = 0;
@@ -104,13 +104,13 @@ export const markListNotificationsRead = mutation({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
     const unread = await ctx.db
       .query("notifications")
-      .withIndex("by_user_read", (q: any) => q.eq("userId", user._id).eq("read", false))
+      .withIndex("by_user_read", q => q.eq("userId", user._id).eq("read", false))
       .collect();
 
     const listTypes = ["list_message", "comment_added"];
@@ -134,13 +134,13 @@ export const markAllAsRead = mutation({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
     const unread = await ctx.db
       .query("notifications")
-      .withIndex("by_user_read", (q: any) => q.eq("userId", user._id).eq("read", false))
+      .withIndex("by_user_read", q => q.eq("userId", user._id).eq("read", false))
       .collect();
 
     for (const n of unread) {
@@ -164,7 +164,7 @@ export const dismiss = mutation({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
@@ -220,7 +220,7 @@ export const registerPushToken = mutation({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
@@ -247,7 +247,7 @@ export const removePushToken = mutation({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
