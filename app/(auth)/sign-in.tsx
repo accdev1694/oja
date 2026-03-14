@@ -1,15 +1,15 @@
 import { useSignIn, useOAuth } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   Platform,
-  ActivityIndicator,
   Pressable,
   Image,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -27,6 +27,8 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 
+const SAVED_AUTH_KEY = "oja_saved_auth";
+
 WebBrowser.maybeCompleteAuthSession();
 
 export default function SignInScreen() {
@@ -43,6 +45,21 @@ export default function SignInScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState("");
+  const [step, setStep] = useState<"email" | "password">("email");
+  const [savedAuth, setSavedAuth] = useState<{ email: string; method: "password" | "google" } | null>(null);
+
+  // Load saved auth on mount
+  useEffect(() => {
+    AsyncStorage.getItem(SAVED_AUTH_KEY)
+      .then((value) => {
+        if (value) {
+          const parsed = JSON.parse(value);
+          setSavedAuth(parsed);
+          setEmailAddress(parsed.email);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const onOAuthPress = useCallback(async (provider: "google" | "apple") => {
     try {
@@ -55,6 +72,10 @@ export default function SignInScreen() {
 
       if (createdSessionId) {
         await setActiveSession!({ session: createdSessionId });
+        // Save auth method for returning-user experience
+        if (emailAddress) {
+          AsyncStorage.setItem(SAVED_AUTH_KEY, JSON.stringify({ email: emailAddress, method: "google" })).catch(() => {});
+        }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         // Navigation handled by _layout.tsx useEffect
       }
@@ -68,31 +89,38 @@ export default function SignInScreen() {
     }
   }, [startGoogleOAuth, startAppleOAuth, router]);
 
-  const onSignInPress = useCallback(async () => {
+  // Step 1: Check what auth strategies are available for this email
+  const onContinuePress = useCallback(async () => {
     if (!isLoaded) return;
+
+    const trimmed = emailAddress.trim();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
 
     setIsLoading(true);
     setError("");
 
     try {
-      // First, create the sign-in attempt with identifier only to check available strategies
-      let signInAttempt = await signIn.create({
-        identifier: emailAddress,
+      const signInAttempt = await signIn.create({
+        identifier: trimmed,
       });
 
-      // Check if password strategy is available
       const passwordFactor = signInAttempt.supportedFirstFactors?.find(
         (factor) => factor.strategy === "password"
       );
 
-      if (passwordFactor && password) {
-        // Password strategy available - attempt password auth
-        signInAttempt = await signIn.attemptFirstFactor({
-          strategy: "password",
-          password,
-        });
-      } else if (signInAttempt.status === "needs_first_factor") {
-        // No password strategy - try email code
+      if (passwordFactor) {
+        // Account has password auth - show password field and save method
+        AsyncStorage.setItem(SAVED_AUTH_KEY, JSON.stringify({ email: emailAddress, method: "password" })).catch(() => {});
+        setSavedAuth({ email: emailAddress, method: "password" });
+        setStep("password");
+        setIsLoading(false);
+        return;
+      }
+
+      if (signInAttempt.status === "needs_first_factor") {
         const emailFactor = signInAttempt.supportedFirstFactors?.find(
           (factor) => factor.strategy === "email_code"
         );
@@ -104,19 +132,50 @@ export default function SignInScreen() {
           setPendingVerification(true);
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           return;
-        } else {
-          // No password, no email code - this account likely uses OAuth only
-          setError("This account uses Google sign-in. Please use the Google button below.");
-          return;
         }
       }
+
+      // No password or email code - OAuth-only account, save and auto-redirect to Google
+      AsyncStorage.setItem(SAVED_AUTH_KEY, JSON.stringify({ email: emailAddress, method: "google" })).catch(() => {});
+      setSavedAuth({ email: emailAddress, method: "google" });
+      setIsLoading(false);
+      onOAuthPress("google");
+    } catch (err: unknown) {
+      console.error("[SignIn] Error:", err);
+      const clerkErr = err as { errors?: { longMessage?: string; message?: string; code?: string }[] };
+      const clerkError = clerkErr?.errors?.[0];
+      const code = clerkError?.code || "";
+      let message;
+      if (code === "form_identifier_not_found") {
+        message = "No account found with this email. Check the address or sign up.";
+      } else if (code === "form_param_format_invalid") {
+        message = "Please enter a valid email address.";
+      } else {
+        message = clerkError?.longMessage || clerkError?.message || "Something went wrong. Please try again.";
+      }
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoaded, emailAddress, signIn, onOAuthPress]);
+
+  // Step 2: Submit password
+  const onSignInPress = useCallback(async () => {
+    if (!isLoaded) return;
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const signInAttempt = await signIn.create({
+        identifier: emailAddress,
+        password,
+      });
 
       if (signInAttempt.status === "complete") {
         await setActive({ session: signInAttempt.createdSessionId });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        // Navigation handled by _layout.tsx useEffect
       } else if (signInAttempt.status === "needs_second_factor") {
-        // Handle 2FA if needed
         setError("Two-factor authentication required. Please check your authenticator app.");
       } else {
         setError(`Sign in incomplete (${signInAttempt.status}). Please try again.`);
@@ -130,7 +189,7 @@ export default function SignInScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoaded, emailAddress, password, signIn]);
+  }, [isLoaded, emailAddress, password, signIn, setActive]);
 
   const onVerifyPress = useCallback(async () => {
     if (!isLoaded) return;
@@ -240,48 +299,163 @@ export default function SignInScreen() {
             </GlassCard>
           ) : null}
 
-          <GlassInput
-            placeholder="Email"
-            value={emailAddress}
-            onChangeText={setEmailAddress}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-            iconLeft="email-outline"
-          />
+          {/* Returning user: show saved account card */}
+          {savedAuth && step === "email" ? (
+            <>
+              <GlassCard style={styles.savedAccountCard}>
+                <View style={styles.savedAccountRow}>
+                  <View style={styles.savedAccountIcon}>
+                    <MaterialCommunityIcons
+                      name={savedAuth.method === "google" ? "google" : "account-circle"}
+                      size={28}
+                      color={colors.accent.primary}
+                    />
+                  </View>
+                  <View style={styles.savedAccountInfo}>
+                    <Text style={styles.savedAccountEmail}>{savedAuth.email}</Text>
+                    <Text style={styles.savedAccountMethod}>
+                      {savedAuth.method === "google" ? "Google account" : "Email & password"}
+                    </Text>
+                  </View>
+                </View>
+              </GlassCard>
 
-          <View style={{ height: spacing.sm }} />
+              <View style={styles.spacer} />
 
-          <GlassInput
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            autoComplete="password"
-            iconLeft="lock-outline"
-            iconRight={showPassword ? "eye-off-outline" : "eye-outline"}
-            onPressIconRight={() => setShowPassword(!showPassword)}
-          />
+              {savedAuth.method === "google" ? (
+                <GlassButton
+                  variant="primary"
+                  size="lg"
+                  onPress={() => onOAuthPress("google")}
+                  loading={isLoading}
+                  disabled={isLoading}
+                >
+                  Continue with Google
+                </GlassButton>
+              ) : (
+                <>
+                  <GlassInput
+                    placeholder="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoComplete="password"
+                    iconLeft="lock-outline"
+                    iconRight={showPassword ? "eye-off-outline" : "eye-outline"}
+                    onPressIconRight={() => setShowPassword(!showPassword)}
+                  />
 
-          {/* Forgot Password */}
-          <Pressable
-            style={styles.forgotPassword}
-            onPress={() => router.push("/(auth)/forgot-password")}
-          >
-            <Text style={styles.linkText}>Forgot password?</Text>
-          </Pressable>
+                  <Pressable
+                    style={styles.forgotPassword}
+                    onPress={() => router.push("/(auth)/forgot-password")}
+                  >
+                    <Text style={styles.linkText}>Forgot password?</Text>
+                  </Pressable>
 
-          <View style={styles.spacer} />
+                  <View style={styles.spacer} />
 
-          <GlassButton
-            variant="primary"
-            size="lg"
-            onPress={onSignInPress}
-            loading={isLoading}
-            disabled={isLoading || !emailAddress || !password}
-          >
-            Sign In
-          </GlassButton>
+                  <GlassButton
+                    variant="primary"
+                    size="lg"
+                    onPress={onSignInPress}
+                    loading={isLoading}
+                    disabled={isLoading || !password}
+                  >
+                    Sign In
+                  </GlassButton>
+                </>
+              )}
+
+              <Pressable
+                style={styles.backButton}
+                onPress={() => {
+                  setSavedAuth(null);
+                  setEmailAddress("");
+                  setPassword("");
+                  setError("");
+                  AsyncStorage.removeItem(SAVED_AUTH_KEY).catch(() => {});
+                }}
+              >
+                <Text style={styles.linkText}>Use a different account</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              {/* Fresh sign-in: identifier-first flow */}
+              <GlassInput
+                placeholder="Email"
+                value={emailAddress}
+                onChangeText={(text) => {
+                  setEmailAddress(text);
+                  if (step === "password") {
+                    setStep("email");
+                    setPassword("");
+                  }
+                }}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoComplete="email"
+                iconLeft="email-outline"
+              />
+
+              {step === "password" ? (
+                <>
+                  <View style={{ height: spacing.sm }} />
+
+                  <GlassInput
+                    placeholder="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoComplete="password"
+                    iconLeft="lock-outline"
+                    iconRight={showPassword ? "eye-off-outline" : "eye-outline"}
+                    onPressIconRight={() => setShowPassword(!showPassword)}
+                  />
+
+                  <Pressable
+                    style={styles.forgotPassword}
+                    onPress={() => router.push("/(auth)/forgot-password")}
+                  >
+                    <Text style={styles.linkText}>Forgot password?</Text>
+                  </Pressable>
+
+                  <View style={styles.spacer} />
+
+                  <GlassButton
+                    variant="primary"
+                    size="lg"
+                    onPress={onSignInPress}
+                    loading={isLoading}
+                    disabled={isLoading || !password}
+                  >
+                    Sign In
+                  </GlassButton>
+
+                  <Pressable
+                    style={styles.backButton}
+                    onPress={() => { setStep("email"); setPassword(""); setError(""); }}
+                  >
+                    <Text style={styles.linkText}>Use a different email</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <View style={styles.spacer} />
+
+                  <GlassButton
+                    variant="primary"
+                    size="lg"
+                    onPress={onContinuePress}
+                    loading={isLoading}
+                    disabled={isLoading || !emailAddress}
+                  >
+                    Continue
+                  </GlassButton>
+                </>
+              )}
+            </>
+          )}
 
           {/* Divider */}
           <View style={styles.divider}>
@@ -435,5 +609,34 @@ const styles = StyleSheet.create({
   backButton: {
     alignItems: "center",
     marginTop: spacing.md,
+  },
+  savedAccountCard: {
+    marginBottom: spacing.sm,
+  },
+  savedAccountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  savedAccountIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: `${colors.accent.primary}15`,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  savedAccountInfo: {
+    flex: 1,
+  },
+  savedAccountEmail: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  savedAccountMethod: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    marginTop: 2,
   },
 });
