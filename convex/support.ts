@@ -1,17 +1,17 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { mutation, query } from "./_generated/server";
+import { QueryCtx, MutationCtx } from "./_generated/server";
 import { trackActivity } from "./lib/analytics";
 
 /**
  * Get current authenticated user
  */
-async function requireUser(ctx) {
+async function requireUser(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
   const user = await ctx.db
     .query("users")
-    .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
+    .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .unique();
   if (!user) throw new Error("User not found");
   return user;
@@ -59,13 +59,13 @@ export const addTicketMessage = mutation({
     const user = await requireUser(ctx);
     const ticket = await ctx.db.get(args.ticketId);
     if (!ticket) throw new Error("Ticket not found");
-    
+
     // Check if user is the ticket owner OR an admin
-    const isAdmin = user.isAdmin; // Simplify for now
+    const isAdmin = user.isAdmin || false;
     if (ticket.userId !== user._id && !isAdmin) {
       throw new Error("Unauthorized to add message to this ticket");
     }
-    
+
     const now = Date.now();
     await ctx.db.insert("ticketMessages", {
       ticketId: args.ticketId,
@@ -127,7 +127,7 @@ export const getTicketDetail = query({
     if (!ticket) return null;
     
     // Check authorization
-    if (ticket.userId !== user._id && !user.isAdmin) {
+    if (ticket.userId !== user._id && !(user.isAdmin || false)) {
       return null;
     }
     
@@ -164,25 +164,36 @@ export const getTicketDetail = query({
  * Get all tickets for admin panel
  */
 export const getAdminTickets = query({
-  args: { status: v.optional(v.string()) },
+  args: {
+    status: v.optional(
+      v.union(
+        v.literal("open"),
+        v.literal("in_progress"),
+        v.literal("waiting_on_user"),
+        v.literal("resolved"),
+        v.literal("closed")
+      )
+    )
+  },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    
+
     // Permission check will be handled by requirePermission in actual admin functions
     // but for now we'll do basic check
-    
+
     let tickets;
-    if (args.status) {
+    if (args.status !== undefined) {
+      const status = args.status;
       tickets = await ctx.db
         .query("supportTickets")
-        .withIndex("by_status", (q) => q.eq("status", args.status))
+        .withIndex("by_status", (q) => q.eq("status", status))
         .order("desc")
         .collect();
     } else {
       tickets = await ctx.db.query("supportTickets").order("desc").collect();
     }
-    
+
     // Enrich with user names
     return await Promise.all(
       tickets.map(async (t) => {
@@ -204,7 +215,7 @@ export const assignTicket = mutation({
   args: { ticketId: v.id("supportTickets"), adminId: v.optional(v.id("users")) },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
-    if (!user.isAdmin) throw new Error("Admin only");
+    if (!(user.isAdmin || false)) throw new Error("Admin only");
     
     const adminId = args.adminId ?? user._id;
     await ctx.db.patch(args.ticketId, {
@@ -227,13 +238,13 @@ export const updateTicketStatus = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
-    if (!user.isAdmin) throw new Error("Admin only");
-    
+    if (!(user.isAdmin || false)) throw new Error("Admin only");
+
     await ctx.db.patch(args.ticketId, {
       status: args.status,
       updatedAt: Date.now(),
     });
-    
+
     return { success: true };
   },
 });

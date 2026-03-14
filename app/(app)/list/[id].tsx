@@ -24,6 +24,7 @@ import { AddItemsModal } from "@/components/list/AddItemsModal";
 import { EditListNameModal } from "@/components/lists/EditListNameModal";
 import { HealthAnalysisModal } from "@/components/lists/HealthAnalysisModal";
 import { TripSummaryModal } from "@/components/list/modals/TripSummaryModal";
+import type { TripStats } from "@/hooks/useTripSummary";
 import { ScanReceiptNudgeModal } from "@/components/list/modals/ScanReceiptNudgeModal";
 
 import { haptic } from "@/lib/haptics/safeHaptics";
@@ -69,12 +70,7 @@ export default function ListDetailScreen() {
   const [showHealthModal, setShowHealthModal] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showScanNudge, setShowScanNudge] = useState(false);
-  const [tripSummary, setTripSummary] = useState<{
-    budget?: number;
-    actualTotal?: number;
-    itemsChecked?: number;
-    totalItems?: number;
-  } | null>(null);
+  const [tripSummary, setTripSummary] = useState<TripStats | null>(null);
   const [editingItem, setEditingItem] = useState<ListItem | null>(null);
 
   // ── Queries & Mutations ────────────────────────────────────────────────────
@@ -97,8 +93,8 @@ export default function ListDetailScreen() {
     finishTrip, 
   } = useTripLogic({ 
     listId: id,
-    onTripFinished: (summary) => {
-      setTripSummary(summary);
+    onTripFinished: (summary: unknown) => {
+      setTripSummary(summary as TripStats);
       setShowSummaryModal(true);
     }
   });
@@ -152,12 +148,12 @@ export default function ListDetailScreen() {
   const { displayItems, spent, remaining, checkedCount } = useMemo(() => {
     if (!items) return { displayItems: [], spent: 0, remaining: 0, checkedCount: 0 };
 
-    let filtered = items.filter(i =>
+    let filtered = items.filter((i: ListItem) =>
       i.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     if (!showCheckedItems && !searchTerm) {
-      filtered = filtered.filter(i => !i.isChecked);
+      filtered = filtered.filter((i: ListItem) => !i.isChecked);
     }
 
     const sorted = [...filtered].sort((a, b) => {
@@ -193,7 +189,7 @@ export default function ListDetailScreen() {
   }, [items, searchTerm, showCheckedItems, list?.budget]);
 
   const receiptStreakCount = useMemo(() => {
-    const streak = streaks?.find(s => s.type === "receipt_scanner");
+    const streak = streaks?.find((s: { type: string; currentCount: number }) => s.type === "receipt_scanner");
     return streak?.currentCount ?? 0;
   }, [streaks]);
 
@@ -213,7 +209,7 @@ export default function ListDetailScreen() {
         <View style={styles.emptyContainer}>
           <MaterialCommunityIcons name="alert-circle-outline" size={48} color={colors.semantic.danger} />
           <Text style={styles.emptyTitle}>List not found</Text>
-          <GlassButton variant="primary" onPress={() => router.replace("/(app)/(tabs)/")}>
+          <GlassButton variant="primary" onPress={() => router.replace("/(app)/(tabs)/" as never)}>
             Go Back
           </GlassButton>
         </View>
@@ -226,7 +222,7 @@ export default function ListDetailScreen() {
       <ListHeader
         title={list.name}
         subtitle={list.storeName}
-        onBack={() => router.canGoBack() ? router.back() : router.replace("/(app)/(tabs)/")}
+        onBack={() => router.canGoBack() ? router.back() : router.replace("/(app)/(tabs)/" as never)}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         onOpenSettings={() => setShowEditModal(true)}
@@ -252,8 +248,6 @@ export default function ListDetailScreen() {
           );
         }}
         keyExtractor={(item) => item._id}
-        // @ts-ignore
-        estimatedItemSize={80}
         ListHeaderComponent={
           <View>
             <AnimatedSection animation="fadeInDown" duration={400}>

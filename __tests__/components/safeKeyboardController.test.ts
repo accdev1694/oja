@@ -348,18 +348,18 @@ function buildProviderTree(nativeAvailable: boolean): {
 function buildScrollViewConfig(
   nativeAvailable: boolean,
   options: {
-    style?: any;
-    contentContainerStyle?: any;
+    style?: Record<string, unknown>;
+    contentContainerStyle?: Record<string, unknown>;
     bottomOffset?: number;
     extraKeyboardSpace?: number;
     disableScrollOnKeyboardHide?: boolean;
-    [key: string]: any;
+    [key: string]: unknown;
   }
 ): {
   component: string;
   innerComponent?: string;
-  props: Record<string, any>;
-  innerProps: Record<string, any>;
+  props: Record<string, unknown>;
+  innerProps: Record<string, unknown>;
 } {
   const {
     style,

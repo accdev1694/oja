@@ -8,28 +8,18 @@ import type { VariantOption } from "@/components/items/VariantPicker";
 import { PersonalizedSuggestions } from "@/components/lists/PersonalizedSuggestions";
 import { styles } from "./styles";
 import type { Id } from "@/convex/_generated/dataModel";
-
-interface Suggestion {
-  name: string;
-  category?: string;
-  size?: string;
-  unit?: string;
-  price?: number;
-  source?: string;
-  icon?: string;
-  [key: string]: unknown;
-}
+import type { ItemSuggestion } from "@/hooks/useItemSuggestions";
 
 interface SearchViewProps {
   itemName: string;
   isSuggestionsLoading: boolean;
-  selectedSuggestion: Suggestion | null;
-  onSelectSuggestion: (suggestion: Suggestion) => void;
+  selectedSuggestion: ItemSuggestion | null;
+  onSelectSuggestion: (suggestion: ItemSuggestion) => void;
   isVariantsLoading: boolean;
   variantOptions: VariantOption[];
   selectedVariantName?: string;
   onVariantSelect: (variantName: string) => void;
-  altSuggestions: Suggestion[];
+  altSuggestions: ItemSuggestion[];
   listId: Id<"shoppingLists">;
   onItemAddedFeedback: () => void;
 }

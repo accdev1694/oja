@@ -17,6 +17,7 @@ import { getEmergencyPriceEstimate } from "../lib/priceValidator";
 import { resolveVariantWithPrice } from "../lib/priceResolver";
 import { enrichGlobalFromProductScan } from "../lib/globalEnrichment";
 import { Id } from "../_generated/dataModel";
+import { checkRateLimit as performRateLimitCheck } from "../lib/rateLimit";
 
 export const getByList = query({
   args: { listId: v.id("shoppingLists") },
@@ -53,6 +54,9 @@ export const create = mutation({
     const user = await requireUser(ctx);
     const perms = await getUserListPermissions(ctx, args.listId, user._id);
     if (!perms.canEdit) throw new Error("Unauthorized");
+
+    const rateLimit = await performRateLimitCheck(ctx, user._id, "list_items", 100);
+    if (!rateLimit.allowed) throw new Error("Rate limit exceeded");
 
     const name = toGroceryTitleCase(args.name);
     const existingItem = await findDuplicateListItem(ctx, args.listId, name, args.size);
@@ -148,12 +152,13 @@ export const update = mutation({
     const perms = await getUserListPermissions(ctx, item.listId, user._id);
     if (!perms.canEdit) throw new Error("Unauthorized");
 
-    const updates = { updatedAt: Date.now() };
+    const updates = {} as Record<string, unknown>;
+    updates.updatedAt = Date.now();
     if (args.name !== undefined) updates.name = toGroceryTitleCase(args.name);
     if (args.quantity !== undefined) updates.quantity = args.quantity;
     if (args.priority !== undefined) updates.priority = args.priority;
     if (args.notes !== undefined) updates.notes = args.notes;
-    
+
     if (args.estimatedPrice !== undefined) {
       updates.estimatedPrice = args.estimatedPrice;
       if (args.priceOverride === true || args.estimatedPrice !== item.estimatedPrice) {
@@ -161,7 +166,7 @@ export const update = mutation({
         updates.priceSource = "manual";
       }
     }
-    
+
     if (args.size !== undefined && args.size !== item.size) {
       if (!item.originalSize && item.size) updates.originalSize = item.size;
       updates.size = args.size;
@@ -394,9 +399,9 @@ export const addAndSeedPantry = mutation({
     estimatedPrice: v.optional(v.number()),
     force: v.optional(v.boolean()),
   },
-  handler: async (ctx, args): Promise<any> => {
+  handler: async (ctx, args): Promise<{ status: string; itemId?: Id<"listItems">; existingItemId?: Id<"listItems">; [key: string]: unknown }> => {
     const user = await requireUser(ctx);
-    
+
     // @ts-ignore
     const pantryId = await ctx.runMutation(api.pantryItems.create, {
       name: args.name,

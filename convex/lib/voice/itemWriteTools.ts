@@ -1,6 +1,15 @@
 import { api } from "../../_generated/api";
 import type { ActionCtx } from "../../_generated/server";
-import type { Id } from "../../_generated/dataModel";
+import type { SizeVariant } from "./types";
+import type { Id, Doc } from "../../_generated/dataModel";
+
+/** Enriched shopping list returned by getActive (includes computed fields) */
+type EnrichedShoppingList = Doc<"shoppingLists"> & {
+  itemCount: number;
+  checkedCount: number;
+  totalEstimatedCost: number | undefined;
+  isInProgress: boolean;
+};
 
 /**
  * Voice Assistant WRITE Tools - Item Edit Operations
@@ -19,7 +28,7 @@ export async function executeItemWriteTool(
 
       if (!targetListId) {
         const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-        const inProgress = lists.find((l) => l.status === "in_progress");
+        const inProgress = lists.find((l: EnrichedShoppingList) => l.isInProgress);
         if (inProgress) {
           targetListId = inProgress._id;
         } else if (lists.length === 1) {
@@ -30,7 +39,7 @@ export async function executeItemWriteTool(
       }
 
       const listItems = await ctx.runQuery(api.listItems.getByList, { listId: targetListId });
-      const itemMatch = listItems.find((i) =>
+      const itemMatch = listItems.find((i: Doc<"listItems">) =>
         i.name.toLowerCase().includes((args.itemName as string).toLowerCase())
       );
 
@@ -57,7 +66,7 @@ export async function executeItemWriteTool(
         listId: (args.listId as string) as Id<"shoppingLists">,
       });
 
-      const itemMatch = listItems.find((i) =>
+      const itemMatch = listItems.find((i: Doc<"listItems">) =>
         i.name.toLowerCase().includes((args.itemName as string).toLowerCase())
       );
 
@@ -70,7 +79,7 @@ export async function executeItemWriteTool(
       });
 
       const newSizeLower = (args.newSize as string).toLowerCase().replace(/\s+/g, "");
-      const matchingSize = sizesResult.sizes.find((s) => {
+      const matchingSize = sizesResult.sizes.find((s: SizeVariant) => {
         const sizeLower = (s.size || "").toLowerCase().replace(/\s+/g, "");
         const sizeNormLower = (s.sizeNormalized || "").toLowerCase().replace(/\s+/g, "");
         return sizeLower === newSizeLower || sizeNormLower === newSizeLower || sizeLower.includes(newSizeLower) || newSizeLower.includes(sizeLower);
@@ -132,7 +141,7 @@ export async function executeItemWriteTool(
         });
 
         const newSizeLower = (args.size as string).toLowerCase().replace(/\s+/g, "");
-        const matchingSize = sizesResult.sizes.find((s) => {
+        const matchingSize = sizesResult.sizes.find((s: SizeVariant) => {
           const sizeLower = (s.size || "").toLowerCase().replace(/\s+/g, "");
           const sizeNormLower = (s.sizeNormalized || "").toLowerCase().replace(/\s+/g, "");
           return sizeLower === newSizeLower || sizeNormLower === newSizeLower || sizeLower.includes(newSizeLower) || newSizeLower.includes(sizeLower);
@@ -167,11 +176,11 @@ export async function executeItemWriteTool(
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
       if (lists.length === 0) return { success: false, message: "No active lists to edit items from." };
 
-      const targetList = listId ? lists.find((l) => l._id === listId) : (lists.find((l) => l.status === 'active') || lists[0]);
+      const targetList = listId ? lists.find((l: Doc<"shoppingLists">) => l._id === listId) : (lists.find((l: Doc<"shoppingLists">) => l.status === 'active') || lists[0]);
       if (!targetList) return { success: false, message: "List not found." };
 
       const listItems = await ctx.runQuery(api.listItems.getByList, { listId: targetList._id });
-      const itemMatch = listItems.find(i => i.name.toLowerCase().includes((args.itemName as string).toLowerCase()));
+      const itemMatch = listItems.find((i: Doc<"listItems">) => i.name.toLowerCase().includes((args.itemName as string).toLowerCase()));
       if (!itemMatch) return { success: false, message: `Couldn't find "${(args.itemName as string)}" on your list.` };
 
       const updates: Record<string, unknown> = {};

@@ -56,7 +56,8 @@ export function useImageProcessor({ addPendingTile, removePending, promotePendin
           throw new Error("Upload failed");
         }
 
-        const { storageId } = await uploadResponse.json();
+        const uploadedData = await uploadResponse.json();
+        const storageId = uploadedData.storageId;
 
         // Call AI to identify product
         const parsed = await scanProduct({ storageId });
@@ -69,17 +70,24 @@ export function useImageProcessor({ addPendingTile, removePending, promotePendin
           return null;
         }
 
-        const product = {
-          name: parsed.name,
-          category: parsed.category,
+        let sizeSourceValue: "visible" | "estimated" | "unknown" | undefined = undefined;
+        if (typeof parsed.sizeSource === "string") {
+          if (parsed.sizeSource === "visible" || parsed.sizeSource === "estimated" || parsed.sizeSource === "unknown") {
+            sizeSourceValue = parsed.sizeSource;
+          }
+        }
+
+        const product: ScannedProduct = {
+          name: typeof parsed.name === "string" ? parsed.name : "Unknown Product",
+          category: typeof parsed.category === "string" ? parsed.category : "Other",
           quantity: typeof parsed.quantity === "number" ? parsed.quantity : 1,
-          size: parsed.size,
-          unit: parsed.unit,
-          brand: parsed.brand,
-          estimatedPrice: parsed.estimatedPrice,
-          confidence: parsed.confidence,
-          sizeSource: parsed.sizeSource,
-          imageStorageId: storageId,
+          size: typeof parsed.size === "string" ? parsed.size : undefined,
+          unit: typeof parsed.unit === "string" ? parsed.unit : undefined,
+          brand: typeof parsed.brand === "string" ? parsed.brand : undefined,
+          estimatedPrice: typeof parsed.estimatedPrice === "number" ? parsed.estimatedPrice : undefined,
+          confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0,
+          sizeSource: sizeSourceValue,
+          imageStorageId: String(storageId),
           localImageUri: uri,
           status: "ready",
         };

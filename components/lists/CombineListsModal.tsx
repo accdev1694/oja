@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Id, Doc } from "@/convex/_generated/dataModel";
 import {
   GlassModal,
   GlassButton,
@@ -21,6 +21,12 @@ interface CombineListsModalProps {
   onConfirm: (newName: string, budget?: number) => Promise<void>;
 }
 
+interface HistoryListData extends Doc<"shoppingLists"> {
+  totalEstimatedCost?: number;
+  actualTotal?: number;
+  itemCount?: number;
+}
+
 export function CombineListsModal({
   visible,
   sourceListIds,
@@ -36,21 +42,18 @@ export function CombineListsModal({
   
   const selectedLists = useMemo(() => {
     if (!history) return [];
-    return history.filter((l) => sourceListIds.includes(l._id));
+    return history.filter((l: HistoryListData) => sourceListIds.includes(l._id)) as HistoryListData[];
   }, [history, sourceListIds]);
 
   const totalEstimatedCost = useMemo(() => {
-    return selectedLists.reduce((sum, list) => {
-      // Safely access properties that might exist depending on the query return type
-      const l = list as Record<string, unknown>;
-      return sum + (Number(l.totalEstimatedCost) || Number(l.actualTotal) || Number(l.budget) || 0);
+    return selectedLists.reduce((sum: number, list: HistoryListData) => {
+      return sum + (list.totalEstimatedCost ?? list.actualTotal ?? list.budget ?? 0);
     }, 0);
   }, [selectedLists]);
 
   const totalItemCount = useMemo(() => {
-    return selectedLists.reduce((sum, list) => {
-      const l = list as Record<string, unknown>;
-      return sum + (Number(l.itemCount) || 0);
+    return selectedLists.reduce((sum: number, list: HistoryListData) => {
+      return sum + (list.itemCount ?? 0);
     }, 0);
   }, [selectedLists]);
 
@@ -86,7 +89,7 @@ export function CombineListsModal({
         {/* Selected Lists Overview */}
         <Text style={styles.sectionTitle}>Selected Lists</Text>
         <View style={styles.listsContainer}>
-          {selectedLists.map(list => (
+          {selectedLists.map((list: HistoryListData) => (
             <View key={list._id} style={styles.listRow}>
               <MaterialCommunityIcons name="clipboard-check-outline" size={16} color={colors.text.tertiary} />
               <Text style={styles.listName} numberOfLines={1}>{list.name}</Text>

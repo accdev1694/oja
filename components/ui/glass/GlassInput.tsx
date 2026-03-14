@@ -149,14 +149,14 @@ export const GlassInput = forwardRef<TextInput, GlassInputProps>(
     });
 
     // Handlers
-    const handleFocus = e => {
+    const handleFocus: typeof onFocus = (e) => {
       setIsFocused(true);
       borderColorAnim.value = withTiming(1, { duration: animations.timing.fast });
       Haptics.selectionAsync();
       onFocus?.(e);
     };
 
-    const handleBlur = e => {
+    const handleBlur: typeof onBlur = (e) => {
       setIsFocused(false);
       borderColorAnim.value = withTiming(0, { duration: animations.timing.fast });
       onBlur?.(e);

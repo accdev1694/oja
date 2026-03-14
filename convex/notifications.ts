@@ -270,7 +270,7 @@ export const sendPush = internalAction({
     userId: v.id("users"),
     title: v.string(),
     body: v.string(),
-    data: v.optional(v.any()),
+    data: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))),
   },
   handler: async (ctx, args): Promise<{ sent: boolean; reason?: string; ticketId?: string }> => {
     // Get user's push token and preferences

@@ -4,7 +4,7 @@
 
 let idCounter = 0;
 function mockId(table: string): string {
-  return `${table}_${++idCounter}` as any;
+  return `${table}_${++idCounter}`;
 }
 
 export function resetIdCounter() {
@@ -14,7 +14,7 @@ export function resetIdCounter() {
 // ============================================================================
 // USER FACTORY
 // ============================================================================
-export function createUser(overrides: Record<string, any> = {}) {
+export function createUser(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("users"),
     clerkId: `clerk_${Math.random().toString(36).slice(2, 10)}`,
@@ -37,7 +37,7 @@ export function createUser(overrides: Record<string, any> = {}) {
 // ============================================================================
 // SHOPPING LIST FACTORY
 // ============================================================================
-export function createShoppingList(overrides: Record<string, any> = {}) {
+export function createShoppingList(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("shoppingLists"),
     userId: mockId("users"),
@@ -55,7 +55,7 @@ export function createShoppingList(overrides: Record<string, any> = {}) {
 // ============================================================================
 // LIST ITEM FACTORY
 // ============================================================================
-export function createListItem(overrides: Record<string, any> = {}) {
+export function createListItem(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("listItems"),
     listId: mockId("shoppingLists"),
@@ -76,7 +76,7 @@ export function createListItem(overrides: Record<string, any> = {}) {
 // ============================================================================
 // RECEIPT FACTORY
 // ============================================================================
-export function createReceipt(overrides: Record<string, any> = {}) {
+export function createReceipt(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("receipts"),
     userId: mockId("users"),
@@ -96,7 +96,7 @@ export function createReceipt(overrides: Record<string, any> = {}) {
 // ============================================================================
 // PARTNER FACTORY
 // ============================================================================
-export function createPartner(overrides: Record<string, any> = {}) {
+export function createPartner(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("listPartners"),
     listId: mockId("shoppingLists"),
@@ -111,7 +111,7 @@ export function createPartner(overrides: Record<string, any> = {}) {
 // ============================================================================
 // INVITE CODE FACTORY
 // ============================================================================
-export function createInviteCode(overrides: Record<string, any> = {}) {
+export function createInviteCode(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("inviteCodes"),
     listId: mockId("shoppingLists"),
@@ -128,7 +128,7 @@ export function createInviteCode(overrides: Record<string, any> = {}) {
 // ============================================================================
 // SUBSCRIPTION FACTORY
 // ============================================================================
-export function createSubscription(overrides: Record<string, any> = {}) {
+export function createSubscription(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("subscriptions"),
     userId: mockId("users"),
@@ -146,7 +146,7 @@ export function createSubscription(overrides: Record<string, any> = {}) {
 // ============================================================================
 // LOYALTY POINTS FACTORY
 // ============================================================================
-export function createLoyaltyPoints(overrides: Record<string, any> = {}) {
+export function createLoyaltyPoints(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("loyaltyPoints"),
     userId: mockId("users"),
@@ -160,7 +160,7 @@ export function createLoyaltyPoints(overrides: Record<string, any> = {}) {
 // ============================================================================
 // POINT TRANSACTION FACTORY
 // ============================================================================
-export function createPointTransaction(overrides: Record<string, any> = {}) {
+export function createPointTransaction(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("pointTransactions"),
     userId: mockId("users"),
@@ -175,7 +175,7 @@ export function createPointTransaction(overrides: Record<string, any> = {}) {
 // ============================================================================
 // NOTIFICATION FACTORY
 // ============================================================================
-export function createNotification(overrides: Record<string, any> = {}) {
+export function createNotification(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("notifications"),
     userId: mockId("users"),
@@ -191,7 +191,7 @@ export function createNotification(overrides: Record<string, any> = {}) {
 // ============================================================================
 // ACHIEVEMENT FACTORY
 // ============================================================================
-export function createAchievement(overrides: Record<string, any> = {}) {
+export function createAchievement(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("achievements"),
     userId: mockId("users"),
@@ -206,7 +206,7 @@ export function createAchievement(overrides: Record<string, any> = {}) {
 // ============================================================================
 // STREAK FACTORY
 // ============================================================================
-export function createStreak(overrides: Record<string, any> = {}) {
+export function createStreak(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("streaks"),
     userId: mockId("users"),
@@ -221,7 +221,7 @@ export function createStreak(overrides: Record<string, any> = {}) {
 // ============================================================================
 // CHALLENGE FACTORY
 // ============================================================================
-export function createChallenge(overrides: Record<string, any> = {}) {
+export function createChallenge(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("challenges"),
     userId: mockId("users"),
@@ -241,7 +241,7 @@ export function createChallenge(overrides: Record<string, any> = {}) {
 // ============================================================================
 // ADMIN LOG FACTORY
 // ============================================================================
-export function createAdminLog(overrides: Record<string, any> = {}) {
+export function createAdminLog(overrides: Record<string, unknown> = {}) {
   return {
     _id: mockId("adminLogs"),
     adminId: mockId("users"),

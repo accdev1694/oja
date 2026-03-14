@@ -12,6 +12,29 @@ import { colors } from '@/lib/design/glassTokens'
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
+interface DialSvgArcsProps {
+  size: number
+  center: number
+  outerRadius: number
+  innerRadius: number
+  outerCircumference: number
+  innerCircumference: number
+  strokeWidth: number
+  startRotation: number
+  spentColor: string
+  isPlanning: boolean
+  storeName: string | undefined
+  storeArcRadius: number
+  storeFontSize: number
+  charAngle: number
+  animOuterFill: SharedValue<number>
+  animOuterOver: SharedValue<number>
+  animInnerFill: SharedValue<number>
+  animInnerOver: SharedValue<number>
+  animOuterOpacity: SharedValue<number>
+  animInnerOpacity: SharedValue<number>
+}
+
 export function DialSvgArcs({
   size,
   center,

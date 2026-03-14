@@ -180,12 +180,12 @@ export default function SubscriptionScreen() {
 
         {/* Current Plan Card */}
         <CurrentPlanCard
-          isAdmin={isAdmin}
-          isPremium={isPremium}
-          isTrial={isTrial}
-          isCancelled={isCancelled}
+          isAdmin={isAdmin ?? false}
+          isPremium={isPremium ?? false}
+          isTrial={isTrial ?? false}
+          isCancelled={isCancelled ?? false}
           subscription={subscription}
-          periodEnd={periodEnd}
+          periodEnd={periodEnd ?? null}
           portalLoading={portalLoading}
           onManageSubscription={handleManageSubscription}
           onShowCancelModal={() => setShowCancelModal(true)}
@@ -194,7 +194,7 @@ export default function SubscriptionScreen() {
         {/* Scan Rewards */}
         <ScanRewardsCard
           pointsBalance={pointsBalance}
-          isAdmin={isAdmin}
+          isAdmin={isAdmin ?? false}
           onViewPointsHistory={() => router.push("/(app)/points-history" as Href)}
         />
 
@@ -209,7 +209,7 @@ export default function SubscriptionScreen() {
           <PlanOptionsList
             plans={plans}
             subscription={subscription}
-            isPremium={isPremium}
+            isPremium={isPremium ?? false}
             checkoutLoading={checkoutLoading}
             onCheckout={handleCheckout}
           />

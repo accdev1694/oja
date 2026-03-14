@@ -6,6 +6,26 @@ import { smartGenerate, stripCodeBlocks } from "./shared";
 import { calculateSimilarity } from "../lib/fuzzyMatch";
 import { cleanItemForStorage } from "../lib/itemNameParser";
 
+interface HealthSwap {
+  originalName: string;
+  suggestedName: string;
+  suggestedCategory?: string;
+  suggestedSize?: string;
+  suggestedUnit?: string;
+  priceDelta?: number;
+  scoreImpact?: number;
+  reason: string;
+}
+
+interface HealthAnalysisResult {
+  score: number;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  swaps: HealthSwap[];
+  itemCountAtAnalysis: number;
+  updatedAt: number;
+}
 export interface HealthAnalysis {
   score: number;
   summary: string;
@@ -49,7 +69,7 @@ export const analyzeListHealth = action({
     const userPrefs = user.cuisinePreferences?.length ? `User Cuisines: ${user.cuisinePreferences.join(", ")}` : "";
     const dietaryRestrictions = user.dietaryRestrictions?.length ? `Dietary Restrictions: ${user.dietaryRestrictions.join(", ")} (CRITICAL: Only suggest items that follow these)` : "";
 
-    const itemsText = items.map((i) => `- ${i.name} (Qty: ${i.quantity}, Category: ${i.category || "Uncategorized"}, Est. Price: £${i.estimatedPrice || '?'})`).join("\n");
+    const itemsText = items.map((i: Doc<"listItems">) => `- ${i.name} (Qty: ${i.quantity}, Category: ${i.category || "Uncategorized"}, Est. Price: £${i.estimatedPrice || '?'})`).join("\n");
 
     const prompt = `You are an enthusiastic, modern AI nutritionist evaluating a grocery list.
 
@@ -62,6 +82,7 @@ Rate the healthiness of this list on a scale of 0 to 100. Provide an exciting, h
 Identify 1-2 strengths and 1-2 weaknesses.
 Suggest up to 3 healthy swaps for specific items on the list.
 
+    let parsed: { score?: number; summary?: string; strengths?: string[]; weaknesses?: string[]; swaps?: HealthSwap[] };
 REQUIREMENTS FOR SWAPS:
 1. Practical & Budget-Conscious.
 2. Price Delta (estimate GBP difference).
@@ -104,7 +125,7 @@ Return ONLY valid JSON in this exact format:
       throw new Error("Failed to analyze health. Please try again.");
     }
 
-    const swapsWithIds = (parsed.swaps || []).map(swap => {
+    const swapsWithIds = (parsed.swaps || []).map((swap: HealthSwap) => {
       if (swap.originalName === "Bonus") {
         const cleaned = cleanItemForStorage(swap.suggestedName, swap.suggestedSize, swap.suggestedUnit);
         return {
@@ -146,7 +167,7 @@ Return ONLY valid JSON in this exact format:
         priceDelta: swap.priceDelta ? parseFloat(String(swap.priceDelta).replace(/^\+/, '')) : undefined,
         scoreImpact: typeof swap.scoreImpact === 'number' ? swap.scoreImpact : 5
       };
-    }).filter(s => s.originalId !== undefined || s.originalName === "Bonus");
+    }).filter((s: HealthSwap & { originalId?: string }) => s.originalId !== undefined || s.originalName === "Bonus");
 
     const healthAnalysis: HealthAnalysis = {
       score: typeof parsed.score === 'number' ? parsed.score : 50,

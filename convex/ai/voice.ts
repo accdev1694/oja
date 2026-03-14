@@ -1,8 +1,7 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
-import { Id } from "../_generated/dataModel";
-import { 
+import {
   smartGenerate, 
   stripCodeBlocks,
   genAI
@@ -12,6 +11,14 @@ import {
   buildSystemPrompt, 
   executeVoiceTool 
 } from "../lib/voice";
+import type { VoiceAssistantResponse, ConversationMessage, PendingAction } from "../lib/voice/types";
+
+/** Shape of the confirm-type result from executeVoiceTool */
+interface ConfirmResult {
+  action: string;
+  params: Record<string, unknown>;
+  description: string;
+}
 
 export const parseVoiceCommand = action({
   args: {
@@ -21,7 +28,7 @@ export const parseVoiceCommand = action({
     activeListName: v.optional(v.string()),
     recentLists: v.array(v.object({ id: v.string(), name: v.string() })),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<VoiceAssistantResponse> => {
     const prompt = `Parse this UK grocery voice command: "${args.transcript}". 
 Recent lists: ${args.recentLists.map(l => l.name).join(", ")}.
 Return JSON with action, listName, matchedListId, items, confidence.`;
@@ -31,7 +38,7 @@ Return JSON with action, listName, matchedListId, items, confidence.`;
       return JSON.parse(stripCodeBlocks(raw));
     } catch (error) {
       console.error("parseVoiceCommand failed:", error);
-      return { action: "unsupported", items: [], confidence: 0 };
+      return { type: "error", text: "Sorry, I couldn't understand that command." };
     }
   },
 });
@@ -49,12 +56,12 @@ export const voiceAssistant = action({
     userName: v.optional(v.string()),
     conversationHistory: v.optional(v.array(v.object({ role: v.union(v.literal("user"), v.literal("model")), text: v.string() }))),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<VoiceAssistantResponse> => {
     const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "voice" });
     if (!rateLimit.allowed) return { type: "error", text: "Too fast! Slow down." };
 
-    const usage = await ctx.runMutation(api.aiUsage.incrementUsage, { feature: "voice", tokenCount: 500 });
-    if (!usage.allowed) return { type: "limit_reached", text: usage.message };
+    const usage: { allowed: boolean; message?: string } = await ctx.runMutation(api.aiUsage.incrementUsage, { feature: "voice", tokenCount: 500 });
+    if (!usage.allowed) return { type: "limit_reached", text: usage.message ?? "You've reached your voice usage limit." };
 
     const systemPrompt = buildSystemPrompt({ ...args, lowStockItems: [], activeListNames: [] });
     const model = genAI.getGenerativeModel({
@@ -63,21 +70,23 @@ export const voiceAssistant = action({
       tools: [{ functionDeclarations: voiceFunctionDeclarations }],
     });
 
-    const history = (args.conversationHistory || []).map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
+    const history = (args.conversationHistory || []).map((msg: ConversationMessage) => ({ role: msg.role, parts: [{ text: msg.text }] }));
     const chat = model.startChat({ history });
     let response = await chat.sendMessage(args.transcript);
 
-    let pendingAction = null;
+    let pendingAction: PendingAction | null = null;
     for (let i = 0; i < 3; i++) {
-      const part = response.response.candidates?.[0].content.parts.find(p => p.functionCall);
+      const part = response.response.candidates?.[0].content.parts.find((p) => p.functionCall);
       if (!part?.functionCall) break;
 
       const { name, args: fnArgs } = part.functionCall;
-      const toolResult = await executeVoiceTool(ctx, name, (fnArgs) || {});
+      const toolResult = await executeVoiceTool(ctx, name, (fnArgs as Record<string, unknown>) || {});
       if (toolResult.type === "confirm") {
-        pendingAction = { action: toolResult.result.action, params: toolResult.result.params, confirmLabel: toolResult.result.description };
+        const confirmData = toolResult.result as ConfirmResult;
+        pendingAction = { action: confirmData.action, params: confirmData.params, confirmLabel: confirmData.description };
       }
-      response = await chat.sendMessage([{ functionResponse: { name, response: toolResult.result } }]);
+      const responsePayload = (toolResult.result ?? {}) as object;
+      response = await chat.sendMessage([{ functionResponse: { name, response: responsePayload } }]);
     }
 
     return { type: pendingAction ? "confirm_action" : "answer", text: response.response.text(), pendingAction };
@@ -85,11 +94,11 @@ export const voiceAssistant = action({
 });
 
 export const executeVoiceAction = action({
-  args: { actionName: v.string(), params: v.any() },
+  args: { actionName: v.string(), params: v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null())) },
   handler: async (ctx, args): Promise<{ success: boolean; message: string; listId?: string }> => {
     switch (args.actionName) {
       case "create_shopping_list":
-        const listId: string = await ctx.runMutation(api.shoppingLists.create, args.params);
+        const listId: string = await ctx.runMutation(api.shoppingLists.create, args.params as { name: string; budget?: number; storeName?: string; normalizedStoreId?: string; plannedDate?: number });
         return { success: true, listId, message: "Created!" };
       default:
         return { success: false, message: "Action not implemented yet" };

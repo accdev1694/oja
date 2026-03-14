@@ -26,7 +26,7 @@ const tierIcons: Record<string, string> = {
 interface PointsBalance {
   tier: string;
   tierProgress: number;
-  nextTierInfo?: { nextTier?: string; scansToNextTier: number };
+  nextTierInfo?: { nextTier: string | null; scansToNextTier: number };
   maxEarningScans: number;
   earningScansThisMonth: number;
   availablePoints: number;

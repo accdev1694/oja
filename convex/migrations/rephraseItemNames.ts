@@ -2,6 +2,7 @@ import { internalAction , internalQuery, internalMutation } from "../_generated/
 import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Id } from "../_generated/dataModel";
 
 // ─── Helper queries/mutations (internal only) ────────────────────────────────
 
@@ -72,22 +73,24 @@ export const run = internalAction({
     const dryRun = args.dryRun ?? true;
 
     // ── Step 1: Collect all unique item names from listItems ──────────────
-    const allListItems: { _id: string; name: string }[] = await ctx.runQuery(
+    const allListItems: Array<{ _id: Id<"listItems">; name: string }> = await ctx.runQuery(
       internal.migrations.rephraseItemNames.getAllListItemNames
     );
 
     // ── Step 2: Collect all unique item names from receipts ───────────────
-    type ReceiptItem = {
-      name: string;
-      quantity: number;
-      unitPrice: number;
-      totalPrice: number;
-      category?: string;
-      size?: string;
-      unit?: string;
-      confidence?: number;
-    };
-    const allReceipts: { _id: string; items: ReceiptItem[] }[] = await ctx.runQuery(
+    const allReceipts: Array<{
+      _id: Id<"receipts">;
+      items: Array<{
+        name: string;
+        quantity: number;
+        unitPrice: number;
+        totalPrice: number;
+        category?: string;
+        size?: string;
+        unit?: string;
+        confidence?: number;
+      }>;
+    }> = await ctx.runQuery(
       internal.migrations.rephraseItemNames.getAllReceiptItemNames
     );
 
@@ -175,7 +178,7 @@ export const run = internalAction({
     let receiptsUpdated = 0;
     for (const receipt of allReceipts) {
       let changed = false;
-      const newItems = receipt.items.map((item) => {
+      const newItems = receipt.items.map((item: { name: string; quantity: number; unitPrice: number; totalPrice: number; category?: string; size?: string; unit?: string; confidence?: number }) => {
         const newName = nameMap[item.name];
         if (newName && newName !== item.name) {
           changed = true;
@@ -209,7 +212,7 @@ export const getAllListItemNames = internalQuery({
   args: {},
   handler: async (ctx) => {
     const items = await ctx.db.query("listItems").collect();
-    return items.map((i) => ({ _id: i._id as string, name: i.name }));
+    return items.map((i) => ({ _id: i._id, name: i.name }));
   },
 });
 
@@ -225,7 +228,7 @@ export const getAllReceiptItemNames = internalQuery({
     return receipts
       .filter((r) => r.items && r.items.length > 0)
       .map((r) => ({
-        _id: r._id as string,
+        _id: r._id,
         items: r.items.map((item) => ({ ...item })),
       }));
   },
@@ -234,18 +237,18 @@ export const getAllReceiptItemNames = internalQuery({
 /** Patch a single listItem name */
 export const patchListItemName = internalMutation({
   args: {
-    id: v.string(),
+    id: v.id("listItems"),
     name: v.string(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id as unknown as import("./_generated/dataModel").Id<"listItems">, { name: args.name, updatedAt: Date.now() });
+    await ctx.db.patch(args.id, { name: args.name, updatedAt: Date.now() });
   },
 });
 
 /** Patch a receipt's items array */
 export const patchReceiptItems = internalMutation({
   args: {
-    id: v.string(),
+    id: v.id("receipts"),
     items: v.array(
       v.object({
         name: v.string(),
@@ -260,6 +263,6 @@ export const patchReceiptItems = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id as unknown as import("./_generated/dataModel").Id<"receipts">, { items: args.items });
+    await ctx.db.patch(args.id, { items: args.items });
   },
 });

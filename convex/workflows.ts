@@ -11,7 +11,7 @@ export const createWorkflow = mutation({
     trigger: v.string(),
     actions: v.array(v.object({
       type: v.string(),
-      params: v.optional(v.any()),
+      params: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))),
     })),
   },
   handler: async (ctx, args) => {
@@ -82,23 +82,24 @@ export const processWorkflows = internalMutation({
             await ctx.db.insert("notifications", {
               userId: user._id,
               type: "workflow_alert",
-              title: action.params?.title || "Update from Oja",
-              body: action.params?.body || "Check out what's new in the app!",
+              title: String(action.params?.title ?? "Update from Oja"),
+              body: String(action.params?.body ?? "Check out what's new in the app!"),
               read: false,
               createdAt: now,
             });
           } else if (action.type === "apply_tag") {
+            const tagValue = String(action.params?.tag ?? "");
             // Check if tag already exists
             const existing = await ctx.db
               .query("userTags")
               .withIndex("by_user", (q) => q.eq("userId", user._id))
-              .filter((q) => q.eq(q.field("tag"), action.params?.tag))
+              .filter((q) => q.eq(q.field("tag"), tagValue))
               .first();
-              
-            if (!existing) {
+
+            if (!existing && tagValue) {
               await ctx.db.insert("userTags", {
                 userId: user._id,
-                tag: action.params?.tag,
+                tag: tagValue,
                 createdAt: now,
               });
             }

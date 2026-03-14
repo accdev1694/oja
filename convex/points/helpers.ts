@@ -1,14 +1,18 @@
 import { internal } from "../_generated/api";
-import type { Id } from "../_generated/dataModel";
+import type { Id, Doc, DataModel } from "../_generated/dataModel";
+import { GenericMutationCtx, GenericQueryCtx } from "convex/server";
 import { getTierFromScans, getNextTierInfo, getMaxEarningScans, getPointsPerScan, checkFeatureAccess, getStartOfMonth } from "../lib/featureGating";
+
+type MutationCtx = GenericMutationCtx<DataModel>;
+type QueryCtx = GenericQueryCtx<DataModel>;
 
 /**
  * Helper to get or initialize a points balance (for mutations only)
  */
-export async function getOrCreatePointsBalance(ctx, userId) {
+export async function getOrCreatePointsBalance(ctx: MutationCtx, userId: Id<"users">): Promise<Doc<"pointsBalance">> {
   let balance = await ctx.db
     .query("pointsBalance")
-    .withIndex("by_user", q => q.eq("userId", userId))
+    .withIndex("by_user", (q) => q.eq("userId", userId))
     .first();
 
   if (!balance) {
@@ -29,7 +33,11 @@ export async function getOrCreatePointsBalance(ctx, userId) {
       createdAt: now,
       updatedAt: now,
     });
-    balance = await ctx.db.get(balanceId);
+    const newBalance = await ctx.db.get(balanceId);
+    if (!newBalance) {
+      throw new Error("Failed to create points balance");
+    }
+    balance = newBalance;
   } else {
     // Check if we need to reset the month
     const currentMonthStart = getStartOfMonth(Date.now());
@@ -51,10 +59,10 @@ export async function getOrCreatePointsBalance(ctx, userId) {
  * Read-only helper to get points balance (for queries)
  * Returns null if balance doesn't exist
  */
-export async function getPointsBalanceReadOnly(ctx, userId) {
+export async function getPointsBalanceReadOnly(ctx: QueryCtx, userId: Id<"users">) {
   const balance = await ctx.db
     .query("pointsBalance")
-    .withIndex("by_user", q => q.eq("userId", userId))
+    .withIndex("by_user", (q) => q.eq("userId", userId))
     .first();
 
   return balance;
@@ -68,7 +76,7 @@ export function getWeekNumber(timestamp: number) {
   return weekNo + (d.getUTCFullYear() * 100); // Year + week to be unique across years
 }
 
-export async function processEarnPoints(ctx, userId: Id<"users">, receiptId: Id<"receipts">) {
+export async function processEarnPoints(ctx: MutationCtx, userId: Id<"users">, receiptId: Id<"receipts">) {
   const { isPremium } = await checkFeatureAccess(ctx, userId);
   const balance = await getOrCreatePointsBalance(ctx, userId);
 
@@ -85,8 +93,8 @@ export async function processEarnPoints(ctx, userId: Id<"users">, receiptId: Id<
   const now = Date.now();
   const activeEvent = await ctx.db
     .query("seasonalEvents")
-    .withIndex("by_active", q => q.eq("isActive", true))
-    .filter(q => q.and(
+    .withIndex("by_active", (q) => q.eq("isActive", true))
+    .filter((q) => q.and(
       q.lte(q.field("startDate"), now),
       q.gte(q.field("endDate"), now)
     ))
@@ -158,7 +166,7 @@ export async function processEarnPoints(ctx, userId: Id<"users">, receiptId: Id<
     receiptId: receiptId,
     balanceBefore: balance.availablePoints,
     balanceAfter: balance.availablePoints + pointsAmount,
-    metadata: { tierAtEarn: currentTier.tier, eventId: activeEvent?._id },
+    metadata: { tierAtEarn: currentTier.tier, ...(activeEvent ? { eventId: activeEvent._id } : {}) },
     createdAt: now,
   });
 
@@ -187,7 +195,7 @@ export async function processEarnPoints(ctx, userId: Id<"users">, receiptId: Id<
   };
 }
 
-export async function processExpirePoints(ctx, userId: Id<"users">, points: number, reason: string) {
+export async function processExpirePoints(ctx: MutationCtx, userId: Id<"users">, points: number, reason: string) {
   const balance = await getOrCreatePointsBalance(ctx, userId);
 
   const expireAmount = Math.min(balance.availablePoints, points);

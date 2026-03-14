@@ -19,13 +19,30 @@ import { SharedListCard } from "@/components/lists/SharedListCard";
 interface ShoppingListItem {
   _id: Id<"shoppingLists">;
   name: string;
-  [key: string]: unknown;
+  status: string;
+  budget?: number;
+  createdAt: number;
+  itemCount?: number;
+  checkedCount?: number;
+  totalEstimatedCost?: number;
+  shoppingStartedAt?: number;
+  isInProgress?: boolean;
+  actualTotal?: number;
+  listNumber?: number;
+  storeName?: string;
+  storeSegments?: { storeId: string; storeName: string; switchedAt: number }[];
 }
 
 interface SharedListItem {
   _id: Id<"shoppingLists">;
   name: string;
-  [key: string]: unknown;
+  status: string;
+  budget?: number;
+  createdAt: number;
+  role: string;
+  ownerName: string;
+  itemCount?: number;
+  totalEstimatedCost?: number;
 }
 
 const ActiveListsContent = React.memo(function ActiveListsContent({

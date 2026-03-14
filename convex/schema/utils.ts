@@ -40,7 +40,7 @@ export const utilityTables = {
     type: v.string(),
     severity: v.string(),
     description: v.string(),
-    metadata: v.any(),
+    metadata: v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null())),
     status: v.union(v.literal("open"), v.literal("resolved")),
     createdAt: v.number(),
   })
@@ -57,7 +57,7 @@ export const utilityTables = {
 
   reportHistory: defineTable({
     reportId: v.id("scheduledReports"),
-    data: v.any(), // Serialized metrics
+    data: v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null())), // Serialized metrics
     sentAt: v.number(),
     status: v.union(v.literal("success"), v.literal("failed")),
     error: v.optional(v.string()),

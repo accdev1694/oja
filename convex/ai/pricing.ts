@@ -1,11 +1,20 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
-import { 
-  smartGenerate, 
-  stripCodeBlocks 
+import {
+  smartGenerate,
+  stripCodeBlocks
 } from "./shared";
 import { toGroceryTitleCase } from "../lib/titleCase";
+
+interface ParsedVariant {
+  baseItem: string;
+  variantName: string;
+  size: string;
+  unit: string;
+  category: string;
+  estimatedPrice?: number;
+}
 
 export const generateItemVariants = action({
   args: {
@@ -32,16 +41,16 @@ Return ONLY valid JSON array:
 
     function parseVariantResponse(text: string) {
       const cleaned = stripCodeBlocks(text);
-      const variants = JSON.parse(cleaned);
+      const variants: ParsedVariant[] = JSON.parse(cleaned);
       if (!Array.isArray(variants)) throw new Error("Invalid variants response");
-      return variants.map(v => ({
-        baseItem: v.baseItem.toLowerCase().trim(),
-        variantName: v.variantName,
-        size: v.size,
-        unit: v.unit,
-        category: v.category,
+      return variants.map((variant) => ({
+        baseItem: variant.baseItem.toLowerCase().trim(),
+        variantName: variant.variantName,
+        size: variant.size,
+        unit: variant.unit,
+        category: variant.category,
         source: "ai_seeded" as const,
-        estimatedPrice: typeof v.estimatedPrice === "number" ? v.estimatedPrice : undefined,
+        estimatedPrice: typeof variant.estimatedPrice === "number" ? variant.estimatedPrice : undefined,
       }));
     }
 
@@ -83,14 +92,14 @@ Return ONLY valid JSON: {"name": "...", "normalizedName": "...", "category": "..
 
       if (result.hasVariants && result.variants?.length > 0) {
         await ctx.runMutation(api.itemVariants.bulkUpsert, {
-          variants: result.variants.map(v => ({
+          variants: result.variants.map((variant: ParsedVariant) => ({
             baseItem: result.normalizedName || normalizedName,
-            variantName: v.variantName,
-            size: v.size,
-            unit: v.unit,
+            variantName: variant.variantName,
+            size: variant.size,
+            unit: variant.unit,
             category: result.category,
             source: "ai_seeded",
-            estimatedPrice: v.estimatedPrice,
+            estimatedPrice: variant.estimatedPrice,
           })),
         });
       }

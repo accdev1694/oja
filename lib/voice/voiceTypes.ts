@@ -9,7 +9,7 @@ export interface ConversationMessage {
 
 export interface PendingAction {
   action: string;
-  params: Record<string, unknown>;
+  params: Record<string, string | number | boolean | null>;
   confirmLabel: string;
 }
 

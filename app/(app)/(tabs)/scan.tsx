@@ -23,7 +23,7 @@ import { ScanOnboardingTip } from "@/components/scan/ScanOnboardingTip";
 import { EditScannedItemModal } from "@/components/scan/EditScannedItemModal";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import { Id, Doc } from "@/convex/_generated/dataModel";
 
 import { useHint } from "@/hooks/useHint";
 import { HintOverlay } from "@/components/tutorial/HintOverlay";
@@ -84,16 +84,6 @@ export default function ScanScreen() {
     }, [])
   );
 
-  const handleProductPress = useCallback((product, index: number) => {
-    setViewingProduct({ product, index });
-  }, [setViewingProduct]);
-
-  const handleConfirmProductEdit = useCallback((edited) => {
-    if (viewingProduct) {
-      productScanner.updateProduct(viewingProduct.index, edited);
-    }
-  }, [viewingProduct, productScanner]);
-
   const handleClearAllProducts = useCallback(() => {
     alert("Clear All Items", "Are you sure you want to clear your current scan list?", [
       { text: "Cancel", style: "cancel" },
@@ -143,7 +133,7 @@ export default function ScanScreen() {
       executeAdd(shoppingLists[0]._id);
     } else {
       // Prompt user to pick a list
-      const buttons: AlertButton[] = shoppingLists.map((list) => ({
+      const buttons: AlertButton[] = shoppingLists.map((list: Doc<"shoppingLists">) => ({
         text: list.name,
         onPress: () => executeAdd(list._id)
       }));
@@ -268,11 +258,11 @@ export default function ScanScreen() {
             scanButtonRef={scanButtonRef}
           />
         ) : (
-          <ProductMode 
+          <ProductMode
             scannedProducts={productScanner.scannedProducts}
             isScanning={productScanner.isProcessing}
             onScanPress={handleScanAction}
-            onProductPress={handleProductPress}
+            onProductPress={(product, index) => setViewingProduct({ product, index })}
             onClearAll={handleClearAllProducts}
             onAddAll={handleAddAllToList}
             scanButtonRef={scanButtonRef}
@@ -303,7 +293,11 @@ export default function ScanScreen() {
       <EditScannedItemModal
         product={viewingProduct?.product ?? null}
         onClose={() => setViewingProduct(null)}
-        onConfirm={handleConfirmProductEdit}
+        onConfirm={(edited) => {
+          if (viewingProduct) {
+            productScanner.updateProduct(viewingProduct.index, edited);
+          }
+        }}
       />
 
       {/* Persistence and Global Feedback */}

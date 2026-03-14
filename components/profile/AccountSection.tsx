@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { RefObject } from "react";
 
 import {
   GlassCard,
@@ -19,6 +20,18 @@ export function AccountSection({
   isAdmin,
   dietRef,
   animationDelay,
+}: {
+  userDisplayName: string;
+  userEmail: string | undefined;
+  referralInfo: {
+    code: string;
+    referredUsers: string[];
+    pointsEarned: number;
+  } | undefined | null;
+  handleShareReferral: () => void;
+  isAdmin: boolean;
+  dietRef: RefObject<View | null>;
+  animationDelay: number;
 }) {
   return (
     <AnimatedSection animation="fadeInDown" duration={400} delay={animationDelay}>

@@ -7,7 +7,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 interface UseTripLogicProps {
   listId: Id<"shoppingLists">;
   onTripStarted?: () => void;
-  onTripFinished?: (stats: Record<string, unknown>) => void;
+  onTripFinished?: (stats: unknown) => void;
 }
 
 export function useTripLogic({ listId, onTripStarted, onTripFinished }: UseTripLogicProps) {
@@ -15,7 +15,8 @@ export function useTripLogic({ listId, onTripStarted, onTripFinished }: UseTripL
   const finishTripMutation = useMutation(api.shoppingLists.finishTrip);
   const switchStoreMidShopMutation = useMutation(api.shoppingLists.switchStoreMidShop);
   const restockFromCheckedItemsMutation = useMutation(api.pantryItems.restockFromCheckedItems);
-  
+  const getTripStatsQuery = useQuery(api.shoppingLists.getTripStats, { id: listId });
+
   const list = useQuery(api.shoppingLists.getById, { id: listId });
 
   const [isFinishing, setIsFinishing] = useState(false);

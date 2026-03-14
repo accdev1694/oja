@@ -1,3 +1,4 @@
+import type { Doc } from "@/convex/_generated/dataModel";
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { useRouter } from "expo-router";
@@ -16,7 +17,7 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 
-function GuideItem({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+function GuideItem({ icon, title, desc }: { icon: keyof typeof import("@expo/vector-icons").MaterialCommunityIcons.glyphMap; title: string; desc: string }) {
   return (
     <View style={styles.guideItem}>
       <View style={styles.guideIconContainer}>
@@ -38,20 +39,21 @@ export default function PointsHistoryScreen() {
 
   const groupedHistory = useMemo(() => {
     if (!history) return [];
-    
-    const groups: { month: string; transactions: { _id: string; type: string; amount: number; description: string; _creationTime: number }[] }[] = [];
+
+    const groups: Array<{ month: string; total: number; transactions: Doc<"pointsTransactions">[] }> = [];
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-    history.forEach(tx => {
+    history.forEach((tx: Doc<"pointsTransactions">) => {
       const date = new Date(tx.createdAt);
       const monthYear = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
-      
+
       let group = groups.find(g => g.month === monthYear);
       if (!group) {
-        group = { month: monthYear, transactions: [] };
-        groups.push(group);
+        group = { month: monthYear, total: 0, transactions: [] };
+        if (group) groups.push(group);
       }
       group.transactions.push(tx);
+      group.total += tx.amount;
     });
 
     return groups;
@@ -59,26 +61,26 @@ export default function PointsHistoryScreen() {
 
   const getIconForType = (type: string) => {
     switch (type) {
-      case "earn": return "camera";
-      case "bonus": return "star";
-      case "redeem": return "cash-register";
+      case "earn": return "receipt";
+      case "bonus": return "gift";
+      case "redeem": return "cash-multiple";
       case "refund": return "undo";
-      case "expire": return "clock-alert";
+      case "expire": return "clock";
       default: return "history";
     }
   };
 
   const getColorForType = (type: string) => {
     switch (type) {
-      case "earn": 
-      case "bonus": 
+      case "earn":
+      case "bonus":
         return colors.semantic.success;
-      case "redeem": 
+      case "redeem":
         return colors.accent.primary;
-      case "refund": 
-      case "expire": 
+      case "refund":
+      case "expire":
         return colors.semantic.danger;
-      default: 
+      default:
         return colors.text.secondary;
     }
   };
@@ -129,25 +131,25 @@ export default function PointsHistoryScreen() {
         <View style={{ marginBottom: spacing.md }}>
           <GlassCollapsible title="How do Points work?" icon="help-circle-outline">
             <View style={styles.guideContent}>
-              <GuideItem 
-                icon="cash-multiple" 
-                title="Conversion" 
-                desc="1,000 points = £1.00. Points are used as credit toward your next subscription renewal." 
+              <GuideItem
+                icon="cash-multiple"
+                title="Conversion"
+                desc="1,000 points = £1.00. Points are used as credit toward your next subscription renewal."
               />
-              <GuideItem 
-                icon="auto-fix" 
-                title="Automatic Redemption" 
-                desc="Once you have at least 500 points, they're automatically applied to your next bill." 
+              <GuideItem
+                icon="cog"
+                title="Automatic Redemption"
+                desc="Once you have at least 500 points, they're automatically applied to your next bill."
               />
-              <GuideItem 
-                icon="trending-up" 
-                title="Earning More" 
-                desc="Higher tiers (Silver, Gold, Platinum) earn more points per scan. Premium users get a 25% bonus!" 
+              <GuideItem
+                icon="chart-line"
+                title="Earning More"
+                desc="Higher tiers (Silver, Gold, Platinum) earn more points per scan. Premium users get a 25% bonus!"
               />
-              <GuideItem 
-                icon="clock-outline" 
-                title="Expiration" 
-                desc="Points expire 12 months after they are earned. Use them or lose them!" 
+              <GuideItem
+                icon="clock"
+                title="Expiration"
+                desc="Points expire 12 months after they are earned. Use them or lose them!"
               />
             </View>
           </GlassCollapsible>
@@ -165,7 +167,7 @@ export default function PointsHistoryScreen() {
           groupedHistory.map((group) => (
             <View key={group.month} style={styles.monthGroup}>
               <Text style={styles.monthHeader}>{group.month}</Text>
-              {group.transactions.map((tx) => {
+              {group.transactions.map((tx: Doc<"pointsTransactions">) => {
                 const isPositive = tx.amount > 0;
                 return (
                   <GlassCard key={tx._id} style={styles.txCard} variant="standard">

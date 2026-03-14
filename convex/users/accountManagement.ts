@@ -107,17 +107,136 @@ export const resetMyAccount = mutation({
   handler: async (ctx) => {
     const user = await requireCurrentUser(ctx);
 
-    // Helper to delete all docs in a table by userId index
-    const deleteByUser = async (table: string) => {
-      const docs = await ctx.db
-        .query(table)
-        .withIndex("by_user", q => q.eq("userId", user._id))
-        .collect();
-      for (const doc of docs) {
-        await ctx.db.delete(doc._id);
-      }
-      return docs.length;
-    };
+    // Delete pantry items
+    const pantryItems = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    let counts = { pantryItems: 0, receipts: 0, priceHistory: 0, listPartners: 0, itemComments: 0, notifications: 0, achievements: 0, streaks: 0, weeklyChallenges: 0, nurtureMessages: 0, tipsDismissed: 0, supportTickets: 0, activityEvents: 0, listItems: 0, shoppingLists: 0, inviteCodes: 0 };
+    for (const item of pantryItems) {
+      await ctx.db.delete(item._id);
+    }
+    counts.pantryItems = pantryItems.length;
+
+    // Delete receipts
+    const receipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const receipt of receipts) {
+      await ctx.db.delete(receipt._id);
+    }
+    counts.receipts = receipts.length;
+
+    // Delete price history
+    const priceHistory = await ctx.db
+      .query("priceHistory")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const price of priceHistory) {
+      await ctx.db.delete(price._id);
+    }
+    counts.priceHistory = priceHistory.length;
+
+    // Delete list partners
+    const listPartners = await ctx.db
+      .query("listPartners")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const partner of listPartners) {
+      await ctx.db.delete(partner._id);
+    }
+    counts.listPartners = listPartners.length;
+
+    // Delete item comments
+    const itemComments = await ctx.db
+      .query("itemComments")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const comment of itemComments) {
+      await ctx.db.delete(comment._id);
+    }
+    counts.itemComments = itemComments.length;
+
+    // Delete notifications
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const notification of notifications) {
+      await ctx.db.delete(notification._id);
+    }
+    counts.notifications = notifications.length;
+
+    // Delete achievements
+    const achievements = await ctx.db
+      .query("achievements")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const achievement of achievements) {
+      await ctx.db.delete(achievement._id);
+    }
+    counts.achievements = achievements.length;
+
+    // Delete streaks
+    const streaks = await ctx.db
+      .query("streaks")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const streak of streaks) {
+      await ctx.db.delete(streak._id);
+    }
+    counts.streaks = streaks.length;
+
+    // Delete weekly challenges
+    const weeklyChallenges = await ctx.db
+      .query("weeklyChallenges")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const challenge of weeklyChallenges) {
+      await ctx.db.delete(challenge._id);
+    }
+    counts.weeklyChallenges = weeklyChallenges.length;
+
+    // Delete nurture messages
+    const nurtureMessages = await ctx.db
+      .query("nurtureMessages")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const msg of nurtureMessages) {
+      await ctx.db.delete(msg._id);
+    }
+    counts.nurtureMessages = nurtureMessages.length;
+
+    // Delete tips dismissed
+    const tipsDismissed = await ctx.db
+      .query("tipsDismissed")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const tip of tipsDismissed) {
+      await ctx.db.delete(tip._id);
+    }
+    counts.tipsDismissed = tipsDismissed.length;
+
+    // Delete support tickets
+    const supportTickets = await ctx.db
+      .query("supportTickets")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const ticket of supportTickets) {
+      await ctx.db.delete(ticket._id);
+    }
+    counts.supportTickets = supportTickets.length;
+
+    // Delete activity events
+    const activityEvents = await ctx.db
+      .query("activityEvents")
+      .withIndex("by_user_timestamp", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const event of activityEvents) {
+      await ctx.db.delete(event._id);
+    }
+    counts.activityEvents = activityEvents.length;
 
     // Delete list items via their lists (by_list index, not by_user)
     const shoppingLists = await ctx.db
@@ -135,19 +254,13 @@ export const resetMyAccount = mutation({
       }
       deletedListItems += items.length;
     }
-
-    // Delete from all user-owned tables (must have by_user index on userId)
-    const counts: Record<string, number> = {};
-    const tables = [
-      "pantryItems", "shoppingLists", "receipts", "priceHistory",
-      "listPartners", "itemComments",
-      "notifications", "achievements", "streaks", "weeklyChallenges",
-      "nurtureMessages", "tipsDismissed", "supportTickets", "activityEvents"
-    ];
-    for (const table of tables) {
-      counts[table] = await deleteByUser(table);
-    }
     counts.listItems = deletedListItems;
+
+    // Delete shopping lists after their items
+    for (const list of shoppingLists) {
+      await ctx.db.delete(list._id);
+    }
+    counts.shoppingLists = shoppingLists.length;
 
     // Tables specifically EXCLUDED from reset to preserve Identity & Economy:
     // - "subscriptions" (Prevents trial abuse)
@@ -159,14 +272,12 @@ export const resetMyAccount = mutation({
 
     // inviteCodes uses createdBy, not userId
     const inviteCodes = await ctx.db.query("inviteCodes").collect();
-    let deletedInvites = 0;
     for (const code of inviteCodes) {
       if (code.createdBy === user._id) {
         await ctx.db.delete(code._id);
-        deletedInvites++;
+        counts.inviteCodes++;
       }
     }
-    counts.inviteCodes = deletedInvites;
 
     // Reset user doc
     await ctx.db.patch(user._id, {
@@ -208,7 +319,7 @@ export const deleteMyAccount = mutation({
     // 2. Log the deletion before purging (for forensics)
     await trackActivity(ctx, user._id, "account_deleted", {
       reason: "user_request",
-      email: user.email
+      ...(user.email ? { email: user.email } : {}),
     });
 
     // 3. Perform full data purge
@@ -228,43 +339,162 @@ export const internalDeleteUser = internalMutation({
     const user = await ctx.db.get(args.userId);
     if (!user) return;
 
-    // Helper to delete all docs in a table by userId index
-    const deleteByUser = async (table) => {
-      const docs = await ctx.db
-        .query(table)
-        .withIndex("by_user", q => q.eq("userId", user._id))
-        .collect();
-      for (const doc of docs) {
-        await ctx.db.delete(doc._id);
-      }
-    };
+    // Delete pantry items
+    const pantryItems = await ctx.db
+      .query("pantryItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const item of pantryItems) {
+      await ctx.db.delete(item._id);
+    }
+
+    // Delete receipts
+    const receipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const receipt of receipts) {
+      await ctx.db.delete(receipt._id);
+    }
+
+    // Delete price history
+    const priceHistory = await ctx.db
+      .query("priceHistory")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const price of priceHistory) {
+      await ctx.db.delete(price._id);
+    }
+
+    // Delete list partners
+    const listPartners = await ctx.db
+      .query("listPartners")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const partner of listPartners) {
+      await ctx.db.delete(partner._id);
+    }
+
+    // Delete item comments
+    const itemComments = await ctx.db
+      .query("itemComments")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const comment of itemComments) {
+      await ctx.db.delete(comment._id);
+    }
+
+    // Delete notifications
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const notification of notifications) {
+      await ctx.db.delete(notification._id);
+    }
+
+    // Delete achievements
+    const achievements = await ctx.db
+      .query("achievements")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const achievement of achievements) {
+      await ctx.db.delete(achievement._id);
+    }
+
+    // Delete streaks
+    const streaks = await ctx.db
+      .query("streaks")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const streak of streaks) {
+      await ctx.db.delete(streak._id);
+    }
+
+    // Delete weekly challenges
+    const weeklyChallenges = await ctx.db
+      .query("weeklyChallenges")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const challenge of weeklyChallenges) {
+      await ctx.db.delete(challenge._id);
+    }
+
+    // Delete subscriptions
+    const subscriptions = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const sub of subscriptions) {
+      await ctx.db.delete(sub._id);
+    }
+
+    // Delete loyalty points
+    const loyaltyPoints = await ctx.db
+      .query("loyaltyPoints")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const pts of loyaltyPoints) {
+      await ctx.db.delete(pts._id);
+    }
+
+    // Delete point transactions
+    const pointTransactions = await ctx.db
+      .query("pointTransactions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const txn of pointTransactions) {
+      await ctx.db.delete(txn._id);
+    }
+
+    // Delete scan credits
+    const scanCredits = await ctx.db
+      .query("scanCredits")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const credit of scanCredits) {
+      await ctx.db.delete(credit._id);
+    }
+
+    // Delete scan credit transactions
+    const scanCreditTransactions = await ctx.db
+      .query("scanCreditTransactions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const txn of scanCreditTransactions) {
+      await ctx.db.delete(txn._id);
+    }
+
+    // Delete rate limits
+    const rateLimits = await ctx.db
+      .query("rateLimits")
+      .withIndex("by_user_feature", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const limit of rateLimits) {
+      await ctx.db.delete(limit._id);
+    }
 
     // 1. Delete list items via their lists
     const shoppingLists = await ctx.db
       .query("shoppingLists")
-      .withIndex("by_user", q => q.eq("userId", user._id))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
     for (const list of shoppingLists) {
       const items = await ctx.db
         .query("listItems")
-        .withIndex("by_list", q => q.eq("listId", list._id))
+        .withIndex("by_list", (q) => q.eq("listId", list._id))
         .collect();
       for (const item of items) {
         await ctx.db.delete(item._id);
       }
     }
 
-    const tables = [
-      "pantryItems", "shoppingLists", "receipts", "priceHistory",
-      "listPartners", "itemComments",
-      "notifications", "achievements", "streaks", "weeklyChallenges",
-      "subscriptions", "loyaltyPoints", "pointTransactions",
-      "scanCredits", "scanCreditTransactions", "rateLimits"
-    ];
-    for (const table of tables) {
-      await deleteByUser(table);
+    // Delete shopping lists after their items
+    for (const list of shoppingLists) {
+      await ctx.db.delete(list._id);
     }
 
+    // Delete invite codes created by this user
     const inviteCodes = await ctx.db.query("inviteCodes").collect();
     for (const code of inviteCodes) {
       if (code.createdBy === user._id) {
@@ -272,6 +502,7 @@ export const internalDeleteUser = internalMutation({
       }
     }
 
+    // Finally, delete the user
     await ctx.db.delete(user._id);
   },
 });

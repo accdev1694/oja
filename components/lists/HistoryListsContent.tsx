@@ -13,7 +13,15 @@ import { HistoryCard } from "@/components/lists/HistoryCard";
 interface HistoryListItem {
   _id: Id<"shoppingLists">;
   name: string;
-  [key: string]: unknown;
+  status: string;
+  budget?: number;
+  actualTotal?: number;
+  pointsEarned?: number;
+  completedAt?: number;
+  createdAt: number;
+  storeName?: string;
+  storeSegments?: { storeId: string; storeName: string; switchedAt: number }[];
+  listNumber?: number;
 }
 
 const HistoryListsContent = React.memo(function HistoryListsContent({

@@ -14,12 +14,20 @@ import {
   spacing,
 } from "@/components/ui/glass";
 
-export function StoreMismatchCard({
-  mismatchInfo,
-  mismatchChoice,
-  setMismatchChoice,
-}) {
-  if (!mismatchInfo?.isMismatch) return null;
+interface StoreMismatchCardProps {
+  mismatchInfo?: {
+    isMismatch: boolean;
+    receiptStore?: string;
+    listStore: string;
+    isKnownSegment: boolean;
+  } | null;
+  mismatchChoice: "tag" | "ignore" | null;
+  setMismatchChoice: (choice: "tag" | "ignore" | null) => void;
+}
+
+export const StoreMismatchCard = React.memo(function StoreMismatchCard({ mismatchInfo, mismatchChoice, setMismatchChoice }: StoreMismatchCardProps) {
+
+  if (!mismatchInfo || !mismatchInfo.isMismatch) return null;
 
   // Already resolved
   if (mismatchChoice !== null) {
@@ -78,7 +86,7 @@ export function StoreMismatchCard({
       </View>
     </GlassCard>
   );
-}
+});
 
 const styles = StyleSheet.create({
   section: {

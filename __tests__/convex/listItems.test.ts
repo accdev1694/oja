@@ -2,15 +2,12 @@ import { create } from "../../convex/listItems";
 
 // Mock the dependencies
 jest.mock("../../convex/_generated/server", () => ({
-  mutation: (args: any) => args.handler,
-  query: (args: any) => args.handler,
+  mutation: (args: { handler: unknown }) => args.handler,
+  query: (args: { handler: unknown }) => args.handler,
 }));
 
 jest.mock("../../convex/_generated/api", () => ({
   api: {
-    aiUsage: {
-      checkRateLimit: "checkRateLimit",
-    },
     ai: {
       estimateItemPrice: "estimateItemPrice",
     }
@@ -25,10 +22,37 @@ jest.mock("../../convex/lib/priceResolver", () => ({
   resolveVariantWithPrice: jest.fn().mockResolvedValue(null),
 }));
 
+const mockRateLimitCheck = jest.fn();
+jest.mock("../../convex/lib/rateLimit", () => ({
+  checkRateLimit: (...args: unknown[]) => mockRateLimitCheck(...args),
+}));
+
+interface MockListItemDb {
+  get: jest.Mock;
+  query: jest.Mock;
+  withIndex: jest.Mock;
+  filter: jest.Mock;
+  order: jest.Mock;
+  unique: jest.Mock;
+  collect: jest.Mock;
+  first: jest.Mock;
+  insert: jest.Mock;
+  patch: jest.Mock;
+  delete: jest.Mock;
+}
+
+interface MockListItemCtx {
+  auth: { getUserIdentity: jest.Mock };
+  db: MockListItemDb;
+  runMutation: jest.Mock;
+  scheduler: { runAfter: jest.Mock };
+}
+
 describe("listItems mutations", () => {
-  let mockCtx: any;
+  let mockCtx: MockListItemCtx;
 
   beforeEach(() => {
+    mockRateLimitCheck.mockReset();
     mockCtx = {
       auth: {
         getUserIdentity: jest.fn().mockResolvedValue({ subject: "user_123" }),
@@ -58,34 +82,33 @@ describe("listItems mutations", () => {
       // Setup mocks
       mockCtx.db.get.mockResolvedValueOnce({ _id: "list1" }); // List
       mockCtx.db.unique.mockResolvedValueOnce({ _id: "user1" }); // User
-      mockCtx.runMutation.mockResolvedValueOnce({ allowed: true }); // Rate limit
+      mockRateLimitCheck.mockResolvedValueOnce({ allowed: true, remaining: 99 }); // Rate limit
       mockCtx.db.collect.mockResolvedValueOnce([]); // No existing duplicate list items
       mockCtx.db.collect.mockResolvedValueOnce([]); // No existing duplicate pantry items (active)
       mockCtx.db.collect.mockResolvedValueOnce([]); // No existing duplicate pantry items (archived)
-      
-      mockCtx.db.insert.mockResolvedValueOnce("pantry1"); // New pantry item
+
       mockCtx.db.insert.mockResolvedValueOnce("item1"); // New list item
 
       // No prices returned
-      mockCtx.db.collect.mockResolvedValue([]); 
+      mockCtx.db.collect.mockResolvedValue([]);
 
-      const result = await (create as any)(mockCtx, {
+      const result = await (create as unknown as (ctx: MockListItemCtx, args: Record<string, unknown>) => Promise<{ status: string; itemId: string }>)(mockCtx, {
         listId: "list1",
         name: "Milk",
         quantity: 1,
       });
 
       expect(result).toEqual({ status: "added", itemId: "item1" });
-      expect(mockCtx.db.insert).toHaveBeenCalledTimes(2);
-      expect(mockCtx.runMutation).toHaveBeenCalled();
+      expect(mockCtx.db.insert).toHaveBeenCalled();
+      expect(mockRateLimitCheck).toHaveBeenCalledWith(mockCtx, "user1", "list_items", 100);
     });
 
     it("should reject if rate limit exceeded", async () => {
       mockCtx.db.get.mockResolvedValueOnce({ _id: "list1" }); // List
       mockCtx.db.unique.mockResolvedValueOnce({ _id: "user1" }); // User
-      mockCtx.runMutation.mockResolvedValueOnce({ allowed: false }); // Rate limit fails
+      mockRateLimitCheck.mockResolvedValueOnce({ allowed: false, remaining: 0 }); // Rate limit fails
 
-      await expect((create as any)(mockCtx, {
+      await expect((create as unknown as (ctx: MockListItemCtx, args: Record<string, unknown>) => Promise<{ status: string; itemId: string }>)(mockCtx, {
         listId: "list1",
         name: "Milk",
         quantity: 1,
@@ -95,14 +118,14 @@ describe("listItems mutations", () => {
     it("should bump existing item if duplicate and forced", async () => {
       mockCtx.db.get.mockResolvedValueOnce({ _id: "list1" }); // List
       mockCtx.db.unique.mockResolvedValueOnce({ _id: "user1" }); // User
-      mockCtx.runMutation.mockResolvedValueOnce({ allowed: true }); // Rate limit
-      
+      mockRateLimitCheck.mockResolvedValueOnce({ allowed: true, remaining: 99 }); // Rate limit
+
       // Existing duplicate
       mockCtx.db.collect.mockResolvedValueOnce([
         { _id: "existing_item1", name: "Milk", quantity: 1, isChecked: false }
-      ]); 
+      ]);
 
-      const result = await (create as any)(mockCtx, {
+      const result = await (create as unknown as (ctx: MockListItemCtx, args: Record<string, unknown>) => Promise<{ status: string; itemId: string }>)(mockCtx, {
         listId: "list1",
         name: "Milk",
         quantity: 1,

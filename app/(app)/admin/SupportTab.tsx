@@ -68,7 +68,7 @@ export function SupportTab({ hasPermission }: SupportTabProps) {
     }
   }, [selectedTicketId, addMessage, showToast]);
 
-  const handleUpdateStatus = useCallback(async status => {
+  const handleUpdateStatus = useCallback(async (status: "open" | "in_progress" | "waiting_on_user" | "resolved" | "closed" = "open") => {
     if (!selectedTicketId) return;
     try {
       await updateStatus({ ticketId: selectedTicketId as Id<"supportTickets">, status });

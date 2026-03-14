@@ -5,10 +5,23 @@ import { Id } from "../_generated/dataModel";
 import { trackFunnelEvent, trackActivity } from "../lib/analytics";
 import { processExpirePoints } from "../points";
 
+/** Minimal shape of a Stripe webhook event data object. */
+interface StripeEventData {
+  id?: string;
+  customer?: string;
+  subscription?: string;
+  status?: string;
+  cancel_at_period_end?: boolean;
+  current_period_start?: number;
+  current_period_end?: number;
+  billing_reason?: string;
+  metadata?: Record<string, string>;
+}
+
 async function getStripeClient() {
   const Stripe = (await import("stripe")).default;
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2025-04-30.basil" as const,
+    apiVersion: "2026-01-28.clover" as const,
   });
 }
 
@@ -29,9 +42,10 @@ function mapStripeStatus(
 }
 
 export const processWebhookEvent = action({
-  args: { eventId: v.string(), eventType: v.string(), data: v.any() },
+  args: { eventId: v.string(), eventType: v.string(), data: v.string() },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
-    const { eventId, eventType, data } = args;
+    const { eventId, eventType } = args;
+    const data = JSON.parse(args.data) as StripeEventData;
 
     const existing = await ctx.runQuery(internal.stripe.checkWebhookProcessed, { eventId });
     if (existing) {
@@ -49,8 +63,8 @@ export const processWebhookEvent = action({
             await ctx.runMutation(internal.stripe.handleCheckoutCompleted, {
               userId: session.metadata.convexUserId,
               planId: session.metadata.planId,
-              stripeCustomerId: session.customer,
-              stripeSubscriptionId: session.subscription,
+              stripeCustomerId: session.customer!,
+              stripeSubscriptionId: session.subscription!,
             });
           }
           break;
@@ -58,36 +72,36 @@ export const processWebhookEvent = action({
         case "customer.subscription.updated": {
           const sub = data;
           await ctx.runMutation(internal.stripe.handleSubscriptionUpdated, {
-            stripeCustomerId: sub.customer,
-            stripeSubscriptionId: sub.id,
-            status: mapStripeStatus(sub.status, sub.cancel_at_period_end),
-            currentPeriodStart: sub.current_period_start * 1000,
-            currentPeriodEnd: sub.current_period_end * 1000,
+            stripeCustomerId: sub.customer!,
+            stripeSubscriptionId: sub.id!,
+            status: mapStripeStatus(sub.status!, sub.cancel_at_period_end!),
+            currentPeriodStart: sub.current_period_start! * 1000,
+            currentPeriodEnd: sub.current_period_end! * 1000,
           });
           break;
         }
         case "customer.subscription.deleted": {
-          await ctx.runMutation(internal.stripe.handleSubscriptionDeleted, { stripeCustomerId: data.customer });
+          await ctx.runMutation(internal.stripe.handleSubscriptionDeleted, { stripeCustomerId: data.customer! });
           break;
         }
         case "invoice.payment_failed": {
-          await ctx.runMutation(internal.stripe.handlePaymentFailed, { stripeCustomerId: data.customer });
+          await ctx.runMutation(internal.stripe.handlePaymentFailed, { stripeCustomerId: data.customer! });
           break;
         }
         case "invoice.created": {
           const isSubscriptionInvoice = data.billing_reason === "subscription_cycle" || data.billing_reason === "subscription_create";
           if (isSubscriptionInvoice && data.status === "draft") {
             const creditResult = await ctx.runMutation(internal.stripe.reservePoints, {
-              stripeCustomerId: data.customer,
-              stripeInvoiceId: data.id,
+              stripeCustomerId: data.customer!,
+              stripeInvoiceId: data.id!,
             });
             if (creditResult && creditResult.pointsApplied > 0) {
               const stripe = await getStripeClient();
               const creditAmountPence = Math.round(creditResult.pointsApplied / 10);
               try {
                 await stripe.invoiceItems.create({
-                  customer: data.customer,
-                  invoice: data.id,
+                  customer: data.customer!,
+                  invoice: data.id!,
                   amount: -creditAmountPence,
                   currency: "gbp",
                   description: `Oja Points redemption (${creditResult.pointsApplied} pts applied)`,

@@ -5,7 +5,7 @@ import { internal } from "../_generated/api";
 async function getStripeClient() {
   const Stripe = (await import("stripe")).default;
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2025-04-30.basil",
+    apiVersion: "2026-01-28.clover" as const,
   });
 }
 
@@ -159,7 +159,7 @@ export const reconcilePointRedemptions = internalAction({
 });
 
 export const logDiscrepancy = internalMutation({
-  args: { type: v.string(), severity: v.string(), description: v.string(), metadata: v.any() },
+  args: { type: v.string(), severity: v.string(), description: v.string(), metadata: v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null())) },
   handler: async (ctx, args) => {
     await ctx.db.insert("discrepancies", {
       type: args.type,

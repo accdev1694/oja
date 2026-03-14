@@ -2,6 +2,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAdmin } from "./lib/auth";
+import { TableNames } from "./_generated/dataModel";
 
 /**
  * Debug: Check if AI API keys are configured in the Convex environment.
@@ -129,21 +130,21 @@ export const mergeDuplicateUsers = mutation({
       for (const { table, index } of tablesToReassign) {
         if (table === "experimentEvents") continue; // Skip for now
 
-        // Reassign by specific index
+        // Reassign by filtering on userId field
+        const tableName = table as TableNames;
+        const fieldName = table === "adminLogs" ? "adminUserId" : "userId";
         const docs = await ctx.db
-          .query(table)
-          .withIndex(index, (q) => q.eq("userId", duplicate._id))
+          .query(tableName)
+          .filter((q) => q.eq(q.field(fieldName), duplicate._id))
           .collect();
-        
+
         for (const doc of docs) {
           const patch: Record<string, unknown> = {};
-          if (table === "adminLogs") {
-            patch.adminUserId = master._id;
-          } else {
-            patch.userId = master._id;
-          }
+          patch[fieldName] = master._id;
           await ctx.db.patch(doc._id, patch);
-          stats[`${table}Moved`] = (stats[`${table}Moved`] || 0) + 1;
+          const statsKey = `${table}Moved`;
+          const current = typeof stats[statsKey] === "number" ? stats[statsKey] : 0;
+          stats[statsKey] = (current as number) + 1;
         }
       }
 
@@ -152,7 +153,8 @@ export const mergeDuplicateUsers = mutation({
       for (const invite of invites) {
         if (invite.createdBy === duplicate._id) {
           await ctx.db.patch(invite._id, { createdBy: master._id });
-          stats.invitesMoved = (stats.invitesMoved || 0) + 1;
+          const currentInvites = typeof stats.invitesMoved === "number" ? stats.invitesMoved : 0;
+          stats.invitesMoved = (currentInvites as number) + 1;
         }
       }
 

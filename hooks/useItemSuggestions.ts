@@ -15,6 +15,8 @@ export interface ItemSuggestion {
   size?: string;
   unit?: string;
   category?: string;
+  icon?: string;
+  [key: string]: unknown;
 }
 
 export interface DidYouMean {

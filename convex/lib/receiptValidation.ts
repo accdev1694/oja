@@ -118,7 +118,7 @@ export async function validateReceiptData(
   }
 
   // 4. Store validation
-  if (!isValidUKStore(ocrData.storeName)) {
+  if (!isValidUKStore(ocrData.storeName ?? "")) {
     flags.push("unknown_store");
   }
 

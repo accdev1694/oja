@@ -107,14 +107,16 @@ export const update = mutation({
     const item = await ctx.db.get(args.id);
     if (!item || item.userId !== user._id) throw new Error("Unauthorized");
 
-    const updates = { updatedAt: Date.now() };
-    if (args.name !== undefined) {
-      updates.name = toGroceryTitleCase(args.name);
-      if (args.name !== item.name) updates.nameSource = "user";
-    }
-    if (args.category !== undefined) updates.category = args.category;
-    if (args.stockLevel !== undefined) updates.stockLevel = args.stockLevel;
-    if (args.autoAddToList !== undefined) updates.autoAddToList = args.autoAddToList;
+    const updates = {
+      updatedAt: Date.now(),
+      ...(args.name !== undefined && {
+        name: toGroceryTitleCase(args.name),
+        ...(args.name !== item.name && { nameSource: "user" as const }),
+      }),
+      ...(args.category !== undefined && { category: args.category }),
+      ...(args.stockLevel !== undefined && { stockLevel: args.stockLevel }),
+      ...(args.autoAddToList !== undefined && { autoAddToList: args.autoAddToList }),
+    };
 
     await ctx.db.patch(args.id, updates);
     return await ctx.db.get(args.id);

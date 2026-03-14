@@ -32,6 +32,7 @@ import { Receipt, PriceAnomaly } from "./types";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAdminToast, useResponsive } from "./hooks";
 import { SavedFilterPills } from "./components/SavedFilterPills";
+import type { FilterData } from "./components/SavedFilterPills";
 
 interface ReceiptsTabProps {
   /** Permission check function */
@@ -183,9 +184,11 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
     { label: "Failed", value: "failed" },
   ];
 
-  const handleApplyPreset = useCallback(data => {
-    if (data.status !== undefined) setStatusFilter(data.status);
-    if (data.search !== undefined) setSearch(data.search);
+  const handleApplyPreset = useCallback((filterData: FilterData) => {
+    if (filterData.type === "receipts") {
+      if (filterData.statusFilter !== undefined) setStatusFilter(filterData.statusFilter);
+      // Note: receipts don't use searchQuery in the FilterData schema
+    }
     showToast("Preset applied", "info");
   }, [showToast]);
 

@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { mutation, query } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { 
@@ -7,7 +8,7 @@ import {
 } from "./helpers";
 
 export const getUsers = query({
-  args: { paginationOpts: v.any() },
+  args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_users");
     return await ctx.db.query("users").order("desc").paginate(args.paginationOpts);
@@ -75,7 +76,7 @@ export const toggleAdmin = mutation({
     if (!user) throw new Error("User not found");
     const newStatus = !user.isAdmin;
 
-    const patchData = { isAdmin: newStatus, updatedAt: Date.now() };
+    const patchData: { isAdmin: boolean; updatedAt: number; adminGrantedAt?: number } = { isAdmin: newStatus, updatedAt: Date.now() };
     if (newStatus) {
       patchData.adminGrantedAt = Date.now();
     }

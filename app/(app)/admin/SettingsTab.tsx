@@ -85,7 +85,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
   const markMigrationComplete = useMutation(api.migrations.optimizeImages.markMigrationComplete);
   const getStorageUrls = useQuery(
     api.receipts.getStorageUrls,
-    imagesToOptimize?.total ? { storageIds: imagesToOptimize.receipts.map(r => r.imageStorageId) } : "skip"
+    imagesToOptimize?.total ? { storageIds: imagesToOptimize.receipts.map((r: { imageStorageId: string }) => r.imageStorageId) } : "skip"
   );
 
   const handleClearSeedData = useCallback(async () => {
@@ -244,7 +244,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
     if (!imagesToOptimize || !getStorageUrls || isOptimizing) return;
 
     // Only receipts have imageStorageId - listItems and pantryItems use itemVariants
-    const receiptImages = imagesToOptimize.receipts.map(r => ({ ...r, targetWidth: 1600 }));
+    const receiptImages = imagesToOptimize.receipts.map((r: { imageStorageId: string; _id: string }) => ({ ...r, targetWidth: 1600 }));
 
     if (receiptImages.length === 0) {
       showToast("No images to optimize", "info");

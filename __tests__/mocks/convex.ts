@@ -7,7 +7,7 @@ type MockQueryFn = jest.Mock;
 type MockMutationFn = jest.Mock;
 
 interface MockConvexClient {
-  queries: Map<string, any>;
+  queries: Map<string, unknown>;
   mutations: Map<string, MockMutationFn>;
   actions: Map<string, MockMutationFn>;
 }
@@ -23,7 +23,7 @@ export function createMockConvexClient(): MockConvexClient {
 /**
  * Create a mock useQuery that returns predetermined data
  */
-export function mockUseQuery(data: any): MockQueryFn {
+export function mockUseQuery(data: unknown): MockQueryFn {
   return jest.fn(() => data);
 }
 
@@ -46,11 +46,16 @@ export function mockUseAction(): MockMutationFn {
 /**
  * Mock database context for testing Convex function logic
  */
+interface MockDocument {
+  _id: string;
+  [key: string]: unknown;
+}
+
 export function createMockDb() {
-  const store: Record<string, any[]> = {};
+  const store: Record<string, MockDocument[]> = {};
 
   return {
-    insert: jest.fn(async (table: string, doc: any) => {
+    insert: jest.fn(async (table: string, doc: Record<string, unknown>) => {
       if (!store[table]) store[table] = [];
       const id = `${table}_${store[table].length + 1}`;
       store[table].push({ _id: id, ...doc });
@@ -63,7 +68,7 @@ export function createMockDb() {
       }
       return null;
     }),
-    patch: jest.fn(async (id: string, updates: any) => {
+    patch: jest.fn(async (id: string, updates: Record<string, unknown>) => {
       for (const table of Object.values(store)) {
         const idx = table.findIndex((d) => d._id === id);
         if (idx !== -1) {
@@ -73,7 +78,7 @@ export function createMockDb() {
       }
     }),
     delete: jest.fn(async (id: string) => {
-      for (const [key, table] of Object.entries(store)) {
+      for (const [, table] of Object.entries(store)) {
         const idx = table.findIndex((d) => d._id === id);
         if (idx !== -1) {
           table.splice(idx, 1);
@@ -97,7 +102,7 @@ export function createMockDb() {
       })),
     })),
     _store: store,
-    _seed: (table: string, docs: any[]) => {
+    _seed: (table: string, docs: MockDocument[]) => {
       store[table] = docs;
     },
   };

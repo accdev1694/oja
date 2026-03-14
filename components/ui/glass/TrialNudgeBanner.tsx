@@ -22,7 +22,7 @@ export function TrialNudgeBanner() {
 
   const isTrial = subscription.status === "trial";
   const isExpired = subscription.status === "expired";
-  const trialEndsAt = (subscription)?.trialEndsAt;
+  const trialEndsAt = "trialEndsAt" in subscription ? (subscription.trialEndsAt as number | undefined) : undefined;
 
   const daysLeft = isTrial && trialEndsAt
     ? Math.max(0, Math.ceil((trialEndsAt - Date.now()) / (1000 * 60 * 60 * 24)))

@@ -1,13 +1,18 @@
 import { v } from "convex/values";
 import { query } from "../_generated/server";
+import { Doc, Id, DataModel } from "../_generated/dataModel";
+import { GenericMutationCtx, GenericQueryCtx } from "convex/server";
+
+export type QueryCtx = GenericQueryCtx<DataModel>;
+export type MutationCtx = GenericMutationCtx<DataModel>;
 
 // Helper to get authenticated user (auto-creates if missing, e.g. partner who skipped onboarding)
-export async function requireUser(ctx) {
+export async function requireUser(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
   const user = await ctx.db
     .query("users")
-    .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
+    .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .unique();
   if (user) return user;
 
@@ -26,7 +31,9 @@ export async function requireUser(ctx) {
     createdAt: now,
     updatedAt: now,
   });
-  return await ctx.db.get(userId);
+  const newUser = await ctx.db.get(userId);
+  if (!newUser) throw new Error("Failed to create user");
+  return newUser;
 }
 
 /**
@@ -35,9 +42,9 @@ export async function requireUser(ctx) {
  * Exported for use in other Convex modules (listItems, etc.)
  */
 export async function getUserListPermissions(
-  ctx,
-  listId,
-  userId
+  ctx: QueryCtx | MutationCtx,
+  listId: Id<"shoppingLists">,
+  userId: Id<"users">
 ): Promise<{
   isOwner: boolean;
   isPartner: boolean;
@@ -61,7 +68,7 @@ export async function getUserListPermissions(
   // Check partner record
   const partner = await ctx.db
     .query("listPartners")
-    .withIndex("by_list_user", q => q.eq("listId", listId).eq("userId", userId))
+    .withIndex("by_list_user", (q) => q.eq("listId", listId).eq("userId", userId))
     .unique();
 
   if (!partner || (partner.status !== "accepted" && partner.status !== "pending")) {
@@ -89,7 +96,7 @@ export const getMyPermissions = query({
     }
     const user = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", q => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
     if (!user) {
       return { isOwner: false, isPartner: false, role: null, canView: false, canEdit: false };

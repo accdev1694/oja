@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 import {
   GlassCard,
@@ -10,38 +11,6 @@ import {
   spacing,
   borderRadius,
 } from "@/components/ui/glass";
-
-interface NavigationLinksProps {
-  router: {
-    push: (path: string) => void;
-    navigate: (path: string) => void;
-  };
-  convexUser: {
-    isAdmin?: boolean;
-  } | null;
-  myAdminPerms: {
-    role?: string;
-  } | null;
-  subscription: {
-    status?: string;
-    isActive?: boolean;
-    trialEndsAt?: number;
-  } | null;
-  pointsBalance: {
-    tier?: string;
-    tierProgress?: number;
-  } | null;
-  aiUsage: {
-    voice?: {
-      usage?: number;
-      limit?: number;
-    };
-  } | null;
-  outOfStockItems: number;
-  lowStockItems: number;
-  handleSupportPress: () => void;
-  animationDelay: number;
-}
 
 export function NavigationLinks({
   router,
@@ -54,7 +23,34 @@ export function NavigationLinks({
   lowStockItems,
   handleSupportPress,
   animationDelay,
-}: NavigationLinksProps) {
+}: {
+  router: ReturnType<typeof useRouter>;
+  convexUser: {
+    isAdmin?: boolean;
+  } | null | undefined;
+  myAdminPerms: {
+    role?: string;
+  } | null | undefined;
+  subscription: {
+    status?: string;
+    isActive?: boolean;
+    trialEndsAt?: number;
+  } | null | undefined;
+  pointsBalance: {
+    tier?: string;
+    tierProgress?: number;
+  } | null | undefined;
+  aiUsage: {
+    voice?: {
+      usage?: number;
+      limit?: number;
+    };
+  } | null | undefined;
+  outOfStockItems: number;
+  lowStockItems: number;
+  handleSupportPress: () => void;
+  animationDelay: number;
+}) {
   return (
     <AnimatedSection animation="fadeInDown" duration={400} delay={animationDelay}>
       <View style={styles.section}>
@@ -228,7 +224,7 @@ export function NavigationLinks({
         <Pressable
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.navigate("/(app)/(tabs)/");
+            router.navigate("/(app)/(tabs)");
           }}
         >
           <GlassCard variant="standard" style={styles.navCard}>

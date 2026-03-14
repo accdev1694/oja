@@ -147,7 +147,7 @@ export function useAdminSearch(query: string) {
 
     // Process User Results
     if (users) {
-      users.forEach(u => {
+      users.forEach((u: typeof users[number]) => {
         results.push({
           type: "user",
           id: u._id,
@@ -160,7 +160,7 @@ export function useAdminSearch(query: string) {
 
     // Process Receipt Results
     if (receipts) {
-      receipts.forEach(r => {
+      receipts.forEach((r: typeof receipts[number]) => {
         results.push({
           type: "receipt",
           id: r._id,

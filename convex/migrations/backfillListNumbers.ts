@@ -1,5 +1,6 @@
 import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
+import { Id } from "../_generated/dataModel";
 
 /**
  * Backfill listNumber for all existing shopping lists.
@@ -24,9 +25,9 @@ export const run = internalMutation({
     console.log(`Found ${allLists.length} lists without listNumber`);
 
     // Group by userId
-    const byUser = new Map<string, typeof allLists>();
+    const byUser = new Map<Id<"users">, typeof allLists>();
     for (const list of allLists) {
-      const key = list.userId as string;
+      const key = list.userId;
       const existing = byUser.get(key) ?? [];
       existing.push(list);
       byUser.set(key, existing);

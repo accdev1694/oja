@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { Doc } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
@@ -39,48 +40,52 @@ export default function NotificationsScreen() {
   const markRead = useMutation(api.notifications.markAsRead);
   const markAllRead = useMutation(api.notifications.markAllAsRead);
 
-  function handleNotificationPress(notification) {
+  const handleNotificationPress = (notification: Doc<"notifications">) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!notification || !notification.read) return;
     if (!notification.read) {
       markRead({ id: notification._id });
     }
 
     // Deep link to relevant screen based on notification type
-    switch (notification.type) {
-      case "achievement_unlocked":
-      case "challenge_completed":
-        router.push("/(app)/insights");
-        break;
-      case "tier_upgrade":
-      case "trial_started":
-        router.push("/(app)/subscription");
-        break;
-      case "comment_added":
-      case "list_message":
-        if (notification.data?.listId) {
-          router.push(`/(app)/list/${notification.data.listId}`);
-        }
-        break;
-      case "partner_joined":
-        router.push("/(app)/partners");
-        break;
+    if (notification.type) {
+      switch (notification.type) {
+        case "achievement_unlocked":
+        case "challenge_completed":
+          router.push("/(app)/insights");
+          break;
+        case "tier_upgrade":
+        case "trial_started":
+          router.push("/(app)/subscription");
+          break;
+        case "comment_added":
+        case "list_message":
+          if (notification.data && notification.data.listId) {
+            router.push(`/(app)/list/${notification.data.listId}`);
+          }
+          break;
+        case "partner_joined":
+          router.push("/(app)/partners");
+          break;
+      }
     }
-  }
+  };
 
-  function handleMarkAllRead() {
+  const handleMarkAllRead = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     markAllRead();
-  }
+  };
 
-  function formatTime(ts: number) {
-    const diff = Date.now() - ts;
+  const formatTime = (ts: number) => {
+    const now = Date.now();
+    const diff = now - ts;
     const mins = Math.floor(diff / 60000);
     if (mins < 60) return `${mins}m ago`;
     const hours = Math.floor(mins / 60);
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
     return `${days}d ago`;
-  }
+  };
 
   if (notifications === undefined) {
     return (
@@ -117,13 +122,13 @@ export default function NotificationsScreen() {
           </View>
         )}
 
-        {notifications.map((n) => (
+        {notifications.map((n: Doc<"notifications">) => (
           <Pressable key={n._id} onPress={() => handleNotificationPress(n)}>
             <GlassCard style={[styles.notifCard, !n.read && styles.unreadCard]}>
               <View style={styles.notifRow}>
                 <View style={[styles.iconCircle, { backgroundColor: `${typeColors[n.type] || colors.accent.primary}20` }]}>
                   <MaterialCommunityIcons
-                    name={(typeIcons[n.type] || "bell")}
+                    name={((typeIcons[n.type] || "bell")) as React.ComponentProps<typeof MaterialCommunityIcons>["name"]}
                     size={20}
                     color={typeColors[n.type] || colors.accent.primary}
                   />

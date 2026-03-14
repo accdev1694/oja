@@ -48,7 +48,7 @@ export const experimentTables = {
     trigger: v.string(), // subscription_canceled, trial_ending, user_inactive_30d, payment_failed
     actions: v.array(v.object({
       type: v.string(), // send_email, send_push, suspend_user, apply_tag
-      params: v.optional(v.any()),
+      params: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))),
     })),
     isEnabled: v.boolean(),
     createdBy: v.id("users"),

@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 import {
   GlassCard,
@@ -21,6 +22,52 @@ export function AdminControlCenter({
   gmvFilter,
   setGmvFilter,
   router,
+}: {
+  adminAnalytics: {
+    totalUsers?: number;
+    newUsersThisWeek?: number;
+    newUsersThisMonth?: number;
+    activeUsersThisWeek?: number;
+    totalLists?: number;
+    completedLists?: number;
+    totalReceipts?: number;
+    receiptsThisWeek?: number;
+    receiptsThisMonth?: number;
+    totalGMV?: number;
+    gmvThisWeek?: number;
+    gmvThisMonth?: number;
+    gmvThisYear?: number;
+    computedAt?: number;
+    isPrecomputed?: boolean;
+  } | undefined;
+  systemHealth: {
+    status: "healthy" | "degraded" | "down";
+    receiptProcessing: {
+      total: number;
+      failed: number;
+      processing: number;
+      successRate: number;
+    };
+    alertCount: number;
+    timestamp: number;
+  } | undefined;
+  platformAIUsage: {
+    summary: Record<string, { requests: number; tokens: number }>;
+    totalRequests: number;
+    totalTokens: number;
+    tokenQuota: number;
+    requestQuota: number;
+    dailyAverageTokens: number;
+    weeklyAverageTokens: number;
+    daysUntilRenewal: number;
+    renewalDate: number;
+    activeProvider: string;
+    alert: { level: "info" | "warning" | "critical"; message: string } | null;
+    computedAt: number;
+  } | undefined;
+  gmvFilter: "week" | "month" | "year" | "lifetime";
+  setGmvFilter: (filter: "week" | "month" | "year" | "lifetime") => void;
+  router: ReturnType<typeof useRouter>;
 }) {
   return (
     <View style={{ gap: spacing.lg, marginBottom: spacing.lg }}>

@@ -2,6 +2,7 @@
  * GlassToast - Animated toast notification with glassmorphism styling
  */
 import React, { useEffect } from "react";
+import type { ComponentProps } from "react";
 import { Text, StyleSheet, ViewStyle, StyleProp } from "react-native";
 import Animated, {
   useSharedValue,
@@ -51,7 +52,7 @@ export function GlassToast({
     >
       {icon && (
         <MaterialCommunityIcons
-          name={icon}
+          name={icon as ComponentProps<typeof MaterialCommunityIcons>["name"]}
           size={20}
           color={iconColor}
           style={styles.icon}

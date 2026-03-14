@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { QueryCtx, MutationCtx } from "./_generated/server";
 import {
   getFreeFeatures,
   getPlanFeatures,
@@ -7,11 +8,10 @@ import {
   isEffectivelyPremium,
   getTierFromScans,
   getNextTierInfo,
-  type TierName,
 } from "./lib/featureGating";
 import { trackFunnelEvent } from "./lib/analytics";
 
-async function requireUser(ctx: Parameters<typeof getCurrentSubscription.handler>[0]) {
+async function requireUser(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
   const user = await ctx.db
@@ -395,15 +395,15 @@ export const migrateToUnifiedRewards = internalMutation({
         .withIndex("by_user", q => q.eq("userId", userId))
         .collect();
 
-      const receiptIds = new Set(scanTxns.map(t => t.receiptId?.toString()).filter(Boolean));
+      const receiptIds = new Set(scanTxns.map(t => t.receiptId.toString()).filter(Boolean));
 
-      // Count point transactions from receipt scans (pre-credit era)
-      const pointTxns = await ctx.db
-        .query("pointTransactions")
+      // Count points transactions from receipt scans (pre-credit era)
+      const pointsTxns = await ctx.db
+        .query("pointsTransactions")
         .withIndex("by_user", q => q.eq("userId", userId))
         .collect();
 
-      for (const pt of pointTxns) {
+      for (const pt of pointsTxns) {
         if (pt.source === "receipt_scan" && pt.receiptId) {
           const rid = pt.receiptId.toString();
           if (!receiptIds.has(rid)) {

@@ -159,7 +159,7 @@ export const adminTables = {
     adminUserId: v.id("users"),
     name: v.string(),
     tab: v.string(), // "users" | "receipts"
-    filterData: v.any(), // JSON serialized filter state
+    filterData: v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null())), // JSON serialized filter state
     createdAt: v.number(),
   })
     .index("by_admin_tab", ["adminUserId", "tab"]),

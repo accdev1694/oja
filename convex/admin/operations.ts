@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { mutation, query, action, internalMutation } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { 
@@ -78,14 +79,22 @@ export const runScheduledReports = internalMutation({
 
     if (activeConfigs.length === 0) return { status: "no_active_configs" };
 
-    let reportData: Record<string, unknown> = {};
+    let reportData: Record<string, string | number | boolean | null> = {};
     if (args.type === "weekly_summary") {
       // @ts-ignore
-      reportData = await ctx.runQuery(api.admin.getAnalytics, {});
+      const raw = await ctx.runQuery(api.admin.getAnalytics, {});
+      reportData = raw as Record<string, string | number | boolean | null>;
     } else {
       // @ts-ignore
-      reportData = await ctx.runQuery(api.admin.getRevenueReport, {});
+      const raw = await ctx.runQuery(api.admin.getRevenueReport, {});
+      reportData = raw as Record<string, string | number | boolean | null>;
     }
+
+    // Find an admin user to attribute system-generated logs to
+    const systemAdmin = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("isAdmin"), true))
+      .first();
 
     for (const config of activeConfigs) {
       await ctx.db.insert("reportHistory", {
@@ -97,14 +106,16 @@ export const runScheduledReports = internalMutation({
 
       await ctx.db.patch(config._id, { lastRunAt: Date.now() });
 
-      await ctx.db.insert("adminLogs", {
-        adminUserId: config.recipientEmails[0] as unknown as typeof config._id,
-        action: "report_generated",
-        targetType: "report",
-        targetId: config._id,
-        details: `Generated ${args.type} for ${config.recipientEmails.join(", ")}`,
-        createdAt: Date.now(),
-      });
+      if (systemAdmin) {
+        await ctx.db.insert("adminLogs", {
+          adminUserId: systemAdmin._id,
+          action: "report_generated",
+          targetType: "report",
+          targetId: config._id,
+          details: `Generated ${args.type} for ${config.recipientEmails.join(", ")}`,
+          createdAt: Date.now(),
+        });
+      }
     }
 
     return { status: "success", count: activeConfigs.length };
@@ -195,7 +206,7 @@ export const getSystemHealth = query({
 });
 
 export const getAuditLogs = query({
-  args: { paginationOpts: v.any(), refreshKey: v.optional(v.string()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
+  args: { paginationOpts: paginationOptsValidator, refreshKey: v.optional(v.string()), dateFrom: v.optional(v.number()), dateTo: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_audit_logs");
     

@@ -36,7 +36,7 @@ export function useUserSubscription() {
   }, [tier]);
 
   const pointsToNextTier = useMemo(() => {
-    return pointsBalance?.pointsToNextTier ?? 0;
+    return pointsBalance?.nextTierInfo?.scansToNextTier ?? 0;
   }, [pointsBalance]);
 
   const isLoading = pointsBalance === undefined || subscription === undefined;

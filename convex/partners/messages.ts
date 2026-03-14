@@ -17,6 +17,7 @@ export const addListMessage = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+
     const list = await ctx.db.get(args.listId);
     if (!list) throw new Error("List not found");
 
@@ -32,10 +33,10 @@ export const addListMessage = mutation({
     });
 
     // Notify owner + all accepted partners (except sender)
-    const notifyUserIds: Set<string> = new Set();
+    const notifyUserIds = [];
 
-    if (list.userId.toString() !== user._id.toString()) {
-      notifyUserIds.add(list.userId.toString());
+    if (list.userId !== user._id) {
+      notifyUserIds.push(list.userId);
     }
 
     const partners = await ctx.db
@@ -43,8 +44,8 @@ export const addListMessage = mutation({
       .withIndex("by_list", q => q.eq("listId", args.listId))
       .collect();
     for (const p of partners) {
-      if (p.status === "accepted" && p.userId.toString() !== user._id.toString()) {
-        notifyUserIds.add(p.userId.toString());
+      if (p.status === "accepted" && p.userId !== user._id) {
+        notifyUserIds.push(p.userId);
       }
     }
 

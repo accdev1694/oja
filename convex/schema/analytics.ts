@@ -53,7 +53,7 @@ export const analyticsTables = {
   funnelEvents: defineTable({
     userId: v.id("users"),
     eventName: v.string(), // signup, onboarding_complete, first_list, first_receipt, first_scan, subscribed
-    eventData: v.optional(v.any()), // Additional context
+    eventData: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))), // Additional context
     createdAt: v.number(),
   })
     .index("by_user", ["userId"])
@@ -91,7 +91,7 @@ export const analyticsTables = {
     segment: v.string(), // power_user, at_risk, dormant, new_user, trial_ending, churned
     assignedAt: v.number(),
     expiresAt: v.optional(v.number()), // For time-limited segments like trial_ending
-    metadata: v.optional(v.any()), // Additional segment data
+    metadata: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))), // Additional segment data
   })
     .index("by_user", ["userId"])
     .index("by_segment", ["segment"])
@@ -101,7 +101,7 @@ export const analyticsTables = {
   activityEvents: defineTable({
     userId: v.id("users"),
     eventType: v.string(), // login, create_list, scan_receipt, subscribe, etc.
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))),
     timestamp: v.number(),
   })
     .index("by_user_timestamp", ["userId", "timestamp"])

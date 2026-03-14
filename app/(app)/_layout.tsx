@@ -169,7 +169,7 @@ const PersistentTabBar = React.memo(function PersistentTabBar() {
   const stockBadge = React.useMemo(() => {
     if (!pantryItems) return 0;
     return pantryItems.filter(
-      item => item.stockLevel === "low" || item.stockLevel === "out"
+      (item: { stockLevel: "stocked" | "low" | "out" | "good" | "half" }) => item.stockLevel === "low" || item.stockLevel === "out"
     ).length;
   }, [pantryItems]);
 
@@ -178,7 +178,7 @@ const PersistentTabBar = React.memo(function PersistentTabBar() {
 
   const handleTabPress = React.useCallback(
     (tabName: string) => {
-      router.navigate(TAB_ROUTES[tabName]);
+      router.navigate(TAB_ROUTES[tabName] as never);
     },
     [router]
   );

@@ -212,13 +212,25 @@ export function AddItemsModal({
   // Map variant results to VariantOption[]
   const variantOptions: VariantOption[] = useMemo(() => {
     if (!variantResult?.sizes) return [];
-    return variantResult.sizes.map((s) => ({
+    return variantResult.sizes.map((s: {
+      size: string;
+      unitLabel: string;
+      sizeNormalized?: string;
+      price: number | null;
+      source?: string;
+      isUsual?: boolean;
+      displayLabel?: string;
+      pricePerUnit?: number | null;
+      brand?: string;
+      productName?: string;
+      confidence?: number;
+    }) => ({
       variantName: formatItemDisplay(selectedSuggestion?.name ?? "", s.size, s.unitLabel.replace("/", "")),
       size: s.sizeNormalized || s.size,
       unit: s.unitLabel.replace("/", ""),
       price: s.price,
       priceSource: s.source as "personal" | "crowdsourced" | "ai_estimate",
-      isUsual: s.isUsual,
+      isUsual: s.isUsual ?? false,
       displayLabel: s.displayLabel,
     }));
   }, [variantResult, selectedSuggestion]);
@@ -296,7 +308,7 @@ export function AddItemsModal({
 
   const altSuggestions = useMemo(() => {
     if (!selectedSuggestion || suggestions.length <= 1) return [];
-    return suggestions.filter((s) => s.name !== selectedSuggestion.name).slice(0, 5);
+    return suggestions.filter((s: ItemSuggestion) => s.name !== selectedSuggestion.name).slice(0, 5);
   }, [suggestions, selectedSuggestion]);
 
   // ── Reset helper ───────────────────────────────────────────────────────────
@@ -335,17 +347,17 @@ export function AddItemsModal({
     async (item: SelectedItem, force = false) => {
       setIsAdding(true);
       try {
-        let result: { status: string; existingName?: string; existingQuantity?: number } | undefined;
+        let result;
 
         if (listStatus === "shopping") {
-          result = (await addItemMidShop({
+          result = await addItemMidShop({
             listId,
             name: item.name,
             actualPrice: item.estimatedPrice,
             quantity: item.quantity,
             storeId: item.storeId,
             storeName: item.storeName,
-          })) as typeof result;
+          });
         } else if (!item.category && !item.pantryItemId) {
           result = await addAndSeedPantry({
             listId,
@@ -356,7 +368,7 @@ export function AddItemsModal({
             estimatedPrice: item.estimatedPrice,
             quantity: item.quantity,
             force,
-          }) as typeof result;
+          });
         } else {
           result = await createItem({
             listId,
@@ -368,13 +380,13 @@ export function AddItemsModal({
             estimatedPrice: item.estimatedPrice,
             ...(item.pantryItemId ? { pantryItemId: item.pantryItemId } : {}),
             force,
-          }) as typeof result;
+          });
         }
 
         if (result && typeof result === "object" && "status" in result && result.status === "duplicate") {
           const existingItemId = (result as Record<string, unknown>).existingItemId as Id<"listItems"> | undefined;
-          const existingName = result.existingName ?? item.name;
-          const existingQty = result.existingQuantity ?? 1;
+          const existingName = (result as Record<string, unknown>).existingName as string | undefined ?? item.name;
+          const existingQty = (result as Record<string, unknown>).existingQuantity as number | undefined ?? 1;
           const existingSize = (result as Record<string, unknown>).existingSize as string | undefined;
           const isChecked = (result as Record<string, unknown>).isChecked as boolean | undefined;
           const sizeLabel = existingSize ? ` (${existingSize})` : "";

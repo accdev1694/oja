@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "../_generated/server";
+import { GenericMutationCtx } from "convex/server";
+import { DataModel, Id } from "../_generated/dataModel";
 import { requireUser, optionalUser } from "./helpers";
 
 export const STORE_ACHIEVEMENTS = {
@@ -61,7 +63,7 @@ export const STORE_ACHIEVEMENTS = {
   },
 } as const;
 
-export async function processUnlockAchievement(ctx: { db: { query: Function; insert: Function } }, userId: string, achievement: { type: string; title: string; description: string; icon: string }) {
+export async function processUnlockAchievement(ctx: GenericMutationCtx<DataModel>, userId: Id<"users">, achievement: { type: string; title: string; description: string; icon: string }) {
   const existing = await ctx.db
     .query("achievements")
     .withIndex("by_user_type", q =>

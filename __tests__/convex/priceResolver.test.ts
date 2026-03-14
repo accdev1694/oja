@@ -1,7 +1,20 @@
 import { resolvePrice, resolveVariantWithPrice } from "../../convex/lib/priceResolver";
+import type { Id } from "../../convex/_generated/dataModel";
+import type { QueryCtx } from "../../convex/_generated/server";
+
+interface MockDb {
+  get: jest.Mock;
+  query: jest.Mock;
+  withIndex: jest.Mock;
+  collect: jest.Mock;
+}
+
+interface MockCtx {
+  db: MockDb;
+}
 
 describe("Price Resolver", () => {
-  let mockCtx: any;
+  let mockCtx: MockCtx;
 
   beforeEach(() => {
     mockCtx = {
@@ -28,13 +41,13 @@ describe("Price Resolver", () => {
       ]);
 
       const result = await resolvePrice(
-        mockCtx,
+        mockCtx as unknown as QueryCtx,
         "milk",
         "500ml",
         "ml",
         "Milk",
         "tesco",
-        "user123" as any,
+        "user123" as unknown as Id<"users">,
         undefined
       );
 
@@ -70,13 +83,13 @@ describe("Price Resolver", () => {
       mockCtx.db.get.mockResolvedValueOnce({ country: "UK" }); // User region
 
       const result = await resolvePrice(
-        mockCtx,
+        mockCtx as unknown as QueryCtx,
         "milk",
         "500ml",
         "ml",
         "Milk",
         "tesco",
-        "user123" as any,
+        "user123" as unknown as Id<"users">,
         undefined
       );
 
@@ -101,13 +114,13 @@ describe("Price Resolver", () => {
       mockCtx.db.collect.mockResolvedValueOnce([]);
 
       const result = await resolvePrice(
-        mockCtx,
+        mockCtx as unknown as QueryCtx,
         "milk",
         "500ml",
         "ml",
         "Milk",
         "tesco",
-        "user123" as any,
+        "user123" as unknown as Id<"users">,
         undefined
       );
 
@@ -121,13 +134,13 @@ describe("Price Resolver", () => {
       mockCtx.db.collect.mockResolvedValue([]);
 
       const result = await resolvePrice(
-        mockCtx,
+        mockCtx as unknown as QueryCtx,
         "milk",
         "500ml",
         "ml",
         "Milk",
         "tesco",
-        "user123" as any,
+        "user123" as unknown as Id<"users">,
         1.5
       );
 
@@ -156,10 +169,10 @@ describe("Price Resolver", () => {
       mockCtx.db.collect.mockResolvedValue([]);
 
       const result = await resolveVariantWithPrice(
-        mockCtx,
+        mockCtx as unknown as QueryCtx,
         "milk",
         "tesco",
-        "user123" as any
+        "user123" as unknown as Id<"users">
       );
 
       expect(result).toBeDefined();
@@ -172,10 +185,10 @@ describe("Price Resolver", () => {
       mockCtx.db.collect.mockResolvedValueOnce([]); // No variants
 
       const result = await resolveVariantWithPrice(
-        mockCtx,
+        mockCtx as unknown as QueryCtx,
         "unknown",
         "tesco",
-        "user123" as any
+        "user123" as unknown as Id<"users">
       );
 
       expect(result).toBeNull();

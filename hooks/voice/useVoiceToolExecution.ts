@@ -9,7 +9,7 @@ import { useCallback, useRef } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
-import type { VoiceAssistantState } from "@/lib/voice/voiceTypes";
+import type { VoiceAssistantState, PendingAction } from "@/lib/voice/voiceTypes";
 import type { ConversationMessage } from "@/lib/voice/voiceTypes";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -76,7 +76,7 @@ export function useVoiceToolExecution(
           ...s,
           isProcessing: false,
           response: result.text,
-          pendingAction: result.pendingAction || null,
+          pendingAction: (result.pendingAction as PendingAction | null) || null,
           conversationHistory: [...opts.historyRef.current],
         }));
 

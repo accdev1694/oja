@@ -1,5 +1,15 @@
+interface ReceiptItem {
+  name: string;
+  category?: string;
+  totalPrice: number;
+}
+
+interface TestReceipt {
+  items?: ReceiptItem[];
+}
+
 describe("Insights Helpers", () => {
-  function getTopCategories(receipts: any[]) {
+  function getTopCategories(receipts: TestReceipt[]) {
     const categoryTotals: Record<string, number> = {};
     for (const receipt of receipts) {
       for (const item of receipt.items || []) {

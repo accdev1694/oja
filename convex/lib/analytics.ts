@@ -12,7 +12,7 @@ export async function trackFunnelEvent(
   ctx: GenericMutationCtx<DataModel>,
   userId: Id<"users">,
   eventName: string,
-  eventData?: Record<string, unknown>
+  eventData?: Record<string, string | number | boolean | null>
 ) {
   const now = Date.now();
   
@@ -52,7 +52,7 @@ export async function trackActivity(
   ctx: GenericMutationCtx<DataModel>,
   userId: Id<"users">,
   eventType: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, string | number | boolean | null>
 ) {
   const now = Date.now();
   

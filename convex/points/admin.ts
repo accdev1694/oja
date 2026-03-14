@@ -21,7 +21,7 @@ export const expireOldPoints = internalMutation({
     const earnTransactions = oldTransactions.filter(tx => tx.type === "earn" || tx.type === "bonus");
 
     // Group by userId and sum points
-    const expiryMap = new Map<string, number>();
+    const expiryMap = new Map();
     for (const tx of earnTransactions) {
       const current = expiryMap.get(tx.userId) || 0;
       expiryMap.set(tx.userId, current + tx.amount);

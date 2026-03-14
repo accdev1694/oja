@@ -148,7 +148,7 @@ export const sendNurtureMessage = internalMutation({
       type: "nurture",
       title,
       body,
-      data: { messageKey, screen },
+      data: { messageKey, ...(screen ? { screen } : {}) },
       read: false,
       createdAt: Date.now(),
     });
@@ -158,7 +158,7 @@ export const sendNurtureMessage = internalMutation({
       userId,
       title,
       body,
-      data: { type: "nurture", messageKey, screen },
+      data: { type: "nurture", messageKey, ...(screen ? { screen } : {}) },
     });
 
     // Record that we sent it

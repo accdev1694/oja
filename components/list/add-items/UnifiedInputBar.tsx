@@ -3,6 +3,7 @@ import { View, Text, Pressable, TextInput, ActivityIndicator } from "react-nativ
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { GlassInput, colors } from "@/components/ui/glass";
 import { styles } from "./styles";
+import type { ItemSuggestion } from "@/hooks/useItemSuggestions";
 
 interface UnifiedInputBarProps {
   activeView: "search" | "pantry";
@@ -26,7 +27,7 @@ interface UnifiedInputBarProps {
   priceInputRef: React.RefObject<TextInput | null>;
   onFieldSubmit: () => void;
   priceEstimate?: { cheapest?: { price: number } } | null;
-  selectedSuggestion: { name: string; category?: string; size?: string; unit?: string; price?: number; [key: string]: unknown } | null;
+  selectedSuggestion: ItemSuggestion | null;
 }
 
 export const UnifiedInputBar = ({

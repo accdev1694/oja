@@ -1,7 +1,16 @@
 import { api } from "../../_generated/api";
 import type { ActionCtx } from "../../_generated/server";
-import type { Id } from "../../_generated/dataModel";
+import type { Id, Doc } from "../../_generated/dataModel";
+import type { SizeVariant } from "./types";
 import { cleanItemForStorage } from "../itemNameParser";
+
+/** Enriched shopping list returned by getActive (includes computed fields) */
+type EnrichedShoppingList = Doc<"shoppingLists"> & {
+  itemCount: number;
+  checkedCount: number;
+  totalEstimatedCost: number | undefined;
+  isInProgress: boolean;
+};
 
 /**
  * Voice Assistant WRITE Tools - Shopping List Operations
@@ -42,11 +51,11 @@ export async function executeListWriteTool(
 
     case "add_items_to_list": {
       let targetListId = (args.listId as string) as Id<"shoppingLists"> | undefined;
-      let targetList: Record<string, unknown> | null = null;
+      let targetList: EnrichedShoppingList | null = null;
 
       if (!targetListId && (args.listName as string)) {
         const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-        const match = lists.find((l) =>
+        const match = lists.find((l: EnrichedShoppingList) =>
           l.name.toLowerCase().includes((args.listName as string).toLowerCase())
         );
         if (match) {
@@ -66,7 +75,7 @@ export async function executeListWriteTool(
           return {
             success: false,
             error: "Multiple lists found. Please specify which list.",
-            availableLists: lists.map((l) => l.name),
+            availableLists: lists.map((l: EnrichedShoppingList) => l.name),
           };
         }
       }
@@ -90,7 +99,7 @@ export async function executeListWriteTool(
 
             if (sizeData && sizeData.defaultSize) {
               size = sizeData.defaultSize;
-              const sizeInfo = sizeData.sizes.find((s) => s.size === size);
+              const sizeInfo = sizeData.sizes.find((s: SizeVariant) => s.size === size);
               if (sizeInfo) {
                 estimatedPrice = sizeInfo.price ?? undefined;
                 priceSource = sizeInfo.source as "personal" | "crowdsourced" | "ai" | "manual";
@@ -112,7 +121,7 @@ export async function executeListWriteTool(
 
             if (sizeData && sizeData.sizes.length > 0) {
               const normalizedInputSize = size.toLowerCase().replace(/\s+/g, "");
-              const sizeInfo = sizeData.sizes.find((s) => {
+              const sizeInfo = sizeData.sizes.find((s: SizeVariant) => {
                 const normalizedSize = s.size?.toLowerCase().replace(/\s+/g, "") || "";
                 const normalizedDisplay = s.sizeNormalized?.toLowerCase().replace(/\s+/g, "") || "";
                 return normalizedSize === normalizedInputSize || normalizedDisplay === normalizedInputSize;
@@ -175,7 +184,7 @@ export async function executeListWriteTool(
       } else if (addedItems.length === 2) {
         message = `Added ${formatItemMessage(addedItems[0])} and ${formatItemMessage(addedItems[1])}`;
       } else {
-        const itemNames = addedItems.map((i) => i.name);
+        const itemNames = addedItems.map((i: { name: string; quantity: number; size?: string; price?: number }) => i.name);
         message = `Added ${itemNames.slice(0, -1).join(", ")} and ${itemNames[itemNames.length - 1]} to your list`;
       }
 
@@ -189,16 +198,16 @@ export async function executeListWriteTool(
 
     case "update_list_budget": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      let targetList: Record<string, unknown> | null = null;
+      let targetList: EnrichedShoppingList | undefined = undefined;
 
       if ((args.listName as string)) {
-        targetList = lists.find((l) =>
+        targetList = lists.find((l: EnrichedShoppingList) =>
           l.name.toLowerCase().includes((args.listName as string).toLowerCase())
         );
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-        targetList = lists.find((l) => l.isInProgress) || lists[0];
+        targetList = lists.find((l: EnrichedShoppingList) => l.isInProgress) || lists[0];
       }
 
       if (!targetList) {
@@ -220,7 +229,7 @@ export async function executeListWriteTool(
 
     case "delete_list": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      const targetList = lists.find((l) =>
+      const targetList = lists.find((l: EnrichedShoppingList) =>
         l.name.toLowerCase().includes((args.listName as string).toLowerCase())
       );
 
@@ -253,16 +262,16 @@ export async function executeListWriteTool(
 
     case "remove_list_item": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      let targetList: Record<string, unknown> | null = null;
+      let targetList: EnrichedShoppingList | undefined = undefined;
 
       if ((args.listName as string)) {
-        targetList = lists.find((l) =>
+        targetList = lists.find((l: EnrichedShoppingList) =>
           l.name.toLowerCase().includes((args.listName as string).toLowerCase())
         );
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-        targetList = lists.find((l) => l.isInProgress) || lists[0];
+        targetList = lists.find((l: EnrichedShoppingList) => l.isInProgress) || lists[0];
       }
 
       if (!targetList) {
@@ -273,7 +282,7 @@ export async function executeListWriteTool(
         listId: targetList._id,
       });
 
-      const itemToRemove = listItems.find((i) =>
+      const itemToRemove = listItems.find((i: Doc<"listItems">) =>
         i.name.toLowerCase().includes((args.itemName as string).toLowerCase())
       );
 
@@ -291,16 +300,16 @@ export async function executeListWriteTool(
 
     case "clear_checked_items": {
       const lists = await ctx.runQuery(api.shoppingLists.getActive, {});
-      let targetList: Record<string, unknown> | null = null;
+      let targetList: EnrichedShoppingList | undefined = undefined;
 
       if ((args.listName as string)) {
-        targetList = lists.find((l) =>
+        targetList = lists.find((l: EnrichedShoppingList) =>
           l.name.toLowerCase().includes((args.listName as string).toLowerCase())
         );
       } else if (lists.length === 1) {
         targetList = lists[0];
       } else if (lists.length > 1) {
-        targetList = lists.find((l) => l.isInProgress) || lists[0];
+        targetList = lists.find((l: EnrichedShoppingList) => l.isInProgress) || lists[0];
       }
 
       if (!targetList) {
@@ -311,7 +320,7 @@ export async function executeListWriteTool(
         listId: targetList._id,
       });
 
-      const checkedItems = listItems.filter((i) => i.isChecked);
+      const checkedItems = listItems.filter((i: Doc<"listItems">) => i.isChecked);
 
       if (checkedItems.length === 0) {
         return { success: true, message: "No checked items to clear." };
@@ -334,7 +343,7 @@ export async function executeListWriteTool(
 
       let targetList = lists[0];
       if ((args.listName as string)) {
-        const match = lists.find((l) => l.name.toLowerCase().includes(((args.listName as string) as string).toLowerCase()));
+        const match = lists.find((l: EnrichedShoppingList) => l.name.toLowerCase().includes((args.listName as string).toLowerCase()));
         if (match) targetList = match;
       }
 

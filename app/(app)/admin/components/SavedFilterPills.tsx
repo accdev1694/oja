@@ -8,21 +8,21 @@ import * as Haptics from "expo-haptics";
 import type { Id } from "@/convex/_generated/dataModel";
 
 // Discriminated union for filter data
-type UserFilterData = {
+export type UserFilterData = {
   type: "users";
   searchQuery?: string;
   statusFilter?: string;
   planFilter?: string;
 };
 
-type ReceiptFilterData = {
+export type ReceiptFilterData = {
   type: "receipts";
   storeFilter?: string;
   statusFilter?: string;
   dateRange?: { from: number; to: number };
 };
 
-type FilterData = UserFilterData | ReceiptFilterData;
+export type FilterData = UserFilterData | ReceiptFilterData;
 
 interface SavedFilter {
   _id: string;

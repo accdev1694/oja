@@ -17,7 +17,7 @@ export const getSavedFilters = query({
 });
 
 export const saveFilter = mutation({
-  args: { name: v.string(), tab: v.string(), filterData: v.any() },
+  args: { name: v.string(), tab: v.string(), filterData: v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null())) },
   handler: async (ctx, args) => {
     const admin = await requirePermission(ctx, "view_analytics");
     

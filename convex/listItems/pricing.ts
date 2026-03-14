@@ -1,9 +1,11 @@
 import { v } from "convex/values";
 import { mutation } from "../_generated/server";
 import { api } from "../_generated/api";
-import { 
-  requireUser, 
-  recalculateListTotal, 
+import {
+  requireUser,
+  recalculateListTotal,
+  QueryCtx,
+  MutationCtx,
 } from "./helpers";
 import { getUserListPermissions } from "../partners";
 import { isDuplicateItemName } from "../lib/fuzzyMatch";
@@ -17,7 +19,7 @@ import { Id } from "../_generated/dataModel";
  * Helper to get price estimate from currentPrices table
  */
 export async function getPriceFromCurrentPrices(
-  ctx: { db },
+  ctx: QueryCtx | MutationCtx,
   itemName: string
 ): Promise<number | undefined> {
   const normalizedName = itemName.toLowerCase().trim();
@@ -53,7 +55,7 @@ export const refreshListPrices = mutation({
       if (item.isChecked || item.priceOverride) continue;
 
       let newPrice: number | undefined;
-      let newSource;
+      let newSource: "personal" | "crowdsourced" | "ai" | "manual" | undefined;
       let newConfidence: number | undefined;
 
       if (normalizedStoreId) {

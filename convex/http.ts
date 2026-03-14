@@ -25,7 +25,7 @@ const stripeHandler = httpAction(async (ctx, request) => {
   // Verify webhook signature
   const Stripe = (await import("stripe")).default;
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2025-04-30.basil" as const,
+    apiVersion: "2026-01-28.clover" as const,
   });
 
   let event;
@@ -55,7 +55,7 @@ const stripeHandler = httpAction(async (ctx, request) => {
       await ctx.runAction(api.stripe.processWebhookEvent, {
         eventId: event.id,
         eventType: event.type,
-        data: event.data.object,
+        data: JSON.stringify(event.data.object),
       });
     } catch (err: unknown) {
       console.error("Error processing webhook:", err);
@@ -159,7 +159,7 @@ const clerkHandler = httpAction(async (ctx, request) => {
 
       await ctx.runAction(api.users.handleClerkWebhook, {
         type: payload.type,
-        data: payload.data,
+        data: JSON.stringify(payload.data),
       });
 
       await ctx.runMutation(internal.stripe.markWebhookComplete, {

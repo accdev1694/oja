@@ -77,7 +77,7 @@ export default function CreateListFromReceiptScreen() {
   const validReceipts = useMemo(() => {
     if (!receipts) return [];
     return receipts.filter(
-      (r) => r.processingStatus === "completed" && r.items && r.items.length > 0
+      (r: { processingStatus: string; items?: unknown[] }) => r.processingStatus === "completed" && r.items && r.items.length > 0
     ) as Receipt[];
   }, [receipts]);
 

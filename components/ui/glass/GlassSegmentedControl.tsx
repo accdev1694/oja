@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useRef, useEffect } from "react";
-import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle, type TextStyle } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -102,7 +102,7 @@ export function GlassSegmentedControl({
         const isActive = activeIndex === i;
         const colorStyle = {
           color: isActive ? activeColor : colors.text.tertiary,
-          fontWeight: (isActive ? "700" : "600"),
+          fontWeight: (isActive ? "700" : "600") as TextStyle["fontWeight"],
         };
 
         return (

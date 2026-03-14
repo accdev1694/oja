@@ -1,6 +1,7 @@
 import React from "react";
 import { View } from "react-native";
 import { Id } from "@/convex/_generated/dataModel";
+import { type StockLevel } from "@/components/pantry";
 import {
   SwipeOnboardingOverlay,
   AddedToListToast,
@@ -20,11 +21,6 @@ interface AddToListItem {
   lastPrice?: number;
 }
 
-interface ActiveList {
-  _id: Id<"shoppingLists">;
-  name: string;
-}
-
 interface StockModalsAndOverlaysProps {
   toastVisible: boolean;
   toastItemName: string;
@@ -37,7 +33,7 @@ interface StockModalsAndOverlaysProps {
   addModalVisible: boolean;
   onCloseAddModal: () => void;
   addToListItem: AddToListItem | null;
-  activeLists: ActiveList[] | undefined;
+  activeLists: Array<{ _id: Id<"shoppingLists">; name: string; status: string }> | undefined;
   onPickList: (listId: Id<"shoppingLists">) => void;
   onCloseListPicker: () => void;
   showGestureOnboarding: boolean;
@@ -70,6 +66,12 @@ export const StockModalsAndOverlays = React.memo(function StockModalsAndOverlays
   lowHint,
   itemRef,
 }: StockModalsAndOverlaysProps) {
+  // Convert Record<string, boolean> to Set<StockLevel> for StockFilterModal
+  const filterSet = new Set<StockLevel>(
+    (Object.entries(stockFilters)
+      .filter(([, isActive]) => isActive)
+      .map(([key]) => key) as StockLevel[])
+  );
   return (
     <>
       {/* Added-to-list Toast */}
@@ -81,8 +83,8 @@ export const StockModalsAndOverlays = React.memo(function StockModalsAndOverlays
       <StockFilterModal
         visible={filterVisible}
         onClose={onCloseFilter}
-        stockFilters={stockFilters}
-        onToggleFilter={onToggleFilter}
+        stockFilters={filterSet}
+        onToggleFilter={(level) => onToggleFilter(level)}
         onShowAll={onShowAll}
       />
 

@@ -91,9 +91,9 @@ export function PointsTab({ hasPermission }: PointsTabProps) {
         {Object.entries(econ.earnDistribution).length === 0 ? (
           <Text style={styles.emptyText}>No transactions in the last 30 days</Text>
         ) : (
-          Object.entries(econ.earnDistribution)
+          (Object.entries(econ.earnDistribution) as [string, number][])
             .sort((a, b) => b[1] - a[1])
-            .map(([source, amount]: [string, any]) => (
+            .map(([source, amount]) => (
               <View key={source} style={styles.distributionRow}>
                 <View style={styles.sourceInfo}>
                   <Text style={styles.sourceName}>{source.replace(/_/g, " ")}</Text>

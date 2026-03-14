@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from "react-native";
+import { Doc } from "@/convex/_generated/dataModel";
 
 import {
   GlassCard,
@@ -18,6 +19,19 @@ export function SettingsSection({
   handleResetHints,
   hintsRef,
   animationDelay,
+}: {
+  convexUser: Doc<"users"> | null | undefined;
+  updateNotificationSettings: (args: {
+    notifications?: boolean;
+    stockReminders?: boolean;
+    nurtureMessages?: boolean;
+    quietHours?: { enabled: boolean; start: string; end: string };
+  }) => void;
+  updateUser: (args: { showTutorialHints: boolean }) => void;
+  setHintsEnabled: (enabled: boolean) => void;
+  handleResetHints: () => void;
+  hintsRef: React.RefObject<View | null>;
+  animationDelay: number;
 }) {
   return (
     <AnimatedSection animation="fadeInDown" duration={400} delay={animationDelay}>

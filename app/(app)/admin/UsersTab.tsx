@@ -24,6 +24,7 @@ import { ActivityTimeline } from "./ActivityTimeline";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAdminToast, useResponsive } from "./hooks";
 import { SavedFilterPills } from "./components/SavedFilterPills";
+import type { FilterData } from "./components/SavedFilterPills";
 
 interface UsersTabProps {
   /** Permission check function */
@@ -114,8 +115,10 @@ export function UsersTab({
 
   // --- Handlers ---
 
-  const handleApplyPreset = useCallback(data => {
-    if (data.search !== undefined) setSearch(data.search);
+  const handleApplyPreset = useCallback((filterData: FilterData) => {
+    if (filterData.type === "users" && filterData.searchQuery !== undefined) {
+      setSearch(filterData.searchQuery);
+    }
     showToast("Preset applied", "info");
   }, [showToast]);
 

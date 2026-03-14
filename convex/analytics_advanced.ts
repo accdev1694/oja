@@ -1,5 +1,5 @@
 import { internalMutation } from "./_generated/server";
-import { Id, DataModel } from "./_generated/dataModel";
+import { Id, Doc, DataModel } from "./_generated/dataModel";
 import { GenericMutationCtx } from "convex/server";
 
 type MutationCtx = GenericMutationCtx<DataModel>;
@@ -226,7 +226,7 @@ export async function computeRevenueMetricsInternal(ctx: MutationCtx) {
   const monthlyPrice = pricing.find(p => p.planId === "premium_monthly" && p.isActive)?.priceAmount || 0;
   const annualPrice = pricing.find(p => p.planId === "premium_annual" && p.isActive)?.priceAmount || 0;
   
-  const getMrr = sub => {
+  const getMrr = (sub: Doc<"subscriptions">) => {
     if (sub.status !== "active") return 0;
     if (sub.plan === "premium_monthly") return monthlyPrice;
     if (sub.plan === "premium_annual") return annualPrice / 12;

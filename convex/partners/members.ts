@@ -44,6 +44,7 @@ export const removePartner = mutation({
   args: { partnerId: v.id("listPartners") },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+
     const partner = await ctx.db.get(args.partnerId);
     if (!partner) throw new Error("Partner not found");
 

@@ -8,6 +8,8 @@ import {
   colors,
 } from "@/components/ui/glass";
 
+import { Doc } from "@/convex/_generated/dataModel";
+
 import { stockStyles as styles, getGreeting } from "@/components/stock/stockStyles";
 import { StockLoadingSkeleton, StockEmptyPantry } from "@/components/stock/StockEmptyStates";
 import { StockSectionList } from "@/components/stock/StockSectionList";
@@ -116,10 +118,15 @@ export default function PantryScreen() {
           <StockBanners
             pageAnimationKey={pageAnimationKey}
             dedupDismissed={dedupDismissed}
-            duplicateGroups={duplicateGroups}
+            duplicateGroups={
+              duplicateGroups?.map((allItemsInGroup: Doc<"pantryItems">[]) => ({
+                canonical: allItemsInGroup[0].name,
+                items: allItemsInGroup.map((eachItem: Doc<"pantryItems">) => eachItem._id),
+              }))
+            }
             onMergeDuplicates={handleMergeDuplicates}
             attentionCount={attentionCount}
-            items={items}
+            items={items ? [{ length: items.length }] : []}
             capsuleActiveIndex={capsuleActiveIndex}
             onViewModeSwitch={handleViewModeSwitch}
             tabsRef={tabsRef}
@@ -154,14 +161,25 @@ export default function PantryScreen() {
           flyStartPosition={flyStartPosition}
           filterVisible={filterVisible}
           onCloseFilter={handleCloseFilter}
-          stockFilters={stockFilters}
-          onToggleFilter={toggleStockFilter}
+          stockFilters={Object.fromEntries(
+            (["low", "stocked", "out"] as const).map((levelName) => [levelName, stockFilters.has(levelName)])
+          )}
+          onToggleFilter={(filterKey) => {
+            if (filterKey === "low" || filterKey === "stocked" || filterKey === "out") {
+              toggleStockFilter(filterKey);
+            }
+          }}
           onShowAll={showAllFilters}
           addModalVisible={addModalVisible}
           onCloseAddModal={handleCloseAddModal}
           addToListItem={addToListItem}
           activeLists={activeLists}
-          onPickList={handlePickList}
+          onPickList={(listId) => {
+            const list = activeLists?.find((foundList: Doc<"shoppingLists">) => foundList._id === listId);
+            if (addToListItem && list) {
+              handlePickList(listId, list.name, addToListItem.name, addToListItem.lastPrice);
+            }
+          }}
           onCloseListPicker={handleCloseListPicker}
           showGestureOnboarding={showGestureOnboarding}
           onDismissGesture={dismissGestureOnboarding}

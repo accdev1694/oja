@@ -5,11 +5,12 @@ import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Doc } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 import { setHintsEnabled, resetAllHints } from "@/lib/storage/hintStorage";
 import {
   GlassScreen, GlassCard, GlassButton, SimpleHeader,
-  SkeletonCard, AnimatedSection, colors, typography, spacing, useGlassAlert,
+  SkeletonCard, AnimatedSection, colors, typography, spacing, useGlassAlert, AlertButton,
 } from "@/components/ui/glass";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
@@ -30,9 +31,9 @@ export default function ProfileScreen() {
   const { user: convexUser } = useCurrentUser();
   const isSwitchingUsers = useIsSwitchingUsers();
 
-  const headerRef = useRef<View>(null);
-  const dietRef = useRef<View>(null);
-  const hintsRef = useRef<View>(null);
+  const headerRef = useRef(null);
+  const dietRef = useRef(null);
+  const hintsRef = useRef(null);
 
   const introHint = useHint("profile_intro", "delayed");
   const dietHint = useHint("profile_diet", "manual");
@@ -102,11 +103,12 @@ export default function ProfileScreen() {
     router.replace("/(auth)/sign-in");
   };
 
-  const confirmAction = (title, message, onConfirm) => {
-    alert(title, message, [
+  const confirmAction = (title: string, message: string, onConfirm: () => void | Promise<void>) => {
+    const buttons: AlertButton[] = [
       { text: "Cancel", style: "cancel" },
       { text: "Confirm", style: "destructive", onPress: onConfirm },
-    ]);
+    ];
+    alert(title, message, buttons);
   };
 
   const handleResetAccount = () => {
@@ -166,10 +168,10 @@ export default function ProfileScreen() {
   }
 
   const userDisplayName = convexUser?.name || user?.firstName || user?.username || user?.primaryEmailAddress?.emailAddress?.split("@")[0] || "Shopper";
-  const completedLists = allLists.filter((list) => list.status === "completed");
-  const outOfStockItems = pantryItems.filter((item) => item.stockLevel === "out").length;
-  const lowStockItems = pantryItems.filter((item) => item.stockLevel === "low").length;
-  const completedReceipts = receipts?.filter((r) => r.processingStatus === "completed").length ?? 0;
+  const completedLists = allLists.filter((list: Doc<"shoppingLists">) => list.status === "completed");
+  const outOfStockItems = pantryItems.filter((item: Doc<"pantryItems">) => item.stockLevel === "out").length;
+  const lowStockItems = pantryItems.filter((item: Doc<"pantryItems">) => item.stockLevel === "low").length;
+  const completedReceipts = receipts?.filter((r: Doc<"receipts">) => r.processingStatus === "completed").length ?? 0;
 
   const quickStats = [
     { value: completedLists.length, label: "trips" },

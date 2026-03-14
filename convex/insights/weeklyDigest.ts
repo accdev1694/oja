@@ -1,4 +1,5 @@
 import { query } from "../_generated/server";
+import { Doc } from "../_generated/dataModel";
 import { optionalUser } from "./helpers";
 
 /**
@@ -80,7 +81,7 @@ export const getWeeklyDigest = query({
   },
 });
 
-function getTopCategories(receipts: Awaited<ReturnType<typeof ctx.db.query<"receipts">>["collect"]>) {
+function getTopCategories(receipts: Doc<"receipts">[]) {
   const categoryTotals: Record<string, number> = {};
   for (const receipt of receipts) {
     for (const item of receipt.items || []) {
@@ -89,7 +90,7 @@ function getTopCategories(receipts: Awaited<ReturnType<typeof ctx.db.query<"rece
     }
   }
   return Object.entries(categoryTotals)
-    .sort(([, a], [, b]) => (b as number) - (a as number))
+    .sort(([, a], [, b]) => b - a)
     .slice(0, 6)
-    .map(([category, total]) => ({ category, total: Math.round((total as number) * 100) / 100 }));
+    .map(([category, total]) => ({ category, total: Math.round(total * 100) / 100 }));
 }

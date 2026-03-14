@@ -2,9 +2,9 @@ import { Platform } from "react-native";
 
 // Conditionally import expo-location only on native platforms
 // expo-location doesn't support web, so we use dynamic require
-let Location = null;
+let Location = null as unknown;
 if (Platform.OS !== "web") {
-  Location = require("expo-location");
+  Location = require("expo-location") as unknown;
 }
 
 export interface LocationData {
@@ -80,7 +80,9 @@ export async function requestLocationPermission(): Promise<boolean> {
   }
 
   try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
+    const { status } = await (Location as {
+      requestForegroundPermissionsAsync: () => Promise<{ status: string }>;
+    }).requestForegroundPermissionsAsync();
     return status === "granted";
   } catch (error) {
     console.error("Location permission request failed:", error);
@@ -116,12 +118,25 @@ export async function detectLocation(): Promise<LocationData> {
     }
 
     // Get current location
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Low, // Low accuracy is fine for country detection
+    const LocationModule = Location as {
+      getCurrentPositionAsync: (options: {
+        accuracy: number;
+      }) => Promise<{
+        coords: { latitude: number; longitude: number };
+      }>;
+      reverseGeocodeAsync: (coords: {
+        latitude: number;
+        longitude: number;
+      }) => Promise<Array<{ isoCountryCode?: string }>>;
+      Accuracy: { Low: number };
+    };
+
+    const location = await LocationModule.getCurrentPositionAsync({
+      accuracy: LocationModule.Accuracy.Low, // Low accuracy is fine for country detection
     });
 
     // Reverse geocode to get country
-    const [geocode] = await Location.reverseGeocodeAsync({
+    const [geocode] = await LocationModule.reverseGeocodeAsync({
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
     });

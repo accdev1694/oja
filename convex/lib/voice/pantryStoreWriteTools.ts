@@ -1,5 +1,7 @@
 import { api } from "../../_generated/api";
 import type { ActionCtx } from "../../_generated/server";
+import type { Doc } from "../../_generated/dataModel";
+import type { StoreInfo } from "./types";
 
 /**
  * Voice Assistant WRITE Tools - Pantry & Store Operations
@@ -15,7 +17,7 @@ export async function executePantryStoreWriteTool(
   switch (functionName) {
     case "update_stock_level": {
       const items = await ctx.runQuery(api.pantryItems.getByUser, {});
-      const match = items.find((i) =>
+      const match = items.find((i: Doc<"pantryItems">) =>
         i.name.toLowerCase().includes((args.itemName as string).toLowerCase())
       );
 
@@ -65,7 +67,7 @@ export async function executePantryStoreWriteTool(
 
     case "remove_pantry_item": {
       const items = await ctx.runQuery(api.pantryItems.getByUser, {});
-      const itemToRemove = items.find((i) =>
+      const itemToRemove = items.find((i: Doc<"pantryItems">) =>
         i.name.toLowerCase().includes((args.itemName as string).toLowerCase())
       );
 
@@ -88,7 +90,7 @@ export async function executePantryStoreWriteTool(
 
       for (const storeName of (args.stores as string[] | undefined) || []) {
         const normalizedInput = storeName.toLowerCase().trim();
-        const match = allStores.find((s) => {
+        const match = allStores.find((s: StoreInfo) => {
           const displayLower = s.displayName.toLowerCase();
           const idLower = s.id.toLowerCase();
           return (
@@ -119,7 +121,7 @@ export async function executePantryStoreWriteTool(
       });
 
       const savedStoreNames = validStoreIds.map((id) => {
-        const store = allStores.find((s) => s.id === id);
+        const store = allStores.find((s: StoreInfo) => s.id === id);
         return store ? store.displayName : id;
       });
 

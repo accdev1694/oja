@@ -22,8 +22,10 @@ export const togglePin = mutation({
     };
 
     if (item.status === "archived" && !item.pinned) {
-      updates.status = "active";
-      updates.archivedAt = undefined;
+      Object.assign(updates, {
+        status: "active",
+        archivedAt: undefined,
+      });
     }
 
     await ctx.db.patch(args.pantryItemId, updates);

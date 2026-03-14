@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
+import { GenericMutationCtx } from "convex/server";
+import { DataModel, Id } from "../_generated/dataModel";
 import { requireUser, optionalUser } from "./helpers";
 
 /**
@@ -59,7 +61,7 @@ export const updateStreak = mutation({
   },
 });
 
-async function checkStreakAchievement(ctx: { db: { query: Function; insert: Function } }, userId: string, type: string, count: number) {
+async function checkStreakAchievement(ctx: GenericMutationCtx<DataModel>, userId: Id<"users">, type: string, count: number) {
   const milestones = [
     { count: 7, title: "Week Warrior", desc: "7-day streak", icon: "fire" },
     { count: 30, title: "Monthly Master", desc: "30-day streak", icon: "star" },

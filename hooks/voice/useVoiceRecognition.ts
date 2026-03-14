@@ -44,19 +44,33 @@ export function useVoiceRecognition(
     setState((s: VoiceAssistantState) => ({ ...s, isListening: false }));
   });
 
-  useSpeechEvent("result", (event: { results: Array<{ transcript: string }>; isFinal: boolean }) => {
-    const transcript = event.results[0]?.transcript || "";
-    if (event.isFinal) {
-      setState((s: VoiceAssistantState) => ({ ...s, transcript, partialTranscript: "" }));
+  useSpeechEvent("result", (...args) => {
+    const event = args[0];
+    if (!event || typeof event !== "object") return;
+
+    const results = "results" in event && Array.isArray(event.results) ? event.results : [];
+    const isFinal = "isFinal" in event && typeof event.isFinal === "boolean" ? event.isFinal : false;
+
+    const transcript = results[0] && typeof results[0] === "object" && "transcript" in results[0] && typeof results[0].transcript === "string"
+      ? results[0].transcript
+      : "";
+
+    if (isFinal) {
+      setState((s) => ({ ...s, transcript, partialTranscript: "" }));
       onFinalTranscript(transcript);
     } else {
-      setState((s: VoiceAssistantState) => ({ ...s, partialTranscript: transcript }));
+      setState((s) => ({ ...s, partialTranscript: transcript }));
     }
   });
 
-  useSpeechEvent("error", (event: { error: string; message: string }) => {
-    console.warn("[useVoiceRecognition] STT error:", event.error, event.message);
-    setState((s: VoiceAssistantState) => ({
+  useSpeechEvent("error", (...args) => {
+    const event = args[0];
+    if (event && typeof event === "object") {
+      const errorMsg = "error" in event && typeof event.error === "string" ? event.error : "";
+      const message = "message" in event && typeof event.message === "string" ? event.message : "";
+      console.warn("[useVoiceRecognition] STT error:", errorMsg, message);
+    }
+    setState((s) => ({
       ...s,
       isListening: false,
       error: "Couldn't hear you clearly. Tap the mic and try again?",
@@ -98,10 +112,17 @@ export function useVoiceRecognition(
         : Haptics.ImpactFeedbackStyle.Medium
     );
 
-    const permResult =
-      await SpeechRecognitionModule.requestPermissionsAsync();
+    if (!SpeechRecognitionModule || typeof SpeechRecognitionModule.requestPermissionsAsync !== "function") {
+      setState((s) => ({
+        ...s,
+        error: "Speech recognition module not available.",
+      }));
+      return;
+    }
 
-    if (!permResult.granted) {
+    const permResult = await SpeechRecognitionModule.requestPermissionsAsync();
+
+    if (!permResult || typeof permResult !== "object" || !("granted" in permResult) || !permResult.granted) {
       setState((s) => ({
         ...s,
         error: "Microphone permission is needed for voice commands.",
@@ -117,15 +138,17 @@ export function useVoiceRecognition(
       error: null,
     }));
 
-    SpeechRecognitionModule.start({
-      lang: "en-GB",
-      interimResults: true,
-      continuous: false,
-    });
+    if (typeof SpeechRecognitionModule.start === "function") {
+      SpeechRecognitionModule.start({
+        lang: "en-GB",
+        interimResults: true,
+        continuous: false,
+      });
+    }
   }, [setState]);
 
   const stopListening = useCallback(() => {
-    if (STT_AVAILABLE) {
+    if (STT_AVAILABLE && SpeechRecognitionModule && typeof SpeechRecognitionModule.stop === "function") {
       SpeechRecognitionModule.stop();
     }
     setState((s) => ({ ...s, isListening: false }));
@@ -133,7 +156,7 @@ export function useVoiceRecognition(
 
   /** Cleanup on unmount — call from effect */
   const cleanupSTT = useCallback(() => {
-    if (STT_AVAILABLE) {
+    if (STT_AVAILABLE && SpeechRecognitionModule && typeof SpeechRecognitionModule.stop === "function") {
       SpeechRecognitionModule.stop();
     }
   }, []);

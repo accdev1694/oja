@@ -238,7 +238,7 @@ export async function getCachedOrCompute<T>(
 ): Promise<T> {
   const cached = queryCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    return cached.data;
+    return cached.data as T;
   }
   
   const result = await computeFn();

@@ -109,6 +109,7 @@ import type * as lib_voice_prompts from "../lib/voice/prompts.js";
 import type * as lib_voice_readDeclarations from "../lib/voice/readDeclarations.js";
 import type * as lib_voice_readTools from "../lib/voice/readTools.js";
 import type * as lib_voice_storeSizeDeclarations from "../lib/voice/storeSizeDeclarations.js";
+import type * as lib_voice_types from "../lib/voice/types.js";
 import type * as lib_voice_writeTools from "../lib/voice/writeTools.js";
 import type * as listItems from "../listItems.js";
 import type * as listItems_core from "../listItems/core.js";
@@ -312,6 +313,7 @@ declare const fullApi: ApiFromModules<{
   "lib/voice/readDeclarations": typeof lib_voice_readDeclarations;
   "lib/voice/readTools": typeof lib_voice_readTools;
   "lib/voice/storeSizeDeclarations": typeof lib_voice_storeSizeDeclarations;
+  "lib/voice/types": typeof lib_voice_types;
   "lib/voice/writeTools": typeof lib_voice_writeTools;
   listItems: typeof listItems;
   "listItems/core": typeof listItems_core;

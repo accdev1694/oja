@@ -72,7 +72,7 @@ interface PlanOption {
   id: string;
   name: string;
   price: number;
-  period: string;
+  period: string | null;
   savings?: string;
   features: string[];
 }
@@ -141,7 +141,7 @@ export function PlanOptionsList({
                   variant="primary"
                   size="md"
                   icon="credit-card-outline"
-                  onPress={() => onCheckout(plan.id)}
+                  onPress={() => onCheckout(plan.id as "premium_monthly" | "premium_annual")}
                   loading={isLoading}
                   style={styles.checkoutButton}
                 >

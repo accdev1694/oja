@@ -1,32 +1,24 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { 
-  GlassCard, 
-  AnimatedSection, 
-  colors, 
-  typography, 
-  spacing, 
-  borderRadius, 
+import {
+  GlassCard,
+  AnimatedSection,
+  colors,
+  typography,
+  spacing,
+  borderRadius,
   SkeletonCard,
-  TAB_BAR_HEIGHT 
+  TAB_BAR_HEIGHT
 } from "@/components/ui/glass";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-interface ScannedProductItem {
-  name: string;
-  category?: string;
-  estimatedPrice?: number;
-  size?: string;
-  unit?: string;
-  [key: string]: unknown;
-}
+import { ScannedProduct } from "@/hooks/useProductScanner";
 
 interface ProductModeProps {
-  scannedProducts: ScannedProductItem[];
+  scannedProducts: ScannedProduct[];
   isScanning: boolean;
   onScanPress: () => void;
-  onProductPress: (product: ScannedProductItem, index: number) => void;
+  onProductPress: (product: ScannedProduct, index: number) => void;
   onClearAll: () => void;
   onAddAll: () => void;
   scanButtonRef?: React.RefObject<View | null>;

@@ -2,6 +2,14 @@ import { v } from "convex/values";
 import { action, internalMutation } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 
+/** Minimal shape of Clerk webhook user data. */
+interface ClerkUserData {
+  id: string;
+  first_name?: string;
+  last_name?: string;
+  email_addresses?: Array<{ email_address: string }>;
+}
+
 /**
  * Clerk Webhook Handler
  * Processes user.deleted and user.updated events from Clerk.
@@ -9,10 +17,11 @@ import { api, internal } from "../_generated/api";
 export const handleClerkWebhook = action({
   args: {
     type: v.string(),
-    data: v.any(),
+    data: v.string(),
   },
   handler: async (ctx, args) => {
-    const { type, data } = args;
+    const { type } = args;
+    const data = JSON.parse(args.data) as ClerkUserData;
 
     if (type === "user.deleted") {
       const clerkId = data.id;
@@ -29,8 +38,8 @@ export const handleClerkWebhook = action({
       if (user) {
         await ctx.runMutation(internal.users.updateUserInfo, {
           userId: user._id,
-          email: email || user.email,
-          name: name || user.name,
+          email: email || user.email || "",
+          name: name || user.name || "",
         });
       }
     }

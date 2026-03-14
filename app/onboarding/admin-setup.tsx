@@ -1,11 +1,12 @@
 import React, { useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { useRouter, type Href} from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ComponentProps } from "react";
 
 import {
   GlassScreen,
@@ -171,7 +172,7 @@ export default function AdminSetupScreen() {
 function SecurityItem({ icon, text }: { icon: string; text: string }) {
   return (
     <View style={styles.securityItem}>
-      <MaterialCommunityIcons name={icon} size={18} color={colors.text.secondary} />
+      <MaterialCommunityIcons name={icon as ComponentProps<typeof MaterialCommunityIcons>["name"]} size={18} color={colors.text.secondary} />
       <Text style={styles.securityText}>{text}</Text>
     </View>
   );
@@ -182,7 +183,7 @@ function PressableCard({ title, subtitle, icon, color, onPress }: { title: strin
     <GlassCard variant="standard" style={styles.pressableCard}>
       <View style={styles.pressableContent}>
         <View style={[styles.pressableIcon, { backgroundColor: `${color}15` }]}>
-          <MaterialCommunityIcons name={icon} size={24} color={color} />
+          <MaterialCommunityIcons name={icon as ComponentProps<typeof MaterialCommunityIcons>["name"]} size={24} color={color} />
         </View>
         <Text style={styles.pressableTitle}>{title}</Text>
         <Text style={styles.pressableSubtitle}>{subtitle}</Text>

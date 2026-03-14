@@ -10,7 +10,7 @@ export const gamificationTables = {
     description: v.string(),
     icon: v.string(),
     unlockedAt: v.number(),
-    data: v.optional(v.any()),
+    data: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))),
   })
     .index("by_user", ["userId"])
     .index("by_user_type", ["userId", "type"]),
@@ -82,7 +82,7 @@ export const gamificationTables = {
     stripeInvoiceItemId: v.optional(v.string()), // Stripe invoice item ID
     balanceBefore: v.number(),
     balanceAfter: v.number(),
-    metadata: v.optional(v.any()),  // Extra data (e.g., tier at time of earn)
+    metadata: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))),  // Extra data (e.g., tier at time of earn)
     createdAt: v.number(),
   })
     .index("by_user", ["userId"])

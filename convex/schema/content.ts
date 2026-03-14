@@ -8,7 +8,7 @@ export const contentTables = {
     type: v.string(),
     title: v.string(),
     body: v.string(),
-    data: v.optional(v.any()),
+    data: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))),
     read: v.boolean(),
     createdAt: v.number(),
   })

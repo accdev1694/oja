@@ -1,13 +1,15 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import { 
-  requireUser, 
-  optionalUser, 
-  requireEditableList 
+import {
+  requireUser,
+  optionalUser,
+  requireEditableList,
+  QueryCtx,
+  MutationCtx,
 } from "./helpers";
-import { 
-  getAllStores, 
-  getStoreInfoSafe, 
+import {
+  getAllStores,
+  getStoreInfoSafe,
 } from "../lib/storeNormalizer";
 import { parseSize } from "../lib/sizeUtils";
 import { getUserListPermissions } from "../partners";
@@ -259,22 +261,16 @@ export const switchStore = mutation({
   },
 });
 
-async function findPriceForExactSize(
-  ctx: { db: { query: Function; get: Function } },
-  normalizedItemName: string,
-  size: string,
-  storeId: string
-): Promise<number | null> {
+const findPriceForExactSize = async (ctx: QueryCtx | MutationCtx, normalizedItemName: string, size: string, storeId: string) => {
   const prices = await ctx.db
     .query("currentPrices")
     .withIndex("by_item", (q) => q.eq("normalizedName", normalizedItemName))
     .collect();
 
-  const storePrice = prices.find(
-    p =>
-      (p.normalizedStoreId === storeId || p.storeName?.toLowerCase() === storeId) &&
-      p.size === size
+  const storePrice = prices.find((p) =>
+    (p.normalizedStoreId === storeId || p.storeName?.toLowerCase() === storeId) &&
+    p.size === size
   );
 
   return storePrice ? (storePrice.averagePrice ?? storePrice.unitPrice) : null;
-}
+};

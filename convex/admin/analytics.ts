@@ -1,12 +1,57 @@
 import { v } from "convex/values";
 import { query } from "../_generated/server";
-import { api } from "../_generated/api";
-import { 
-  requirePermissionQuery, 
-  getCachedOrCompute, 
+import {
+  requirePermissionQuery,
+  getCachedOrCompute,
   measureQueryPerformance,
-  QueryCtx 
+  QueryCtx
 } from "./helpers";
+
+async function computeRevenueReport(
+  ctx: QueryCtx,
+  dateFrom?: number,
+  dateTo?: number
+) {
+  const monthlyPricing = await ctx.db
+    .query("pricingConfig")
+    .withIndex("by_plan", (q) => q.eq("planId", "premium_monthly"))
+    .filter((q) => q.eq(q.field("isActive"), true))
+    .first();
+
+  const annualPricing = await ctx.db
+    .query("pricingConfig")
+    .withIndex("by_plan", (q) => q.eq("planId", "premium_annual"))
+    .filter((q) => q.eq(q.field("isActive"), true))
+    .first();
+
+  const monthlyPrice = monthlyPricing?.priceAmount || 0;
+  const annualPrice = annualPricing?.priceAmount || 0;
+
+  const subsQuery = dateFrom
+    ? ctx.db.query("subscriptions").withIndex("by_created", q => q.gte("createdAt", dateFrom))
+    : ctx.db.query("subscriptions").withIndex("by_created");
+
+  let subs = await subsQuery.collect();
+  if (dateTo) subs = subs.filter(s => s.createdAt <= dateTo);
+
+  const activeSubs = subs.filter(s => s.status === "active");
+  const monthlyCount = activeSubs.filter(s => s.plan === "premium_monthly").length;
+  const annualCount = activeSubs.filter(s => s.plan === "premium_annual").length;
+  const trialsActive = subs.filter(s => s.status === "trial").length;
+
+  const mrr = monthlyCount * monthlyPrice + (annualCount * annualPrice) / 12;
+  const arr = mrr * 12;
+
+  return {
+    totalSubscriptions: subs.length,
+    activeSubscriptions: activeSubs.length,
+    monthlySubscribers: monthlyCount,
+    annualSubscribers: annualCount,
+    trialsActive,
+    mrr: Math.round(mrr * 100) / 100,
+    arr: Math.round(arr * 100) / 100,
+  };
+}
 
 export const getReceiptImageUrl = query({
   args: { storageId: v.string() },
@@ -190,47 +235,9 @@ export const getRevenueReport = query({
     await requirePermissionQuery(ctx, "view_analytics");
 
     const cacheKey = `revenue_report_${args.dateFrom || 0}_${args.dateTo || 0}`;
-    return await getCachedOrCompute(cacheKey, 5 * 60 * 1000, async () => {
-      const monthlyPricing = await ctx.db
-        .query("pricingConfig")
-        .withIndex("by_plan", (q) => q.eq("planId", "premium_monthly"))
-        .filter((q) => q.eq(q.field("isActive"), true))
-        .first();
-
-      const annualPricing = await ctx.db
-        .query("pricingConfig")
-        .withIndex("by_plan", (q) => q.eq("planId", "premium_annual"))
-        .filter((q) => q.eq(q.field("isActive"), true))
-        .first();
-
-      const monthlyPrice = monthlyPricing?.priceAmount || 0;
-      const annualPrice = annualPricing?.priceAmount || 0;
-
-      const subsQuery = args.dateFrom 
-        ? ctx.db.query("subscriptions").withIndex("by_created", q => q.gte("createdAt", args.dateFrom!))
-        : ctx.db.query("subscriptions").withIndex("by_created");
-        
-      let subs = await subsQuery.collect();
-      if (args.dateTo) subs = subs.filter(s => s.createdAt <= args.dateTo!);
-
-      const activeSubs = subs.filter(s => s.status === "active");
-      const monthlyCount = activeSubs.filter(s => s.plan === "premium_monthly").length;
-      const annualCount = activeSubs.filter(s => s.plan === "premium_annual").length;
-      const trialsActive = subs.filter(s => s.status === "trial").length;
-
-      const mrr = monthlyCount * monthlyPrice + (annualCount * annualPrice) / 12;
-      const arr = mrr * 12;
-
-      return {
-        totalSubscriptions: subs.length,
-        activeSubscriptions: activeSubs.length,
-        monthlySubscribers: monthlyCount,
-        annualSubscribers: annualCount,
-        trialsActive,
-        mrr: Math.round(mrr * 100) / 100,
-        arr: Math.round(arr * 100) / 100,
-      };
-    });
+    return await getCachedOrCompute(cacheKey, 5 * 60 * 1000, () =>
+      computeRevenueReport(ctx, args.dateFrom, args.dateTo)
+    );
   },
 });
 
@@ -243,12 +250,12 @@ export const getFinancialReport = query({
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_analytics");
 
-    const rev = await ctx.runQuery(api.admin.getRevenueReport, args);
+    const rev = await computeRevenueReport(ctx, args.dateFrom, args.dateTo);
 
     const grossRevenue: number = rev?.mrr || 0;
     const estimatedTax: number = grossRevenue * 0.20; // 20% VAT
 
-    const analytics = await ctx.runQuery(api.admin.getAnalytics, {});
+    const analytics = await getLiveAnalytics(ctx);
     const activeUsers: number = analytics?.activeUsersThisWeek || 0;
     const estimatedCOGS: number = activeUsers * 0.50;
     

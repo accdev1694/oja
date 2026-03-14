@@ -71,7 +71,7 @@ export const awardBonusPoints = internalMutation({
     userId: v.id("users"),
     amount: v.number(),
     source: v.string(),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))),
   },
   handler: async (ctx, args) => {
     const balance = await getOrCreatePointsBalance(ctx, args.userId);

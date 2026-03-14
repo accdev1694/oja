@@ -20,7 +20,7 @@
  */
 
 import React, { useCallback, useEffect } from "react";
-import { Pressable, PressableProps, ViewStyle, StyleSheet } from "react-native";
+import { Pressable, PressableProps, ViewStyle, StyleSheet, GestureResponderEvent } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -38,12 +38,10 @@ import Animated, {
   SlideInLeft,
   SlideOutLeft,
   Layout,
+  withRepeat,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { animations } from "@/lib/design/glassTokens";
-
-// Need to import withRepeat
-import { withRepeat } from "react-native-reanimated";
 
 // =============================================================================
 // ANIMATED PRESSABLE COMPONENT
@@ -84,26 +82,22 @@ export function AnimatedPressable({
   const opacity = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => {
-    const transforms: { scale?: number }[] = [];
-    const styleObj: ViewStyle = {};
+    const baseTransforms = [];
 
     if (animationType === "scale" || animationType === "both") {
-      transforms.push({ scale: scale.value });
+      baseTransforms.push({ scale: scale.value });
     }
 
-    if (animationType === "opacity" || animationType === "both") {
-      styleObj.opacity = opacity.value;
-    }
-
-    if (transforms.length > 0) {
-      styleObj.transform = transforms;
-    }
+    const styleObj = {
+      opacity: animationType === "opacity" || animationType === "both" ? opacity.value : 1,
+      transform: baseTransforms.length > 0 ? baseTransforms : undefined,
+    };
 
     return styleObj;
   });
 
   const handlePressIn = useCallback(
-    event => {
+    (event: GestureResponderEvent) => {
       if (enableHaptics) {
         const feedbackStyle =
           hapticStyle === "light"
@@ -123,7 +117,7 @@ export function AnimatedPressable({
   );
 
   const handlePressOut = useCallback(
-    event => {
+    (event: GestureResponderEvent) => {
       scale.value = withSpring(1, springConfig);
       opacity.value = withTiming(1, { duration: 100 });
 
@@ -140,7 +134,7 @@ export function AnimatedPressable({
       disabled={disabled}
       {...props}
     >
-      <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>
+      <Animated.View style={style ? [style, animatedStyle] : animatedStyle}>{children}</Animated.View>
     </Pressable>
   );
 }

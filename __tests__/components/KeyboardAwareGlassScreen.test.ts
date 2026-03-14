@@ -174,8 +174,8 @@ describe("KeyboardAwareGlassScreen", () => {
 // =============================================================================
 
 interface ScreenConfigInput {
-  style?: any;
-  contentContainerStyle?: any;
+  style?: Record<string, unknown>;
+  contentContainerStyle?: Record<string, unknown>;
   edges?: ("top" | "bottom" | "left" | "right")[];
   extraKeyboardSpace?: number;
   bottomOffset?: number;
@@ -188,8 +188,8 @@ interface ScreenConfig {
     edges: ("top" | "bottom" | "left" | "right")[];
   };
   scrollViewProps: {
-    style: any;
-    contentContainerStyle: any;
+    style: unknown;
+    contentContainerStyle: unknown;
     extraKeyboardSpace: number;
     bottomOffset: number;
     disableScrollOnKeyboardHide: boolean;

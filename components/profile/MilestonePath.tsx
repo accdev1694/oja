@@ -8,6 +8,7 @@ import {
   typography,
   spacing,
 } from "@/components/ui/glass";
+import { Doc } from "@/convex/_generated/dataModel";
 
 export function MilestonePath({
   pantryItems,
@@ -15,13 +16,19 @@ export function MilestonePath({
   receipts,
   pointsBalance,
   isAdmin,
+}: {
+  pantryItems: Doc<"pantryItems">[] | undefined;
+  allLists: Doc<"shoppingLists">[] | undefined;
+  receipts: Doc<"receipts">[] | undefined;
+  pointsBalance: { totalPoints: number } | null | undefined;
+  isAdmin: boolean | undefined;
 }) {
   if (isAdmin) return null;
 
   const milestones = [
-    { icon: "package-variant" as const, text: "Add items to your stock", done: pantryItems.length > 0 },
-    { icon: "clipboard-list-outline" as const, text: "Create your first list", done: allLists.length > 0 },
-    { icon: "camera" as const, text: "Scan a receipt", done: (receipts?.filter((r) => r.processingStatus === "completed").length ?? 0) > 0 },
+    { icon: "package-variant" as const, text: "Add items to your stock", done: (pantryItems?.length ?? 0) > 0 },
+    { icon: "clipboard-list-outline" as const, text: "Create your first list", done: (allLists?.length ?? 0) > 0 },
+    { icon: "camera" as const, text: "Scan a receipt", done: (receipts?.filter((r: Doc<"receipts">) => r.processingStatus === "completed").length ?? 0) > 0 },
     { icon: "trophy-outline" as const, text: "Earn your first points", done: (pointsBalance?.totalPoints ?? 0) > 0 },
   ];
   const allDone = milestones.every((m) => m.done);

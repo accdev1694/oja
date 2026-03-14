@@ -15,6 +15,7 @@ import { detectLocation } from "@/lib/location/detectLocation";
 import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ComponentProps } from "react";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -350,10 +351,10 @@ function DietaryButton({ diet, isSelected, onToggle }: DietaryButtonProps) {
           accentColor={isSelected ? colors.accent.success : undefined}
           style={[styles.dietaryButton, isSelected && styles.dietaryButtonSelected]}
         >
-          <MaterialCommunityIcons 
-            name={diet.icon as const} 
-            size={24} 
-            color={isSelected ? colors.accent.success : colors.text.secondary} 
+          <MaterialCommunityIcons
+            name={diet.icon as ComponentProps<typeof MaterialCommunityIcons>["name"]}
+            size={24}
+            color={isSelected ? colors.accent.success : colors.text.secondary}
           />
           <Text
             style={[

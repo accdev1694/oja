@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
 import { View, Text, SectionList } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Id } from "@/convex/_generated/dataModel";
+import { Id, Doc } from "@/convex/_generated/dataModel";
 import { PantryItemRow } from "@/components/pantry";
 import { AnimatedSection, colors } from "@/components/ui/glass";
 import { EssentialsSectionHeader, CategoryHeader } from "./StockSectionHeaders";
@@ -12,9 +12,15 @@ import { stockStyles as styles, ESSENTIALS_SECTION_TITLE } from "./stockStyles";
 // STOCK SECTION LIST
 // =============================================================================
 
+interface StockSection {
+  title: string;
+  data: Doc<"pantryItems">[];
+  sectionDelay: number;
+}
+
 interface StockSectionListProps {
-  sections: { title: string; data: PantryItem[]; sectionDelay: number }[];
-  filteredItems: PantryItem[];
+  sections: StockSection[];
+  filteredItems: Doc<"pantryItems">[];
   collapsedCategories: Set<string>;
   animationKey: number;
   viewMode: "attention" | "all";
@@ -51,58 +57,6 @@ export const StockSectionList = React.memo(function StockSectionList({
   onToggleCategory,
   onToggleEssentials,
 }: StockSectionListProps) {
-  const keyExtractor = useCallback((item: PantryItem) => item._id, []);
-
-  const renderItem = useCallback(({ item, section, index }: { item: PantryItem; section: { title: string; data: PantryItem[]; sectionDelay: number }; index: number }) => {
-    // If category is collapsed, render nothing
-    if (collapsedCategories.has(section.title)) return null;
-    const isArchivedResult = item.status === "archived";
-
-    // Use pre-calculated section delay + small item stagger
-    const delay = section.sectionDelay + (index * 20);
-
-    const isFirstItem = index === 0 && section.title === sections[0]?.title;
-
-    return (
-      <AnimatedSection key={`${item._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={delay}>
-        <View ref={isFirstItem ? itemRef : undefined}>
-          <PantryItemRow
-            item={item}
-            onSwipeDecrease={onSwipeDecrease}
-            onSwipeIncrease={onSwipeIncrease}
-            onRemove={onRemove}
-            onAddToList={onAddToList}
-            onLongPress={onLongPress}
-            isArchivedResult={isArchivedResult}
-          />
-        </View>
-      </AnimatedSection>
-    );
-  }, [collapsedCategories, animationKey, sections, itemRef, onSwipeDecrease, onSwipeIncrease, onRemove, onAddToList, onLongPress]);
-
-  const renderSectionHeader = useCallback(({ section }: { section: { title: string; data: PantryItem[]; sectionDelay: number } }) => {
-    const delay = section.sectionDelay - 50;
-
-    return (
-      <AnimatedSection key={`header-${section.title}-${animationKey}`} animation="fadeInDown" duration={400} delay={delay}>
-        {section.title === ESSENTIALS_SECTION_TITLE ? (
-          <EssentialsSectionHeader
-            count={section.data.length}
-            isCollapsed={collapsedCategories.has(ESSENTIALS_SECTION_TITLE)}
-            onToggle={onToggleEssentials}
-          />
-        ) : (
-          <CategoryHeader
-            category={section.title}
-            count={section.data.length}
-            isCollapsed={collapsedCategories.has(section.title)}
-            onToggle={onToggleCategory}
-          />
-        )}
-      </AnimatedSection>
-    );
-  }, [animationKey, collapsedCategories, onToggleEssentials, onToggleCategory]);
-
   const ListHeaderComponent = (
     <AnimatedSection key={`listheader-${animationKey}`} animation="fadeInDown" duration={400} delay={220}>
       <StockListHeader
@@ -135,11 +89,62 @@ export const StockSectionList = React.memo(function StockSectionList({
 
   return (
     <View key={`list-${animationKey}`} style={styles.listWrapper}>
-      <SectionList
+      <SectionList<Doc<"pantryItems">, StockSection>
         sections={sections}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        renderSectionHeader={renderSectionHeader}
+        keyExtractor={(item) => item._id}
+        renderItem={(info) => {
+          const item = info.item;
+          const section = info.section;
+          const index = info.index;
+
+          // If category is collapsed, render nothing
+          if (collapsedCategories.has(section.title)) return null;
+          const isArchivedResult = item.status === "archived";
+
+          // Use pre-calculated section delay + small item stagger
+          const delay = section.sectionDelay + (index * 20);
+
+          const isFirstItem = index === 0 && section.title === sections[0]?.title;
+
+          return (
+            <AnimatedSection key={`${item._id}-${animationKey}`} animation="fadeInDown" duration={400} delay={delay}>
+              <View ref={isFirstItem ? itemRef : undefined}>
+                <PantryItemRow
+                  item={item}
+                  onSwipeDecrease={onSwipeDecrease}
+                  onSwipeIncrease={onSwipeIncrease}
+                  onRemove={onRemove}
+                  onAddToList={onAddToList}
+                  onLongPress={onLongPress}
+                  isArchivedResult={isArchivedResult}
+                />
+              </View>
+            </AnimatedSection>
+          );
+        }}
+        renderSectionHeader={(info) => {
+          const section = info.section;
+          const delay = section.sectionDelay - 50;
+
+          return (
+            <AnimatedSection key={`header-${section.title}-${animationKey}`} animation="fadeInDown" duration={400} delay={delay}>
+              {section.title === ESSENTIALS_SECTION_TITLE ? (
+                <EssentialsSectionHeader
+                  count={section.data.length}
+                  isCollapsed={collapsedCategories.has(ESSENTIALS_SECTION_TITLE)}
+                  onToggle={onToggleEssentials}
+                />
+              ) : (
+                <CategoryHeader
+                  category={section.title}
+                  count={section.data.length}
+                  isCollapsed={collapsedCategories.has(section.title)}
+                  onToggle={onToggleCategory}
+                />
+              )}
+            </AnimatedSection>
+          );
+        }}
         ListHeaderComponent={ListHeaderComponent}
         ListFooterComponent={ListFooterComponent}
         stickySectionHeadersEnabled={false}

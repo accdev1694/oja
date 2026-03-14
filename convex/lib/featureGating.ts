@@ -3,6 +3,9 @@
  * Used by mutations to check if a user can perform premium actions.
  */
 
+import { GenericQueryCtx } from "convex/server";
+import { DataModel, Id } from "../_generated/dataModel";
+
 // AI feature limits by plan (monthly)
 export const AI_LIMITS = {
   voice: {
@@ -50,10 +53,12 @@ export function getPlanFeatures(plan: string) {
 
 /** Read-time guard: treat expired trials as expired even if the cron hasn't run yet. */
 export function isTrialExpired(sub: { status: string; trialEndsAt?: number } | null): boolean {
+  if (!sub) return false;
   return sub.status === "trial" && sub.trialEndsAt != null && sub.trialEndsAt <= Date.now();
 }
 
 export function effectiveStatus(sub: { status: string; trialEndsAt?: number } | null): string {
+  if (!sub) return "free";
   if (isTrialExpired(sub)) return "expired";
   return sub.status;
 }
@@ -119,11 +124,11 @@ export function getPointsPerScan(tier: TierConfig, isPremium: boolean): number {
  * Check feature access for a user.
  * Returns plan features and whether the user has premium.
  */
-export async function checkFeatureAccess(ctx: { db: { query: Function; get: Function } }, userId: string) {
+export async function checkFeatureAccess(ctx: GenericQueryCtx<DataModel>, userId: Id<"users">) {
   const user = await ctx.db.get(userId);
   const sub = await ctx.db
     .query("subscriptions")
-    .withIndex("by_user", q => q.eq("userId", userId))
+    .withIndex("by_user", (q) => q.eq("userId", userId))
     .order("desc")
     .first();
 
@@ -139,7 +144,7 @@ export async function checkFeatureAccess(ctx: { db: { query: Function; get: Func
  * Check if user can create a new shopping list.
  * Free tier: max 2 active lists.
  */
-export async function canCreateList(ctx: { db: { query: Function; get: Function } }, userId: string): Promise<{ allowed: boolean; reason?: string; currentCount?: number; maxCount?: number }> {
+export async function canCreateList(ctx: GenericQueryCtx<DataModel>, userId: Id<"users">): Promise<{ allowed: boolean; reason?: string; currentCount?: number; maxCount?: number }> {
   const { isPremium, features } = await checkFeatureAccess(ctx, userId);
   if (isPremium || features.maxLists === -1) {
     return { allowed: true };
@@ -147,7 +152,7 @@ export async function canCreateList(ctx: { db: { query: Function; get: Function 
 
   const activeLists = await ctx.db
     .query("shoppingLists")
-    .withIndex("by_user_status", q => q.eq("userId", userId).eq("status", "active"))
+    .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "active"))
     .take(features.maxLists + 1);
 
   const activeCount = activeLists.length;
@@ -168,7 +173,7 @@ export async function canCreateList(ctx: { db: { query: Function; get: Function 
  * Check if user can add a new pantry item.
  * Free tier: max 30 items.
  */
-export async function canAddPantryItem(ctx: { db: { query: Function; get: Function } }, userId: string): Promise<{ allowed: boolean; reason?: string; currentCount?: number; maxCount?: number }> {
+export async function canAddPantryItem(ctx: GenericQueryCtx<DataModel>, userId: Id<"users">): Promise<{ allowed: boolean; reason?: string; currentCount?: number; maxCount?: number }> {
   const { isPremium, features } = await checkFeatureAccess(ctx, userId);
   if (isPremium || features.maxPantryItems === -1) {
     return { allowed: true };
@@ -176,7 +181,7 @@ export async function canAddPantryItem(ctx: { db: { query: Function; get: Functi
 
   const items = await ctx.db
     .query("pantryItems")
-    .withIndex("by_user_status", q => q.eq("userId", userId).eq("status", "active"))
+    .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "active"))
     .take(features.maxPantryItems + 1);
 
   if (items.length >= features.maxPantryItems) {
@@ -194,7 +199,7 @@ export async function canAddPantryItem(ctx: { db: { query: Function; get: Functi
 /**
  * Check if user has premium access for a specific feature.
  */
-export async function requireFeature(ctx: { db: { query: Function; get: Function } }, userId: string, feature: string): Promise<{ allowed: boolean; reason?: string }> {
+export async function requireFeature(ctx: GenericQueryCtx<DataModel>, userId: Id<"users">, feature: string): Promise<{ allowed: boolean; reason?: string }> {
   const { features } = await checkFeatureAccess(ctx, userId);
   const hasAccess = features[feature as keyof typeof features];
 

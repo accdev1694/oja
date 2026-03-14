@@ -182,7 +182,7 @@ export const update = mutation({
 
       const validation = await validateReceiptData(ctx, user._id, args.imageHash, {
         storeName: args.storeName,
-        total: args.total,
+        total: args.total ?? receipt.total ?? 0,
         purchaseDate: args.purchaseDate,
         items: args.items,
         imageQuality: args.imageQuality

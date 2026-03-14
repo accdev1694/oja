@@ -6,6 +6,17 @@ import { CreateFromTemplateModal } from "@/components/lists/CreateFromTemplateMo
 import { CombineListsModal } from "@/components/lists/CombineListsModal";
 import { EditListNameModal } from "@/components/lists/EditListNameModal";
 
+interface HistoryList {
+  _id: Id<"shoppingLists">;
+  name: string;
+  status: string;
+  completedAt?: number;
+  createdAt: number;
+  storeName?: string;
+  storeSegments?: { storeId: string; storeName: string; switchedAt: number }[];
+  listNumber?: number;
+}
+
 const ListsModals = React.memo(function ListsModals({
   showCreateOptionsModal,
   showTemplatePickerModal,

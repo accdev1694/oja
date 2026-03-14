@@ -24,6 +24,7 @@ import {
 import { adminStyles as styles } from "./styles";
 import { Webhook } from "./types";
 import { useAdminToast } from "./hooks";
+import type { Id } from "@/convex/_generated/dataModel";
 
 interface WebhooksTabProps {
   hasPermission: (p: string) => boolean;
@@ -85,16 +86,16 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
     }
   }, [form, createWebhook, showToast]);
 
-  const handleTest = useCallback(async (id: string) => {
+  const handleTest = useCallback(async (id = "") => {
     try {
-      await testWebhook({ id: id });
+      await testWebhook({ id: id as Id<"webhooks"> });
       showToast("Test event sent", "success");
     } catch (e) {
       showToast((e as Error).message, "error");
     }
   }, [testWebhook, showToast]);
 
-  const handleDelete = useCallback(async (id: string) => {
+  const handleDelete = useCallback(async (id = "") => {
     showAlert("Delete Webhook", "Are you sure you want to remove this integration?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -102,7 +103,7 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
         style: "destructive",
         onPress: async () => {
           try {
-            await deleteWebhook({ id: id });
+            await deleteWebhook({ id: id as Id<"webhooks"> });
             showToast("Webhook deleted", "success");
           } catch (e) {
             showToast((e as Error).message, "error");
@@ -148,11 +149,11 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
                   ))}
                 </View>
               </View>
-              <Switch 
-                value={wh.isEnabled} 
+              <Switch
+                value={wh.isEnabled}
                 onValueChange={async () => {
                   try {
-                    await toggleWebhook({ id: wh._id });
+                    await toggleWebhook({ id: wh._id as Id<"webhooks"> });
                   } catch (e) {
                     showToast((e as Error).message, "error");
                   }

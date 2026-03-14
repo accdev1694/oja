@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useRef, useEffect, startTransition } fr
 import { View } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import { Id, Doc } from "@/convex/_generated/dataModel";
 import {
   notificationAsync,
   impactAsync,
@@ -29,6 +29,8 @@ import { hasViewedHint as hasViewedHintLocal } from "@/lib/storage/hintStorage";
 import { ESSENTIALS_SECTION_TITLE, getItemTier, SCREEN_WIDTH } from "@/components/stock/stockStyles";
 
 type PantryViewMode = "attention" | "all";
+type PantryItem = Doc<"pantryItems">;
+type ShoppingList = Doc<"shoppingLists">;
 
 export function useStockScreen() {
   const insets = useSafeAreaInsets();
@@ -99,9 +101,9 @@ export function useStockScreen() {
   // Migrate icons for items that don't have them yet
   useEffect(() => {
     if (items && items.length > 0) {
-      const needsMigration = items.some((item) => !item.icon);
+      const needsMigration = items.some((item: PantryItem) => !item.icon);
       if (needsMigration) {
-        migrateIcons({}).catch((err) => {
+        migrateIcons({}).catch((err: unknown) => {
           console.error("Migration failed:", err);
         });
       }
@@ -171,8 +173,8 @@ export function useStockScreen() {
   // Derive unique categories from items
   const categories = useMemo(() => {
     if (!items) return [];
-    const cats = new Set(items.map((item) => item.category));
-    return [...cats].sort((a, b) => a.localeCompare(b));
+    const cats = new Set<string>(items.map((item: PantryItem) => item.category));
+    return Array.from(cats).sort((a, b) => a.localeCompare(b));
   }, [items]);
 
   // Initialize all categories as collapsed on first load
@@ -181,13 +183,13 @@ export function useStockScreen() {
     if (categoriesInitialized.current) return;
     if (categories.length === 0) return;
     categoriesInitialized.current = true;
-    setCollapsedCategories(new Set<string>(categories));
+    setCollapsedCategories(new Set(categories as string[]));
   }, [categories]);
 
   const attentionCount = useMemo(() => {
     if (!items) return 0;
     return items.filter(
-      (item) => item.stockLevel === "low" || item.stockLevel === "out"
+      (item: PantryItem) => item.stockLevel === "low" || item.stockLevel === "out"
     ).length;
   }, [items]);
 
@@ -196,7 +198,7 @@ export function useStockScreen() {
     const isSearching = searchQuery.trim().length > 0;
     const searchLower = searchQuery.toLowerCase();
 
-    const activeResults = items.filter((item) => {
+    const activeResults = items.filter((item: PantryItem) => {
       if (item.status === "archived") return false;
       const level = item.stockLevel as StockLevel;
       if (viewMode === "attention") {
@@ -212,7 +214,7 @@ export function useStockScreen() {
     });
 
     if (isSearching && archivedItems) {
-      const archivedResults = archivedItems.filter((item) =>
+      const archivedResults = archivedItems.filter((item: PantryItem) =>
         item.name.toLowerCase().includes(searchLower)
       );
       return [...activeResults, ...archivedResults];
@@ -225,7 +227,7 @@ export function useStockScreen() {
     const essentials: typeof filteredItems = [];
     const regular: typeof filteredItems = [];
 
-    filteredItems.forEach((item) => {
+    filteredItems.forEach((item: PantryItem) => {
       const tier = getItemTier(item);
       if (tier === 1) {
         essentials.push(item);
@@ -235,7 +237,7 @@ export function useStockScreen() {
     });
 
     const grouped: Record<string, typeof filteredItems> = {};
-    regular.forEach((item) => {
+    regular.forEach((item: PantryItem) => {
       if (!grouped[item.category]) {
         grouped[item.category] = [];
       }
@@ -346,7 +348,7 @@ export function useStockScreen() {
 
   const handleSwipeDecrease = useCallback(async (itemId: Id<"pantryItems">) => {
     if (showGestureOnboarding) dismissGestureOnboarding();
-    const item = items?.find((i) => i._id === itemId);
+    const item = items?.find((i: PantryItem) => i._id === itemId);
     if (!item) return;
 
     const nextLevel = getNextLowerLevel(item.stockLevel as StockLevel);
@@ -372,7 +374,7 @@ export function useStockScreen() {
 
   const handleSwipeIncrease = useCallback(async (itemId: Id<"pantryItems">) => {
     if (showGestureOnboarding) dismissGestureOnboarding();
-    const item = items?.find((i) => i._id === itemId);
+    const item = items?.find((i: PantryItem) => i._id === itemId);
     if (!item) return;
 
     const nextLevel = getNextHigherLevel(item.stockLevel as StockLevel);
@@ -394,7 +396,7 @@ export function useStockScreen() {
   }, [items, showGestureOnboarding, dismissGestureOnboarding, getNextHigherLevel, updateStockLevel]);
 
   const handleRemoveItem = useCallback((itemId: Id<"pantryItems">) => {
-    const item = items?.find((i) => i._id === itemId);
+    const item = items?.find((i: PantryItem) => i._id === itemId);
     if (!item) return;
 
     impactAsync(ImpactFeedbackStyle.Medium);
@@ -435,11 +437,11 @@ export function useStockScreen() {
   }, [addListItem, showToast]);
 
   const handleAddToList = useCallback((itemId: Id<"pantryItems">) => {
-    const item = items?.find((i) => i._id === itemId);
+    const item = items?.find((i: PantryItem) => i._id === itemId);
     if (!item) return;
 
     const planningLists = (activeLists ?? []).filter(
-      (l) => l.status === "active"
+      (l: ShoppingList) => l.status === "active"
     );
 
     if (planningLists.length === 0) {
@@ -494,7 +496,7 @@ export function useStockScreen() {
       setSearchQuery("");
       setAnimationKey((prev) => prev + 1);
       if (mode === "all" && categories.length > 0) {
-        setCollapsedCategories(new Set(categories));
+        setCollapsedCategories(new Set(categories as string[]));
       }
     });
   }, [viewMode, categories]);
@@ -523,7 +525,7 @@ export function useStockScreen() {
   const handleMergeDuplicates = useCallback(async () => {
     if (!duplicateGroups || duplicateGroups.length === 0) return;
 
-    const totalDupes = duplicateGroups.reduce((sum, g) => sum + g.length - 1, 0);
+    const totalDupes = duplicateGroups.reduce((sum: number, g: PantryItem[]) => sum + g.length - 1, 0);
     const groupCount = duplicateGroups.length;
 
     alert(
@@ -543,19 +545,19 @@ export function useStockScreen() {
                 const priceRank = (source?: string) =>
                   source === "receipt" ? 3 : source === "user" ? 2 : source === "ai_estimate" ? 1 : 0;
 
-                const sorted = [...group].sort((a, b) => {
+                const sorted = [...group].sort((a: PantryItem, b: PantryItem) => {
                   const priceDiff = priceRank(b.priceSource) - priceRank(a.priceSource);
                   if (priceDiff !== 0) return priceDiff;
                   return (b.purchaseCount ?? 0) - (a.purchaseCount ?? 0);
                 });
 
                 const keepId = sorted[0]._id;
-                const deleteIds = sorted.slice(1).map((item) => item._id);
+                const deleteIds = sorted.slice(1).map((item: PantryItem) => item._id);
 
                 await mergeDuplicatesMut({ keepId, deleteIds });
               }
               haptic("success");
-            } catch (err) {
+            } catch (err: unknown) {
               console.error("Merge duplicates failed:", err);
               haptic("error");
             }
@@ -566,8 +568,8 @@ export function useStockScreen() {
   }, [duplicateGroups, alert, mergeDuplicatesMut]);
 
   const handleItemLongPress = useCallback((itemId: Id<"pantryItems">) => {
-    const item = items?.find((i) => i._id === itemId)
-      ?? archivedItems?.find((i) => i._id === itemId);
+    const item = items?.find((i: PantryItem) => i._id === itemId)
+      ?? archivedItems?.find((i: PantryItem) => i._id === itemId);
     if (!item) return;
 
     haptic("medium");
@@ -584,7 +586,7 @@ export function useStockScreen() {
             try {
               await unarchiveItemMut({ pantryItemId: item._id });
               haptic("success");
-            } catch (err) {
+            } catch (err: unknown) {
               console.error("Failed to unarchive:", err);
             }
           },
@@ -602,7 +604,7 @@ export function useStockScreen() {
           try {
             await togglePin({ pantryItemId: item._id });
             haptic("light");
-          } catch (err) {
+          } catch (err: unknown) {
             console.error("Failed to toggle pin:", err);
           }
         },
@@ -617,7 +619,7 @@ export function useStockScreen() {
           try {
             await archiveItemMut({ pantryItemId: item._id });
             haptic("light");
-          } catch (err) {
+          } catch (err: unknown) {
             console.error("Failed to archive:", err);
           }
         },

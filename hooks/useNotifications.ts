@@ -24,7 +24,7 @@ export function useNotifications() {
   /**
    * Get the navigation route for a notification based on its type/data.
    */
-  const getRoute = (notification: { type: string; data?: Record<string, string> }): string | null => {
+  const getRoute = (notification: { type: string; data?: Record<string, string | number | boolean | null> }): string | null => {
     const data = notification.data;
     if (!data) return null;
 

@@ -44,25 +44,41 @@ export function useVoiceTTS() {
       };
 
       // Only try neural TTS if expo-av is available
-      if (AUDIO_AVAILABLE) {
+      if (AUDIO_AVAILABLE && AudioModule !== null) {
         try {
           const result = await textToSpeech({ text: ttsText, voiceGender: "MALE" });
 
           if (result.audioBase64) {
-            const { sound } = await AudioModule.Sound.createAsync(
-              { uri: `data:audio/mp3;base64,${result.audioBase64}` },
-              { shouldPlay: true }
-            );
-            soundRef.current = sound;
+            const audioModuleRecord = AudioModule as Record<string, unknown>;
+            const soundClass = audioModuleRecord.Sound;
+            if (soundClass && typeof soundClass === 'object' && 'createAsync' in soundClass) {
+              const soundClassRecord = soundClass as Record<string, unknown>;
+              const createAsyncFn = soundClassRecord.createAsync;
+              if (typeof createAsyncFn === 'function') {
+                const { sound } = await createAsyncFn.call(soundClass,
+                  { uri: `data:audio/mp3;base64,${result.audioBase64}` },
+                  { shouldPlay: true }
+                );
+                soundRef.current = sound;
 
-            sound.setOnPlaybackStatusUpdate((status:{isLoaded:boolean;didJustFinish?:boolean}) => {
-              if (status.isLoaded && status.didJustFinish) {
-                sound.unloadAsync();
-                soundRef.current = null;
-                wrappedOnDone();
+                const soundRecord = sound as Record<string, unknown>;
+                const setStatusUpdateFn = soundRecord.setOnPlaybackStatusUpdate;
+                if (typeof setStatusUpdateFn === 'function') {
+                  setStatusUpdateFn.call(sound, (status = {}) => {
+                    const statusObj = status as Record<string, unknown>;
+                    if (statusObj.isLoaded && statusObj.didJustFinish) {
+                      const unloadFn = soundRecord.unloadAsync;
+                      if (typeof unloadFn === 'function') {
+                        unloadFn.call(sound);
+                      }
+                      soundRef.current = null;
+                      wrappedOnDone();
+                    }
+                  });
+                }
+                return;
               }
-            });
-            return;
+            }
           }
         } catch (error) {
           console.warn("[speakText] Neural TTS failed, using device TTS:", error);

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import { requireUser, getUserListPermissions } from "./helpers";
+import { requireUser, getUserListPermissions, MutationCtx } from "./helpers";
+import { Id } from "../_generated/dataModel";
 
 /**
  * Get comment counts for multiple items (batch query to avoid N+1)
@@ -46,6 +47,7 @@ export const addComment = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    if (!user) throw new Error("User creation failed");
 
     // Verify the user has access to this list
     const item = await ctx.db.get(args.listItemId);
@@ -65,11 +67,11 @@ export const addComment = mutation({
     // Notify other participants (owner + partners) about the new comment
     const list = await ctx.db.get(item.listId);
     if (list) {
-      const notifyUserIds: Set<string> = new Set();
+      const notifyUserIds = [];
 
       // Add owner
-      if (list.userId.toString() !== user._id.toString()) {
-        notifyUserIds.add(list.userId.toString());
+      if (list.userId !== user._id) {
+        notifyUserIds.push(list.userId);
       }
 
       // Add all accepted partners
@@ -78,8 +80,11 @@ export const addComment = mutation({
         .withIndex("by_list", q => q.eq("listId", item.listId))
         .collect();
       for (const p of partners) {
-        if (p.status === "accepted" && p.userId.toString() !== user._id.toString()) {
-          notifyUserIds.add(p.userId.toString());
+        if (p.status === "accepted" && p.userId !== user._id) {
+          const found = notifyUserIds.some(uid => uid === p.userId);
+          if (!found) {
+            notifyUserIds.push(p.userId);
+          }
         }
       }
 
