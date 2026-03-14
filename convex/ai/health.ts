@@ -179,9 +179,7 @@ Return ONLY valid JSON in this exact format:
       updatedAt: Date.now()
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- breaks TS2589 deep type instantiation on nested v.object args
-    const updateFn = internal.shoppingLists.updateHealthAnalysis as any;
-    await ctx.runMutation(updateFn, {
+    await ctx.runMutation(internal.shoppingLists.updateHealthAnalysis, {
       listId: args.listId,
       healthAnalysis
     });

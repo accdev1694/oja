@@ -53,7 +53,7 @@ export const generateHybridSeedItems = action({
 
     let globalItems: SeedItem[] = [];
     try {
-        const popularVariants = await ctx.runQuery(
+      const popularVariants = await ctx.runQuery(
         internal.itemVariants.getPopularForSeeding,
         { limit: totalItems }
       );
