@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   Modal,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
@@ -90,79 +91,104 @@ export function SupportTab({ hasPermission }: SupportTabProps) {
     { label: "Closed", value: "closed" },
   ];
 
-  return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-      {/* Support Summary */}
-      {summary && (
-        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
-          <View style={styles.metricsGrid}>
-            <View style={[styles.metricCard, { width: "23%" }]}>
-              <Text style={styles.metricValue}>{summary.open}</Text>
-              <Text style={styles.metricLabel}>Open</Text>
-            </View>
-            <View style={[styles.metricCard, { width: "23%" }]}>
-              <Text style={styles.metricValue}>{summary.unassigned}</Text>
-              <Text style={styles.metricLabel}>Unassigned</Text>
-            </View>
-            <View style={[styles.metricCard, { width: "23%" }]}>
-              <Text style={styles.metricValue}>{summary.inProgress}</Text>
-              <Text style={styles.metricLabel}>Active</Text>
-            </View>
-            <View style={[styles.metricCard, { width: "23%" }]}>
-              <Text style={styles.metricValue}>{summary.resolved}</Text>
-              <Text style={styles.metricLabel}>Resolved</Text>
-            </View>
+  const ticketRenderItem = useCallback(
+    ({ item: t }: { item: SupportTicket }) => (
+      <Pressable
+        style={styles.ticketRow}
+        onPress={() => { setSelectedTicketId(t._id); Haptics.selectionAsync(); }}
+      >
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={[styles.priorityDot, { backgroundColor: t.priority === "urgent" ? colors.semantic.danger : t.priority === "high" ? colors.semantic.warning : colors.accent.primary }]} />
+            <Text style={styles.userName}>{t.subject}</Text>
           </View>
-        </AnimatedSection>
-      )}
-
-      {/* Ticket List */}
-      <GlassCard style={styles.section}>
-        <View style={styles.filterRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-            {statusOptions.map((opt) => (
-              <Pressable
-                key={opt.value || "all"}
-                style={[styles.filterChip, statusFilter === opt.value && styles.filterChipActive]}
-                onPress={() => { setStatusFilter(opt.value); Haptics.selectionAsync(); }}
-              >
-                <Text style={[styles.filterChipText, statusFilter === opt.value && styles.filterChipTextActive]}>
-                  {opt.label}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+          <Text style={styles.userEmail}>{t.userName} • {new Date(t.createdAt).toLocaleDateString()}</Text>
         </View>
+        <View style={{ alignItems: "flex-end", gap: 4 }}>
+          <View style={[styles.statusBadge, t.status === "open" ? styles.warningBadge : t.status === "resolved" ? styles.successBadge : styles.infoBadge]}>
+            <Text style={styles.statusBadgeText}>{t.status}</Text>
+          </View>
+          {!t.assignedTo && (
+            <Pressable onPress={() => handleAssign(t._id)} style={styles.assignBadge}>
+              <Text style={styles.assignBadgeText}>Claim</Text>
+            </Pressable>
+          )}
+        </View>
+      </Pressable>
+    ),
+    [handleAssign]
+  );
 
-        {tickets?.map((t) => (
-          <Pressable 
-            key={t._id} 
-            style={styles.ticketRow}
-            onPress={() => { setSelectedTicketId(t._id); Haptics.selectionAsync(); }}
-          >
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={[styles.priorityDot, { backgroundColor: t.priority === "urgent" ? colors.semantic.danger : t.priority === "high" ? colors.semantic.warning : colors.accent.primary }]} />
-                <Text style={styles.userName}>{t.subject}</Text>
+  const ticketKeyExtractor = useCallback((item: SupportTicket) => item._id, []);
+
+  const TicketListHeader = useMemo(
+    () => (
+      <View>
+        {/* Support Summary */}
+        {summary && (
+          <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+            <View style={styles.metricsGrid}>
+              <View style={[styles.metricCard, { width: "23%" }]}>
+                <Text style={styles.metricValue}>{summary.open}</Text>
+                <Text style={styles.metricLabel}>Open</Text>
               </View>
-              <Text style={styles.userEmail}>{t.userName} • {new Date(t.createdAt).toLocaleDateString()}</Text>
-            </View>
-            <View style={{ alignItems: "flex-end", gap: 4 }}>
-              <View style={[styles.statusBadge, t.status === "open" ? styles.warningBadge : t.status === "resolved" ? styles.successBadge : styles.infoBadge]}>
-                <Text style={styles.statusBadgeText}>{t.status}</Text>
+              <View style={[styles.metricCard, { width: "23%" }]}>
+                <Text style={styles.metricValue}>{summary.unassigned}</Text>
+                <Text style={styles.metricLabel}>Unassigned</Text>
               </View>
-              {!t.assignedTo && (
-                <Pressable onPress={() => handleAssign(t._id)} style={styles.assignBadge}>
-                  <Text style={styles.assignBadgeText}>Claim</Text>
-                </Pressable>
-              )}
+              <View style={[styles.metricCard, { width: "23%" }]}>
+                <Text style={styles.metricValue}>{summary.inProgress}</Text>
+                <Text style={styles.metricLabel}>Active</Text>
+              </View>
+              <View style={[styles.metricCard, { width: "23%" }]}>
+                <Text style={styles.metricValue}>{summary.resolved}</Text>
+                <Text style={styles.metricLabel}>Resolved</Text>
+              </View>
             </View>
-          </Pressable>
-        ))}
-        {(!tickets || tickets.length === 0) && (
-          <Text style={styles.emptyText}>No tickets found for this filter.</Text>
+          </AnimatedSection>
         )}
-      </GlassCard>
+
+        {/* Filter chips */}
+        <GlassCard style={styles.section}>
+          <View style={styles.filterRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+              {statusOptions.map((opt) => (
+                <Pressable
+                  key={opt.value || "all"}
+                  style={[styles.filterChip, statusFilter === opt.value && styles.filterChipActive]}
+                  onPress={() => { setStatusFilter(opt.value); Haptics.selectionAsync(); }}
+                >
+                  <Text style={[styles.filterChipText, statusFilter === opt.value && styles.filterChipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </GlassCard>
+      </View>
+    ),
+    [summary, statusFilter, statusOptions]
+  );
+
+  const TicketListEmpty = useMemo(
+    () => <Text style={styles.emptyText}>No tickets found for this filter.</Text>,
+    []
+  );
+
+  const ticketData = useMemo(() => tickets || [], [tickets]);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <FlashList
+        data={ticketData}
+        renderItem={ticketRenderItem}
+        keyExtractor={ticketKeyExtractor}
+        ListHeaderComponent={TicketListHeader}
+        ListEmptyComponent={TicketListEmpty}
+        ListFooterComponent={<View style={{ height: 140 }} />}
+        contentContainerStyle={styles.scrollContent}
+      />
 
       {/* Ticket Detail Modal */}
       <Modal
@@ -173,7 +199,7 @@ export function SupportTab({ hasPermission }: SupportTabProps) {
       >
         <View style={styles.modalOverlay}>
           {ticketDetail && (
-            <SupportTicketView 
+            <SupportTicketView
               ticket={ticketDetail}
               onSendReply={handleSendReply}
               onUpdateStatus={handleUpdateStatus}
@@ -182,8 +208,6 @@ export function SupportTab({ hasPermission }: SupportTabProps) {
           )}
         </View>
       </Modal>
-
-      <View style={{ height: 140 }} />
-    </ScrollView>
+    </View>
   );
 }

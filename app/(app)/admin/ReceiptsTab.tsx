@@ -10,6 +10,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
@@ -18,7 +19,6 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   GlassCard,
   GlassButton,
-  AnimatedSection,
   colors,
   spacing,
   typography,
@@ -293,8 +293,174 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
     }
   }, [overridePrice, showToast]);
 
+  const receiptRenderItem = useCallback(
+    ({ item: r }: { item: Receipt }) => (
+      <Pressable
+        style={[styles.receiptRow, selectedReceiptId === r._id && { backgroundColor: `${colors.accent.primary}05` }, isMobile && { flexDirection: "column", alignItems: "flex-start", gap: 8 }]}
+        onPress={() => handleSelectReceipt(r._id)}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={styles.userName}>{r.storeName}</Text>
+          <Text style={styles.userEmail}>
+            £{(r.total ?? 0).toFixed(2)} • {r.userName} • {new Date(r.purchaseDate || Date.now()).toLocaleDateString()}
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center", width: isMobile ? "100%" : "auto", justifyContent: isMobile ? "space-between" : "flex-end" }}>
+          <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center" }}>
+            <Pressable onPress={() => handleStartEdit(r)} hitSlop={8}>
+              <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.text.tertiary} />
+            </Pressable>
+            {r.imageStorageId && (
+              <Pressable onPress={() => setSelectedImage(r.imageStorageId || null)} hitSlop={8}>
+                <MaterialCommunityIcons name="eye-outline" size={20} color={colors.accent.primary} />
+              </Pressable>
+            )}
+            {canDelete && (
+              <Pressable onPress={() => handleDeleteReceipt(r._id)} hitSlop={8}>
+                <MaterialCommunityIcons name="delete-outline" size={18} color={colors.semantic.danger} />
+              </Pressable>
+            )}
+          </View>
+          <View style={[styles.statusBadge, r.processingStatus === "completed" ? styles.successBadge : styles.warningBadge]}>
+            <Text style={styles.statusBadgeText}>{r.processingStatus}</Text>
+          </View>
+        </View>
+      </Pressable>
+    ),
+    [selectedReceiptId, isMobile, handleSelectReceipt, handleStartEdit, canDelete, handleDeleteReceipt]
+  );
+
+  const receiptKeyExtractor = useCallback((item: Receipt) => item._id, []);
+
+  const receiptListData = useMemo(
+    () => (Array.isArray(recentReceipts) ? recentReceipts : []),
+    [recentReceipts]
+  );
+
+  const ReceiptListHeader = useMemo(
+    () => (
+      <View>
+        {/* Flagged Queue (Visual Moderation) */}
+        {Array.isArray(flaggedReceipts) && flaggedReceipts.length > 0 && (
+          <GlassCard style={[styles.section, { paddingBottom: 0 }]}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons name="eye-check" size={24} color={colors.semantic.warning} />
+              <Text style={styles.sectionTitle}>Moderation Queue ({flaggedReceipts.length})</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={localStyles.thumbList}>
+              {flaggedReceipts.map((r) => (
+                <View key={r._id} style={localStyles.queueItem}>
+                  <ReceiptThumbnail
+                    storageId={r.imageStorageId || ""}
+                    onPress={() => setSelectedImage(r.imageStorageId || null)}
+                  />
+                  <Text style={localStyles.queueLabel} numberOfLines={1}>{r.storeName}</Text>
+                  <Text style={localStyles.queueValue}>£{r.total.toFixed(2)}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <View style={{ padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border }}>
+              <GlassButton
+                onPress={handleBulkApprove}
+                variant="secondary"
+                size="sm"
+              >{`Approve All (${flaggedReceipts.length})`}</GlassButton>
+            </View>
+          </GlassCard>
+        )}
+
+        {/* Search & Filters */}
+        <GlassCard style={styles.section}>
+          <View style={styles.searchRow}>
+            <MaterialCommunityIcons name="magnify" size={20} color={colors.text.tertiary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search store, user..."
+              placeholderTextColor={colors.text.tertiary}
+              value={search}
+              onChangeText={setSearch}
+            />
+            {(search.length > 0 || statusFilter) && (
+              <Pressable onPress={handleSavePreset} hitSlop={12} style={{ padding: 4 }}>
+                <MaterialCommunityIcons name="bookmark-plus-outline" size={20} color={colors.accent.primary} />
+              </Pressable>
+            )}
+          </View>
+
+          <View style={{ marginTop: spacing.sm }}>
+            <SavedFilterPills tab="receipts" onSelect={handleApplyPreset} />
+          </View>
+
+          <View style={styles.filterRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+              {statusOptions.map((opt) => (
+                <Pressable
+                  key={opt.value || "all"}
+                  style={[styles.filterChip, statusFilter === opt.value && styles.filterChipActive]}
+                  onPress={() => { setStatusFilter(opt.value); Haptics.selectionAsync(); }}
+                >
+                  <Text style={[styles.filterChipText, statusFilter === opt.value && styles.filterChipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </GlassCard>
+
+        {/* Date Range Picker */}
+        <GlassDateRangePicker
+          value={dateRange}
+          onChange={setDateRange}
+          onClear={() => setDateRange({ startDate: null, endDate: null })}
+          title="Filter Receipts"
+        />
+
+        {/* Price Anomalies */}
+        {Array.isArray(priceAnomalies) && priceAnomalies.length > 0 && (
+          <GlassCard style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons name="alert-circle" size={24} color={colors.semantic.danger} />
+              <Text style={styles.sectionTitle}>Price Anomalies ({priceAnomalies.length})</Text>
+            </View>
+            {priceAnomalies.slice(0, 10).map((a) => (
+              <View key={a._id} style={[styles.receiptRow, isMobile && { flexDirection: "column", alignItems: "flex-start", gap: 4 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.userName}>{a.itemName}</Text>
+                  <Text style={styles.userEmail}>
+                    £{(a.unitPrice ?? 0).toFixed(2)} at {a.storeName} (avg: £{a.averagePrice ?? 0}, {a.deviation ?? 0}% off)
+                  </Text>
+                </View>
+                <View style={{ width: isMobile ? "100%" : "auto", alignItems: "flex-end" }}>
+                  {canDelete && (
+                    <Pressable onPress={() => handleDeletePrice(a._id)} hitSlop={8}>
+                      <MaterialCommunityIcons name="close-circle" size={20} color={colors.semantic.danger} />
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+            ))}
+          </GlassCard>
+        )}
+
+        {/* Recent Receipts section title */}
+        {receiptListData.length > 0 && (
+          <GlassCard style={[styles.section, { paddingBottom: 0 }]}>
+            <Text style={styles.sectionTitle}>Recent Receipts</Text>
+          </GlassCard>
+        )}
+      </View>
+    ),
+    [flaggedReceipts, search, statusFilter, statusOptions, dateRange, priceAnomalies, isMobile, canDelete, receiptListData.length, handleBulkApprove, handleSavePreset, handleApplyPreset, handleDeletePrice]
+  );
+
+  const ReceiptListEmpty = useMemo(
+    () => <Text style={styles.emptyText}>No receipts match your filters.</Text>,
+    []
+  );
+
   return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+    <View style={{ flex: 1 }}>
       {/* Image Modal */}
       <Modal
         visible={!!selectedImage}
@@ -330,7 +496,7 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
                 <MaterialCommunityIcons name="close" size={24} color={colors.text.primary} />
               </TouchableOpacity>
             </View>
-            
+
             <View style={{ gap: spacing.md }}>
               <View>
                 <Text style={styles.fieldLabel}>Store Name</Text>
@@ -361,158 +527,17 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
         </View>
       </Modal>
 
-      {/* Flagged Queue (Visual Moderation) */}
-      {Array.isArray(flaggedReceipts) && flaggedReceipts.length > 0 && (
-        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
-          <GlassCard style={[styles.section, { paddingBottom: 0 }]}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons name="eye-check" size={24} color={colors.semantic.warning} />
-              <Text style={styles.sectionTitle}>Moderation Queue ({flaggedReceipts.length})</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={localStyles.thumbList}>
-              {flaggedReceipts.map((r) => (
-                <View key={r._id} style={localStyles.queueItem}>
-                  <ReceiptThumbnail 
-                    storageId={r.imageStorageId || ""} 
-                    onPress={() => setSelectedImage(r.imageStorageId || null)} 
-                  />
-                  <Text style={localStyles.queueLabel} numberOfLines={1}>{r.storeName}</Text>
-                  <Text style={localStyles.queueValue}>£{r.total.toFixed(2)}</Text>
-                </View>
-              ))}
-            </ScrollView>
-            <View style={{ padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border }}>
-              <GlassButton
-                onPress={handleBulkApprove}
-                variant="secondary"
-                size="sm"
-              >{`Approve All (${flaggedReceipts.length})`}</GlassButton>
-            </View>
-          </GlassCard>
-        </AnimatedSection>
-      )}
-
-      {/* Search & Filters */}
-      <GlassCard style={styles.section}>
-        <View style={styles.searchRow}>
-          <MaterialCommunityIcons name="magnify" size={20} color={colors.text.tertiary} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search store, user..."
-            placeholderTextColor={colors.text.tertiary}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {(search.length > 0 || statusFilter) && (
-            <Pressable onPress={handleSavePreset} hitSlop={12} style={{ padding: 4 }}>
-              <MaterialCommunityIcons name="bookmark-plus-outline" size={20} color={colors.accent.primary} />
-            </Pressable>
-          )}
-        </View>
-        
-        <View style={{ marginTop: spacing.sm }}>
-          <SavedFilterPills tab="receipts" onSelect={handleApplyPreset} />
-        </View>
-
-        <View style={styles.filterRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-            {statusOptions.map((opt) => (
-              <Pressable
-                key={opt.value || "all"}
-                style={[styles.filterChip, statusFilter === opt.value && styles.filterChipActive]}
-                onPress={() => { setStatusFilter(opt.value); Haptics.selectionAsync(); }}
-              >
-                <Text style={[styles.filterChipText, statusFilter === opt.value && styles.filterChipTextActive]}>
-                  {opt.label}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      </GlassCard>
-
-      {/* Date Range Picker */}
-      <GlassDateRangePicker 
-        value={dateRange} 
-        onChange={setDateRange} 
-        onClear={() => setDateRange({ startDate: null, endDate: null })}
-        title="Filter Receipts"
+      <FlashList
+        data={receiptListData}
+        renderItem={receiptRenderItem}
+        keyExtractor={receiptKeyExtractor}
+        ListHeaderComponent={ReceiptListHeader}
+        ListEmptyComponent={ReceiptListEmpty}
+        ListFooterComponent={<View style={{ height: 140 }} />}
+        extraData={{ selectedReceiptId }}
+        contentContainerStyle={styles.scrollContent}
       />
-
-      {/* Price Anomalies */}
-      {Array.isArray(priceAnomalies) && priceAnomalies.length > 0 && (
-        <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
-          <GlassCard style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons name="alert-circle" size={24} color={colors.semantic.danger} />
-              <Text style={styles.sectionTitle}>Price Anomalies ({priceAnomalies.length})</Text>
-            </View>
-            {priceAnomalies.slice(0, 10).map((a) => (
-              <View key={a._id} style={[styles.receiptRow, isMobile && { flexDirection: "column", alignItems: "flex-start", gap: 4 }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.userName}>{a.itemName}</Text>
-                  <Text style={styles.userEmail}>
-                    £{(a.unitPrice ?? 0).toFixed(2)} at {a.storeName} (avg: £{a.averagePrice ?? 0}, {a.deviation ?? 0}% off)
-                  </Text>
-                </View>
-                <View style={{ width: isMobile ? "100%" : "auto", alignItems: "flex-end" }}>
-                  {canDelete && (
-                    <Pressable onPress={() => handleDeletePrice(a._id)} hitSlop={8}>
-                      <MaterialCommunityIcons name="close-circle" size={20} color={colors.semantic.danger} />
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-            ))}
-          </GlassCard>
-        </AnimatedSection>
-      )}
-
-      {/* Recent Receipts */}
-      {Array.isArray(recentReceipts) && recentReceipts.length > 0 && (
-        <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
-          <GlassCard style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Receipts</Text>
-            {recentReceipts.map((r) => (
-              <Pressable 
-                key={r._id} 
-                style={[styles.receiptRow, selectedReceiptId === r._id && { backgroundColor: `${colors.accent.primary}05` }, isMobile && { flexDirection: "column", alignItems: "flex-start", gap: 8 }]}
-                onPress={() => handleSelectReceipt(r._id)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.userName}>{r.storeName}</Text>
-                  <Text style={styles.userEmail}>
-                    £{(r.total ?? 0).toFixed(2)} • {r.userName} • {new Date(r.purchaseDate || Date.now()).toLocaleDateString()}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center", width: isMobile ? "100%" : "auto", justifyContent: isMobile ? "space-between" : "flex-end" }}>
-                  <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center" }}>
-                    <Pressable onPress={() => handleStartEdit(r)} hitSlop={8}>
-                      <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.text.tertiary} />
-                    </Pressable>
-                    {r.imageStorageId && (
-                      <Pressable onPress={() => setSelectedImage(r.imageStorageId || null)} hitSlop={8}>
-                        <MaterialCommunityIcons name="eye-outline" size={20} color={colors.accent.primary} />
-                      </Pressable>
-                    )}
-                    {canDelete && (
-                      <Pressable onPress={() => handleDeleteReceipt(r._id)} hitSlop={8}>
-                        <MaterialCommunityIcons name="delete-outline" size={18} color={colors.semantic.danger} />
-                      </Pressable>
-                    )}
-                  </View>
-                  <View style={[styles.statusBadge, r.processingStatus === "completed" ? styles.successBadge : styles.warningBadge]}>
-                    <Text style={styles.statusBadgeText}>{r.processingStatus}</Text>
-                  </View>
-                </View>
-              </Pressable>
-            ))}
-          </GlassCard>
-        </AnimatedSection>
-      )}
-
-      <View style={{ height: 140 }} />
-    </ScrollView>
+    </View>
   );
 }
 

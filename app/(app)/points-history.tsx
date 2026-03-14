@@ -1,10 +1,10 @@
-import type { Doc } from "@/convex/_generated/dataModel";
-import React, { useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import React, { useMemo, useCallback } from "react";
+import { View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { FlashList } from "@shopify/flash-list";
 
 import {
   GlassScreen,
@@ -31,32 +31,41 @@ function GuideItem({ icon, title, desc }: { icon: keyof typeof import("@expo/vec
   );
 }
 
+interface MonthHeader {
+  _id: string;
+  isMonthHeader: true;
+  month: string;
+}
+
 export default function PointsHistoryScreen() {
   const router = useRouter();
   const history = useQuery(api.points.getPointsHistory, { limit: 100 });
   const pointsBalance = useQuery(api.points.getPointsBalance);
   const expiringPoints = useQuery(api.points.getExpiringPoints);
 
-  const groupedHistory = useMemo(() => {
-    if (!history) return [];
+  type HistoryItem = NonNullable<typeof history>[number];
+  type FlatDataItem = HistoryItem | MonthHeader;
 
-    const groups: Array<{ month: string; total: number; transactions: Doc<"pointsTransactions">[] }> = [];
+  // Flatten grouped history into a flat array with month headers interleaved
+  const flatData = useMemo(() => {
+    if (!history || history.length === 0) return [] as FlatDataItem[];
+
+    const result: FlatDataItem[] = [];
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    let currentMonth = "";
 
-    history.forEach((tx: Doc<"pointsTransactions">) => {
+    history.forEach((tx) => {
       const date = new Date(tx.createdAt);
       const monthYear = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
 
-      let group = groups.find(g => g.month === monthYear);
-      if (!group) {
-        group = { month: monthYear, total: 0, transactions: [] };
-        if (group) groups.push(group);
+      if (monthYear !== currentMonth) {
+        currentMonth = monthYear;
+        result.push({ _id: `month-${monthYear}`, isMonthHeader: true, month: monthYear });
       }
-      group.transactions.push(tx);
-      group.total += tx.amount;
+      result.push(tx);
     });
 
-    return groups;
+    return result;
   }, [history]);
 
   const getIconForType = (type: string) => {
@@ -85,19 +94,47 @@ export default function PointsHistoryScreen() {
     }
   };
 
-  return (
-    <GlassScreen>
-      <SimpleHeader
-        title="Points History"
-        showBack
-        onBack={() => router.back()}
-      />
+  const renderItem = useCallback(
+    ({ item }: { item: FlatDataItem }) => {
+      if ("isMonthHeader" in item && item.isMonthHeader) {
+        return <Text style={styles.monthHeader}>{item.month}</Text>;
+      }
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      const tx = item as HistoryItem;
+      const isPositive = tx.amount > 0;
+      return (
+        <GlassCard style={styles.txCard} variant="standard">
+          <View style={styles.txRow}>
+            <View style={[styles.iconContainer, { backgroundColor: `${getColorForType(tx.type)}20` }]}>
+              <MaterialCommunityIcons name={getIconForType(tx.type)} size={20} color={getColorForType(tx.type)} />
+            </View>
+            <View style={styles.txInfo}>
+              <Text style={styles.txTitle}>
+                {tx.type === "earn" ? "Receipt Scan" :
+                 tx.type === "bonus" ? "Streak Bonus" :
+                 tx.type === "redeem" ? "Subscription Credit" :
+                 tx.type === "refund" ? "Points Adjusted" :
+                 "Points Expired"}
+              </Text>
+              <Text style={styles.txDate}>
+                {new Date(tx.createdAt).toLocaleDateString()} · {new Date(tx.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </View>
+            <Text style={[styles.txAmount, { color: isPositive ? colors.semantic.success : colors.text.primary }]}>
+              {isPositive ? "+" : ""}{tx.amount} pts
+            </Text>
+          </View>
+        </GlassCard>
+      );
+    },
+    []
+  );
+
+  const keyExtractor = useCallback((item: FlatDataItem) => item._id, []);
+
+  const ListHeaderComponent = useMemo(
+    () => (
+      <View style={{ gap: spacing.md }}>
         {/* Expiring Soon Banner */}
         {expiringPoints && (
           <GlassCard variant="bordered" accentColor={colors.semantic.warning} style={styles.expiringBanner}>
@@ -154,57 +191,49 @@ export default function PointsHistoryScreen() {
             </View>
           </GlassCollapsible>
         </View>
+      </View>
+    ),
+    [expiringPoints, pointsBalance]
+  );
 
-        {!history ? (
-          <Text style={styles.loadingText}>Loading history...</Text>
-        ) : history.length === 0 ? (
-          <GlassCard style={styles.emptyCard}>
-            <MaterialCommunityIcons name="history" size={48} color={colors.text.tertiary} />
-            <Text style={styles.emptyTitle}>No Points Yet</Text>
-            <Text style={styles.emptySub}>Scan receipts to start earning points.</Text>
-          </GlassCard>
-        ) : (
-          groupedHistory.map((group) => (
-            <View key={group.month} style={styles.monthGroup}>
-              <Text style={styles.monthHeader}>{group.month}</Text>
-              {group.transactions.map((tx: Doc<"pointsTransactions">) => {
-                const isPositive = tx.amount > 0;
-                return (
-                  <GlassCard key={tx._id} style={styles.txCard} variant="standard">
-                    <View style={styles.txRow}>
-                      <View style={[styles.iconContainer, { backgroundColor: `${getColorForType(tx.type)}20` }]}>
-                        <MaterialCommunityIcons name={getIconForType(tx.type)} size={20} color={getColorForType(tx.type)} />
-                      </View>
-                      <View style={styles.txInfo}>
-                        <Text style={styles.txTitle}>
-                          {tx.type === "earn" ? "Receipt Scan" : 
-                           tx.type === "bonus" ? "Streak Bonus" : 
-                           tx.type === "redeem" ? "Subscription Credit" : 
-                           tx.type === "refund" ? "Points Adjusted" : 
-                           "Points Expired"}
-                        </Text>
-                        <Text style={styles.txDate}>
-                          {new Date(tx.createdAt).toLocaleDateString()} · {new Date(tx.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                      </View>
-                      <Text style={[styles.txAmount, { color: isPositive ? colors.semantic.success : colors.text.primary }]}>
-                        {isPositive ? "+" : ""}{tx.amount} pts
-                      </Text>
-                    </View>
-                  </GlassCard>
-                );
-              })}
-            </View>
-          ))
-        )}
-      </ScrollView>
+  const ListEmptyComponent = useMemo(
+    () => {
+      if (!history) {
+        return <Text style={styles.loadingText}>Loading history...</Text>;
+      }
+      return (
+        <GlassCard style={styles.emptyCard}>
+          <MaterialCommunityIcons name="history" size={48} color={colors.text.tertiary} />
+          <Text style={styles.emptyTitle}>No Points Yet</Text>
+          <Text style={styles.emptySub}>Scan receipts to start earning points.</Text>
+        </GlassCard>
+      );
+    },
+    [history]
+  );
+
+  return (
+    <GlassScreen>
+      <SimpleHeader
+        title="Points History"
+        showBack
+        onBack={() => router.back()}
+      />
+
+      <FlashList
+        data={flatData}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        ListHeaderComponent={ListHeaderComponent}
+        ListEmptyComponent={ListEmptyComponent}
+        contentContainerStyle={styles.content}
+      />
     </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: { flex: 1 },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, paddingTop: spacing.md, gap: spacing.md },
+  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, paddingTop: spacing.md },
   loadingText: { ...typography.bodyMedium, color: colors.text.secondary, textAlign: "center", marginTop: spacing.xl },
   
   // Stats
@@ -228,8 +257,7 @@ const styles = StyleSheet.create({
   guideItemDesc: { ...typography.bodySmall, color: colors.text.secondary, lineHeight: 18 },
 
   // History
-  monthGroup: { gap: spacing.sm },
-  monthHeader: { ...typography.labelLarge, color: colors.text.secondary, marginLeft: spacing.xs, marginTop: spacing.sm, fontWeight: "600" },
+  monthHeader: { ...typography.labelLarge, color: colors.text.secondary, marginLeft: spacing.xs, marginTop: spacing.sm, marginBottom: spacing.sm, fontWeight: "600" },
   emptyCard: { alignItems: "center", padding: spacing.xl, gap: spacing.sm },
   emptyTitle: { ...typography.headlineSmall, color: colors.text.primary },
   emptySub: { ...typography.bodyMedium, color: colors.text.secondary, textAlign: "center" },

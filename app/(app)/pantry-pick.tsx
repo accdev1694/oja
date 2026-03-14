@@ -3,9 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { useQuery, useMutation } from "convex/react";
 import { useLocalSearchParams, router } from "expo-router";
 import { api } from "@/convex/_generated/api";
@@ -57,6 +57,10 @@ export default function PantryPickScreen() {
   const [isAdding, setIsAdding] = useState(false);
   const [pickCategoryFilter, setPickCategoryFilter] = useState<string | null>(null);
 
+  type PantryItem = NonNullable<typeof items>[number];
+  type CategoryHeader = { _id: string; isCategoryHeader: true; category: string; count: number };
+  type FlatItem = CategoryHeader | PantryItem;
+
   // Derive categories for filter chips
   const { pickCategories, pickCategoryCounts } = useMemo(() => {
     if (!items) return { pickCategories: [], pickCategoryCounts: {} };
@@ -67,25 +71,31 @@ export default function PantryPickScreen() {
     return { pickCategories: Object.keys(countMap).sort(), pickCategoryCounts: countMap };
   }, [items]);
 
-  // Filter items by selected category, then group by category sorted by stock
-  const groupedItems = useMemo(() => {
-    if (!items) return {};
+  // Flatten items into a flat array with category headers interleaved
+  const flatData = useMemo(() => {
+    if (!items) return [];
     const filtered = pickCategoryFilter
       ? items.filter(item => item.category === pickCategoryFilter)
       : items;
-    const groups: Record<string, typeof items> = {};
     const sorted = [...filtered].sort(
       (a, b) =>
         (STOCK_SORT_ORDER[a.stockLevel] ?? 4) -
         (STOCK_SORT_ORDER[b.stockLevel] ?? 4)
     );
+    const groups: Record<string, typeof sorted> = {};
     sorted.forEach(item => {
       if (!groups[item.category]) {
         groups[item.category] = [];
       }
       groups[item.category].push(item);
     });
-    return groups;
+
+    const result: FlatItem[] = [];
+    Object.entries(groups).forEach(([category, categoryItems]) => {
+      result.push({ _id: `cat-${category}`, isCategoryHeader: true, category, count: categoryItems.length });
+      categoryItems.forEach(item => result.push(item));
+    });
+    return result;
   }, [items, pickCategoryFilter]);
 
   const allItemIds = useMemo(() => {
@@ -146,6 +156,56 @@ export default function PantryPickScreen() {
       });
     }
   }, [allLowSelected, lowItemIds]);
+
+  const pantryRenderItem = useCallback(
+    ({ item }: { item: FlatItem }) => {
+      if ("isCategoryHeader" in item && item.isCategoryHeader) {
+        return (
+          <View style={styles.categoryHeader}>
+            <Text style={styles.categoryTitle}>{item.category}</Text>
+            <View style={styles.categoryCountBadge}>
+              <Text style={styles.categoryCount}>{item.count}</Text>
+            </View>
+          </View>
+        );
+      }
+
+      const pantryItem = item as PantryItem;
+      const isSelected = selectedIds.has(pantryItem._id);
+      const stockColor = STOCK_COLORS[pantryItem.stockLevel] || colors.text.tertiary;
+      const stockLabel = STOCK_LEVEL_SHORT[pantryItem.stockLevel as StockLevel] || pantryItem.stockLevel;
+      const iconName = getSafeIcon(pantryItem.icon, pantryItem.category);
+
+      return (
+        <TouchableOpacity
+          style={[styles.itemRow, isSelected && styles.itemRowSelected]}
+          onPress={() => toggleItem(pantryItem._id)}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons
+            name={isSelected ? "checkbox-marked" : "checkbox-blank-outline"}
+            size={22}
+            color={isSelected ? colors.accent.primary : colors.text.tertiary}
+          />
+          <MaterialCommunityIcons
+            name={iconName}
+            size={20}
+            color={colors.text.secondary}
+          />
+          <Text style={styles.itemName} numberOfLines={1}>
+            {pantryItem.name}
+          </Text>
+          <View style={[styles.stockBadge, { backgroundColor: `${stockColor}20` }]}>
+            <View style={[styles.stockDot, { backgroundColor: stockColor }]} />
+            <Text style={[styles.stockText, { color: stockColor }]}>{stockLabel}</Text>
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [selectedIds, toggleItem]
+  );
+
+  const pantryKeyExtractor = useCallback((item: FlatItem) => item._id, []);
 
   const handleConfirm = async () => {
     if (selectedIds.size === 0 || !listId) return;
@@ -248,57 +308,13 @@ export default function PantryPickScreen() {
       />
 
       {/* Item list */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {Object.entries(groupedItems).map(([category, categoryItems]) => (
-          <View key={category} style={styles.categorySection}>
-            <View style={styles.categoryHeader}>
-              <Text style={styles.categoryTitle}>{category}</Text>
-              <View style={styles.categoryCountBadge}>
-                <Text style={styles.categoryCount}>{categoryItems.length}</Text>
-              </View>
-            </View>
-            <View style={styles.itemList}>
-              {categoryItems.map((item) => {
-                const isSelected = selectedIds.has(item._id as string);
-                const stockColor = STOCK_COLORS[item.stockLevel] || colors.text.tertiary;
-                const stockLabel = STOCK_LEVEL_SHORT[item.stockLevel as StockLevel] || item.stockLevel;
-                const iconName = getSafeIcon(item.icon, item.category);
-
-                return (
-                  <TouchableOpacity
-                    key={item._id}
-                    style={[styles.itemRow, isSelected && styles.itemRowSelected]}
-                    onPress={() => toggleItem(item._id as string)}
-                    activeOpacity={0.7}
-                  >
-                    <MaterialCommunityIcons
-                      name={isSelected ? "checkbox-marked" : "checkbox-blank-outline"}
-                      size={22}
-                      color={isSelected ? colors.accent.primary : colors.text.tertiary}
-                    />
-                    <MaterialCommunityIcons
-                      name={iconName}
-                      size={20}
-                      color={colors.text.secondary}
-                    />
-                    <Text style={styles.itemName} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <View style={[styles.stockBadge, { backgroundColor: `${stockColor}20` }]}>
-                      <View style={[styles.stockDot, { backgroundColor: stockColor }]} />
-                      <Text style={[styles.stockText, { color: stockColor }]}>{stockLabel}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        ))}
-      </ScrollView>
+      <FlashList
+        data={flatData}
+        renderItem={pantryRenderItem}
+        keyExtractor={pantryKeyExtractor}
+        extraData={selectedIds}
+        contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: 140 + insets.bottom }}
+      />
 
       {/* Floating confirm button */}
       <View style={[styles.floatingBar, { paddingBottom: insets.bottom + 16 }]}>
@@ -398,16 +414,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontWeight: "600",
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-  },
-  categorySection: {
-    marginBottom: spacing.xl,
-  },
   categoryHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -429,15 +435,13 @@ const styles = StyleSheet.create({
     ...typography.labelSmall,
     color: colors.text.secondary,
   },
-  itemList: {
-    gap: spacing.sm,
-  },
   itemRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
     backgroundColor: colors.glass.background,
     borderRadius: borderRadius.md,
     borderWidth: 1,

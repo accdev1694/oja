@@ -1,10 +1,12 @@
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
+import { useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Doc } from "@/convex/_generated/dataModel";
+import { Doc } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { FlashList } from "@shopify/flash-list";
 import {
   GlassScreen,
   GlassCard,
@@ -16,7 +18,9 @@ import {
   spacing,
 } from "@/components/ui/glass";
 
-const typeIcons: Record<string, string> = {
+type Notification = Doc<"notifications">;
+
+const typeIcons = {
   partner_joined: "account-check",
   comment_added: "comment-text",
   list_message: "chat",
@@ -25,7 +29,7 @@ const typeIcons: Record<string, string> = {
   tier_upgrade: "arrow-up-bold",
 };
 
-const typeColors: Record<string, string> = {
+const typeColors = {
   partner_joined: colors.accent.primary,
   comment_added: colors.accent.primary,
   list_message: colors.accent.primary,
@@ -40,9 +44,9 @@ export default function NotificationsScreen() {
   const markRead = useMutation(api.notifications.markAsRead);
   const markAllRead = useMutation(api.notifications.markAllAsRead);
 
-  const handleNotificationPress = (notification: Doc<"notifications">) => {
+  const handleNotificationPress = (notification: Notification) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!notification || !notification.read) return;
+    if (!notification) return;
     if (!notification.read) {
       markRead({ id: notification._id });
     }
@@ -75,6 +79,49 @@ export default function NotificationsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     markAllRead();
   };
+
+  const renderItem = useCallback(
+    ({ item: n }: { item: Notification }) => (
+      <Pressable onPress={() => handleNotificationPress(n)}>
+        <GlassCard style={[styles.notifCard, !n.read && styles.unreadCard]}>
+          <View style={styles.notifRow}>
+            <View style={[styles.iconCircle, { backgroundColor: `${typeColors[n.type as keyof typeof typeColors] || colors.accent.primary}20` }]}>
+              <MaterialCommunityIcons
+                name={((typeIcons[n.type as keyof typeof typeIcons] || "bell")) as React.ComponentProps<typeof MaterialCommunityIcons>["name"]}
+                size={20}
+                color={typeColors[n.type as keyof typeof typeColors] || colors.accent.primary}
+              />
+            </View>
+            <View style={styles.notifContent}>
+              <Text style={styles.notifTitle}>{n.title}</Text>
+              <Text style={styles.notifBody}>{n.body}</Text>
+              <Text style={styles.notifTime}>{formatTime(n.createdAt)}</Text>
+            </View>
+            {!n.read && <View style={styles.unreadDot} />}
+          </View>
+        </GlassCard>
+      </Pressable>
+    ),
+    [handleNotificationPress]
+  );
+
+  const keyExtractor = useCallback(
+    (item: Notification) => item._id,
+    []
+  );
+
+  const ListEmptyComponent = useMemo(
+    () => (
+      <View style={styles.emptyState}>
+        <MaterialCommunityIcons name="bell-off-outline" size={64} color={colors.text.tertiary} />
+        <Text style={styles.emptyTitle}>No Notifications</Text>
+        <Text style={styles.emptySubtitle}>You&apos;re all caught up!</Text>
+      </View>
+    ),
+    []
+  );
+
+  const ListFooterComponent = useMemo(() => <View style={{ height: 140 }} />, []);
 
   const formatTime = (ts: number) => {
     const now = Date.now();
@@ -113,46 +160,20 @@ export default function NotificationsScreen() {
         }
       />
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {notifications.length === 0 && (
-          <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="bell-off-outline" size={64} color={colors.text.tertiary} />
-            <Text style={styles.emptyTitle}>No Notifications</Text>
-            <Text style={styles.emptySubtitle}>You&apos;re all caught up!</Text>
-          </View>
-        )}
-
-        {notifications.map((n: Doc<"notifications">) => (
-          <Pressable key={n._id} onPress={() => handleNotificationPress(n)}>
-            <GlassCard style={[styles.notifCard, !n.read && styles.unreadCard]}>
-              <View style={styles.notifRow}>
-                <View style={[styles.iconCircle, { backgroundColor: `${typeColors[n.type] || colors.accent.primary}20` }]}>
-                  <MaterialCommunityIcons
-                    name={((typeIcons[n.type] || "bell")) as React.ComponentProps<typeof MaterialCommunityIcons>["name"]}
-                    size={20}
-                    color={typeColors[n.type] || colors.accent.primary}
-                  />
-                </View>
-                <View style={styles.notifContent}>
-                  <Text style={styles.notifTitle}>{n.title}</Text>
-                  <Text style={styles.notifBody}>{n.body}</Text>
-                  <Text style={styles.notifTime}>{formatTime(n.createdAt)}</Text>
-                </View>
-                {!n.read && <View style={styles.unreadDot} />}
-              </View>
-            </GlassCard>
-          </Pressable>
-        ))}
-
-        <View style={{ height: 140 }} />
-      </ScrollView>
+      <FlashList
+        data={notifications}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        ListEmptyComponent={ListEmptyComponent}
+        ListFooterComponent={ListFooterComponent}
+        contentContainerStyle={styles.scrollContent}
+      />
     </GlassScreen>
   );
 }
 
 const styles = StyleSheet.create({
   loading: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.md },
-  scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   emptyState: { alignItems: "center", marginTop: 80, gap: spacing.sm },
   emptyTitle: { ...typography.headlineSmall, color: colors.text.primary },

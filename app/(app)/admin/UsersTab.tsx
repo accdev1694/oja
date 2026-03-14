@@ -2,10 +2,10 @@ import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   View,
   Text,
-  ScrollView,
   TextInput,
   Pressable,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
@@ -292,10 +292,68 @@ export function UsersTab({
     }
   }, [toggleSuspension, showToast]);
 
-  return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-      {/* Search & Saved Filters */}
-      <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+  const userRenderItem = useCallback(
+    ({ item: u }: { item: User }) => (
+      <Pressable
+        style={[styles.userRow, selectedUsers.has(u._id) && { backgroundColor: `${colors.accent.primary}05` }]}
+        onPress={() => handleSelectUser(u._id)}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+          {canBulk && (
+            <Pressable
+              onPress={() => toggleUserSelection(u._id)}
+              style={{ padding: 4, marginRight: spacing.xs }}
+            >
+              <MaterialCommunityIcons
+                name={selectedUsers.has(u._id) ? "checkbox-marked" : "checkbox-blank-outline"}
+                size={20}
+                color={selectedUsers.has(u._id) ? colors.accent.primary : colors.text.tertiary}
+              />
+            </Pressable>
+          )}
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>{u.name}</Text>
+            <Text style={styles.userEmail}>{u.email || "No email"}</Text>
+          </View>
+        </View>
+
+        {/* Inline Quick Actions */}
+        <View style={styles.userActions}>
+          {canEdit && (
+            <>
+              <Pressable
+                onPress={() => handleImpersonate(u._id)}
+                hitSlop={12}
+                style={{ padding: 4 }}
+              >
+                <MaterialCommunityIcons name="incognito" size={18} color={colors.text.tertiary} />
+              </Pressable>
+              <Pressable
+                onPress={() => handleToggleAdmin(u._id)}
+                hitSlop={12}
+                style={{ padding: 4 }}
+              >
+                <MaterialCommunityIcons
+                  name={u.isAdmin ? "shield-check" : "shield-outline"}
+                  size={18}
+                  color={u.isAdmin ? colors.accent.primary : colors.text.tertiary}
+                />
+              </Pressable>
+            </>
+          )}
+          <MaterialCommunityIcons name="chevron-right" size={18} color={colors.text.tertiary} />
+        </View>
+      </Pressable>
+    ),
+    [selectedUsers, canBulk, canEdit, handleSelectUser, toggleUserSelection, handleImpersonate, handleToggleAdmin]
+  );
+
+  const userKeyExtractor = useCallback((item: User) => item._id, []);
+
+  const UserListHeader = useMemo(
+    () => (
+      <View>
+        {/* Search & Saved Filters */}
         <GlassCard style={styles.section}>
           <View style={styles.searchRow}>
             <MaterialCommunityIcons name="magnify" size={20} color={colors.text.tertiary} />
@@ -312,16 +370,14 @@ export function UsersTab({
               </Pressable>
             )}
           </View>
-          
+
           <View style={{ marginTop: spacing.sm }}>
             <SavedFilterPills tab="users" onSelect={handleApplyPreset} />
           </View>
         </GlassCard>
-      </AnimatedSection>
 
-      {/* Bulk Actions Bar */}
-      {selectedUsers.size > 0 && canBulk && (
-        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+        {/* Bulk Actions Bar */}
+        {selectedUsers.size > 0 && canBulk && (
           <GlassCard style={[styles.section, { backgroundColor: `${colors.accent.primary}10` }]}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <Text style={styles.userName}>{selectedUsers.size} users selected</Text>
@@ -338,12 +394,10 @@ export function UsersTab({
               </View>
             </View>
           </GlassCard>
-        </AnimatedSection>
-      )}
+        )}
 
-      {/* User Detail View */}
-      {selectedUser && userDetail && (
-        <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
+        {/* User Detail View */}
+        {selectedUser && userDetail && (
           <GlassCard style={styles.section}>
             <View style={styles.detailHeader}>
               <View>
@@ -384,13 +438,13 @@ export function UsersTab({
 
             {/* Details Tabs */}
             <View style={[styles.filterRow, { marginBottom: spacing.md }]}>
-              <Pressable 
+              <Pressable
                 style={[styles.filterChip, detailTab === "info" && styles.filterChipActive]}
                 onPress={() => setDetailTab("info")}
               >
                 <Text style={[styles.filterChipText, detailTab === "info" && styles.filterChipTextActive]}>Info</Text>
               </Pressable>
-              <Pressable 
+              <Pressable
                 style={[styles.filterChip, detailTab === "activity" && styles.filterChipActive]}
                 onPress={() => setDetailTab("activity")}
               >
@@ -457,82 +511,54 @@ export function UsersTab({
               <ActivityTimeline userId={selectedUser} />
             )}
           </GlassCard>
-        </AnimatedSection>
-      )}
+        )}
 
-      {/* User List */}
-      {Array.isArray(displayUsers) && displayUsers.length > 0 && (
-        <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
-          <GlassCard style={styles.section}>
+        {/* Section title for user list */}
+        {Array.isArray(displayUsers) && displayUsers.length > 0 && (
+          <GlassCard style={[styles.section, { paddingBottom: 0 }]}>
             <Text style={styles.sectionTitle}>
               {search.length >= 2 ? `Results (${displayUsers.length})` : `Users (${displayUsers.length})`}
             </Text>
-            {displayUsers.map((u) => (
-              <Pressable
-                key={u._id}
-                style={[styles.userRow, selectedUsers.has(u._id) && { backgroundColor: `${colors.accent.primary}05` }]}
-                onPress={() => handleSelectUser(u._id)}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                  {canBulk && (
-                    <Pressable 
-                      onPress={() => toggleUserSelection(u._id)}
-                      style={{ padding: 4, marginRight: spacing.xs }}
-                    >
-                      <MaterialCommunityIcons 
-                        name={selectedUsers.has(u._id) ? "checkbox-marked" : "checkbox-blank-outline"} 
-                        size={20} 
-                        color={selectedUsers.has(u._id) ? colors.accent.primary : colors.text.tertiary} 
-                      />
-                    </Pressable>
-                  )}
-                  <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{u.name}</Text>
-                    <Text style={styles.userEmail}>{u.email || "No email"}</Text>
-                  </View>
-                </View>
-                
-                {/* Inline Quick Actions */}
-                <View style={styles.userActions}>
-                  {canEdit && (
-                    <>
-                      <Pressable 
-                        onPress={() => handleImpersonate(u._id)} 
-                        hitSlop={12}
-                        style={{ padding: 4 }}
-                      >
-                        <MaterialCommunityIcons name="incognito" size={18} color={colors.text.tertiary} />
-                      </Pressable>
-                      <Pressable 
-                        onPress={() => handleToggleAdmin(u._id)} 
-                        hitSlop={12}
-                        style={{ padding: 4 }}
-                      >
-                        <MaterialCommunityIcons
-                          name={u.isAdmin ? "shield-check" : "shield-outline"}
-                          size={18}
-                          color={u.isAdmin ? colors.accent.primary : colors.text.tertiary}
-                        />
-                      </Pressable>
-                    </>
-                  )}
-                  <MaterialCommunityIcons name="chevron-right" size={18} color={colors.text.tertiary} />
-                </View>
-              </Pressable>
-            ))}
-            {status === "CanLoadMore" && (
-              <GlassButton
-                onPress={() => loadMore(50)}
-                variant="ghost"
-                size="sm"
-                style={{ marginTop: spacing.md }}
-              >Load More Users</GlassButton>
-            )}
           </GlassCard>
-        </AnimatedSection>
-      )}
+        )}
+      </View>
+    ),
+    [search, selectedUsers, canBulk, canEdit, selectedUser, userDetail, userTags, detailTab, isMobile, displayUsers, newTag, handleSavePreset, handleApplyPreset, handleBulkExtend, handleExportCSV, handleImpersonate, handleRemoveTag, handleAddTag, handleExtendTrial, handleAdjustPoints, handleGrantAccess, handleToggleSuspension]
+  );
 
-      <View style={{ height: 140 }} />
-    </ScrollView>
+  const userListData = useMemo(
+    () => (Array.isArray(displayUsers) ? displayUsers : []),
+    [displayUsers]
+  );
+
+  const UserListFooter = useMemo(
+    () => (
+      <View>
+        {status === "CanLoadMore" && (
+          <GlassButton
+            onPress={() => loadMore(50)}
+            variant="ghost"
+            size="sm"
+            style={{ marginTop: spacing.md }}
+          >Load More Users</GlassButton>
+        )}
+        <View style={{ height: 140 }} />
+      </View>
+    ),
+    [status, loadMore]
+  );
+
+  return (
+    <View style={{ flex: 1 }}>
+      <FlashList
+        data={userListData}
+        renderItem={userRenderItem}
+        keyExtractor={userKeyExtractor}
+        ListHeaderComponent={UserListHeader}
+        ListFooterComponent={UserListFooter}
+        extraData={{ selectedUsers, selectedUser }}
+        contentContainerStyle={styles.scrollContent}
+      />
+    </View>
   );
 }
