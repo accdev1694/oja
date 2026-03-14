@@ -24,6 +24,7 @@ export const updateHealthAnalysis = internalMutation({
       updatedAt: v.number()
     })
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.listId, {
       healthAnalysis: args.healthAnalysis
