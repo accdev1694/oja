@@ -39,6 +39,7 @@ export default function SignUpScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const [firstName, setFirstName] = useState("");
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
   const [referralCode, setReferralCode] = useState("");
@@ -90,6 +91,7 @@ export default function SignUpScreen() {
 
     try {
       await signUp.create({
+        firstName: firstName.trim() || undefined,
         emailAddress,
         password,
       });
@@ -105,7 +107,7 @@ export default function SignUpScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoaded, emailAddress, password]);
+  }, [isLoaded, firstName, emailAddress, password]);
 
   const onVerifyPress = useCallback(async () => {
     if (!isLoaded) return;
@@ -220,6 +222,17 @@ export default function SignUpScreen() {
               <Text style={styles.errorText}>{error}</Text>
             </GlassCard>
           ) : null}
+
+          <GlassInput
+            placeholder="First name"
+            value={firstName}
+            onChangeText={setFirstName}
+            autoCapitalize="words"
+            autoComplete="given-name"
+            iconLeft="account-outline"
+          />
+
+          <View style={{ height: spacing.sm }} />
 
           <GlassInput
             placeholder="Email"

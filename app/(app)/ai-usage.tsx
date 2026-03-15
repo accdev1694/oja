@@ -24,7 +24,7 @@ import { ReceiptScansCard } from "@/components/ai-usage/ReceiptScansCard";
  */
 export default function AIUsageScreen() {
   const router = useRouter();
-  const { user: convexUser } = useCurrentUser();
+  const { user: convexUser, firstName } = useCurrentUser();
   const usageSummary = useQuery(api.aiUsage.getUsageSummary);
   const pointsBalance = useQuery(api.points.getPointsBalance);
   const updateAiSettings = useMutation(api.aiUsage.updateAiSettings);
@@ -68,7 +68,7 @@ export default function AIUsageScreen() {
     <GlassScreen>
       <SimpleHeader
         title="AI Usage"
-        subtitle="This month"
+        subtitle={firstName ? `${firstName}'s usage this month` : "This month"}
         showBack
         onBack={() => router.back()}
       />

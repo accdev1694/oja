@@ -27,13 +27,15 @@ import {
 } from "@/components/ui/glass";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export default function SupportScreen() {
   const router = useRouter();
   const { type } = useLocalSearchParams();
   const { alert: showAlert } = useGlassAlert();
+  const { firstName } = useCurrentUser();
   const [view, setView] = useState<"form" | "list">("form");
-  
+
   const isInternal = type === "internal";
   
   // Form State
@@ -47,7 +49,7 @@ export default function SupportScreen() {
 
   const handleSubmit = async () => {
     if (!subject.trim() || !description.trim()) {
-      showAlert("Missing Information", "Please provide both a subject and a description.");
+      showAlert("Missing Information", firstName ? `${firstName}, please provide both a subject and a description.` : "Please provide both a subject and a description.");
       return;
     }
 
@@ -62,9 +64,9 @@ export default function SupportScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert(
         isInternal ? "Internal Ticket Created" : "Ticket Created", 
-        isInternal 
-          ? "Your request has been sent to the Super Admin team." 
-          : "We've received your request and will get back to you soon.", 
+        isInternal
+          ? (firstName ? `${firstName}, your request has been sent to the Super Admin team.` : "Your request has been sent to the Super Admin team.")
+          : (firstName ? `${firstName}, we've received your request and will get back to you soon.` : "We've received your request and will get back to you soon."),
         [
           { text: "View My Tickets", onPress: () => setView("list") }
         ]
@@ -83,7 +85,7 @@ export default function SupportScreen() {
     <GlassScreen>
       <SimpleHeader 
         title={isInternal ? "Internal Support" : "Support"} 
-        subtitle={isInternal ? "Admin-to-SuperAdmin communication" : "How can we help you today?"} 
+        subtitle={isInternal ? "Admin-to-SuperAdmin communication" : firstName ? `${firstName}, how can we help you today?` : "How can we help you today?"}
         showBack 
         onBack={() => router.back()} 
       />

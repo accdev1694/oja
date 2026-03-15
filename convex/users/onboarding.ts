@@ -91,6 +91,7 @@ export const setOnboardingData = mutation({
 
     await ctx.db.patch(user._id, {
       name: args.name,
+      nameManuallySet: true,
       country: args.country,
       cuisinePreferences: args.cuisinePreferences,
       dietaryRestrictions: args.dietaryRestrictions,

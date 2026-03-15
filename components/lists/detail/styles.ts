@@ -366,4 +366,21 @@ export const styles = StyleSheet.create({
     ...typography.labelSmall,
     color: colors.accent.primary,
   },
+  chatBadge: {
+    position: "absolute" as const,
+    top: -4,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.semantic.danger,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+    paddingHorizontal: 3,
+  },
+  chatBadgeText: {
+    fontSize: 9,
+    fontWeight: "700" as const,
+    color: "#fff",
+  },
 });

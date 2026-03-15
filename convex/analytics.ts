@@ -165,3 +165,130 @@ export const computeDailyMetrics = internalMutation({
     return { success: true, date: today };
   },
 });
+
+/**
+ * Aggregate yesterday's AI usage into aiUsageDaily for historical trends.
+ * Runs daily at 1am UTC via cron job.
+ */
+export const aggregateAIUsageDaily = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const yesterday = new Date(now - 24 * 60 * 60 * 1000);
+    const dateStr = yesterday.toISOString().split("T")[0];
+    const dayStart = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate()).getTime();
+    const dayEnd = dayStart + 24 * 60 * 60 * 1000 - 1;
+
+    console.log(`[AI Aggregation] Computing AI usage for ${dateStr}...`);
+
+    // Check if already aggregated
+    const existing = await ctx.db
+      .query("aiUsageDaily")
+      .withIndex("by_date", (q) => q.eq("date", dateStr))
+      .collect();
+
+    if (existing.length > 0) {
+      console.log(`[AI Aggregation] Already aggregated for ${dateStr}, skipping`);
+      return { success: true, date: dateStr, skipped: true };
+    }
+
+    // Get all aiUsage records that overlap with yesterday
+    // Records are monthly, so we check if the period covers yesterday
+    const monthStart = new Date(yesterday.getFullYear(), yesterday.getMonth(), 1).getTime();
+    const usageRecords = await ctx.db
+      .query("aiUsage")
+      .withIndex("by_period", (q) => q.eq("periodStart", monthStart))
+      .collect();
+
+    // Aggregate by feature
+    const featureAgg: Record<string, {
+      requestCount: number;
+      inputTokens: number;
+      outputTokens: number;
+      estimatedCostUsd: number;
+      visionRequests: number;
+      fallbackRequests: number;
+      userIds: Set<string>;
+    }> = {};
+
+    let totalRequests = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalCost = 0;
+    let totalVision = 0;
+    let totalFallback = 0;
+    const allUserIds = new Set<string>();
+
+    for (const record of usageRecords) {
+      // Use daily delta fields for accurate per-day data (not monthly cumulative)
+      // Records track which day their deltas belong to via dailyDate
+      if (record.dailyDate !== dateStr) continue;
+
+      const feature = record.feature;
+      if (!featureAgg[feature]) {
+        featureAgg[feature] = {
+          requestCount: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          estimatedCostUsd: 0,
+          visionRequests: 0,
+          fallbackRequests: 0,
+          userIds: new Set(),
+        };
+      }
+
+      const agg = featureAgg[feature];
+      agg.requestCount += record.dailyRequestCount ?? 0;
+      agg.inputTokens += record.dailyInputTokens ?? 0;
+      agg.outputTokens += record.dailyOutputTokens ?? 0;
+      agg.estimatedCostUsd += record.dailyCostUsd ?? 0;
+      agg.visionRequests += record.dailyVisionRequests ?? 0;
+      agg.fallbackRequests += record.dailyFallbackRequests ?? 0;
+      agg.userIds.add(record.userId.toString());
+
+      totalRequests += record.dailyRequestCount ?? 0;
+      totalInputTokens += record.dailyInputTokens ?? 0;
+      totalOutputTokens += record.dailyOutputTokens ?? 0;
+      totalCost += record.dailyCostUsd ?? 0;
+      totalVision += record.dailyVisionRequests ?? 0;
+      totalFallback += record.dailyFallbackRequests ?? 0;
+      allUserIds.add(record.userId.toString());
+    }
+
+    // Insert per-feature records
+    for (const [feature, agg] of Object.entries(featureAgg)) {
+      await ctx.db.insert("aiUsageDaily", {
+        date: dateStr,
+        feature,
+        provider: "all",
+        requestCount: agg.requestCount,
+        inputTokens: agg.inputTokens,
+        outputTokens: agg.outputTokens,
+        estimatedCostUsd: agg.estimatedCostUsd,
+        visionRequests: agg.visionRequests,
+        fallbackRequests: agg.fallbackRequests,
+        uniqueUsers: agg.userIds.size,
+        computedAt: now,
+      });
+    }
+
+    // Insert aggregate "all" record
+    await ctx.db.insert("aiUsageDaily", {
+      date: dateStr,
+      feature: "all",
+      provider: "all",
+      requestCount: totalRequests,
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+      estimatedCostUsd: totalCost,
+      visionRequests: totalVision,
+      fallbackRequests: totalFallback,
+      uniqueUsers: allUserIds.size,
+      computedAt: now,
+    });
+
+    console.log(`[AI Aggregation] ✅ Aggregated ${dateStr}: ${totalRequests} requests, ${allUserIds.size} users, $${totalCost.toFixed(4)} est. cost`);
+
+    return { success: true, date: dateStr, totalRequests, uniqueUsers: allUserIds.size };
+  },
+});

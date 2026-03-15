@@ -1,11 +1,11 @@
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { v } from "convex/values";
-import { 
-  withAIFallback, 
-  geminiGenerate, 
-  openaiGenerate, 
-  stripCodeBlocks 
+import {
+  withAIFallbackInstrumented,
+  geminiGenerateInstrumented,
+  openaiGenerateInstrumented,
+  stripCodeBlocks
 } from "./shared";
 import { toGroceryTitleCase } from "../lib/titleCase";
 
@@ -134,11 +134,28 @@ Return ONLY JSON array.`;
     }
 
     try {
-      const aiItems = await withAIFallback(
+      const { result: aiItems, metrics: aiMetrics } = await withAIFallbackInstrumented(
         isFullGeneration ? "generateHybridSeedItems" : "generateHybridSeedItems-gap",
-        async () => parseSeedResponse(await geminiGenerate(prompt, { temperature: 0.8 })),
-        async () => parseSeedResponse(await openaiGenerate(prompt, { temperature: 0.8 }))
+        async () => {
+          const { result, metrics } = await geminiGenerateInstrumented(prompt, { temperature: 0.8 });
+          return { result: parseSeedResponse(result), metrics };
+        },
+        async () => {
+          const { result, metrics } = await openaiGenerateInstrumented(prompt, { temperature: 0.8 });
+          return { result: parseSeedResponse(result), metrics };
+        }
       );
+
+      // Track AI usage
+      await ctx.runMutation(api.aiUsage.trackAICall, {
+        feature: "pantry_seed",
+        provider: aiMetrics.provider,
+        inputTokens: aiMetrics.inputTokens,
+        outputTokens: aiMetrics.outputTokens,
+        estimatedCostUsd: aiMetrics.estimatedCostUsd,
+        isVision: false,
+        isFallback: aiMetrics.isFallback,
+      });
       return deduplicateItems([...globalItems, ...aiItems]).slice(0, totalItems);
     } catch (error) {
       console.error("AI generation failed:", error);

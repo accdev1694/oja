@@ -26,6 +26,7 @@ interface UseVoiceAssistantOptions {
   activeListName?: string;
   userName?: string;
   ttsEnabled?: boolean;
+  userId?: string;
 }
 
 export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
@@ -41,7 +42,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
     useConversationHistory();
 
   const { speakText, stopSpeaking, cleanupTTS, isSpeakingRef } =
-    useVoiceTTS();
+    useVoiceTTS(options.userId);
 
   // useVoiceRecognition needs processTranscript as callback, but
   // processTranscript comes from useVoiceToolExecution which needs

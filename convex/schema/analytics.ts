@@ -110,11 +110,27 @@ export const analyticsTables = {
   // Monthly AI usage per user (voice, estimates, etc.)
   aiUsage: defineTable({
     userId: v.id("users"),
-    feature: v.string(), // "voice" | "price_estimate" | "list_suggestions"
+    feature: v.string(), // "voice" | "receipt_scan" | "product_scan" | "health_analysis" | "price_estimate" | "item_variants" | "list_suggestions" | "pantry_seed" | "tts"
     periodStart: v.number(), // Start of billing month
     periodEnd: v.number(), // End of billing month
     requestCount: v.number(),
     tokenCount: v.optional(v.number()), // Estimated tokens used
+    inputTokens: v.optional(v.number()), // Actual input tokens from API response
+    outputTokens: v.optional(v.number()), // Actual output tokens from API response
+    estimatedCostUsd: v.optional(v.number()), // Calculated cost in USD
+    visionRequests: v.optional(v.number()), // Count of vision (image) API calls
+    fallbackRequests: v.optional(v.number()), // Count of OpenAI fallback calls
+    errorCount: v.optional(v.number()), // Count of failed API calls
+    ttsCharacters: v.optional(v.number()), // Azure TTS character count (for "tts" feature)
+    // Daily delta fields — reset each day, used by aggregation & RPD meter
+    dailyDate: v.optional(v.string()), // "2026-03-15" — which day these deltas represent
+    dailyRequestCount: v.optional(v.number()),
+    dailyInputTokens: v.optional(v.number()),
+    dailyOutputTokens: v.optional(v.number()),
+    dailyCostUsd: v.optional(v.number()),
+    dailyVisionRequests: v.optional(v.number()),
+    dailyFallbackRequests: v.optional(v.number()),
+    dailyTtsCharacters: v.optional(v.number()),
     limit: v.number(), // Monthly limit for this feature
     lastNotifiedAt: v.optional(v.number()), // Last usage notification sent
     lastNotifiedThreshold: v.optional(v.number()), // 50, 80, or 100
@@ -123,5 +139,25 @@ export const analyticsTables = {
   })
     .index("by_user", ["userId"])
     .index("by_user_feature", ["userId", "feature"])
-    .index("by_user_feature_period", ["userId", "feature", "periodEnd"]),
+    .index("by_user_feature_period", ["userId", "feature", "periodEnd"])
+    .index("by_period", ["periodStart"]),
+
+  // Daily aggregated AI usage for historical trends & capacity planning
+  aiUsageDaily: defineTable({
+    date: v.string(), // "2025-03-15" ISO date
+    feature: v.string(), // Same feature names as aiUsage
+    provider: v.string(), // "gemini" | "openai" | "azure_tts" | "all"
+    requestCount: v.number(),
+    inputTokens: v.number(),
+    outputTokens: v.number(),
+    estimatedCostUsd: v.number(),
+    visionRequests: v.number(),
+    fallbackRequests: v.number(),
+    uniqueUsers: v.number(),
+    ttsCharacters: v.optional(v.number()), // Azure TTS character count
+    computedAt: v.number(),
+  })
+    .index("by_date", ["date"])
+    .index("by_feature_date", ["feature", "date"])
+    .index("by_date_feature", ["date", "feature"]),
 };

@@ -16,6 +16,7 @@ import {
   spacing,
   borderRadius,
 } from "@/components/ui/glass";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 function GuideItem({ icon, title, desc }: { icon: keyof typeof import("@expo/vector-icons").MaterialCommunityIcons.glyphMap; title: string; desc: string }) {
   return (
@@ -39,6 +40,7 @@ interface MonthHeader {
 
 export default function PointsHistoryScreen() {
   const router = useRouter();
+  const { firstName } = useCurrentUser();
   const history = useQuery(api.points.getPointsHistory, { limit: 100 });
   const pointsBalance = useQuery(api.points.getPointsBalance);
   const expiringPoints = useQuery(api.points.getExpiringPoints);
@@ -209,11 +211,11 @@ export default function PointsHistoryScreen() {
         <GlassCard style={styles.emptyCard}>
           <MaterialCommunityIcons name="history" size={48} color={colors.text.tertiary} />
           <Text style={styles.emptyTitle}>No Points Yet</Text>
-          <Text style={styles.emptySub}>Scan receipts to start earning points.</Text>
+          <Text style={styles.emptySub}>{firstName ? `${firstName}, scan receipts to start earning points.` : "Scan receipts to start earning points."}</Text>
         </GlassCard>
       );
     },
-    [history]
+    [history, firstName]
   );
 
   return (

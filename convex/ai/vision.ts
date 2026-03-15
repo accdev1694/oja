@@ -1,12 +1,14 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
-import { 
-  withAIFallback, 
-  genAI, 
-  openaiVisionGenerate, 
-  stripCodeBlocks 
+import {
+  withAIFallbackInstrumented,
+  genAI,
+  openaiVisionGenerateInstrumented,
+  stripCodeBlocks
 } from "./shared";
+import { metricsFromGemini } from "../lib/aiTracking";
+import type { AICallMetrics } from "../lib/aiTracking";
 import { toGroceryTitleCase } from "../lib/titleCase";
 
 /**
@@ -121,7 +123,7 @@ IMPORTANT RULES:
 - Only include actual product items that the customer bought and took home
 - Be HONEST about confidence — do not inflate scores. A fuzzy receipt should have low imageQuality and low item confidence.`;
 
-      const parsed = await withAIFallback(
+      const { result: parsed, metrics: aiMetrics } = await withAIFallbackInstrumented(
         "parseReceipt",
         async () => {
           const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -129,13 +131,25 @@ IMPORTANT RULES:
             { text: receiptPrompt },
             { inlineData: { mimeType: "image/jpeg", data: base64Image } },
           ]);
-          return JSON.parse(stripCodeBlocks(result.response.text().trim()));
+          const metrics = metricsFromGemini(result.response.usageMetadata, true);
+          return { result: JSON.parse(stripCodeBlocks(result.response.text().trim())), metrics };
         },
         async () => {
-          const response = await openaiVisionGenerate(receiptPrompt, base64Image);
-          return JSON.parse(stripCodeBlocks(response));
+          const { result: text, metrics } = await openaiVisionGenerateInstrumented(receiptPrompt, base64Image);
+          return { result: JSON.parse(stripCodeBlocks(text)), metrics };
         }
       );
+
+      // Track AI usage with actual metrics
+      await ctx.runMutation(api.aiUsage.trackAICall, {
+        feature: "receipt_scan",
+        provider: aiMetrics.provider,
+        inputTokens: aiMetrics.inputTokens,
+        outputTokens: aiMetrics.outputTokens,
+        estimatedCostUsd: aiMetrics.estimatedCostUsd,
+        isVision: true,
+        isFallback: aiMetrics.isFallback,
+      });
 
       const imageQuality = typeof parsed.imageQuality === "number" ? parsed.imageQuality : 50;
 
@@ -276,7 +290,7 @@ FIELDS:
 
 Return ONLY valid JSON.`;
 
-      const parsed = await withAIFallback(
+      const { result: parsed, metrics: aiMetrics } = await withAIFallbackInstrumented(
         "scanProduct",
         async () => {
           const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -284,13 +298,25 @@ Return ONLY valid JSON.`;
             { text: productPrompt },
             { inlineData: { mimeType: "image/jpeg", data: base64Image } },
           ]);
-          return JSON.parse(stripCodeBlocks(result.response.text().trim()));
+          const metrics = metricsFromGemini(result.response.usageMetadata, true);
+          return { result: JSON.parse(stripCodeBlocks(result.response.text().trim())), metrics };
         },
         async () => {
-          const response = await openaiVisionGenerate(productPrompt, base64Image);
-          return JSON.parse(stripCodeBlocks(response));
+          const { result: text, metrics } = await openaiVisionGenerateInstrumented(productPrompt, base64Image);
+          return { result: JSON.parse(stripCodeBlocks(text)), metrics };
         }
       );
+
+      // Track AI usage with actual metrics
+      await ctx.runMutation(api.aiUsage.trackAICall, {
+        feature: "product_scan",
+        provider: aiMetrics.provider,
+        inputTokens: aiMetrics.inputTokens,
+        outputTokens: aiMetrics.outputTokens,
+        estimatedCostUsd: aiMetrics.estimatedCostUsd,
+        isVision: true,
+        isFallback: aiMetrics.isFallback,
+      });
 
       const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
 

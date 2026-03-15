@@ -22,11 +22,13 @@ export function useCurrentUser() {
     clerkUser?.id ? { clerkId: clerkUser.id } : "skip"
   );
 
-  // Try Convex name first, then Clerk's firstName/fullName as fallback
+  // Try Convex name first, then Clerk's firstName/fullName, then email prefix, then "Shopper"
   const firstName =
     getFirstName(convexUser?.name) ||
     clerkUser?.firstName ||
-    getFirstName(clerkUser?.fullName);
+    getFirstName(clerkUser?.fullName) ||
+    clerkUser?.primaryEmailAddress?.emailAddress?.split("@")[0] ||
+    "Shopper";
 
   return {
     clerkUser,

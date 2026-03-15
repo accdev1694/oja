@@ -1,17 +1,19 @@
 import { action } from "../_generated/server";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { v } from "convex/values";
 import {
-  smartGenerate, 
+  smartGenerateInstrumented,
   stripCodeBlocks,
   genAI
 } from "./shared";
-import { 
-  voiceFunctionDeclarations, 
-  buildSystemPrompt, 
-  executeVoiceTool 
+import {
+  voiceFunctionDeclarations,
+  buildSystemPrompt,
+  executeVoiceTool
 } from "../lib/voice";
 import type { VoiceAssistantResponse, ConversationMessage, PendingAction } from "../lib/voice/types";
+import { metricsFromGemini } from "../lib/aiTracking";
+import { calculateTtsCostUsd } from "../lib/aiTracking";
 
 /** Shape of the confirm-type result from executeVoiceTool */
 interface ConfirmResult {
@@ -29,12 +31,24 @@ export const parseVoiceCommand = action({
     recentLists: v.array(v.object({ id: v.string(), name: v.string() })),
   },
   handler: async (ctx, args): Promise<VoiceAssistantResponse> => {
-    const prompt = `Parse this UK grocery voice command: "${args.transcript}". 
+    const prompt = `Parse this UK grocery voice command: "${args.transcript}".
 Recent lists: ${args.recentLists.map(l => l.name).join(", ")}.
 Return JSON with action, listName, matchedListId, items, confidence.`;
 
     try {
-      const raw = await smartGenerate(prompt, "parseVoiceCommand", { temperature: 0.2 });
+      const { result: raw, metrics: aiMetrics } = await smartGenerateInstrumented(prompt, "parseVoiceCommand", { temperature: 0.2 });
+
+      // Track this AI call with actual metrics
+      await ctx.runMutation(api.aiUsage.trackAICall, {
+        feature: "voice",
+        provider: aiMetrics.provider,
+        inputTokens: aiMetrics.inputTokens,
+        outputTokens: aiMetrics.outputTokens,
+        estimatedCostUsd: aiMetrics.estimatedCostUsd,
+        isVision: false,
+        isFallback: aiMetrics.isFallback,
+      });
+
       return JSON.parse(stripCodeBlocks(raw));
     } catch (error) {
       console.error("parseVoiceCommand failed:", error);
@@ -60,8 +74,9 @@ export const voiceAssistant = action({
     const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "voice" });
     if (!rateLimit.allowed) return { type: "error", text: "Too fast! Slow down." };
 
-    const usage: { allowed: boolean; message?: string } = await ctx.runMutation(api.aiUsage.incrementUsage, { feature: "voice", tokenCount: 500 });
-    if (!usage.allowed) return { type: "limit_reached", text: usage.message ?? "You've reached your voice usage limit." };
+    // Check usage limit without incrementing (query is read-only)
+    const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "voice" });
+    if (!usageCheck.allowed) return { type: "limit_reached", text: "You've reached your voice usage limit. Upgrade for more." };
 
     const systemPrompt = buildSystemPrompt({ ...args, lowStockItems: [], activeListNames: [] });
     const model = genAI.getGenerativeModel({
@@ -89,6 +104,18 @@ export const voiceAssistant = action({
       response = await chat.sendMessage([{ functionResponse: { name, response: responsePayload } }]);
     }
 
+    // Track with actual Gemini metrics (replaces incrementUsage + correctTokenCount)
+    const metrics = metricsFromGemini(response.response.usageMetadata);
+    await ctx.runMutation(api.aiUsage.trackAICall, {
+      feature: "voice",
+      provider: metrics.provider,
+      inputTokens: metrics.inputTokens,
+      outputTokens: metrics.outputTokens,
+      estimatedCostUsd: metrics.estimatedCostUsd,
+      isVision: false,
+      isFallback: false,
+    });
+
     return { type: pendingAction ? "confirm_action" : "answer", text: response.response.text(), pendingAction };
   },
 });
@@ -107,11 +134,15 @@ export const executeVoiceAction = action({
 });
 
 export const textToSpeech = action({
-  args: { text: v.string(), voiceGender: v.optional(v.union(v.literal("FEMALE"), v.literal("MALE"))) },
-  handler: async (_, args) => {
+  args: {
+    text: v.string(),
+    voiceGender: v.optional(v.union(v.literal("FEMALE"), v.literal("MALE"))),
+    userId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
     const azureKey = process.env.AZURE_SPEECH_KEY;
     if (!azureKey) return { audioBase64: null, provider: null, error: null };
-    
+
     const response = await fetch(`https://${process.env.AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`, {
       method: "POST",
       headers: { "Ocp-Apim-Subscription-Key": azureKey, "Content-Type": "application/ssml+xml", "X-Microsoft-OutputFormat": "audio-16khz-128kbitrate-mono-mp3" },
@@ -121,6 +152,20 @@ export const textToSpeech = action({
     if (response.ok) {
       const buffer = await response.arrayBuffer();
       const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+      // Track TTS character usage via internal mutation
+      const charCount = args.text.length;
+      const ttsCost = calculateTtsCostUsd(charCount);
+      if (args.userId) {
+        try {
+          await ctx.runMutation(internal.aiUsage.trackTTSUsage, {
+            userId: args.userId,
+            characterCount: charCount,
+            estimatedCostUsd: ttsCost,
+          });
+        } catch (e) {
+          console.warn("[TTS] Failed to track usage:", e);
+        }
+      }
       return { audioBase64: base64, provider: "azure", error: null };
     }
     return { audioBase64: null, provider: null, error: "Azure failed" };

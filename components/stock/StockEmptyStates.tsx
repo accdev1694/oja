@@ -9,6 +9,7 @@ import {
   colors,
 } from "@/components/ui/glass";
 import { TypewriterHint } from "@/components/pantry";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { stockStyles as styles } from "./stockStyles";
 
 // =============================================================================
@@ -16,9 +17,10 @@ import { stockStyles as styles } from "./stockStyles";
 // =============================================================================
 
 export function StockLoadingSkeleton() {
+  const { firstName } = useCurrentUser();
   return (
     <GlassScreen edges={["top"]}>
-      <SimpleHeader title="My Stock" subtitle="What you have at home · Loading..." accentColor={colors.semantic.pantry} />
+      <SimpleHeader title={firstName ? `${firstName}'s Stock` : "My Stock"} subtitle="What you have at home · Loading..." accentColor={colors.semantic.pantry} />
       <View style={styles.skeletonContainer}>
         <View style={styles.skeletonSection}>
           <View style={styles.skeletonSectionHeader}>
@@ -47,9 +49,10 @@ export function StockLoadingSkeleton() {
 // =============================================================================
 
 export function StockEmptyPantry() {
+  const { firstName } = useCurrentUser();
   return (
     <GlassScreen edges={["top"]}>
-      <SimpleHeader title="My Stock" subtitle="What you have at home · 0 items" accentColor={colors.semantic.pantry} />
+      <SimpleHeader title={firstName ? `${firstName}'s Stock` : "My Stock"} subtitle="What you have at home · 0 items" accentColor={colors.semantic.pantry} />
       <View style={styles.emptyContainer}>
         <EmptyPantry />
       </View>
@@ -103,7 +106,7 @@ export const StockListHeader = React.memo(function StockListHeader({
           />
           <Text style={styles.attentionEmptyTitle}>All stocked up!</Text>
           <Text style={styles.attentionEmptySubtitle}>
-            Nothing needs restocking right now. Tap &quot;All Items&quot; to browse your full stock.
+            Nothing needs restocking right now. Tap "All Items" to browse your full stock.
           </Text>
         </View>
       );

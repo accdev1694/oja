@@ -174,7 +174,7 @@ export default function InsightsScreen() {
             ? `You've saved £${savingsJar.totalSaved.toFixed(2)} so far!`
             : digest && digest.tripsCount > 0
               ? `${digest.tripsCount} trip${digest.tripsCount !== 1 ? "s" : ""} this week`
-              : "Your shopping intelligence"
+              : firstName ? `${firstName}'s shopping intelligence` : "Your shopping intelligence"
         }
         showBack
         onBack={() => router.back()}

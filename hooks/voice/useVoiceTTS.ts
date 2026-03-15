@@ -23,7 +23,7 @@ try {
 const AUDIO_AVAILABLE = AudioModule != null;
 const MAX_TTS_CHARS = 4500;
 
-export function useVoiceTTS() {
+export function useVoiceTTS(userId?: string) {
   const textToSpeech = useAction(api.ai.textToSpeech);
   const soundRef = useRef<{stopAsync():Promise<void>;unloadAsync():Promise<void>}|null>(null);
   const isSpeakingRef = useRef(false);
@@ -46,7 +46,7 @@ export function useVoiceTTS() {
       // Only try neural TTS if expo-av is available
       if (AUDIO_AVAILABLE && AudioModule !== null) {
         try {
-          const result = await textToSpeech({ text: ttsText, voiceGender: "MALE" });
+          const result = await textToSpeech({ text: ttsText, voiceGender: "MALE", userId: userId as any });
 
           if (result.audioBase64) {
             const audioModuleRecord = AudioModule as Record<string, unknown>;
@@ -116,7 +116,7 @@ export function useVoiceTTS() {
         });
       }
     },
-    [textToSpeech]
+    [textToSpeech, userId]
   );
 
   const stopSpeaking = useCallback(async () => {

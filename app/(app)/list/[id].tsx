@@ -49,6 +49,8 @@ import { ListHeader } from "@/components/lists/detail/ListHeader";
 import { ListFooter } from "@/components/lists/detail/ListFooter";
 import { ListEmptyState } from "@/components/lists/detail/ListEmptyState";
 import { ListSectionHeader } from "@/components/lists/detail/ListSectionHeader";
+import { ListChatThread } from "@/components/partners/ListChatThread";
+import { CommentThread } from "@/components/partners/CommentThread";
 
 type ListHeaderData = {
   _id: string;
@@ -83,12 +85,15 @@ export default function ListDetailScreen() {
   const [showMidShopStorePicker, setShowMidShopStorePicker] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [commentItem, setCommentItem] = useState<{ id: Id<"listItems">; name: string } | null>(null);
 
   // ── Queries & Mutations ────────────────────────────────────────────────────
   const list = useQuery(api.shoppingLists.getById, { id });
   const items = useQuery(api.listItems.getByList, { listId: id });
   const pointsBalance = useQuery(api.points.getPointsBalance);
   const streaks = useQuery(api.insights.getStreaks);
+  const partners = useQuery(api.partners.getByList, { listId: id });
   
   const toggleChecked = useMutation(api.listItems.toggleChecked);
   const removeItem = useMutation(api.listItems.remove);
@@ -100,7 +105,19 @@ export default function ListDetailScreen() {
   const refreshPrices = useMutation(api.listItems.refreshListPrices);
 
   // ── Hooks ──────────────────────────────────────────────────────────────────
-  const { isOwner, canEdit } = usePartnerRole(id);
+  const { isOwner, isPartner, canEdit } = usePartnerRole(id);
+  const isShared = isOwner || isPartner;
+
+  // Partner mode queries (skip if not shared)
+  const chatMessageCount = useQuery(
+    api.partners.getListMessageCount,
+    isShared ? { listId: id } : "skip"
+  );
+  const itemIds = useMemo(() => items?.map((i) => i._id) ?? [], [items]);
+  const commentCounts = useQuery(
+    api.partners.getCommentCounts,
+    isShared && itemIds.length > 0 ? { listItemIds: itemIds } : "skip"
+  );
   const { 
     isInProgress, 
     isFinishing, 
@@ -337,11 +354,17 @@ export default function ListDetailScreen() {
     return streak?.currentCount ?? 0;
   }, [streaks]);
 
+  // ── Partner mode handlers ────────────────────────────────────────────────
+  const handleOpenComments = useCallback((itemId: Id<"listItems">, itemName: string) => {
+    setCommentItem({ id: itemId, name: itemName });
+  }, []);
+
   // ── FlashList performance: memoized renderItem, keyExtractor, getItemType ──
   const renderListItem = useCallback(({ item }: { item: CategorizedItem }) => {
     if ("isHeader" in item) {
       return <ListSectionHeader title={item.title} />;
     }
+    const counts = commentCounts as Record<string, number> | undefined;
     return (
       <ShoppingListItem
         item={item}
@@ -354,9 +377,12 @@ export default function ListDetailScreen() {
         selectionActive={selectionActive}
         isSelected={selectedIds.has(item._id)}
         onSelectToggle={handleSelectToggle}
+        isOwner={isOwner}
+        commentCount={isShared ? (counts?.[item._id] ?? 0) : undefined}
+        onOpenComments={isShared ? handleOpenComments : undefined}
       />
     );
-  }, [isInProgress, canEdit, handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange, selectionActive, selectedIds, handleSelectToggle]);
+  }, [isInProgress, canEdit, handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange, selectionActive, selectedIds, handleSelectToggle, isOwner, isShared, commentCounts, handleOpenComments]);
 
   const listKeyExtractor = useCallback((item: CategorizedItem) => item._id, []);
 
@@ -492,7 +518,10 @@ export default function ListDetailScreen() {
         onSearchChange={setSearchTerm}
         onOpenSettings={() => setShowEditModal(true)}
         onAddItem={() => setShowAddModal(true)}
-        onShare={() => alert("Coming Soon", "Shared list functionality is being updated.")}
+        onShare={() => router.push(`/(app)/partners?listId=${id}`)}
+        isShared={isShared}
+        onOpenChat={() => setShowChat(true)}
+        unreadChatCount={chatMessageCount ?? 0}
       />
 
       <FlashList
@@ -529,7 +558,7 @@ export default function ListDetailScreen() {
           isFinishing={isFinishing}
           onStartTrip={() => startTrip(list.normalizedStoreId, list.storeName)}
           onFinishTrip={finishTrip}
-          activeShopper={list.activeShopperId ? { name: "Partner" } : null}
+          activeShopper={list.activeShopperId ? { name: partners?.find((p) => p.userId === list.activeShopperId)?.userName || "Partner" } : null}
           checkedCount={checkedCount}
           totalCount={items.length}
           insetsBottom={tabBarBottom}
@@ -621,6 +650,22 @@ export default function ListDetailScreen() {
         listId={id}
         initialAnalysis={list.healthAnalysis}
         itemCount={items.length}
+      />
+
+      {/* Partner mode: List chat */}
+      <ListChatThread
+        visible={showChat}
+        listId={id}
+        listName={list.name}
+        onClose={() => setShowChat(false)}
+      />
+
+      {/* Partner mode: Item comments */}
+      <CommentThread
+        visible={!!commentItem}
+        itemId={commentItem?.id ?? null}
+        itemName={commentItem?.name ?? ""}
+        onClose={() => setCommentItem(null)}
       />
     </GlassScreen>
   );

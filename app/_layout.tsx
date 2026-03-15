@@ -95,6 +95,7 @@ function InitialLayout() {
   const NAME_PROMPT_STORAGE_KEY = "oja_name_prompt_count";
   const MAX_NAME_PROMPTS = 3;
   const needsName = currentUser?.onboardingComplete &&
+    !currentUser.nameManuallySet &&
     (!currentUser.name || isGenericName(currentUser.name) ||
       currentUser.name.toLowerCase() === currentUser.email?.split("@")[0]?.toLowerCase());
   const [showNameModal, setShowNameModal] = useState(false);
@@ -216,23 +217,26 @@ function InitialLayout() {
             iconLeft="account-outline"
           />
           <View style={{ height: spacing.md }} />
-          <GlassButton
-            variant="primary"
-            size="lg"
-            onPress={handleSaveName}
-            loading={savingName}
-            disabled={savingName || !nameInput.trim()}
-          >
-            Continue
-          </GlassButton>
-          <GlassButton
-            variant="ghost"
-            size="sm"
-            onPress={() => setShowNameModal(false)}
-            style={{ marginTop: spacing.xs }}
-          >
-            Skip for now
-          </GlassButton>
+          <View style={{ flexDirection: "row", gap: spacing.sm, width: "100%" }}>
+            <GlassButton
+              variant="ghost"
+              size="lg"
+              onPress={() => setShowNameModal(false)}
+              style={{ flex: 1 }}
+            >
+              Skip for now
+            </GlassButton>
+            <GlassButton
+              variant="primary"
+              size="lg"
+              onPress={handleSaveName}
+              loading={savingName}
+              disabled={savingName || !nameInput.trim()}
+              style={{ flex: 1 }}
+            >
+              Continue
+            </GlassButton>
+          </View>
         </View>
       </GlassModal>
     </UserSwitchContext.Provider>

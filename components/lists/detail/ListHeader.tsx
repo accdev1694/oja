@@ -13,6 +13,9 @@ interface ListHeaderProps {
   onOpenSettings: () => void;
   onAddItem: () => void;
   onShare: () => void;
+  isShared?: boolean;
+  onOpenChat?: () => void;
+  unreadChatCount?: number;
 }
 
 export const ListHeader = ({
@@ -24,6 +27,9 @@ export const ListHeader = ({
   onOpenSettings,
   onAddItem,
   onShare,
+  isShared,
+  onOpenChat,
+  unreadChatCount,
 }: ListHeaderProps) => {
   const [searchVisible, setSearchVisible] = useState(false);
   const searchRef = useRef<TextInput>(null);
@@ -88,6 +94,24 @@ export const ListHeader = ({
           >
             <MaterialCommunityIcons name="share-variant-outline" size={18} color={colors.text.secondary} />
           </Pressable>
+          {isShared && onOpenChat && (
+            <Pressable
+              style={styles.iconButtonSmall}
+              onPress={onOpenChat}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <View>
+                <MaterialCommunityIcons name="chat-outline" size={18} color={colors.accent.primary} />
+                {(unreadChatCount ?? 0) > 0 && (
+                  <View style={styles.chatBadge}>
+                    <Text style={styles.chatBadgeText}>
+                      {unreadChatCount! > 9 ? "9+" : unreadChatCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </Pressable>
+          )}
           <Pressable
             style={[styles.iconButtonSmall, searchVisible && styles.iconButtonActive]}
             onPress={() => setSearchVisible(!searchVisible)}

@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, typography } from "@/lib/design/glassTokens";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 /**
  * Soft nudge banner shown on main screens:
@@ -15,6 +16,7 @@ import { colors, spacing, typography } from "@/lib/design/glassTokens";
  */
 export function TrialNudgeBanner() {
   const router = useRouter();
+  const { firstName } = useCurrentUser();
   const subscription = useQuery(api.subscriptions.getCurrentSubscription);
   const [dismissed, setDismissed] = useState(false);
 
@@ -36,13 +38,14 @@ export function TrialNudgeBanner() {
 
   // Different messaging based on urgency
   const isUrgent = daysLeft <= 2;
+  const name = firstName ? `${firstName}, ` : "";
   const message = showExpired
-    ? "Your trial ended — upgrade for unlimited lists & pantry"
+    ? `${name}your trial ended — upgrade for unlimited lists & pantry`
     : daysLeft === 0
-      ? "Trial ends today — subscribe to keep unlimited access"
+      ? `${name}trial ends today — subscribe to keep unlimited access`
       : isUrgent
-        ? `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left — subscribe to keep unlimited access`
-        : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left on your free trial`;
+        ? `${name}${daysLeft} day${daysLeft !== 1 ? "s" : ""} left — subscribe to keep unlimited access`
+        : `${name}${daysLeft} day${daysLeft !== 1 ? "s" : ""} left on your free trial`;
 
   // Warm color for expired/urgent, teal for normal trial period
   const accentColor = showExpired

@@ -17,6 +17,7 @@ import {
   typography,
   spacing,
 } from "@/components/ui/glass";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 type Notification = Doc<"notifications">;
 
@@ -40,6 +41,7 @@ const typeColors = {
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { firstName } = useCurrentUser();
   const notifications = useQuery(api.notifications.getByUser);
   const markRead = useMutation(api.notifications.markAsRead);
   const markAllRead = useMutation(api.notifications.markAllAsRead);
@@ -115,10 +117,10 @@ export default function NotificationsScreen() {
       <View style={styles.emptyState}>
         <MaterialCommunityIcons name="bell-off-outline" size={64} color={colors.text.tertiary} />
         <Text style={styles.emptyTitle}>No Notifications</Text>
-        <Text style={styles.emptySubtitle}>You&apos;re all caught up!</Text>
+        <Text style={styles.emptySubtitle}>{firstName ? `${firstName}, you're all caught up!` : "You're all caught up!"}</Text>
       </View>
     ),
-    []
+    [firstName]
   );
 
   const ListFooterComponent = useMemo(() => <View style={{ height: 140 }} />, []);

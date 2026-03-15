@@ -175,9 +175,15 @@ export const incrementUsage = mutation({
     const newCount = usage.requestCount + 1;
     const percentage = Math.round((newCount / usage.limit) * 100);
 
+    // Maintain daily delta fields alongside monthly cumulative
+    const todayStr = new Date().toISOString().split("T")[0];
+    const isNewDay = usage.dailyDate !== todayStr;
+
     await ctx.db.patch(usage._id, {
       requestCount: newCount,
       tokenCount: (usage.tokenCount ?? 0) + (args.tokenCount ?? 0),
+      dailyDate: todayStr,
+      dailyRequestCount: isNewDay ? 1 : (usage.dailyRequestCount ?? 0) + 1,
       updatedAt: Date.now(),
     });
 
@@ -441,6 +447,113 @@ export const sendUsageNotification = internalMutation({
 });
 
 /**
+ * Track an AI call with full provider metrics.
+ * Called by AI actions after each successful API call.
+ * Increments requestCount and adds actual token/cost data.
+ */
+export const trackAICall = mutation({
+  args: {
+    feature: v.string(),
+    provider: v.string(), // "gemini" | "openai" | "azure_tts"
+    inputTokens: v.number(),
+    outputTokens: v.number(),
+    estimatedCostUsd: v.number(),
+    isVision: v.boolean(),
+    isFallback: v.boolean(),
+    ttsCharacters: v.optional(v.number()),
+    checkLimit: v.optional(v.boolean()), // When true, check limit before tracking and return allowed status
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return args.checkLimit ? { allowed: false, message: "Not authenticated" } : undefined;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) return args.checkLimit ? { allowed: false, message: "User not found" } : undefined;
+
+    const { start, end } = getCurrentPeriod();
+
+    let usage = await ctx.db
+      .query("aiUsage")
+      .withIndex("by_user_feature_period", (q) =>
+        q.eq("userId", user._id).eq("feature", args.feature).eq("periodEnd", end)
+      )
+      .unique();
+
+    if (!usage) {
+      // Get user's plan for limit
+      const subscription = await ctx.db
+        .query("subscriptions")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .unique();
+
+      const plan = subscription?.plan ?? "free";
+      const featureKey = args.feature as keyof typeof AI_LIMITS;
+      const limit = AI_LIMITS[featureKey] ? getAILimit(plan, featureKey) : 999999;
+
+      const usageId = await ctx.db.insert("aiUsage", {
+        userId: user._id,
+        feature: args.feature,
+        periodStart: start,
+        periodEnd: end,
+        requestCount: 0,
+        limit: limit === -1 ? 999999 : limit,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      usage = await ctx.db.get(usageId);
+    }
+
+    if (!usage) return args.checkLimit ? { allowed: false, message: "Failed to create usage record" } : undefined;
+
+    // Check limit before tracking if requested
+    if (args.checkLimit && usage.requestCount >= usage.limit) {
+      return {
+        allowed: false,
+        usage: usage.requestCount,
+        limit: usage.limit,
+        percentage: 100,
+        message: `You've reached your monthly ${args.feature} limit. Upgrade for more.`,
+      };
+    }
+
+    // Maintain daily delta fields for accurate daily aggregation & RPD meter
+    const todayStr = new Date().toISOString().split("T")[0];
+    const isNewDay = usage.dailyDate !== todayStr;
+
+    await ctx.db.patch(usage._id, {
+      // Monthly cumulative fields (unchanged behavior)
+      requestCount: usage.requestCount + 1,
+      tokenCount: (usage.tokenCount ?? 0) + args.inputTokens + args.outputTokens,
+      inputTokens: (usage.inputTokens ?? 0) + args.inputTokens,
+      outputTokens: (usage.outputTokens ?? 0) + args.outputTokens,
+      estimatedCostUsd: (usage.estimatedCostUsd ?? 0) + args.estimatedCostUsd,
+      visionRequests: (usage.visionRequests ?? 0) + (args.isVision ? 1 : 0),
+      fallbackRequests: (usage.fallbackRequests ?? 0) + (args.isFallback ? 1 : 0),
+      // Daily delta fields — reset on new day, increment on same day
+      dailyDate: todayStr,
+      dailyRequestCount: isNewDay ? 1 : (usage.dailyRequestCount ?? 0) + 1,
+      dailyInputTokens: isNewDay ? args.inputTokens : (usage.dailyInputTokens ?? 0) + args.inputTokens,
+      dailyOutputTokens: isNewDay ? args.outputTokens : (usage.dailyOutputTokens ?? 0) + args.outputTokens,
+      dailyCostUsd: isNewDay ? args.estimatedCostUsd : (usage.dailyCostUsd ?? 0) + args.estimatedCostUsd,
+      dailyVisionRequests: isNewDay ? (args.isVision ? 1 : 0) : (usage.dailyVisionRequests ?? 0) + (args.isVision ? 1 : 0),
+      dailyFallbackRequests: isNewDay ? (args.isFallback ? 1 : 0) : (usage.dailyFallbackRequests ?? 0) + (args.isFallback ? 1 : 0),
+      dailyTtsCharacters: isNewDay ? (args.ttsCharacters ?? 0) : (usage.dailyTtsCharacters ?? 0) + (args.ttsCharacters ?? 0),
+      updatedAt: Date.now(),
+    });
+
+    // Return limit status when checkLimit is requested
+    if (args.checkLimit) {
+      const newCount = usage.requestCount + 1;
+      const percentage = Math.round((newCount / usage.limit) * 100);
+      return { allowed: true, usage: newCount, limit: usage.limit, percentage };
+    }
+  },
+});
+
+/**
  * Get limit for a feature based on user's plan
  */
 export const getFeatureLimit = query({
@@ -466,5 +579,93 @@ export const getFeatureLimit = query({
     const limit = getAILimit(plan, args.feature as keyof typeof AI_LIMITS);
 
     return { limit: limit === Infinity ? 999999 : limit, plan };
+  },
+});
+
+/**
+ * Track TTS (text-to-speech) usage via internal mutation.
+ * TTS runs as an unauthenticated action, so caller must pass userId.
+ */
+export const trackTTSUsage = internalMutation({
+  args: {
+    userId: v.id("users"),
+    characterCount: v.number(),
+    estimatedCostUsd: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const { start, end } = getCurrentPeriod();
+
+    let usage = await ctx.db
+      .query("aiUsage")
+      .withIndex("by_user_feature_period", (q) =>
+        q.eq("userId", args.userId).eq("feature", "tts").eq("periodEnd", end)
+      )
+      .unique();
+
+    if (!usage) {
+      const usageId = await ctx.db.insert("aiUsage", {
+        userId: args.userId,
+        feature: "tts",
+        periodStart: start,
+        periodEnd: end,
+        requestCount: 0,
+        limit: 999999, // TTS is unlimited but tracked
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      usage = await ctx.db.get(usageId);
+    }
+
+    if (!usage) return;
+
+    const todayStr = new Date().toISOString().split("T")[0];
+    const isNewDay = usage.dailyDate !== todayStr;
+
+    await ctx.db.patch(usage._id, {
+      requestCount: usage.requestCount + 1,
+      estimatedCostUsd: (usage.estimatedCostUsd ?? 0) + args.estimatedCostUsd,
+      ttsCharacters: (usage.ttsCharacters ?? 0) + args.characterCount,
+      dailyDate: todayStr,
+      dailyRequestCount: isNewDay ? 1 : (usage.dailyRequestCount ?? 0) + 1,
+      dailyCostUsd: isNewDay ? args.estimatedCostUsd : (usage.dailyCostUsd ?? 0) + args.estimatedCostUsd,
+      dailyTtsCharacters: isNewDay ? args.characterCount : (usage.dailyTtsCharacters ?? 0) + args.characterCount,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Track a failed AI call. Increments errorCount on the feature's usage record.
+ * Called from catch blocks in AI actions to monitor error rates.
+ */
+export const trackAICallError = mutation({
+  args: {
+    feature: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user) return;
+
+    const { end } = getCurrentPeriod();
+
+    const usage = await ctx.db
+      .query("aiUsage")
+      .withIndex("by_user_feature_period", (q) =>
+        q.eq("userId", user._id).eq("feature", args.feature).eq("periodEnd", end)
+      )
+      .unique();
+
+    if (usage) {
+      await ctx.db.patch(usage._id, {
+        errorCount: (usage.errorCount ?? 0) + 1,
+        updatedAt: Date.now(),
+      });
+    }
   },
 });

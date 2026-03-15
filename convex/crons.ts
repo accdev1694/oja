@@ -48,6 +48,27 @@ crons.daily(
   internal.analytics.computeDailyMetrics
 );
 
+// Aggregate daily AI usage for capacity planning — runs daily at 1am UTC
+crons.daily(
+  "aggregate-ai-usage-daily",
+  { hourUTC: 1, minuteUTC: 0 },
+  internal.analytics.aggregateAIUsageDaily
+);
+
+// Check AI capacity alerts (after daily aggregation) — runs daily at 2:15am UTC
+crons.daily(
+  "check-ai-capacity",
+  { hourUTC: 2, minuteUTC: 15 },
+  internal.monitoring.checkAICapacity
+);
+
+// Check Azure TTS character quota — runs daily at 2:30am UTC
+crons.daily(
+  "check-tts-quota",
+  { hourUTC: 2, minuteUTC: 30 },
+  internal.monitoring.checkTTSQuota
+);
+
 // Advanced Analytics — Phase 2
 crons.daily(
   "compute-user-segments",

@@ -2,7 +2,7 @@ import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { v } from "convex/values";
 import { Id, Doc } from "../_generated/dataModel";
-import { smartGenerate, stripCodeBlocks } from "./shared";
+import { smartGenerateInstrumented, stripCodeBlocks } from "./shared";
 import { calculateSimilarity } from "../lib/fuzzyMatch";
 import { cleanItemForStorage } from "../lib/itemNameParser";
 
@@ -114,8 +114,19 @@ Return ONLY valid JSON in this exact format:
   ]
 }`;
 
-    const response = await smartGenerate(prompt, "analyzeListHealth", { temperature: 0.7 });
+    const { result: response, metrics: aiMetrics } = await smartGenerateInstrumented(prompt, "analyzeListHealth", { temperature: 0.7 });
     const cleaned = stripCodeBlocks(response);
+
+    // Track AI usage
+    await ctx.runMutation(api.aiUsage.trackAICall, {
+      feature: "health_analysis",
+      provider: aiMetrics.provider,
+      inputTokens: aiMetrics.inputTokens,
+      outputTokens: aiMetrics.outputTokens,
+      estimatedCostUsd: aiMetrics.estimatedCostUsd,
+      isVision: false,
+      isFallback: aiMetrics.isFallback,
+    });
     
     let parsed;
     try {

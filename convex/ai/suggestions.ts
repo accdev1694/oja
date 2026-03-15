@@ -1,8 +1,9 @@
 import { action } from "../_generated/server";
+import { api } from "../_generated/api";
 import { v } from "convex/values";
-import { 
-  smartGenerate, 
-  stripCodeBlocks 
+import {
+  smartGenerateInstrumented,
+  stripCodeBlocks
 } from "./shared";
 
 export const generateListSuggestions = action({
@@ -47,7 +48,19 @@ Return ONLY a JSON array of item names, nothing else:
     }
 
     try {
-      const response = await smartGenerate(prompt, "generateListSuggestions", { maxTokens: 200 });
+      const { result: response, metrics: aiMetrics } = await smartGenerateInstrumented(prompt, "generateListSuggestions", { maxTokens: 200 });
+
+      // Track AI usage
+      await ctx.runMutation(api.aiUsage.trackAICall, {
+        feature: "list_suggestions",
+        provider: aiMetrics.provider,
+        inputTokens: aiMetrics.inputTokens,
+        outputTokens: aiMetrics.outputTokens,
+        estimatedCostUsd: aiMetrics.estimatedCostUsd,
+        isVision: false,
+        isFallback: aiMetrics.isFallback,
+      });
+
       return parseSuggestions(response);
     } catch (error) {
       console.error("AI suggestion generation failed:", error);

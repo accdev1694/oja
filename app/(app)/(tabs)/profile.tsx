@@ -220,6 +220,25 @@ export default function ProfileScreen() {
           <AdminControlCenter adminAnalytics={adminAnalytics} systemHealth={systemHealth} platformAIUsage={platformAIUsage} gmvFilter={gmvFilter} setGmvFilter={setGmvFilter} router={router} />
         )}
 
+        {!convexUser?.nameManuallySet && (
+          <AnimatedSection animation="fadeInDown" duration={400} delay={isAdmin ? 150 : 0}>
+            <Pressable onPress={handleEditName}>
+              <GlassCard variant="bordered" accentColor={colors.accent.primary} style={{ marginBottom: spacing.sm, marginHorizontal: spacing.lg }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: `${colors.accent.primary}20`, justifyContent: "center", alignItems: "center" }}>
+                    <MaterialCommunityIcons name="account-edit-outline" size={22} color={colors.accent.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ ...typography.bodyMedium, color: colors.text.primary, fontWeight: "600" }}>Personalise your experience</Text>
+                    <Text style={{ ...typography.bodySmall, color: colors.text.secondary }}>Add your name so Oja feels like yours</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text.tertiary} />
+                </View>
+              </GlassCard>
+            </Pressable>
+          </AnimatedSection>
+        )}
+
         <AccountSection userDisplayName={userDisplayName} userEmail={user?.primaryEmailAddress?.emailAddress} referralInfo={referralInfo} handleShareReferral={handleShareReferral} isAdmin={isAdmin} dietRef={dietRef} animationDelay={isAdmin ? 200 : 0} onEditName={handleEditName} />
 
         <SettingsSection convexUser={convexUser} updateNotificationSettings={updateNotificationSettings} updateUser={updateUser} setHintsEnabled={setHintsEnabled} handleResetHints={handleResetHints} hintsRef={hintsRef} animationDelay={isAdmin ? 250 : 50} />

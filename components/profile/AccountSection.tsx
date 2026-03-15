@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { RefObject } from "react";
 
@@ -20,6 +20,7 @@ export function AccountSection({
   isAdmin,
   dietRef,
   animationDelay,
+  onEditName,
 }: {
   userDisplayName: string;
   userEmail: string | undefined;
@@ -32,30 +33,38 @@ export function AccountSection({
   isAdmin: boolean;
   dietRef: RefObject<View | null>;
   animationDelay: number;
+  onEditName?: () => void;
 }) {
   return (
     <AnimatedSection animation="fadeInDown" duration={400} delay={animationDelay}>
       <View style={styles.section} ref={dietRef}>
         <Text style={styles.sectionTitle}>Account</Text>
-        <GlassCard variant="bordered" accentColor={colors.semantic.profile} style={{ marginBottom: spacing.sm }}>
-          <View style={styles.accountRow}>
-            <View style={styles.avatarContainer}>
+        <Pressable onPress={onEditName}>
+          <GlassCard variant="bordered" accentColor={colors.semantic.profile} style={{ marginBottom: spacing.sm }}>
+            <View style={styles.accountRow}>
+              <View style={styles.avatarContainer}>
+                <MaterialCommunityIcons
+                  name="account-circle"
+                  size={48}
+                  color={colors.semantic.profile}
+                />
+              </View>
+              <View style={styles.accountInfo}>
+                <Text style={styles.accountName}>
+                  {userDisplayName}
+                </Text>
+                <Text style={styles.accountEmail}>
+                  {userEmail || "Not set"}
+                </Text>
+              </View>
               <MaterialCommunityIcons
-                name="account-circle"
-                size={48}
-                color={colors.semantic.profile}
+                name="pencil-outline"
+                size={18}
+                color={colors.text.tertiary}
               />
             </View>
-            <View style={styles.accountInfo}>
-              <Text style={styles.accountName}>
-                {userDisplayName}
-              </Text>
-              <Text style={styles.accountEmail}>
-                {userEmail || "Not set"}
-              </Text>
-            </View>
-          </View>
-        </GlassCard>
+          </GlassCard>
+        </Pressable>
 
         {/* Referrals Section */}
         <GlassCard variant="standard" style={styles.referralCard}>

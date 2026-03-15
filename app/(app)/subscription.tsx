@@ -10,6 +10,7 @@ import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useCallback } from "react";
 import * as Haptics from "expo-haptics";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   GlassScreen,
@@ -34,6 +35,7 @@ import {
 export default function SubscriptionScreen() {
   const router = useRouter();
   const { alert } = useGlassAlert();
+  const { firstName } = useCurrentUser();
   const subscription = useQuery(api.subscriptions.getCurrentSubscription);
   const plans = useQuery(api.subscriptions.getPlans);
   const pointsBalance = useQuery(api.points.getPointsBalance);
@@ -101,7 +103,7 @@ export default function SubscriptionScreen() {
       if (isPremium && !isTrial && !isAdmin) {
         alert(
           "Manage Subscription",
-          "You already have an active subscription. To switch plans, please use the 'Manage Subscription' portal.",
+          firstName ? `${firstName}, you already have an active subscription. To switch plans, please use the 'Manage Subscription' portal.` : "You already have an active subscription. To switch plans, please use the 'Manage Subscription' portal.",
           [
             { text: "Cancel", style: "cancel" },
             { text: "Open Portal", onPress: handleManageSubscription }
@@ -137,7 +139,7 @@ export default function SubscriptionScreen() {
       setShowCancelModal(false);
       alert(
         "Subscription Cancelled",
-        "You'll keep access until the end of your billing period."
+        firstName ? `${firstName}, you'll keep access until the end of your billing period.` : "You'll keep access until the end of your billing period."
       );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);

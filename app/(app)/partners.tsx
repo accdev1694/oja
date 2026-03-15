@@ -19,11 +19,13 @@ import {
   useGlassAlert,
 } from "@/components/ui/glass";
 import { usePartnerRole } from "@/hooks/usePartnerRole";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export default function PartnersScreen() {
   const { listId } = useLocalSearchParams<{ listId: string }>();
   const router = useRouter();
   const { alert } = useGlassAlert();
+  const { firstName } = useCurrentUser();
   const partners = useQuery(api.partners.getByList, listId ? { listId: listId as Id<"shoppingLists"> } : "skip");
   const createInvite = useMutation(api.partners.createInviteCode);
   const removePartner = useMutation(api.partners.removePartner);
@@ -137,7 +139,7 @@ export default function PartnersScreen() {
           <View style={styles.emptyState}>
             <MaterialCommunityIcons name="account-group-outline" size={64} color={colors.text.tertiary} />
             <Text style={styles.emptyTitle}>No Partners Yet</Text>
-            <Text style={styles.emptySubtitle}>Invite someone to collaborate on this list</Text>
+            <Text style={styles.emptySubtitle}>{firstName ? `${firstName}, invite someone to collaborate on this list` : "Invite someone to collaborate on this list"}</Text>
           </View>
         )}
 

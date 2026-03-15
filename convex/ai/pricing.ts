@@ -2,7 +2,7 @@ import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
 import {
-  smartGenerate,
+  smartGenerateInstrumented,
   stripCodeBlocks
 } from "./shared";
 import { toGroceryTitleCase } from "../lib/titleCase";
@@ -55,7 +55,19 @@ Return ONLY valid JSON array:
     }
 
     try {
-      const response = await smartGenerate(prompt, "generateItemVariants", { temperature: 0.5 });
+      const { result: response, metrics: aiMetrics } = await smartGenerateInstrumented(prompt, "generateItemVariants", { temperature: 0.5 });
+
+      // Track AI usage
+      await ctx.runMutation(api.aiUsage.trackAICall, {
+        feature: "item_variants",
+        provider: aiMetrics.provider,
+        inputTokens: aiMetrics.inputTokens,
+        outputTokens: aiMetrics.outputTokens,
+        estimatedCostUsd: aiMetrics.estimatedCostUsd,
+        isVision: false,
+        isFallback: aiMetrics.isFallback,
+      });
+
       return parseVariantResponse(response);
     } catch (error) {
       console.error("Variant generation failed:", error);
@@ -128,7 +140,19 @@ export const estimateItemPrice = action({
 Return ONLY valid JSON: {"name": "...", "normalizedName": "...", "category": "...", "estimatedPrice": 1.15, "hasVariants": true, "variants": [...]}`;
 
     try {
-      const response = await smartGenerate(prompt, "estimateItemPrice", { temperature: 0.3 });
+      const { result: response, metrics: aiMetrics } = await smartGenerateInstrumented(prompt, "estimateItemPrice", { temperature: 0.3 });
+
+      // Track AI usage
+      await ctx.runMutation(api.aiUsage.trackAICall, {
+        feature: "price_estimate",
+        provider: aiMetrics.provider,
+        inputTokens: aiMetrics.inputTokens,
+        outputTokens: aiMetrics.outputTokens,
+        estimatedCostUsd: aiMetrics.estimatedCostUsd,
+        isVision: false,
+        isFallback: aiMetrics.isFallback,
+      });
+
       const result = JSON.parse(stripCodeBlocks(response));
 
       await ctx.runMutation(api.currentPrices.upsertAIEstimate, {

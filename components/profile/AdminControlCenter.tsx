@@ -52,7 +52,7 @@ export function AdminControlCenter({
     timestamp: number;
   } | undefined;
   platformAIUsage: {
-    summary: Record<string, { requests: number; tokens: number }>;
+    summary: Record<string, { requests: number; tokens: number; cost: number; vision: number; fallbacks: number }>;
     totalRequests: number;
     totalTokens: number;
     tokenQuota: number;
@@ -62,6 +62,10 @@ export function AdminControlCenter({
     daysUntilRenewal: number;
     renewalDate: number;
     activeProvider: string;
+    totalCost: number;
+    totalVision: number;
+    totalFallbacks: number;
+    fallbackRate: number;
     alert: { level: "info" | "warning" | "critical"; message: string } | null;
     computedAt: number;
   } | undefined;

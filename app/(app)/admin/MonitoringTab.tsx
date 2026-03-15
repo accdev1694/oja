@@ -44,6 +44,8 @@ export function MonitoringTab({ hasPermission }: MonitoringTabProps) {
   
   const summary = useQuery(api.admin.getMonitoringSummary) as MonitoringSummary | undefined;
   const platformAIUsage = useQuery(api.admin.getPlatformAIUsage, {});
+  const todayAIRequests = useQuery(api.admin.getTodayAIRequestCount, {});
+  const capacityPlanning = useQuery(api.admin.getCapacityPlanningData, {});
   const experiments = useQuery(api.admin.getExperiments) as Experiment[] | undefined;
   const workflows = useQuery(api.admin.getWorkflows) as Workflow[] | undefined;
 
@@ -106,7 +108,7 @@ export function MonitoringTab({ hasPermission }: MonitoringTabProps) {
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
       {/* Platform AI Consumption */}
       <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
-        <PlatformAIUsageMonitor data={platformAIUsage} />
+        <PlatformAIUsageMonitor data={platformAIUsage} todayData={todayAIRequests} capacityData={capacityPlanning} />
       </AnimatedSection>
 
       {/* Active Alerts */}

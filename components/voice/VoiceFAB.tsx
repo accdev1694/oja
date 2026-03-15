@@ -45,7 +45,7 @@ interface Props {
 
 export function VoiceFAB({ activeListId, activeListName }: Props) {
   const pathname = usePathname();
-  const { firstName } = useCurrentUser();
+  const { firstName, user: convexUser } = useCurrentUser();
   const insets = useSafeAreaInsets();
 
   // Measured container dimensions — the single source of truth for bounds.
@@ -124,6 +124,7 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
     activeListId,
     activeListName,
     userName: firstName,
+    userId: convexUser?._id,
   });
 
   // Pulse animation when listening

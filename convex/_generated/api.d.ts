@@ -67,6 +67,7 @@ import type * as itemVariants from "../itemVariants.js";
 import type * as itemVariants_admin from "../itemVariants/admin.js";
 import type * as itemVariants_mutations from "../itemVariants/mutations.js";
 import type * as itemVariants_queries from "../itemVariants/queries.js";
+import type * as lib_aiTracking from "../lib/aiTracking.js";
 import type * as lib_alerts from "../lib/alerts.js";
 import type * as lib_analytics from "../lib/analytics.js";
 import type * as lib_auth from "../lib/auth.js";
@@ -272,6 +273,7 @@ declare const fullApi: ApiFromModules<{
   "itemVariants/admin": typeof itemVariants_admin;
   "itemVariants/mutations": typeof itemVariants_mutations;
   "itemVariants/queries": typeof itemVariants_queries;
+  "lib/aiTracking": typeof lib_aiTracking;
   "lib/alerts": typeof lib_alerts;
   "lib/analytics": typeof lib_analytics;
   "lib/auth": typeof lib_auth;

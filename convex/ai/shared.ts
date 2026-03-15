@@ -1,5 +1,9 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
+import { metricsFromGemini, metricsFromOpenAI } from "../lib/aiTracking";
+import type { AICallMetrics } from "../lib/aiTracking";
+
+export type { AICallMetrics };
 
 export const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 export const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
@@ -43,13 +47,22 @@ export async function withRetry<T>(
 }
 
 /**
- * Fallback wrapper that tries Gemini first and OpenAI second.
+ * Result from an instrumented AI generation call.
  */
-export async function withAIFallback<T>(
+export interface InstrumentedResult<T> {
+  result: T;
+  metrics: AICallMetrics;
+}
+
+/**
+ * Fallback wrapper that tries Gemini first and OpenAI second.
+ * Returns the result along with provider metrics.
+ */
+export async function withAIFallbackInstrumented<T>(
   operationName: string,
-  geminiFn: () => Promise<T>,
-  openaiFn: () => Promise<T>
-): Promise<T> {
+  geminiFn: () => Promise<InstrumentedResult<T>>,
+  openaiFn: () => Promise<InstrumentedResult<T>>
+): Promise<InstrumentedResult<T>> {
   try {
     return await withRetry(geminiFn, operationName);
   } catch (geminiErr: unknown) {
@@ -59,7 +72,7 @@ export async function withAIFallback<T>(
     } catch (openaiErr: unknown) {
       const openaiError = openaiErr as Error;
       console.error(`[${operationName}] Both AI providers failed for ${operationName}.`);
-      
+
       throw new Error(
         openaiError?.message?.includes("API key")
           ? "AI service configuration error. Please contact support."
@@ -70,9 +83,9 @@ export async function withAIFallback<T>(
 }
 
 /**
- * Run a prompt through Gemini.
+ * Run a prompt through Gemini and return result + metrics.
  */
-export async function geminiGenerate(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
+export async function geminiGenerateInstrumented(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<InstrumentedResult<string>> {
   const model = genAI.getGenerativeModel({
     model: "gemini-2.0-flash",
     generationConfig: {
@@ -82,26 +95,28 @@ export async function geminiGenerate(prompt: string, options?: { temperature?: n
   });
   const result = await model.generateContent(prompt);
   const response = await result.response;
-  return response.text().trim();
+  const metrics = metricsFromGemini(response.usageMetadata);
+  return { result: response.text().trim(), metrics };
 }
 
 /**
- * Run a prompt through OpenAI gpt-4o-mini.
+ * Run a prompt through OpenAI and return result + metrics.
  */
-export async function openaiGenerate(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
+export async function openaiGenerateInstrumented(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<InstrumentedResult<string>> {
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [{ role: "user", content: prompt }],
     temperature: options?.temperature ?? 0.7,
     max_tokens: options?.maxTokens ?? 4000,
   });
-  return response.choices[0].message.content?.trim() || "";
+  const metrics = metricsFromOpenAI(response.usage);
+  return { result: response.choices[0].message.content?.trim() || "", metrics };
 }
 
 /**
- * Run a prompt with an image through OpenAI gpt-4o-mini.
+ * Run a prompt with an image through OpenAI and return result + metrics.
  */
-export async function openaiVisionGenerate(prompt: string, base64Image: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
+export async function openaiVisionGenerateInstrumented(prompt: string, base64Image: string, options?: { temperature?: number; maxTokens?: number }): Promise<InstrumentedResult<string>> {
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
@@ -119,17 +134,18 @@ export async function openaiVisionGenerate(prompt: string, base64Image: string, 
     temperature: options?.temperature ?? 0.2,
     max_tokens: options?.maxTokens ?? 4000,
   });
-  return response.choices[0].message.content?.trim() || "";
+  const metrics = metricsFromOpenAI(response.usage, true);
+  return { result: response.choices[0].message.content?.trim() || "", metrics };
 }
 
 /**
- * Unified generation helper with fallback.
+ * Unified generation helper with fallback and instrumentation.
  */
-export async function smartGenerate(prompt: string, operationName: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
-  return await withAIFallback(
+export async function smartGenerateInstrumented(prompt: string, operationName: string, options?: { temperature?: number; maxTokens?: number }): Promise<InstrumentedResult<string>> {
+  return await withAIFallbackInstrumented(
     operationName,
-    async () => geminiGenerate(prompt, options),
-    async () => openaiGenerate(prompt, options)
+    async () => geminiGenerateInstrumented(prompt, options),
+    async () => openaiGenerateInstrumented(prompt, options)
   );
 }
 
