@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Linking } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Linking, Pressable } from "react-native";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";

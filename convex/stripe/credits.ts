@@ -67,6 +67,7 @@ export const reservePoints = internalMutation({
 export const confirmPointsRedemption = internalMutation({
   args: {
     reservationId: v.id("pointsReservations"),
+    stripeInvoiceItemId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const reservation = await ctx.db.get(args.reservationId);
@@ -98,6 +99,7 @@ export const confirmPointsRedemption = internalMutation({
       amount: -reservation.amount,
       source: "invoice_credit",
       invoiceId: reservation.stripeInvoiceId,
+      stripeInvoiceItemId: args.stripeInvoiceItemId,
       balanceBefore: balance.availablePoints,
       balanceAfter: balance.availablePoints - reservation.amount,
       createdAt: now,
@@ -115,6 +117,30 @@ export const releasePoints = internalMutation({
     const reservation = await ctx.db.get(args.reservationId);
     if (!reservation || reservation.status !== "pending") return;
     await ctx.db.patch(reservation._id, { status: "released" });
+  },
+});
+
+/**
+ * Cleanup expired point reservations that were never confirmed or released.
+ * Reservations have a 5-minute window; this catches any orphans.
+ */
+export const cleanupExpiredReservations = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const expiredReservations = await ctx.db
+      .query("pointsReservations")
+      .withIndex("by_status_expires", (q) => q.eq("status", "pending"))
+      .filter((q) => q.lt(q.field("expiresAt"), now))
+      .collect();
+
+    let cleanedCount = 0;
+    for (const reservation of expiredReservations) {
+      await ctx.db.patch(reservation._id, { status: "released" });
+      cleanedCount++;
+    }
+
+    return { cleanedCount };
   },
 });
 

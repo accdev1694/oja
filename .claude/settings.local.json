@@ -194,7 +194,8 @@
       "Bash(__NEW_LINE__ echo \"Fixed convex/debug.ts \\(already mostly correct\\)\")",
       "Bash(claude --version)",
       "Bash(claude models list:*)",
-      "Bash(claude /models)"
+      "Bash(claude /models)",
+      "Bash(del C:UsersdilocDocumentsprogrammerojadebug.md)"
     ]
   },
   "enableAllProjectMcpServers": true,

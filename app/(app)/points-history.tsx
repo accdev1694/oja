@@ -180,18 +180,65 @@ export default function PointsHistoryScreen() {
 
         {/* Lifetime Stats */}
         {pointsBalance && (
-          <View style={styles.statsRow}>
-            <GlassCard variant="standard" style={styles.statCard}>
-              <Text style={styles.statLabel}>Available</Text>
-              <Text style={styles.statValue}>{pointsBalance.availablePoints.toLocaleString()}</Text>
-              <Text style={styles.statSubValue}>≈ £{(pointsBalance.availablePoints / 1000).toFixed(2)}</Text>
+          <>
+            <View style={styles.statsRow}>
+              <GlassCard variant="standard" style={styles.statCard}>
+                <Text style={styles.statLabel}>Available</Text>
+                <Text style={styles.statValue}>{pointsBalance.availablePoints.toLocaleString()}</Text>
+                <Text style={styles.statSubValue}>≈ £{(pointsBalance.availablePoints / 1000).toFixed(2)}</Text>
+              </GlassCard>
+              <GlassCard variant="standard" style={styles.statCard}>
+                <Text style={styles.statLabel}>Lifetime Earned</Text>
+                <Text style={styles.statValue}>{pointsBalance.totalPoints.toLocaleString()}</Text>
+                <Text style={styles.statSubValue}>Total value</Text>
+              </GlassCard>
+            </View>
+
+            {/* Tier Progress Bar */}
+            <GlassCard variant="standard" style={styles.tierProgressCard}>
+              <View style={styles.tierProgressHeader}>
+                <View style={[styles.tierBadgeSmall, { backgroundColor: `${pointsBalance.tier === "platinum" ? "#E5E4E2" : pointsBalance.tier === "gold" ? "#FFD700" : pointsBalance.tier === "silver" ? "#C0C0C0" : "#CD7F32"}20` }]}>
+                  <MaterialCommunityIcons
+                    name="shield-star"
+                    size={18}
+                    color={pointsBalance.tier === "platinum" ? "#E5E4E2" : pointsBalance.tier === "gold" ? "#FFD700" : pointsBalance.tier === "silver" ? "#C0C0C0" : "#CD7F32"}
+                  />
+                </View>
+                <Text style={styles.tierProgressTitle}>
+                  {pointsBalance.tier.charAt(0).toUpperCase() + pointsBalance.tier.slice(1)} Tier
+                </Text>
+                {pointsBalance.nextTierInfo?.nextTier && pointsBalance.nextTierInfo.scansToNextTier > 0 && (
+                  <Text style={styles.tierProgressNext}>
+                    {pointsBalance.nextTierInfo.scansToNextTier} to {pointsBalance.nextTierInfo.nextTier}
+                  </Text>
+                )}
+              </View>
+              {pointsBalance.nextTierInfo?.nextTier && pointsBalance.nextTierInfo.scansToNextTier > 0 && (() => {
+                const tierThresholds = { bronze: 0, silver: 20, gold: 50, platinum: 100 };
+                const currentThreshold = tierThresholds[pointsBalance.tier as keyof typeof tierThresholds] ?? 0;
+                const nextThreshold = tierThresholds[pointsBalance.nextTierInfo.nextTier as keyof typeof tierThresholds] ?? 100;
+                const rangeTotal = nextThreshold - currentThreshold;
+                const rangeProgress = (pointsBalance.tierProgress ?? 0) - currentThreshold;
+                const pct = rangeTotal > 0 ? Math.min(1, Math.max(0, rangeProgress / rangeTotal)) : 0;
+                return (
+                  <View>
+                    <View style={styles.tierProgressBar}>
+                      <View style={[styles.tierProgressFill, { width: `${Math.round(pct * 100)}%` }]} />
+                    </View>
+                    <Text style={styles.tierProgressLabel}>
+                      {pointsBalance.tierProgress ?? 0}/{nextThreshold} scans
+                    </Text>
+                  </View>
+                );
+              })()}
+              <View style={styles.monthlyCapRow}>
+                <Text style={styles.monthlyCapLabel}>Monthly earning scans</Text>
+                <Text style={styles.monthlyCapValue}>
+                  {pointsBalance.earningScansThisMonth ?? 0}/{pointsBalance.maxEarningScans ?? 1}
+                </Text>
+              </View>
             </GlassCard>
-            <GlassCard variant="standard" style={styles.statCard}>
-              <Text style={styles.statLabel}>Lifetime Earned</Text>
-              <Text style={styles.statValue}>{pointsBalance.totalPoints.toLocaleString()}</Text>
-              <Text style={styles.statSubValue}>Total value</Text>
-            </GlassCard>
-          </View>
+          </>
         )}
 
         {/* How it Works Guide */}
@@ -286,6 +333,19 @@ const styles = StyleSheet.create({
   guideIconContainer: { width: 32, height: 32, borderRadius: 16, backgroundColor: `${colors.accent.primary}15`, justifyContent: "center", alignItems: "center" },
   guideItemTitle: { ...typography.bodyMedium, color: colors.text.primary, fontWeight: "600", marginBottom: 2 },
   guideItemDesc: { ...typography.bodySmall, color: colors.text.secondary, lineHeight: 18 },
+
+  // Tier Progress
+  tierProgressCard: { padding: spacing.md, marginBottom: spacing.md },
+  tierProgressHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
+  tierBadgeSmall: { width: 32, height: 32, borderRadius: 16, justifyContent: "center", alignItems: "center" },
+  tierProgressTitle: { ...typography.bodyMedium, color: colors.text.primary, fontWeight: "600", flex: 1 },
+  tierProgressNext: { ...typography.labelSmall, color: colors.accent.secondary },
+  tierProgressBar: { height: 6, borderRadius: 3, backgroundColor: colors.glass.backgroundStrong, overflow: "hidden" },
+  tierProgressFill: { height: "100%", borderRadius: 3, backgroundColor: colors.accent.primary },
+  tierProgressLabel: { ...typography.labelSmall, color: colors.text.tertiary, marginTop: 4, textAlign: "right" },
+  monthlyCapRow: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.glass.border },
+  monthlyCapLabel: { ...typography.labelSmall, color: colors.text.tertiary },
+  monthlyCapValue: { ...typography.labelSmall, color: colors.text.secondary, fontWeight: "600" },
 
   // History
   monthHeader: { ...typography.labelLarge, color: colors.text.secondary, marginLeft: spacing.xs, marginTop: spacing.sm, marginBottom: spacing.sm, fontWeight: "600" },

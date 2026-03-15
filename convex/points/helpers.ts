@@ -130,6 +130,15 @@ export async function processEarnPoints(ctx: MutationCtx, userId: Id<"users">, r
     } else if (activeEvent.type === "bonus_points" && activeEvent.bonusAmount) {
       eventBonus = activeEvent.bonusAmount;
       pointsAmount += eventBonus;
+    } else if (activeEvent.type === "tier_boost") {
+      // Tier boost: temporarily treat user as one tier higher for this scan
+      const boostedProgress = balance.tierProgress + (activeEvent.multiplier ? Math.round(activeEvent.multiplier) : 50);
+      const boostedTier = getTierFromScans(boostedProgress);
+      const boostedPoints = getPointsPerScan(boostedTier, isPremium);
+      if (boostedPoints > pointsAmount) {
+        eventBonus = boostedPoints - pointsAmount;
+        pointsAmount = boostedPoints;
+      }
     }
   }
 

@@ -76,6 +76,7 @@ export const processWebhookEvent = action({
             status: mapStripeStatus(sub.status!, sub.cancel_at_period_end!),
             currentPeriodStart: sub.current_period_start! * 1000,
             currentPeriodEnd: sub.current_period_end! * 1000,
+            plan: sub.metadata?.planId,
           });
           break;
         }
@@ -98,14 +99,17 @@ export const processWebhookEvent = action({
               const stripe = await getStripeClient();
               const creditAmountPence = Math.round(creditResult.pointsApplied / 10);
               try {
-                await stripe.invoiceItems.create({
+                const invoiceItem = await stripe.invoiceItems.create({
                   customer: data.customer!,
                   invoice: data.id!,
                   amount: -creditAmountPence,
                   currency: "gbp",
                   description: `Oja Points redemption (${creditResult.pointsApplied} pts applied)`,
                 });
-                await ctx.runMutation(internal.stripe.confirmPointsRedemption, { reservationId: creditResult.reservationId });
+                await ctx.runMutation(internal.stripe.confirmPointsRedemption, {
+                  reservationId: creditResult.reservationId,
+                  stripeInvoiceItemId: invoiceItem.id,
+                });
               } catch (stripeError: unknown) {
                 console.error(`[Webhook] Stripe invoice item creation failed for ${data.id}:`, stripeError);
                 await ctx.runMutation(internal.stripe.releasePoints, { reservationId: creditResult.reservationId });
@@ -218,17 +222,35 @@ export const handleCheckoutCompleted = internalMutation({
 });
 
 export const handleSubscriptionUpdated = internalMutation({
-  args: { stripeCustomerId: v.string(), stripeSubscriptionId: v.string(), status: v.union(v.literal("active"), v.literal("cancelled"), v.literal("expired"), v.literal("trial")), currentPeriodStart: v.number(), currentPeriodEnd: v.number() },
+  args: { stripeCustomerId: v.string(), stripeSubscriptionId: v.string(), status: v.union(v.literal("active"), v.literal("cancelled"), v.literal("expired"), v.literal("trial")), currentPeriodStart: v.number(), currentPeriodEnd: v.number(), plan: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const sub = await ctx.db.query("subscriptions").withIndex("by_stripe_customer", q => q.eq("stripeCustomerId", args.stripeCustomerId)).first();
     if (!sub) return;
+
+    const previousPlan = sub.plan;
+    const newPlan = args.plan ?? sub.plan;
+
     await ctx.db.patch(sub._id, {
+      plan: newPlan as "free" | "premium_monthly" | "premium_annual",
       status: args.status,
       stripeSubscriptionId: args.stripeSubscriptionId,
       currentPeriodStart: args.currentPeriodStart,
       currentPeriodEnd: args.currentPeriodEnd,
       updatedAt: Date.now(),
     });
+
+    // Award 500pt bonus when upgrading from monthly to annual
+    if (previousPlan === "premium_monthly" && newPlan === "premium_annual") {
+      await ctx.runMutation(internal.points.awardBonusPoints, {
+        userId: sub.userId,
+        amount: 500,
+        source: "annual_subscription_bonus",
+        metadata: {
+          stripeSubscriptionId: args.stripeSubscriptionId,
+          idempotencyKey: `annual_upgrade_${args.stripeSubscriptionId}`,
+        },
+      });
+    }
   },
 });
 

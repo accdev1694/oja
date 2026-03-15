@@ -113,7 +113,7 @@ export default function AIUsageScreen() {
                     Earn up to {pointsBalance.monthlyEarningCap} pts/mo
                   </Text>
                 </View>
-                {pointsBalance.nextTierInfo?.scansToNextTier && pointsBalance.nextTierInfo.scansToNextTier > 0 && (
+                {pointsBalance.nextTierInfo?.scansToNextTier != null && pointsBalance.nextTierInfo.scansToNextTier > 0 && (
                   <View style={styles.nextTierBadge}>
                     <Text style={styles.nextTierText}>
                       {pointsBalance.nextTierInfo.scansToNextTier} to {pointsBalance.nextTierInfo.nextTier}
@@ -121,6 +121,44 @@ export default function AIUsageScreen() {
                   </View>
                 )}
               </View>
+
+              {/* Tier Progress Bar */}
+              {pointsBalance.nextTierInfo?.nextTier && pointsBalance.nextTierInfo.scansToNextTier > 0 && (() => {
+                const tierThresholds = { bronze: 0, silver: 20, gold: 50, platinum: 100 };
+                const currentThreshold = tierThresholds[pointsBalance.tier as keyof typeof tierThresholds] ?? 0;
+                const nextThreshold = tierThresholds[pointsBalance.nextTierInfo.nextTier as keyof typeof tierThresholds] ?? 100;
+                const rangeTotal = nextThreshold - currentThreshold;
+                const rangeProgress = (pointsBalance.tierProgress ?? 0) - currentThreshold;
+                const pct = rangeTotal > 0 ? Math.min(1, Math.max(0, rangeProgress / rangeTotal)) : 0;
+                return (
+                  <View style={styles.progressContainer}>
+                    <View style={styles.progressBar}>
+                      <View style={[styles.progressFill, { width: `${Math.round(pct * 100)}%` }]} />
+                    </View>
+                    <Text style={styles.progressLabel}>
+                      {pointsBalance.tierProgress ?? 0}/{nextThreshold} scans
+                    </Text>
+                  </View>
+                );
+              })()}
+
+              {/* Monthly Earning Progress */}
+              {(() => {
+                const used = pointsBalance.earningScansThisMonth ?? 0;
+                const max = pointsBalance.maxEarningScans ?? 1;
+                const pct = max > 0 ? Math.min(1, used / max) : 0;
+                return (
+                  <View style={styles.progressContainer}>
+                    <View style={styles.monthlyProgressRow}>
+                      <Text style={styles.monthlyLabel}>This month</Text>
+                      <Text style={styles.monthlyValue}>{used}/{max} earning scans</Text>
+                    </View>
+                    <View style={styles.progressBar}>
+                      <View style={[styles.progressFillMonthly, { width: `${Math.round(pct * 100)}%` }]} />
+                    </View>
+                  </View>
+                );
+              })()}
             </GlassCard>
           </View>
         )}
@@ -234,6 +272,45 @@ const styles = StyleSheet.create({
   nextTierText: {
     ...typography.labelSmall,
     color: colors.accent.secondary,
+  },
+  progressContainer: {
+    marginTop: spacing.md,
+  },
+  progressBar: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.glass.backgroundStrong,
+    overflow: "hidden" as const,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: colors.accent.primary,
+  },
+  progressFillMonthly: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: colors.accent.secondary,
+  },
+  progressLabel: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    marginTop: 4,
+    textAlign: "right" as const,
+  },
+  monthlyProgressRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    marginBottom: 4,
+  },
+  monthlyLabel: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+  },
+  monthlyValue: {
+    ...typography.labelSmall,
+    color: colors.text.secondary,
+    fontWeight: "600" as const,
   },
   settingRow: {
     flexDirection: "row",
