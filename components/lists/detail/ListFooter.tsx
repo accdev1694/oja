@@ -26,7 +26,7 @@ export const ListFooter = ({
   insetsBottom,
 }: ListFooterProps) => {
   return (
-    <View style={[styles.footer, { paddingBottom: insetsBottom + spacing.md }]}>
+    <View style={[styles.footer, { bottom: insetsBottom, paddingBottom: spacing.md }]}>
       {activeShopper && !isInProgress && (
         <View style={styles.activeShopperBanner}>
           <MaterialCommunityIcons name="account-search" size={18} color={colors.accent.primary} />

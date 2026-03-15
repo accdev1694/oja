@@ -189,14 +189,8 @@ export const toggleChecked = mutation({
     if (!perms.canEdit) throw new Error("Unauthorized");
 
     const newChecked = !item.isChecked;
-    const updates = {
-      isChecked: newChecked,
-      checkedAt: newChecked ? Date.now() : undefined,
-      checkedByUserId: newChecked ? user._id : undefined,
-      updatedAt: Date.now(),
-    };
-
     const list = await ctx.db.get(item.listId);
+
     if (newChecked && list && !list.shoppingStartedAt) {
       await ctx.db.patch(item.listId, {
         shoppingStartedAt: Date.now(),
@@ -205,7 +199,15 @@ export const toggleChecked = mutation({
       });
     }
 
-    await ctx.db.patch(args.id, updates);
+    // Record which store the item was purchased at
+    await ctx.db.patch(args.id, {
+      isChecked: newChecked,
+      checkedAt: newChecked ? Date.now() : undefined,
+      checkedByUserId: newChecked ? user._id : undefined,
+      purchasedAtStoreId: newChecked ? (list?.normalizedStoreId ?? undefined) : undefined,
+      purchasedAtStoreName: newChecked ? (list?.storeName ?? undefined) : undefined,
+      updatedAt: Date.now(),
+    });
     return await ctx.db.get(args.id);
   },
 });
