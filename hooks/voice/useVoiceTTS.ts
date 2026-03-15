@@ -1,7 +1,7 @@
 /**
  * Voice TTS Hook
  *
- * Manages text-to-speech with Google Cloud Neural2 (via Convex action)
+ * Manages text-to-speech with Azure Cognitive Services Neural (via Convex action)
  * and fallback to expo-speech device TTS.
  */
 

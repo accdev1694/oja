@@ -3,7 +3,9 @@ import { api } from "../_generated/api";
 import { v } from "convex/values";
 import {
   smartGenerateInstrumented,
-  stripCodeBlocks
+  stripCodeBlocks,
+  enforceGeminiQuota,
+  GeminiQuotaExhaustedError,
 } from "./shared";
 import { toGroceryTitleCase } from "../lib/titleCase";
 
@@ -27,6 +29,14 @@ export const generateItemVariants = action({
   },
   handler: async (ctx, args) => {
     if (args.items.length === 0) return [];
+
+    // Enforce Gemini free tier RPD quota
+    try {
+      await enforceGeminiQuota(ctx);
+    } catch (e) {
+      if (e instanceof GeminiQuotaExhaustedError) return [];
+      throw e;
+    }
 
     const itemList = args.items
       .map((i) => `- ${i.name} (${i.category})`)
@@ -71,6 +81,7 @@ Return ONLY valid JSON array:
       return parseVariantResponse(response);
     } catch (error) {
       console.error("Variant generation failed:", error);
+      try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "item_variants" }); } catch {}
       return [];
     }
   },
@@ -86,6 +97,14 @@ export const estimateItemPrice = action({
   handler: async (ctx, args) => {
     const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "ai_estimation" });
     if (!rateLimit.allowed) return null;
+
+    // Enforce Gemini free tier RPD quota
+    try {
+      await enforceGeminiQuota(ctx);
+    } catch (e) {
+      if (e instanceof GeminiQuotaExhaustedError) return null;
+      throw e;
+    }
 
     const normalizedName = args.itemName.toLowerCase().trim();
 
@@ -188,6 +207,7 @@ Return ONLY valid JSON: {"name": "...", "normalizedName": "...", "category": "..
       };
     } catch (error) {
       console.error("estimateItemPrice failed:", error);
+      try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "price_estimate" }); } catch {}
       return null;
     }
   },

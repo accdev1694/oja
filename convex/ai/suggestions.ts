@@ -3,7 +3,9 @@ import { api } from "../_generated/api";
 import { v } from "convex/values";
 import {
   smartGenerateInstrumented,
-  stripCodeBlocks
+  stripCodeBlocks,
+  enforceGeminiQuota,
+  GeminiQuotaExhaustedError,
 } from "./shared";
 
 export const generateListSuggestions = action({
@@ -14,6 +16,16 @@ export const generateListSuggestions = action({
   handler: async (ctx, args): Promise<string[]> => {
     const { currentItems, excludeItems } = args;
     if (currentItems.length === 0) return [];
+
+    // Enforce Gemini free tier RPD quota — fall back to hardcoded pairings if exhausted
+    try {
+      await enforceGeminiQuota(ctx);
+    } catch (e) {
+      if (e instanceof GeminiQuotaExhaustedError) {
+        return getFallbackSuggestions(currentItems);
+      }
+      throw e;
+    }
 
     const itemList = currentItems.join(", ");
     const excludeList = excludeItems.length > 0
@@ -64,6 +76,7 @@ Return ONLY a JSON array of item names, nothing else:
       return parseSuggestions(response);
     } catch (error) {
       console.error("AI suggestion generation failed:", error);
+      try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "list_suggestions" }); } catch {}
       return getFallbackSuggestions(currentItems);
     }
   },

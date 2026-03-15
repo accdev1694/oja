@@ -5,9 +5,12 @@ import {
   withAIFallbackInstrumented,
   geminiGenerateInstrumented,
   openaiGenerateInstrumented,
-  stripCodeBlocks
+  stripCodeBlocks,
+  enforceGeminiQuota,
+  GeminiQuotaExhaustedError,
 } from "./shared";
 import { toGroceryTitleCase } from "../lib/titleCase";
+import { cleanItemForStorage } from "../lib/itemNameParser";
 
 export interface SeedItem {
   name: string;
@@ -50,6 +53,16 @@ export const generateHybridSeedItems = action({
   handler: async (ctx, args): Promise<SeedItem[]> => {
     const { country, cuisines } = args;
     const totalItems = 200;
+
+    // Enforce Gemini free tier RPD quota — fall back to hardcoded items if exhausted
+    try {
+      await enforceGeminiQuota(ctx);
+    } catch (e) {
+      if (e instanceof GeminiQuotaExhaustedError) {
+        return getFallbackItems(country, cuisines);
+      }
+      throw e;
+    }
 
     let globalItems: SeedItem[] = [];
     try {
@@ -125,11 +138,17 @@ Return ONLY JSON array.`;
       return items
         .filter((item) => item.name && item.category)
         .filter((item) => !existingNames.has(item.name.toLowerCase().trim()))
-        .map((item) => ({
-          ...item,
-          stockLevel: "low" as const,
-          source: item.source === "cultural" ? "cultural" as const : "local" as const,
-        }))
+        .map((item) => {
+          const parsed = cleanItemForStorage(item.name, item.defaultSize, item.defaultUnit);
+          return {
+            ...item,
+            name: parsed.name,
+            defaultSize: parsed.size,
+            defaultUnit: parsed.unit,
+            stockLevel: "low" as const,
+            source: item.source === "cultural" ? "cultural" as const : "local" as const,
+          };
+        })
         .slice(0, itemCount);
     }
 
@@ -159,6 +178,7 @@ Return ONLY JSON array.`;
       return deduplicateItems([...globalItems, ...aiItems]).slice(0, totalItems);
     } catch (error) {
       console.error("AI generation failed:", error);
+      try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "pantry_seed" }); } catch {}
       const fallback = getFallbackItems(country, cuisines);
       return deduplicateItems([...globalItems, ...fallback]).slice(0, totalItems);
     }

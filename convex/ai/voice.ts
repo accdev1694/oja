@@ -4,7 +4,9 @@ import { v } from "convex/values";
 import {
   smartGenerateInstrumented,
   stripCodeBlocks,
-  genAI
+  genAI,
+  enforceGeminiQuota,
+  GeminiQuotaExhaustedError,
 } from "./shared";
 import {
   voiceFunctionDeclarations,
@@ -31,6 +33,16 @@ export const parseVoiceCommand = action({
     recentLists: v.array(v.object({ id: v.string(), name: v.string() })),
   },
   handler: async (ctx, args): Promise<VoiceAssistantResponse> => {
+    // Enforce Gemini free tier RPD quota
+    try {
+      await enforceGeminiQuota(ctx);
+    } catch (e) {
+      if (e instanceof GeminiQuotaExhaustedError) {
+        return { type: "error", text: "AI capacity reached for today. Please try again tomorrow." };
+      }
+      throw e;
+    }
+
     const prompt = `Parse this UK grocery voice command: "${args.transcript}".
 Recent lists: ${args.recentLists.map(l => l.name).join(", ")}.
 Return JSON with action, listName, matchedListId, items, confidence.`;
@@ -38,20 +50,10 @@ Return JSON with action, listName, matchedListId, items, confidence.`;
     try {
       const { result: raw, metrics: aiMetrics } = await smartGenerateInstrumented(prompt, "parseVoiceCommand", { temperature: 0.2 });
 
-      // Track this AI call with actual metrics
-      await ctx.runMutation(api.aiUsage.trackAICall, {
-        feature: "voice",
-        provider: aiMetrics.provider,
-        inputTokens: aiMetrics.inputTokens,
-        outputTokens: aiMetrics.outputTokens,
-        estimatedCostUsd: aiMetrics.estimatedCostUsd,
-        isVision: false,
-        isFallback: aiMetrics.isFallback,
-      });
-
       return JSON.parse(stripCodeBlocks(raw));
     } catch (error) {
       console.error("parseVoiceCommand failed:", error);
+      try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "voice" }); } catch {}
       return { type: "error", text: "Sorry, I couldn't understand that command." };
     }
   },
@@ -78,6 +80,16 @@ export const voiceAssistant = action({
     const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "voice" });
     if (!usageCheck.allowed) return { type: "limit_reached", text: "You've reached your voice usage limit. Upgrade for more." };
 
+    // Enforce Gemini free tier RPD quota before making any API calls
+    try {
+      await enforceGeminiQuota(ctx);
+    } catch (e) {
+      if (e instanceof GeminiQuotaExhaustedError) {
+        return { type: "error", text: "AI capacity reached for today. Please try again tomorrow." };
+      }
+      throw e;
+    }
+
     const systemPrompt = buildSystemPrompt({ ...args, lowStockItems: [], activeListNames: [] });
     const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash",
@@ -87,36 +99,43 @@ export const voiceAssistant = action({
 
     const history = (args.conversationHistory || []).map((msg: ConversationMessage) => ({ role: msg.role, parts: [{ text: msg.text }] }));
     const chat = model.startChat({ history });
-    let response = await chat.sendMessage(args.transcript);
 
-    let pendingAction: PendingAction | null = null;
-    for (let i = 0; i < 3; i++) {
-      const part = response.response.candidates?.[0].content.parts.find((p) => p.functionCall);
-      if (!part?.functionCall) break;
+    try {
+      let response = await chat.sendMessage(args.transcript);
 
-      const { name, args: fnArgs } = part.functionCall;
-      const toolResult = await executeVoiceTool(ctx, name, (fnArgs as Record<string, unknown>) || {});
-      if (toolResult.type === "confirm") {
-        const confirmData = toolResult.result as ConfirmResult;
-        pendingAction = { action: confirmData.action, params: confirmData.params, confirmLabel: confirmData.description };
+      let pendingAction: PendingAction | null = null;
+      for (let i = 0; i < 3; i++) {
+        const part = response.response.candidates?.[0].content.parts.find((p) => p.functionCall);
+        if (!part?.functionCall) break;
+
+        const { name, args: fnArgs } = part.functionCall;
+        const toolResult = await executeVoiceTool(ctx, name, (fnArgs as Record<string, unknown>) || {});
+        if (toolResult.type === "confirm") {
+          const confirmData = toolResult.result as ConfirmResult;
+          pendingAction = { action: confirmData.action, params: confirmData.params, confirmLabel: confirmData.description };
+        }
+        const responsePayload = (toolResult.result ?? {}) as object;
+        response = await chat.sendMessage([{ functionResponse: { name, response: responsePayload } }]);
       }
-      const responsePayload = (toolResult.result ?? {}) as object;
-      response = await chat.sendMessage([{ functionResponse: { name, response: responsePayload } }]);
+
+      // Track with actual Gemini metrics (replaces incrementUsage + correctTokenCount)
+      const metrics = metricsFromGemini(response.response.usageMetadata);
+      await ctx.runMutation(api.aiUsage.trackAICall, {
+        feature: "voice",
+        provider: metrics.provider,
+        inputTokens: metrics.inputTokens,
+        outputTokens: metrics.outputTokens,
+        estimatedCostUsd: metrics.estimatedCostUsd,
+        isVision: false,
+        isFallback: false,
+      });
+
+      return { type: pendingAction ? "confirm_action" : "answer", text: response.response.text(), pendingAction };
+    } catch (error) {
+      console.error("voiceAssistant Gemini chat failed:", error);
+      try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "voice" }); } catch {}
+      return { type: "error", text: "Sorry, something went wrong. Please try again." };
     }
-
-    // Track with actual Gemini metrics (replaces incrementUsage + correctTokenCount)
-    const metrics = metricsFromGemini(response.response.usageMetadata);
-    await ctx.runMutation(api.aiUsage.trackAICall, {
-      feature: "voice",
-      provider: metrics.provider,
-      inputTokens: metrics.inputTokens,
-      outputTokens: metrics.outputTokens,
-      estimatedCostUsd: metrics.estimatedCostUsd,
-      isVision: false,
-      isFallback: false,
-    });
-
-    return { type: pendingAction ? "confirm_action" : "answer", text: response.response.text(), pendingAction };
   },
 });
 
@@ -141,7 +160,21 @@ export const textToSpeech = action({
   },
   handler: async (ctx, args) => {
     const azureKey = process.env.AZURE_SPEECH_KEY;
-    if (!azureKey) return { audioBase64: null, provider: null, error: null };
+    if (!azureKey) {
+      console.warn("[TTS] AZURE_SPEECH_KEY not configured — falling back to device TTS");
+      return { audioBase64: null, provider: null, error: "TTS not configured" };
+    }
+
+    // Enforce Azure TTS free tier hard cap (480K chars/month, 20K buffer from 500K)
+    const ttsQuota = await ctx.runQuery(internal.aiUsage.getTTSCharactersThisMonth, {}) as {
+      charactersUsed: number;
+      hardCap: number;
+      blocked: boolean;
+    };
+    if (ttsQuota.blocked) {
+      console.warn(`[TTS] Monthly character quota exhausted: ${ttsQuota.charactersUsed}/${ttsQuota.hardCap}. Falling back to device TTS.`);
+      return { audioBase64: null, provider: null, error: "TTS quota reached" };
+    }
 
     const response = await fetch(`https://${process.env.AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`, {
       method: "POST",
@@ -165,6 +198,8 @@ export const textToSpeech = action({
         } catch (e) {
           console.warn("[TTS] Failed to track usage:", e);
         }
+      } else {
+        console.warn(`[TTS] userId not provided — ${charCount} chars untracked`);
       }
       return { audioBase64: base64, provider: "azure", error: null };
     }

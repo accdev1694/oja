@@ -2,7 +2,7 @@ import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { v } from "convex/values";
 import { Id, Doc } from "../_generated/dataModel";
-import { smartGenerateInstrumented, stripCodeBlocks } from "./shared";
+import { smartGenerateInstrumented, stripCodeBlocks, enforceGeminiQuota, GeminiQuotaExhaustedError } from "./shared";
 import { calculateSimilarity } from "../lib/fuzzyMatch";
 import { cleanItemForStorage } from "../lib/itemNameParser";
 
@@ -59,6 +59,16 @@ export const analyzeListHealth = action({
     });
     if (!user) throw new Error("User not found");
 
+    // Enforce Gemini free tier RPD quota
+    try {
+      await enforceGeminiQuota(ctx);
+    } catch (e) {
+      if (e instanceof GeminiQuotaExhaustedError) {
+        throw new Error("AI capacity reached for today. Please try again tomorrow.");
+      }
+      throw e;
+    }
+
     const items = (await ctx.runQuery(api.listItems.getByList, { listId: args.listId })) as Doc<"listItems">[];
     if (!items || items.length === 0) {
       throw new Error("Your list is empty! Add some items first so our AI nutritionist can analyze them.");
@@ -82,7 +92,6 @@ Rate the healthiness of this list on a scale of 0 to 100. Provide an exciting, h
 Identify 1-2 strengths and 1-2 weaknesses.
 Suggest up to 3 healthy swaps for specific items on the list.
 
-    let parsed: { score?: number; summary?: string; strengths?: string[]; weaknesses?: string[]; swaps?: HealthSwap[] };
 REQUIREMENTS FOR SWAPS:
 1. Practical & Budget-Conscious.
 2. Price Delta (estimate GBP difference).
@@ -133,6 +142,7 @@ Return ONLY valid JSON in this exact format:
       parsed = JSON.parse(cleaned);
     } catch (e) {
       console.error("Failed to parse health analysis:", cleaned);
+      try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "health_analysis" }); } catch {}
       throw new Error("Failed to analyze health. Please try again.");
     }
 

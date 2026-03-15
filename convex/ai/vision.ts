@@ -5,7 +5,9 @@ import {
   withAIFallbackInstrumented,
   genAI,
   openaiVisionGenerateInstrumented,
-  stripCodeBlocks
+  stripCodeBlocks,
+  enforceGeminiQuota,
+  GeminiQuotaExhaustedError,
 } from "./shared";
 import { metricsFromGemini } from "../lib/aiTracking";
 import type { AICallMetrics } from "../lib/aiTracking";
@@ -28,6 +30,9 @@ export const parseReceipt = action({
     if (!rateLimit.allowed) {
       throw new Error("Scan rate limit reached. Please wait a minute before scanning again.");
     }
+
+    // Enforce Gemini free tier RPD quota
+    await enforceGeminiQuota(ctx);
 
     try {
       // Get the image URL from Convex storage
@@ -238,6 +243,7 @@ IMPORTANT RULES:
       };
     } catch (error) {
       console.error("Receipt parsing failed:", error);
+      try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "receipt_scan" }); } catch {}
       if (error instanceof SyntaxError) {
         throw new Error("Failed to read receipt format. Please try again with a clearer image.");
       }
@@ -258,6 +264,16 @@ export const scanProduct = action({
     storageId: v.string(),
   },
   handler: async (ctx, args) => {
+    // Enforce Gemini free tier RPD quota
+    try {
+      await enforceGeminiQuota(ctx);
+    } catch (e) {
+      if (e instanceof GeminiQuotaExhaustedError) {
+        return { success: false, rejection: "AI capacity reached for today. Please try again tomorrow.", confidence: 0 };
+      }
+      throw e;
+    }
+
     try {
       const imageUrl = await ctx.storage.getUrl(args.storageId);
       if (!imageUrl) {
@@ -342,6 +358,7 @@ Return ONLY valid JSON.`;
       };
     } catch (error) {
       console.error("Product scanning failed:", error);
+      try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "product_scan" }); } catch {}
       return {
         success: false,
         rejection: "Failed to identify product. Please try again.",
