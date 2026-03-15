@@ -207,6 +207,10 @@ export default function PantryPickScreen() {
 
   const pantryKeyExtractor = useCallback((item: FlatItem) => item._id, []);
 
+  const pantryGetItemType = useCallback((item: FlatItem) =>
+    "isCategoryHeader" in item ? "categoryHeader" : "row",
+  []);
+
   const handleConfirm = async () => {
     if (selectedIds.size === 0 || !listId) return;
     setIsAdding(true);
@@ -312,6 +316,7 @@ export default function PantryPickScreen() {
         data={flatData}
         renderItem={pantryRenderItem}
         keyExtractor={pantryKeyExtractor}
+        getItemType={pantryGetItemType}
         extraData={selectedIds}
         contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: 140 + insets.bottom }}
       />

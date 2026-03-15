@@ -48,6 +48,7 @@ export const upsertFromReceipt = mutation({
     let upsertCount = 0;
     let variantsDiscovered = 0;
     const normalizedStoreId = normalizeStoreName(receipt.storeName);
+    const region = user.postcodePrefix || user.country || "UK";
 
     for (const item of receipt.items) {
       const normalizedName = item.name.toLowerCase().trim();
@@ -71,6 +72,7 @@ export const upsertFromReceipt = mutation({
             ...(item.size && { size: item.size }),
             ...(item.unit && { unit: item.unit }),
             ...(normalizedStoreId && { normalizedStoreId }),
+            region,
             minPrice: existing.minPrice !== undefined ? Math.min(existing.minPrice, item.unitPrice) : item.unitPrice,
             maxPrice: existing.maxPrice !== undefined ? Math.max(existing.maxPrice, item.unitPrice) : item.unitPrice,
             averagePrice: existing.averagePrice !== undefined
@@ -91,6 +93,7 @@ export const upsertFromReceipt = mutation({
           itemName: toGroceryTitleCase(item.name),
           storeName: receipt.storeName,
           ...(normalizedStoreId && { normalizedStoreId }),
+          region,
           ...(item.size && { size: item.size }),
           ...(item.unit && { unit: item.unit }),
           unitPrice: item.unitPrice,

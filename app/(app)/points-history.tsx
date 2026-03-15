@@ -132,6 +132,10 @@ export default function PointsHistoryScreen() {
 
   const keyExtractor = useCallback((item: FlatDataItem) => item._id, []);
 
+  const getItemType = useCallback((item: FlatDataItem) =>
+    "isMonthHeader" in item ? "monthHeader" : "row",
+  []);
+
   const ListHeaderComponent = useMemo(
     () => (
       <View style={{ gap: spacing.md }}>
@@ -224,6 +228,7 @@ export default function PointsHistoryScreen() {
         data={flatData}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        getItemType={getItemType}
         ListHeaderComponent={ListHeaderComponent}
         ListEmptyComponent={ListEmptyComponent}
         contentContainerStyle={styles.content}

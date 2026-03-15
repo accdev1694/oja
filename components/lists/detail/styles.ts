@@ -14,7 +14,7 @@ export const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.xs,
   },
   headerTop: {
     flexDirection: "row",
@@ -141,10 +141,10 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.xs,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
   },
   sectionHeaderText: {
     ...typography.labelSmall,
@@ -218,7 +218,7 @@ export const styles = StyleSheet.create({
   },
   tripControls: {
     flexDirection: "row",
-    gap: spacing.md,
+    gap: spacing.xs,
     alignItems: "center",
   },
   activeShopperBanner: {
@@ -237,7 +237,7 @@ export const styles = StyleSheet.create({
   },
   midShopActions: {
     flexDirection: "row",
-    gap: spacing.sm,
+    gap: spacing.xs,
     marginVertical: spacing.sm,
   },
   midShopButton: {
@@ -318,18 +318,34 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
   },
   checkedToggleBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: colors.glass.background,
-    justifyContent: "center" as const,
+    flex: 1,
+    height: 48,
+    flexDirection: "row" as const,
     alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: "#0F2A2A",
     borderWidth: 1,
-    borderColor: colors.glass.border,
+    borderColor: colors.accent.primary,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
   },
   checkedToggleBtnActive: {
-    backgroundColor: "rgba(0, 212, 170, 0.08)",
-    borderColor: "rgba(0, 212, 170, 0.3)",
+    backgroundColor: "#0F2A2A",
+    borderColor: colors.accent.primary,
+  },
+  checkedToggleText: {
+    ...typography.labelMedium,
+    color: colors.text.secondary,
+    fontWeight: "600",
+  },
+  checkedToggleTextActive: {
+    color: colors.accent.primary,
   },
   refreshPricesRow: {
     paddingHorizontal: spacing.lg,

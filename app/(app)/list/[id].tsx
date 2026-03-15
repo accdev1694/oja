@@ -269,10 +269,16 @@ export default function ListDetailScreen() {
   const { displayItems, spent, remaining, checkedCount, estimatedTotal } = useMemo(() => {
     if (!items) return { displayItems: [], spent: 0, remaining: 0, checkedCount: 0, estimatedTotal: 0 };
 
-    // Compute estimated total from ALL items (not just filtered)
+    // Compute totals from ALL items (independent of filter/toggle state)
     let plannedAcc = 0;
+    let spentAcc = 0;
+    let checkedAcc = 0;
     items.forEach((item: ListItem) => {
       plannedAcc += (item.estimatedPrice || 0) * item.quantity;
+      if (item.isChecked) {
+        spentAcc += (item.actualPrice || item.estimatedPrice || 0) * item.quantity;
+        checkedAcc++;
+      }
     });
 
     let filtered = items.filter((i: ListItem) =>
@@ -284,14 +290,11 @@ export default function ListDetailScreen() {
     }
 
     const sorted = [...filtered].sort((a, b) => {
-      if (a.isChecked !== b.isChecked) return a.isChecked ? 1 : -1;
       return (a.category || "Other").localeCompare(b.category || "Other");
     });
 
     const sections: CategorizedItem[] = [];
     let currentCat = "";
-    let spentAcc = 0;
-    let checkedAcc = 0;
 
     sorted.forEach(item => {
       const cat = item.category || "Other";
@@ -300,10 +303,6 @@ export default function ListDetailScreen() {
         currentCat = cat;
       }
       sections.push(item);
-      if (item.isChecked) {
-        spentAcc += (item.actualPrice || item.estimatedPrice || 0) * item.quantity;
-        checkedAcc++;
-      }
     });
 
     const budget = list?.budget || 0;
@@ -492,6 +491,7 @@ export default function ListDetailScreen() {
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         onOpenSettings={() => setShowEditModal(true)}
+        onAddItem={() => setShowAddModal(true)}
         onShare={() => alert("Coming Soon", "Shared list functionality is being updated.")}
       />
 

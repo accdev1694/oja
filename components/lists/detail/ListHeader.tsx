@@ -11,6 +11,7 @@ interface ListHeaderProps {
   searchTerm: string;
   onSearchChange: (text: string) => void;
   onOpenSettings: () => void;
+  onAddItem: () => void;
   onShare: () => void;
 }
 
@@ -21,6 +22,7 @@ export const ListHeader = ({
   searchTerm,
   onSearchChange,
   onOpenSettings,
+  onAddItem,
   onShare,
 }: ListHeaderProps) => {
   const [searchVisible, setSearchVisible] = useState(false);
@@ -72,6 +74,13 @@ export const ListHeader = ({
           )}
         </View>
         <View style={styles.secondRowActions}>
+          <Pressable
+            style={styles.iconButtonSmall}
+            onPress={onAddItem}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="plus" size={20} color={colors.accent.primary} />
+          </Pressable>
           <Pressable
             style={styles.iconButtonSmall}
             onPress={onShare}
