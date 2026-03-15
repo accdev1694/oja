@@ -23,8 +23,8 @@ export const refreshPantryPrices = mutation({
       const resolved = await resolvePrice(
         ctx,
         normalizedName,
-        item.defaultSize,
-        item.defaultUnit,
+        item.defaultSize || "Standard",
+        item.defaultUnit || "unit",
         undefined,
         defaultStore,
         user._id,

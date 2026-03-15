@@ -48,7 +48,6 @@ import { ListHeader } from "@/components/lists/detail/ListHeader";
 
 import { ListFooter } from "@/components/lists/detail/ListFooter";
 import { ListEmptyState } from "@/components/lists/detail/ListEmptyState";
-import { ListActions } from "@/components/lists/detail/ListActions";
 import { ListSectionHeader } from "@/components/lists/detail/ListSectionHeader";
 
 type ListHeaderData = {
@@ -197,6 +196,17 @@ export default function ListDetailScreen() {
     }
   }, [id, updateListName]);
 
+  const handleBudgetDialPress = useCallback(() => setShowBudgetModal(true), []);
+
+  const handleEditItem = useCallback((i: ListItem) => {
+    setEditingItem(i);
+    setShowAddModal(true);
+  }, []);
+
+  const handlePriorityChange = useCallback((itemId: Id<"listItems">, priority: "must-have" | "should-have" | "nice-to-have") => {
+    updateItem({ id: itemId, priority });
+  }, [updateItem]);
+
   const handleRefreshPrices = useCallback(async () => {
     haptic("light");
     setIsRefreshingPrices(true);
@@ -306,10 +316,148 @@ export default function ListDetailScreen() {
     };
   }, [items, searchTerm, showCheckedItems, list?.budget]);
 
+  const storeDisplayName = useMemo(() => {
+    const segments = list?.storeSegments as { storeName: string }[] | undefined;
+    if (segments && segments.length > 0) {
+      const unique: string[] = [];
+      for (const seg of segments) {
+        if (!unique.includes(seg.storeName)) unique.push(seg.storeName);
+      }
+      if (unique.length === 1) return unique[0];
+      if (unique.length === 2) return `${unique[0]} → ${unique[1]}`;
+      const first = unique[0];
+      const current = unique[unique.length - 1];
+      const remaining = unique.length - 2;
+      return `${first} → ${current} + ${remaining} more`;
+    }
+    return list?.storeName;
+  }, [list?.storeSegments, list?.storeName]);
+
   const receiptStreakCount = useMemo(() => {
     const streak = streaks?.find((s: { type: string; currentCount: number }) => s.type === "receipt_scanner");
     return streak?.currentCount ?? 0;
   }, [streaks]);
+
+  // ── FlashList performance: memoized renderItem, keyExtractor, getItemType ──
+  const renderListItem = useCallback(({ item }: { item: CategorizedItem }) => {
+    if ("isHeader" in item) {
+      return <ListSectionHeader title={item.title} />;
+    }
+    return (
+      <ShoppingListItem
+        item={item}
+        isShopping={isInProgress}
+        canEdit={canEdit}
+        onToggle={handleToggleItem}
+        onRemove={handleRemoveItem}
+        onEdit={handleEditItem}
+        onPriorityChange={handlePriorityChange}
+        selectionActive={selectionActive}
+        isSelected={selectedIds.has(item._id)}
+        onSelectToggle={handleSelectToggle}
+      />
+    );
+  }, [isInProgress, canEdit, handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange, selectionActive, selectedIds, handleSelectToggle]);
+
+  const listKeyExtractor = useCallback((item: CategorizedItem) => item._id, []);
+
+  const getListItemType = useCallback((item: CategorizedItem) =>
+    "isHeader" in item ? "sectionHeader" : "row",
+  []);
+
+  const handleOpenAddModal = useCallback(() => {
+    setEditingItem(null);
+    setShowAddModal(true);
+  }, []);
+
+  const handleOpenMidShopStorePicker = useCallback(() => {
+    haptic("light");
+    setShowMidShopStorePicker(true);
+  }, []);
+
+  const handleMidShopAddItems = useCallback(() => {
+    haptic("light");
+    setEditingItem(null);
+    setShowAddModal(true);
+  }, []);
+
+  const listHeaderComponent = useMemo(
+    () => (
+      <View>
+        <AnimatedSection animation="fadeInDown" duration={400}>
+          <CircularBudgetDial
+            budget={list?.budget || 0}
+            planned={estimatedTotal}
+            spent={spent}
+            mode={isInProgress ? "shopping" : "active"}
+            onPress={canEdit ? handleBudgetDialPress : undefined}
+            storeName={storeDisplayName}
+            storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
+          />
+        </AnimatedSection>
+
+        {canEdit && !isInProgress && (
+          <ListActionRow
+            storeName={storeDisplayName}
+            storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
+            hasStore={!!list?.normalizedStoreId}
+            currentStoreId={list?.normalizedStoreId}
+            userFavorites={userFavorites}
+            itemCount={items?.length ?? 0}
+            onStoreSelect={handleSelectStore}
+            onAddItemsPress={handleOpenAddModal}
+          />
+        )}
+
+        {canEdit && !isInProgress && (items?.length ?? 0) > 0 && (
+          <View style={styles.refreshPricesRow}>
+            <Pressable
+              style={styles.refreshPricesButton}
+              onPress={handleRefreshPrices}
+              disabled={isRefreshingPrices}
+            >
+              <MaterialCommunityIcons
+                name="currency-gbp"
+                size={16}
+                color={isRefreshingPrices ? colors.text.disabled : colors.accent.primary}
+              />
+              <Text
+                style={[
+                  styles.refreshPricesText,
+                  isRefreshingPrices && { color: colors.text.disabled },
+                ]}
+              >
+                {isRefreshingPrices ? "Refreshing..." : "Refresh Prices"}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {isInProgress && canEdit && (
+          <View style={styles.midShopActions}>
+            <Pressable
+              style={styles.midShopButton}
+              onPress={handleOpenMidShopStorePicker}
+            >
+              <MaterialCommunityIcons name="swap-horizontal" size={18} color={colors.accent.primary} />
+              <Text style={styles.midShopButtonText}>Switch Store</Text>
+            </Pressable>
+            <Pressable
+              style={styles.midShopButton}
+              onPress={handleMidShopAddItems}
+            >
+              <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
+              <Text style={styles.midShopButtonText}>Add Items</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+    ),
+    [list?.budget, list?.normalizedStoreId, estimatedTotal, spent, isInProgress, canEdit,
+     storeDisplayName, userFavorites, items?.length, isRefreshingPrices,
+     handleBudgetDialPress, handleSelectStore, handleOpenAddModal, handleRefreshPrices,
+     handleOpenMidShopStorePicker, handleMidShopAddItems]
+  );
 
   if (list === undefined || items === undefined) {
     return (
@@ -339,7 +487,7 @@ export default function ListDetailScreen() {
     <GlassScreen>
       <ListHeader
         title={list.name}
-        subtitle={list.storeName}
+        subtitle={storeDisplayName}
         onBack={() => router.canGoBack() ? router.back() : router.replace("/(app)/(tabs)/" as never)}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
@@ -349,113 +497,11 @@ export default function ListDetailScreen() {
 
       <FlashList
         data={displayItems}
-        renderItem={({ item }) => {
-          if ("isHeader" in item) {
-            return <ListSectionHeader title={item.title} />;
-          }
-          return (
-            <ShoppingListItem
-              item={item}
-              isShopping={isInProgress}
-              canEdit={canEdit}
-              onToggle={handleToggleItem}
-              onRemove={handleRemoveItem}
-              onEdit={(i) => { setEditingItem(i); setShowAddModal(true); }}
-              onPriorityChange={(itemId, priority) => updateItem({ id: itemId, priority })}
-              selectionActive={selectionActive}
-              isSelected={selectedIds.has(item._id)}
-              onSelectToggle={handleSelectToggle}
-            />
-          );
-        }}
-        keyExtractor={(item) => item._id}
-        ListHeaderComponent={
-          <View>
-            <AnimatedSection animation="fadeInDown" duration={400}>
-              <CircularBudgetDial
-                budget={list.budget || 0}
-                planned={estimatedTotal}
-                spent={spent}
-                mode={isInProgress ? "shopping" : "active"}
-                onPress={canEdit ? () => setShowBudgetModal(true) : undefined}
-                storeName={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.displayName : undefined}
-                storeColor={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
-              />
-            </AnimatedSection>
-
-            {canEdit && !isInProgress && (
-              <ListActionRow
-                storeName={list.storeName}
-                storeColor={list.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
-                hasStore={!!list.normalizedStoreId}
-                currentStoreId={list.normalizedStoreId}
-                userFavorites={userFavorites}
-                itemCount={items.length}
-                onStoreSelect={handleSelectStore}
-                onAddItemsPress={() => {
-                  setEditingItem(null);
-                  setShowAddModal(true);
-                }}
-              />
-            )}
-
-            {canEdit && !isInProgress && items.length > 0 && (
-              <View style={styles.refreshPricesRow}>
-                <Pressable
-                  style={styles.refreshPricesButton}
-                  onPress={handleRefreshPrices}
-                  disabled={isRefreshingPrices}
-                >
-                  <MaterialCommunityIcons
-                    name="currency-gbp"
-                    size={16}
-                    color={isRefreshingPrices ? colors.text.disabled : colors.accent.primary}
-                  />
-                  <Text
-                    style={[
-                      styles.refreshPricesText,
-                      isRefreshingPrices && { color: colors.text.disabled },
-                    ]}
-                  >
-                    {isRefreshingPrices ? "Refreshing..." : "Refresh Prices"}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-
-            {isInProgress && canEdit && (
-              <View style={styles.midShopActions}>
-                <Pressable
-                  style={styles.midShopButton}
-                  onPress={() => {
-                    haptic("light");
-                    setShowMidShopStorePicker(true);
-                  }}
-                >
-                  <MaterialCommunityIcons name="swap-horizontal" size={18} color={colors.accent.primary} />
-                  <Text style={styles.midShopButtonText}>Switch Store</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.midShopButton}
-                  onPress={() => {
-                    haptic("light");
-                    setEditingItem(null);
-                    setShowAddModal(true);
-                  }}
-                >
-                  <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
-                  <Text style={styles.midShopButtonText}>Add Items</Text>
-                </Pressable>
-              </View>
-            )}
-
-            <ListActions
-              showCheckedItems={showCheckedItems}
-              onToggleCheckedItems={setShowCheckedItems}
-              itemCount={items.length}
-            />
-          </View>
-        }
+        renderItem={renderListItem}
+        keyExtractor={listKeyExtractor}
+        getItemType={getListItemType}
+        extraData={selectedIds}
+        ListHeaderComponent={listHeaderComponent}
         ListEmptyComponent={<ListEmptyState />}
         contentContainerStyle={styles.listContent}
       />
@@ -487,6 +533,8 @@ export default function ListDetailScreen() {
           checkedCount={checkedCount}
           totalCount={items.length}
           insetsBottom={tabBarBottom}
+          showCheckedItems={showCheckedItems}
+          onToggleCheckedItems={() => setShowCheckedItems(prev => !prev)}
         />
       )}
 
