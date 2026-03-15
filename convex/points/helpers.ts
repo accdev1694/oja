@@ -47,8 +47,10 @@ export async function getOrCreatePointsBalance(ctx: MutationCtx, userId: Id<"use
         monthStart: currentMonthStart,
         updatedAt: Date.now(),
       });
-      balance.earningScansThisMonth = 0;
-      balance.monthStart = currentMonthStart;
+      // Re-fetch to ensure we have post-patch state (avoids month-boundary race)
+      const refreshed = await ctx.db.get(balance._id);
+      if (!refreshed) throw new Error("Balance disappeared after month reset");
+      balance = refreshed;
     }
   }
 
@@ -68,15 +70,34 @@ export async function getPointsBalanceReadOnly(ctx: QueryCtx, userId: Id<"users"
   return balance;
 }
 
+/**
+ * Returns a sequential week number that handles year boundaries correctly.
+ * Uses ISO 8601 week numbering, then converts to a sequential count
+ * so that Week 52/2025 + 1 === Week 1/2026.
+ */
 export function getWeekNumber(timestamp: number) {
   const d = new Date(timestamp);
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const isoYear = d.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
   const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  return weekNo + (d.getUTCFullYear() * 100); // Year + week to be unique across years
+  // Use sequential weeks from epoch to avoid year-boundary breaks
+  // (e.g. 202552 + 1 !== 202601, but sequential numbering is always +1)
+  const epochStart = new Date(Date.UTC(2020, 0, 1));
+  const daysSinceEpoch = Math.floor((d.getTime() - epochStart.getTime()) / 86400000);
+  return Math.floor(daysSinceEpoch / 7);
 }
 
 export async function processEarnPoints(ctx: MutationCtx, userId: Id<"users">, receiptId: Id<"receipts">) {
+  // Idempotency: check if we already awarded points for this receipt
+  const existingEarn = await ctx.db
+    .query("pointsTransactions")
+    .withIndex("by_receipt_and_type", (q) => q.eq("receiptId", receiptId).eq("type", "earn"))
+    .first();
+  if (existingEarn) {
+    return { earned: false, reason: "already_earned" };
+  }
+
   const { isPremium } = await checkFeatureAccess(ctx, userId);
   const balance = await getOrCreatePointsBalance(ctx, userId);
 
@@ -157,18 +178,37 @@ export async function processEarnPoints(ctx: MutationCtx, userId: Id<"users">, r
     currentTier: newTierInfo.tier,
   });
 
-  // Create transaction for base points (including event bonus)
+  // Create transaction for base points (excluding event bonus — itemized separately)
+  const baseAmount = pointsAmount - eventBonus;
+  let runningBalance = balance.availablePoints;
   await ctx.db.insert("pointsTransactions", {
     userId: userId,
     type: "earn",
-    amount: pointsAmount,
-    source: activeEvent ? `receipt_scan_${activeEvent.name}` : "receipt_scan",
+    amount: baseAmount,
+    source: "receipt_scan",
     receiptId: receiptId,
-    balanceBefore: balance.availablePoints,
-    balanceAfter: balance.availablePoints + pointsAmount,
-    metadata: { tierAtEarn: currentTier.tier, ...(activeEvent ? { eventId: activeEvent._id } : {}) },
+    balanceBefore: runningBalance,
+    balanceAfter: runningBalance + baseAmount,
+    metadata: { tierAtEarn: currentTier.tier },
     createdAt: now,
   });
+  runningBalance += baseAmount;
+
+  // Create separate transaction for seasonal event bonus if applicable
+  if (eventBonus > 0 && activeEvent) {
+    await ctx.db.insert("pointsTransactions", {
+      userId: userId,
+      type: "bonus",
+      amount: eventBonus,
+      source: `seasonal_event_${activeEvent.name}`,
+      receiptId: receiptId,
+      balanceBefore: runningBalance,
+      balanceAfter: runningBalance + eventBonus,
+      metadata: { eventId: activeEvent._id, eventType: activeEvent.type },
+      createdAt: now,
+    });
+    runningBalance += eventBonus;
+  }
 
   // Create transaction for streak bonus if applicable
   if (streakBonus > 0) {
@@ -178,8 +218,8 @@ export async function processEarnPoints(ctx: MutationCtx, userId: Id<"users">, r
       amount: streakBonus,
       source: `streak_bonus_${newStreakCount}_weeks`,
       receiptId: receiptId,
-      balanceBefore: balance.availablePoints + pointsAmount,
-      balanceAfter: balance.availablePoints + totalEarnedThisScan,
+      balanceBefore: runningBalance,
+      balanceAfter: runningBalance + streakBonus,
       metadata: { streakCount: newStreakCount },
       createdAt: now,
     });

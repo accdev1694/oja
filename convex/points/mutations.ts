@@ -2,6 +2,7 @@ import { mutation, internalMutation } from "../_generated/server";
 import { v, ConvexError } from "convex/values";
 import { internal } from "../_generated/api";
 import { getOrCreatePointsBalance, processEarnPoints, processExpirePoints } from "./helpers";
+import { getTierFromScans } from "../lib/featureGating";
 
 export const initializePointsBalance = mutation({
   args: { userId: v.id("users") },
@@ -74,6 +75,17 @@ export const awardBonusPoints = internalMutation({
     metadata: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))),
   },
   handler: async (ctx, args) => {
+    // Idempotency: if metadata includes an idempotencyKey, check for duplicates
+    if (args.metadata?.idempotencyKey) {
+      const existing = await ctx.db
+        .query("pointsTransactions")
+        .withIndex("by_user_and_type", (q) => q.eq("userId", args.userId).eq("type", "bonus"))
+        .filter((q) => q.eq(q.field("source"), args.source))
+        .collect();
+      const dup = existing.find((tx) => tx.metadata?.idempotencyKey === args.metadata?.idempotencyKey);
+      if (dup) return { success: false, reason: "already_awarded" };
+    }
+
     const balance = await getOrCreatePointsBalance(ctx, args.userId);
     const now = Date.now();
 
@@ -118,11 +130,13 @@ export const refundPoints = internalMutation({
     const refundAmount = args.points;
     const now = Date.now();
 
+    const newTierProgress = Math.max(0, balance.tierProgress - 1);
+    const newTier = getTierFromScans(newTierProgress);
     await ctx.db.patch(balance._id, {
       totalPoints: Math.max(0, balance.totalPoints - refundAmount),
       availablePoints: Math.max(0, balance.availablePoints - refundAmount),
-      // We don't rollback tier or scan counts currently as that's complex,
-      // just removing the points is enough for deletion/fraud.
+      tierProgress: newTierProgress,
+      tier: newTier.tier,
       updatedAt: now,
     });
 

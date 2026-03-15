@@ -79,6 +79,12 @@ export const confirmPointsRedemption = internalMutation({
 
     if (!balance) return;
 
+    // Re-validate balance at confirmation time to prevent negative balance from concurrent webhooks
+    if (balance.availablePoints < reservation.amount) {
+      await ctx.db.patch(reservation._id, { status: "released" });
+      return;
+    }
+
     const now = Date.now();
     await ctx.db.patch(balance._id, {
       availablePoints: balance.availablePoints - reservation.amount,

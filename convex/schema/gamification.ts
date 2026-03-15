@@ -88,6 +88,7 @@ export const gamificationTables = {
     .index("by_user", ["userId"])
     .index("by_user_and_type", ["userId", "type"])
     .index("by_receipt", ["receiptId"])
+    .index("by_receipt_and_type", ["receiptId", "type"])
     .index("by_created", ["createdAt"]),
 
   // Phase 5.3.1: Seasonal Events

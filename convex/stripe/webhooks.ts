@@ -3,7 +3,6 @@ import { action, internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import { trackFunnelEvent, trackActivity } from "../lib/analytics";
-import { processExpirePoints } from "../points";
 
 /** Minimal shape of a Stripe webhook event data object. */
 interface StripeEventData {
@@ -247,10 +246,8 @@ export const handleSubscriptionDeleted = internalMutation({
       read: false,
       createdAt: Date.now(),
     });
-    const balance = await ctx.db.query("pointsBalance").withIndex("by_user", q => q.eq("userId", sub.userId)).first();
-    if (balance && balance.availablePoints > 0) {
-      await processExpirePoints(ctx, sub.userId, balance.availablePoints, "subscription_cancelled");
-    }
+    // Points remain valid under the 12-month expiry policy.
+    // Cancellation stops new earning on free tier, but existing points age out naturally via cron.
   },
 });
 

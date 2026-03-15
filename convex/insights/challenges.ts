@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
+import { internal } from "../_generated/api";
 import { requireUser, optionalUser } from "./helpers";
 
 /**
@@ -118,6 +119,18 @@ export const updateChallengeProgress = mutation({
           unlockedAt: now,
         });
       }
+
+      // Award the challenge reward points
+      await ctx.runMutation(internal.points.awardBonusPoints, {
+        userId: user._id,
+        amount: challenge.reward,
+        source: "challenge_completion",
+        metadata: {
+          challengeId: args.challengeId,
+          challengeType: challenge.type,
+          idempotencyKey: `challenge_${args.challengeId}`,
+        },
+      });
 
       await ctx.db.insert("notifications", {
         userId: user._id,

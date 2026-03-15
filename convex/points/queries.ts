@@ -75,10 +75,13 @@ export const getExpiringPoints = query({
 
     if (!user) return null;
 
-    // Points expire after 12 months.
+    // Points expire after 12 months (365 days).
     // We check for transactions that will expire in the next 30 days.
-    const elevenMonthsAgo = Date.now() - (11 * 30 * 24 * 60 * 60 * 1000);
-    const twelveMonthsAgo = Date.now() - (12 * 30 * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const elevenMonthsAgoDate = new Date(now.getFullYear(), now.getMonth() - 11, now.getDate());
+    const twelveMonthsAgoDate = new Date(now.getFullYear(), now.getMonth() - 12, now.getDate());
+    const elevenMonthsAgo = elevenMonthsAgoDate.getTime();
+    const twelveMonthsAgo = twelveMonthsAgoDate.getTime();
 
     const transactions = await ctx.db
       .query("pointsTransactions")

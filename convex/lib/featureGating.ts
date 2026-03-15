@@ -91,10 +91,13 @@ export const TIER_TABLE: TierConfig[] = [
 ];
 
 export function getTierFromScans(lifetimeScans: number): TierConfig {
-  for (let i = TIER_TABLE.length - 1; i >= 0; i--) {
-    if (lifetimeScans >= TIER_TABLE[i].threshold) return TIER_TABLE[i];
+  // Defensively sort ascending by threshold to guarantee correct lookup
+  const sorted = [...TIER_TABLE].sort((a, b) => a.threshold - b.threshold);
+  let result = sorted[0];
+  for (const t of sorted) {
+    if (lifetimeScans >= t.threshold) result = t;
   }
-  return TIER_TABLE[0];
+  return result;
 }
 
 export function getNextTierInfo(lifetimeScans: number) {

@@ -113,9 +113,21 @@ export default function PointsHistoryScreen() {
             <View style={styles.txInfo}>
               <Text style={styles.txTitle}>
                 {tx.type === "earn" ? "Receipt Scan" :
-                 tx.type === "bonus" ? "Streak Bonus" :
+                 tx.type === "bonus" ? (
+                   tx.source === "admin_adjustment" ? "Admin Adjustment" :
+                   tx.source === "challenge_completion" ? "Challenge Reward" :
+                   tx.source?.startsWith("seasonal_event_") ? "Seasonal Bonus" :
+                   tx.source?.startsWith("streak_bonus") ? `${tx.metadata?.streakCount ?? ""}-Week Streak` :
+                   tx.source === "referral_welcome" ? "Referral Welcome" :
+                   tx.source === "referral_reward" ? "Referral Reward" :
+                   tx.source === "annual_subscription_bonus" ? "Annual Bonus" :
+                   "Bonus"
+                 ) :
                  tx.type === "redeem" ? "Subscription Credit" :
-                 tx.type === "refund" ? "Points Adjusted" :
+                 tx.type === "refund" ? (
+                   tx.source === "admin_adjustment" ? "Admin Adjustment" :
+                   "Points Adjusted"
+                 ) :
                  "Points Expired"}
               </Text>
               <Text style={styles.txDate}>
@@ -141,6 +153,18 @@ export default function PointsHistoryScreen() {
   const ListHeaderComponent = useMemo(
     () => (
       <View style={{ gap: spacing.md }}>
+        {/* Free user earning scan warning */}
+        {pointsBalance && !pointsBalance.isPremium && pointsBalance.canEarnMore && (
+          <GlassCard variant="bordered" accentColor={colors.semantic.warning} style={{ padding: spacing.md }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+              <MaterialCommunityIcons name="information-outline" size={18} color={colors.semantic.warning} />
+              <Text style={{ ...typography.bodySmall, color: colors.text.secondary, flex: 1 }}>
+                Free plan: you have 1 points-earning scan this month. Make it count!
+              </Text>
+            </View>
+          </GlassCard>
+        )}
+
         {/* Expiring Soon Banner */}
         {expiringPoints && (
           <GlassCard variant="bordered" accentColor={colors.semantic.warning} style={styles.expiringBanner}>
@@ -182,7 +206,7 @@ export default function PointsHistoryScreen() {
               <GuideItem
                 icon="cog"
                 title="Automatic Redemption"
-                desc="Once you have at least 500 points, they're automatically applied to your next bill."
+                desc="Once you have at least 500 points (£0.50), they're automatically applied to your next bill. Redeemed in multiples of 500."
               />
               <GuideItem
                 icon="chart-line"
