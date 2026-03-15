@@ -69,6 +69,14 @@ crons.daily(
   internal.monitoring.checkTTSQuota
 );
 
+// Provider scaling nudge — counts AI DAU and alerts admin when approaching free tier limits
+// Runs at 9pm UTC (end of UK peak usage) to capture full day's activity
+crons.daily(
+  "check-provider-scaling-needs",
+  { hourUTC: 21, minuteUTC: 0 },
+  internal.monitoring.checkProviderScalingNeeds
+);
+
 // Advanced Analytics — Phase 2
 crons.daily(
   "compute-user-segments",

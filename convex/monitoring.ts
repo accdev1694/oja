@@ -314,6 +314,160 @@ export const checkAICapacity = internalMutation({
 });
 
 /**
+ * Provider Scaling Nudge: Counts daily active AI users and nudges admin
+ * when user growth approaches provider free tier exhaustion.
+ *
+ * Thresholds (based on ~7 AI calls/user/day average):
+ * - Gemini: 50 DAU = info, 80 DAU = warning, 120 DAU = critical
+ * - Azure TTS: 25 voice DAU = info, 40 voice DAU = warning, 60 voice DAU = critical
+ */
+export const checkProviderScalingNeeds = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    // Count unique users who made AI calls today (from daily delta fields)
+    const allUsage = await ctx.db
+      .query("aiUsage")
+      .withIndex("by_period")
+      .collect();
+
+    const aiUsers = new Set<string>();
+    const voiceUsers = new Set<string>();
+    let todayRequests = 0;
+    let todayTtsChars = 0;
+
+    for (const record of allUsage) {
+      if (record.dailyDate !== todayStr) continue;
+      const dailyReqs = record.dailyRequestCount ?? 0;
+      if (dailyReqs > 0) {
+        aiUsers.add(record.userId.toString());
+        todayRequests += dailyReqs;
+      }
+      if (record.feature === "voice" && dailyReqs > 0) {
+        voiceUsers.add(record.userId.toString());
+      }
+      if (record.feature === "tts") {
+        todayTtsChars += record.dailyTtsCharacters ?? 0;
+      }
+    }
+
+    const aiDAU = aiUsers.size;
+    const voiceDAU = voiceUsers.size;
+    const geminiLimit = PROVIDER_LIMITS.gemini.requestsPerDay;
+    const geminiPercent = Math.round((todayRequests / geminiLimit) * 100);
+    let alertsCreated = 0;
+
+    // --- Gemini scaling nudge ---
+    if (aiDAU >= 50) {
+      let severity: "info" | "warning" | "critical" = "info";
+      let recommendation = "";
+
+      if (aiDAU >= 120) {
+        severity = "critical";
+        recommendation = `URGENT: ${aiDAU} daily active users consuming ${todayRequests}/${geminiLimit} RPD (${geminiPercent}%). Enable Gemini billing (Tier 1 pay-as-you-go) or migrate heavy features to a lighter model immediately.`;
+      } else if (aiDAU >= 80) {
+        severity = "warning";
+        recommendation = `${aiDAU} daily active users consuming ${todayRequests}/${geminiLimit} RPD (${geminiPercent}%). Start planning paid tier migration. At current growth, free tier will be exhausted soon.`;
+      } else {
+        recommendation = `${aiDAU} daily active users consuming ${todayRequests}/${geminiLimit} RPD (${geminiPercent}%). No action needed yet, but monitor growth. Consider adding per-user monthly caps to uncapped features.`;
+      }
+
+      const existing = await ctx.db
+        .query("adminAlerts")
+        .withIndex("by_resolved", (q) => q.eq("isResolved", false))
+        .filter((q) => q.eq(q.field("alertType"), "provider_scaling_gemini"))
+        .first();
+
+      const shouldCreate = !existing ||
+        (existing.severity === "info" && (severity === "warning" || severity === "critical")) ||
+        (existing.severity === "warning" && severity === "critical");
+
+      if (shouldCreate) {
+        if (existing && existing.severity !== severity) {
+          await ctx.db.patch(existing._id, { isResolved: true, resolvedAt: Date.now() });
+        }
+        await sendAlert(ctx, {
+          type: "provider_scaling_gemini",
+          message: recommendation,
+          severity,
+          metadata: {
+            date: todayStr,
+            aiDAU,
+            todayRequests,
+            geminiLimit,
+            geminiPercent,
+            avgCallsPerUser: aiDAU > 0 ? Math.round(todayRequests / aiDAU) : 0,
+          },
+        });
+        alertsCreated++;
+      }
+    }
+
+    // --- Azure TTS scaling nudge ---
+    if (voiceDAU >= 25) {
+      const ttsMonthlyLimit = PROVIDER_LIMITS.azure_tts.freeCharsPerMonth;
+      const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+      const dayOfMonth = new Date().getDate();
+      const projectedMonthlyChars = dayOfMonth > 0 ? Math.round((todayTtsChars / 1) * (daysInMonth - dayOfMonth + 1) + todayTtsChars) : todayTtsChars;
+
+      let severity: "info" | "warning" | "critical" = "info";
+      let recommendation = "";
+
+      if (voiceDAU >= 60) {
+        severity = "critical";
+        recommendation = `URGENT: ${voiceDAU} daily voice users. Azure TTS free tier (${ttsMonthlyLimit.toLocaleString()} chars/month) will be exhausted. Upgrade Azure Speech to S0 paid tier or shift more users to on-device expo-speech fallback.`;
+      } else if (voiceDAU >= 40) {
+        severity = "warning";
+        recommendation = `${voiceDAU} daily voice users generating ~${todayTtsChars.toLocaleString()} chars today. Projected monthly: ~${projectedMonthlyChars.toLocaleString()} of ${ttsMonthlyLimit.toLocaleString()} chars. Plan for Azure TTS paid tier.`;
+      } else {
+        recommendation = `${voiceDAU} daily voice users. TTS usage is growing. Monitor monthly character consumption and consider on-device TTS fallback for non-critical responses.`;
+      }
+
+      const existing = await ctx.db
+        .query("adminAlerts")
+        .withIndex("by_resolved", (q) => q.eq("isResolved", false))
+        .filter((q) => q.eq(q.field("alertType"), "provider_scaling_tts"))
+        .first();
+
+      const shouldCreate = !existing ||
+        (existing.severity === "info" && (severity === "warning" || severity === "critical")) ||
+        (existing.severity === "warning" && severity === "critical");
+
+      if (shouldCreate) {
+        if (existing && existing.severity !== severity) {
+          await ctx.db.patch(existing._id, { isResolved: true, resolvedAt: Date.now() });
+        }
+        await sendAlert(ctx, {
+          type: "provider_scaling_tts",
+          message: recommendation,
+          severity,
+          metadata: {
+            date: todayStr,
+            voiceDAU,
+            todayTtsChars,
+            projectedMonthlyChars,
+            ttsMonthlyLimit,
+          },
+        });
+        alertsCreated++;
+      }
+    }
+
+    return {
+      checked: true,
+      date: todayStr,
+      aiDAU,
+      voiceDAU,
+      todayRequests,
+      geminiPercent,
+      todayTtsChars,
+      alertsCreated,
+    };
+  },
+});
+
+/**
  * TTS Character Quota: Monitors Azure TTS usage against the 500K chars/month free tier
  * - Alert 1: > 80% usage = warning
  * - Alert 2: > 95% usage = critical
