@@ -208,6 +208,20 @@ crons.hourly(
   internal.points.checkFraudAlerts
 );
 
+// Cleanup expired point reservations (orphaned pending reservations past 5-minute window)
+crons.hourly(
+  "cleanup-expired-reservations",
+  { minuteUTC: 15 },
+  internal.stripe.cleanupExpiredReservations
+);
+
+// Auto-deactivate seasonal events past their end date — runs daily at 0:30am UTC
+crons.daily(
+  "deactivate-expired-events",
+  { hourUTC: 0, minuteUTC: 30 },
+  internal.events.deactivateExpiredEvents
+);
+
 // Stock Update Reminders — Wednesdays and Fridays at 6pm UTC
 crons.weekly(
   "stock-reminder-wednesday",

@@ -208,6 +208,7 @@ export const aggregateAIUsageDaily = internalMutation({
       estimatedCostUsd: number;
       visionRequests: number;
       fallbackRequests: number;
+      ttsCharacters: number;
       userIds: Set<string>;
     }> = {};
 
@@ -217,6 +218,7 @@ export const aggregateAIUsageDaily = internalMutation({
     let totalCost = 0;
     let totalVision = 0;
     let totalFallback = 0;
+    let totalTtsCharacters = 0;
     const allUserIds = new Set<string>();
 
     for (const record of usageRecords) {
@@ -233,6 +235,7 @@ export const aggregateAIUsageDaily = internalMutation({
           estimatedCostUsd: 0,
           visionRequests: 0,
           fallbackRequests: 0,
+          ttsCharacters: 0,
           userIds: new Set(),
         };
       }
@@ -244,6 +247,7 @@ export const aggregateAIUsageDaily = internalMutation({
       agg.estimatedCostUsd += record.dailyCostUsd ?? 0;
       agg.visionRequests += record.dailyVisionRequests ?? 0;
       agg.fallbackRequests += record.dailyFallbackRequests ?? 0;
+      agg.ttsCharacters += record.dailyTtsCharacters ?? 0;
       agg.userIds.add(record.userId.toString());
 
       totalRequests += record.dailyRequestCount ?? 0;
@@ -252,6 +256,7 @@ export const aggregateAIUsageDaily = internalMutation({
       totalCost += record.dailyCostUsd ?? 0;
       totalVision += record.dailyVisionRequests ?? 0;
       totalFallback += record.dailyFallbackRequests ?? 0;
+      totalTtsCharacters += record.dailyTtsCharacters ?? 0;
       allUserIds.add(record.userId.toString());
     }
 
@@ -267,6 +272,7 @@ export const aggregateAIUsageDaily = internalMutation({
         estimatedCostUsd: agg.estimatedCostUsd,
         visionRequests: agg.visionRequests,
         fallbackRequests: agg.fallbackRequests,
+        ttsCharacters: agg.ttsCharacters > 0 ? agg.ttsCharacters : undefined,
         uniqueUsers: agg.userIds.size,
         computedAt: now,
       });
@@ -283,6 +289,7 @@ export const aggregateAIUsageDaily = internalMutation({
       estimatedCostUsd: totalCost,
       visionRequests: totalVision,
       fallbackRequests: totalFallback,
+      ttsCharacters: totalTtsCharacters > 0 ? totalTtsCharacters : undefined,
       uniqueUsers: allUserIds.size,
       computedAt: now,
     });

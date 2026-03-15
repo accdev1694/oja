@@ -206,7 +206,7 @@ export const checkAICapacity = internalMutation({
 
     if (!dailyRecord) return { checked: false, reason: "No data for yesterday" };
 
-    const geminiDailyLimit = 1500;
+    const geminiDailyLimit = PROVIDER_LIMITS.gemini.requestsPerDay;
     const usagePercent = (dailyRecord.requestCount / geminiDailyLimit) * 100;
     const fallbackRate = dailyRecord.requestCount > 0
       ? (dailyRecord.fallbackRequests / dailyRecord.requestCount) * 100
@@ -224,7 +224,10 @@ export const checkAICapacity = internalMutation({
         .filter((q) => q.eq(q.field("alertType"), "ai_capacity_daily"))
         .first();
 
-      if (!existing) {
+      if (!existing || (existing.severity === "warning" && severity === "critical")) {
+        if (existing && existing.severity === "warning" && severity === "critical") {
+          await ctx.db.patch(existing._id, { isResolved: true, resolvedAt: Date.now() });
+        }
         await sendAlert(ctx, {
           type: "ai_capacity_daily",
           message: `AI daily usage at ${usagePercent.toFixed(0)}% of Gemini free tier (${dailyRecord.requestCount}/${geminiDailyLimit} RPD). ${severity === "critical" ? "Upgrade to Vertex AI immediately." : "Monitor closely."}`,
@@ -251,7 +254,10 @@ export const checkAICapacity = internalMutation({
         .filter((q) => q.eq(q.field("alertType"), "ai_fallback_rate"))
         .first();
 
-      if (!existing) {
+      if (!existing || (existing.severity === "warning" && severity === "critical")) {
+        if (existing && existing.severity === "warning" && severity === "critical") {
+          await ctx.db.patch(existing._id, { isResolved: true, resolvedAt: Date.now() });
+        }
         await sendAlert(ctx, {
           type: "ai_fallback_rate",
           message: `AI fallback rate is ${fallbackRate.toFixed(1)}% (${dailyRecord.fallbackRequests} of ${dailyRecord.requestCount} calls hit OpenAI). Gemini may be throttling.`,
@@ -269,17 +275,22 @@ export const checkAICapacity = internalMutation({
 
     // Alert 3: Cost spike (daily cost > $1 indicates significant usage)
     if (dailyRecord.estimatedCostUsd > 1.0) {
+      const severity = dailyRecord.estimatedCostUsd > 5.0 ? "critical" : "warning";
+
       const existing = await ctx.db
         .query("adminAlerts")
         .withIndex("by_resolved", (q) => q.eq("isResolved", false))
         .filter((q) => q.eq(q.field("alertType"), "ai_cost_spike"))
         .first();
 
-      if (!existing) {
+      if (!existing || (existing.severity === "warning" && severity === "critical")) {
+        if (existing && existing.severity === "warning" && severity === "critical") {
+          await ctx.db.patch(existing._id, { isResolved: true, resolvedAt: Date.now() });
+        }
         await sendAlert(ctx, {
           type: "ai_cost_spike",
           message: `AI daily cost was $${dailyRecord.estimatedCostUsd.toFixed(4)} on ${dateStr}. Projected monthly: $${(dailyRecord.estimatedCostUsd * 30).toFixed(2)}.`,
-          severity: dailyRecord.estimatedCostUsd > 5.0 ? "critical" : "warning",
+          severity,
           metadata: {
             date: dateStr,
             dailyCost: dailyRecord.estimatedCostUsd,
@@ -339,7 +350,10 @@ export const checkTTSQuota = internalMutation({
         .filter((q) => q.eq(q.field("alertType"), "tts_quota"))
         .first();
 
-      if (!existing) {
+      if (!existing || (existing.severity === "warning" && severity === "critical")) {
+        if (existing && existing.severity === "warning" && severity === "critical") {
+          await ctx.db.patch(existing._id, { isResolved: true, resolvedAt: Date.now() });
+        }
         await sendAlert(ctx, {
           type: "tts_quota",
           message: `Azure TTS usage at ${usagePercent.toFixed(0)}% of free tier (${totalChars.toLocaleString()} / ${freeLimit.toLocaleString()} chars). ${severity === "critical" ? "Approaching limit — voice responses may fail." : "Monitor closely."}`,

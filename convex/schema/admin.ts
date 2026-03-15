@@ -136,6 +136,7 @@ export const adminTables = {
     alertType: v.string(), // receipt_failure_spike, payment_failed, system_error, high_latency
     message: v.string(),
     severity: v.union(v.literal("info"), v.literal("warning"), v.literal("critical")),
+    metadata: v.optional(v.any()), // Rich context (request counts, costs, usage %) for debugging
     isResolved: v.boolean(),
     resolvedBy: v.optional(v.id("users")),
     resolvedAt: v.optional(v.number()),

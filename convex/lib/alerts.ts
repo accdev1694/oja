@@ -22,6 +22,7 @@ export async function sendAlert(
     alertType: args.type,
     message: args.message,
     severity: args.severity,
+    metadata: args.metadata,
     isResolved: false,
     createdAt: Date.now(),
   });

@@ -6,6 +6,7 @@ import {
   measureQueryPerformance,
   QueryCtx
 } from "./helpers";
+import { PROVIDER_LIMITS } from "../lib/aiTracking";
 
 async function computeRevenueReport(
   ctx: QueryCtx,
@@ -277,13 +278,13 @@ export const getTodayAIRequestCount = query({
       }
     }
 
-    const geminiDailyLimit = 1500;
+    const geminiDailyLimit = PROVIDER_LIMITS.gemini.requestsPerDay;
     const usagePercent = Math.round((todayRequests / geminiDailyLimit) * 100);
     const fallbackRate = todayRequests > 0 ? Math.round((todayFallback / todayRequests) * 100) : 0;
 
     let zone = "green";
     if (usagePercent > 93) zone = "red";
-    else if (usagePercent > 66) zone = "yellow";
+    else if (usagePercent > 70) zone = "yellow";
 
     return {
       todayRequests,
@@ -384,7 +385,7 @@ export const getCapacityPlanningData = query({
       : 0;
 
     // Projections: days until Gemini free tier exceeded (1,500 RPD)
-    const geminiDailyLimit = 1500;
+    const geminiDailyLimit = PROVIDER_LIMITS.gemini.requestsPerDay;
     let daysUntilLimit = null;
     if (avgRequestsPerDay > 0 && growthRate > 0) {
       // Linear projection: requests = avgRequestsPerDay * (1 + growthRate/100)^days
