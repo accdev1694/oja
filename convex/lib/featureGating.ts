@@ -86,7 +86,7 @@ export interface TierConfig {
 export const TIER_TABLE: TierConfig[] = [
   { tier: "bronze",   threshold: 0,   pointsPerScan: 150, maxEarningScans: 4, maxPoints: 600 },
   { tier: "silver",   threshold: 20,  pointsPerScan: 175, maxEarningScans: 5, maxPoints: 875 },
-  { tier: "gold",     threshold: 50,  pointsPerScan: 200, maxEarningScans: 5, maxPoints: 1000 },
+  { tier: "gold",     threshold: 50,  pointsPerScan: 200, maxEarningScans: 6, maxPoints: 1200 },
   { tier: "platinum", threshold: 100, pointsPerScan: 225, maxEarningScans: 6, maxPoints: 1350 },
 ];
 

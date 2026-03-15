@@ -1,9 +1,10 @@
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { AI_LIMITS, getAILimit } from "./lib/featureGating";
 import { checkRateLimit as performRateLimitCheck } from "./lib/rateLimit";
+import { PROVIDER_LIMITS } from "./lib/aiTracking";
 
 // Notification thresholds (percentage)
 const USAGE_THRESHOLDS = [50, 80, 100] as const;
@@ -288,8 +289,18 @@ export const canUseFeature = query({
       .unique();
 
     if (!usage) {
-      // No usage yet this period = allowed
-      return { allowed: true, usage: 0, limit: 200, percentage: 0 };
+      // No usage yet this period — look up actual plan limit
+      const subscription = await ctx.db
+        .query("subscriptions")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .unique();
+      const plan = subscription?.plan ?? "free";
+      const featureKey = args.feature as keyof typeof AI_LIMITS;
+      const actualLimit = AI_LIMITS[featureKey]
+        ? getAILimit(plan, featureKey)
+        : 999999;
+      const displayLimit = actualLimit === -1 ? 999999 : actualLimit;
+      return { allowed: true, usage: 0, limit: displayLimit, percentage: 0 };
     }
 
     const percentage = Math.round((usage.requestCount / usage.limit) * 100);
@@ -353,8 +364,20 @@ export const getUsageSummary = query({
       .order("desc")
       .first();
 
+    // Look up actual plan limit for voice if no usage record exists yet
+    let voiceFallback = { usage: 0, limit: 10, percentage: 0 };
+    if (!summary.voice) {
+      const subscription = await ctx.db
+        .query("subscriptions")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .unique();
+      const plan = subscription?.plan ?? "free";
+      const voiceLimit = getAILimit(plan, "voice");
+      voiceFallback = { usage: 0, limit: voiceLimit === -1 ? 999999 : voiceLimit, percentage: 0 };
+    }
+
     return {
-      voice: summary.voice ?? { usage: 0, limit: 200, percentage: 0 },
+      voice: summary.voice ?? voiceFallback,
       receipts: {
         scansThisPeriod: scanCredits?.scansThisPeriod ?? 0,
         creditsEarned: scanCredits?.creditsEarned ?? 0,
@@ -631,6 +654,68 @@ export const trackTTSUsage = internalMutation({
       dailyTtsCharacters: isNewDay ? args.characterCount : (usage.dailyTtsCharacters ?? 0) + args.characterCount,
       updatedAt: Date.now(),
     });
+  },
+});
+
+/**
+ * Get today's total Gemini request count across ALL users and features.
+ * Used by AI actions to enforce the 1,500 RPD free tier hard cap.
+ */
+export const getGeminiRPDToday = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    // Sum dailyRequestCount across all aiUsage records where dailyDate === today
+    // and the provider was gemini (we only track gemini calls toward RPD)
+    const allUsage = await ctx.db
+      .query("aiUsage")
+      .withIndex("by_period")
+      .collect();
+
+    let totalToday = 0;
+    for (const record of allUsage) {
+      if (record.dailyDate === todayStr) {
+        totalToday += record.dailyRequestCount ?? 0;
+      }
+    }
+    return {
+      requestsToday: totalToday,
+      limit: PROVIDER_LIMITS.gemini.requestsPerDay,
+      remaining: Math.max(0, PROVIDER_LIMITS.gemini.requestsPerDay - totalToday),
+      blocked: totalToday >= PROVIDER_LIMITS.gemini.requestsPerDay,
+    };
+  },
+});
+
+/**
+ * Get this month's total Azure TTS characters across ALL users.
+ * Used by textToSpeech action to enforce 480K hard cap (leaving 20K buffer from 500K free tier).
+ */
+export const getTTSCharactersThisMonth = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const { end } = getCurrentPeriod();
+    const ttsRecords = await ctx.db
+      .query("aiUsage")
+      .withIndex("by_period")
+      .filter((q) => q.eq(q.field("feature"), "tts"))
+      .collect();
+
+    let totalChars = 0;
+    for (const record of ttsRecords) {
+      if (record.periodEnd === end) {
+        totalChars += record.ttsCharacters ?? 0;
+      }
+    }
+
+    const hardCap = PROVIDER_LIMITS.azure_tts.freeCharsPerMonth - 20_000; // 480K buffer
+    return {
+      charactersUsed: totalChars,
+      hardCap,
+      freeLimit: PROVIDER_LIMITS.azure_tts.freeCharsPerMonth,
+      remaining: Math.max(0, hardCap - totalChars),
+      blocked: totalChars >= hardCap,
+    };
   },
 });
 

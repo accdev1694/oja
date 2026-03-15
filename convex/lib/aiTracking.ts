@@ -18,12 +18,16 @@ const COST_TABLE = {
   azure_tts: { perMillionChars: 16 },
 } as const;
 
-// Provider free tier limits
+// Provider free tier limits — ENFORCED, not just tracked
 export const PROVIDER_LIMITS = {
   gemini: {
     requestsPerMinute: 15,
     requestsPerDay: 1500,
     tokensPerMinute: 1_000_000,
+  },
+  openai: {
+    /** Hard daily spend cap in USD. $0 = never use OpenAI (free tier only). */
+    dailySpendCapUsd: 0,
   },
   azure_tts: {
     freeCharsPerMonth: 500_000,
