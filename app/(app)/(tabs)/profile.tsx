@@ -9,10 +9,12 @@ import { Doc } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 import { setHintsEnabled, resetAllHints } from "@/lib/storage/hintStorage";
 import {
-  GlassScreen, GlassCard, GlassButton, SimpleHeader,
+  GlassScreen, GlassCard, GlassButton, GlassModal, GlassInput, SimpleHeader,
   SkeletonCard, AnimatedSection, colors, typography, spacing, useGlassAlert, AlertButton,
 } from "@/components/ui/glass";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { isGenericName } from "@/lib/names";
 import { useIsSwitchingUsers } from "@/hooks/useIsSwitchingUsers";
 import { useHint } from "@/hooks/useHint";
 import { HintOverlay } from "@/components/tutorial/HintOverlay";
@@ -67,6 +69,9 @@ export default function ProfileScreen() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [animationKey, setAnimationKey] = useState(0);
   const [gmvFilter, setGmvFilter] = useState<"week" | "month" | "year" | "lifetime">("lifetime");
+  const [showEditName, setShowEditName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   const myAdminPerms = useQuery(api.admin.getMyPermissions, {});
   const isAdmin = !!convexUser?.isAdmin || !!myAdminPerms;
@@ -112,7 +117,8 @@ export default function ProfileScreen() {
   };
 
   const handleResetAccount = () => {
-    confirmAction("Reset Account", "This will delete ALL your data (pantry, lists, receipts, etc.) and restart onboarding. Your login stays intact.", async () => {
+    const name = convexUser?.name || user?.firstName;
+    confirmAction("Reset Account", `${name ? `${name}, this` : "This"} will delete ALL your data (pantry, lists, receipts, etc.) and restart onboarding. Your login stays intact.`, async () => {
       setIsResetting(true);
       try {
         await resetMyAccount();
@@ -127,6 +133,26 @@ export default function ProfileScreen() {
       resetAllHints();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     });
+  };
+
+  const handleEditName = () => {
+    setEditNameValue(convexUser?.name || "");
+    setShowEditName(true);
+  };
+
+  const handleSaveName = async () => {
+    const trimmed = editNameValue.trim();
+    if (trimmed.length < 2 || /^\d+$/.test(trimmed)) return;
+    setSavingName(true);
+    try {
+      await updateUser({ name: trimmed });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowEditName(false);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSavingName(false);
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -167,7 +193,9 @@ export default function ProfileScreen() {
     );
   }
 
-  const userDisplayName = convexUser?.name || user?.firstName || user?.username || user?.primaryEmailAddress?.emailAddress?.split("@")[0] || "Shopper";
+  const convexName = convexUser?.name && !isGenericName(convexUser.name) ? convexUser.name : undefined;
+  const clerkUsername = user?.username && !isGenericName(user.username) ? user.username : undefined;
+  const userDisplayName = convexName || user?.firstName || clerkUsername || user?.primaryEmailAddress?.emailAddress?.split("@")[0] || "Shopper";
   const completedLists = allLists.filter((list: Doc<"shoppingLists">) => list.status === "completed");
   const outOfStockItems = pantryItems.filter((item: Doc<"pantryItems">) => item.stockLevel === "out").length;
   const lowStockItems = pantryItems.filter((item: Doc<"pantryItems">) => item.stockLevel === "low").length;
@@ -183,7 +211,7 @@ export default function ProfileScreen() {
   return (
     <GlassScreen>
       <View ref={headerRef}>
-        <SimpleHeader title={userDisplayName ? `Hey, ${userDisplayName}` : "Profile"} accentColor={colors.semantic.profile} subtitle="Your insights & settings" />
+        <SimpleHeader title={userDisplayName ? `Hey, ${userDisplayName}` : "Profile"} accentColor={colors.semantic.profile} subtitle={userDisplayName ? `${userDisplayName}'s insights & settings` : "Your insights & settings"} />
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -192,7 +220,7 @@ export default function ProfileScreen() {
           <AdminControlCenter adminAnalytics={adminAnalytics} systemHealth={systemHealth} platformAIUsage={platformAIUsage} gmvFilter={gmvFilter} setGmvFilter={setGmvFilter} router={router} />
         )}
 
-        <AccountSection userDisplayName={userDisplayName} userEmail={user?.primaryEmailAddress?.emailAddress} referralInfo={referralInfo} handleShareReferral={handleShareReferral} isAdmin={isAdmin} dietRef={dietRef} animationDelay={isAdmin ? 200 : 0} />
+        <AccountSection userDisplayName={userDisplayName} userEmail={user?.primaryEmailAddress?.emailAddress} referralInfo={referralInfo} handleShareReferral={handleShareReferral} isAdmin={isAdmin} dietRef={dietRef} animationDelay={isAdmin ? 200 : 0} onEditName={handleEditName} />
 
         <SettingsSection convexUser={convexUser} updateNotificationSettings={updateNotificationSettings} updateUser={updateUser} setHintsEnabled={setHintsEnabled} handleResetHints={handleResetHints} hintsRef={hintsRef} animationDelay={isAdmin ? 250 : 50} />
 
@@ -247,6 +275,49 @@ export default function ProfileScreen() {
       <HintOverlay visible={introHint.shouldShow} targetRef={headerRef} title="Control Center" content="This is your control center. Manage your account, referrals, and app settings here." onDismiss={introHint.dismiss} position="below" />
       <HintOverlay visible={dietHint.shouldShow} targetRef={dietRef} title="Personalise Oja" content="Set your dietary preferences in Account settings to get better health swaps tailored to you." onDismiss={dietHint.dismiss} position="below" />
       <HintOverlay visible={hintsHint.shouldShow} targetRef={hintsRef} title="Hint Settings" content="You can toggle these hints off anytime if you're already an Oja pro!" onDismiss={hintsHint.dismiss} position="above" />
+
+      {/* Edit Name Modal */}
+      <GlassModal
+        visible={showEditName}
+        onClose={() => setShowEditName(false)}
+        animationType="fade"
+        position="center"
+        avoidKeyboard
+      >
+        <View style={{ alignItems: "center", paddingVertical: spacing.md }}>
+          <MaterialCommunityIcons name="account-edit-outline" size={36} color={colors.accent.primary} style={{ marginBottom: spacing.md }} />
+          <Text style={{ ...typography.headlineSmall, color: colors.text.primary, marginBottom: spacing.xs }}>Edit your name</Text>
+          <Text style={{ ...typography.bodyMedium, color: colors.text.secondary, textAlign: "center", marginBottom: spacing.lg }}>
+            This is how Oja will greet you
+          </Text>
+          <GlassInput
+            placeholder="First name"
+            value={editNameValue}
+            onChangeText={setEditNameValue}
+            autoCapitalize="words"
+            autoComplete="given-name"
+            iconLeft="account-outline"
+          />
+          <View style={{ height: spacing.md }} />
+          <GlassButton
+            variant="primary"
+            size="lg"
+            onPress={handleSaveName}
+            loading={savingName}
+            disabled={savingName || !editNameValue.trim()}
+          >
+            Save
+          </GlassButton>
+          <GlassButton
+            variant="ghost"
+            size="sm"
+            onPress={() => setShowEditName(false)}
+            style={{ marginTop: spacing.xs }}
+          >
+            Cancel
+          </GlassButton>
+        </View>
+      </GlassModal>
     </GlassScreen>
   );
 }

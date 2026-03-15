@@ -1,13 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
+import { View, Text, StyleSheet } from "react-native";
 import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { ConvexReactClient, useMutation, useQuery } from "convex/react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import * as Haptics from "expo-haptics";
 import { SafeKeyboardProvider } from "@/lib/keyboard/safeKeyboardController";
-import { GlassAlertProvider } from "@/components/ui/glass";
+import {
+  GlassAlertProvider,
+  GlassModal,
+  GlassInput,
+  GlassButton,
+  colors,
+  typography,
+  spacing,
+} from "@/components/ui/glass";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "@/convex/_generated/api";
+import { isGenericName, isValidName } from "@/lib/names";
 import { UserSwitchContext } from "@/hooks/useIsSwitchingUsers";
 
 const convex = new ConvexReactClient(
@@ -75,7 +88,57 @@ function InitialLayout() {
   );
   // Ensure user record exists in Convex when signed in
   const getOrCreate = useMutation(api.users.getOrCreate);
+  const updateUser = useMutation(api.users.update);
   const creatingUser = useRef(false);
+
+  // Name collection for existing users with generic/missing names
+  const NAME_PROMPT_STORAGE_KEY = "oja_name_prompt_count";
+  const MAX_NAME_PROMPTS = 3;
+  const needsName = currentUser?.onboardingComplete &&
+    (!currentUser.name || isGenericName(currentUser.name) ||
+      currentUser.name.toLowerCase() === currentUser.email?.split("@")[0]?.toLowerCase());
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const namePromptShown = useRef(false);
+
+  // Show name prompt for users who need it, up to MAX_NAME_PROMPTS times total
+  useEffect(() => {
+    if (!needsName || namePromptShown.current || isSwitchingUsers) return;
+    namePromptShown.current = true;
+
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(NAME_PROMPT_STORAGE_KEY);
+        const count = raw ? parseInt(raw, 10) : 0;
+        if (count >= MAX_NAME_PROMPTS) return;
+        await AsyncStorage.setItem(NAME_PROMPT_STORAGE_KEY, String(count + 1));
+        const timer = setTimeout(() => setShowNameModal(true), 800);
+        return () => clearTimeout(timer);
+      } catch {
+        // Storage error — show anyway to avoid silently skipping
+        const timer = setTimeout(() => setShowNameModal(true), 800);
+        return () => clearTimeout(timer);
+      }
+    })();
+  }, [needsName, isSwitchingUsers]);
+
+  const handleSaveName = useCallback(async () => {
+    const trimmed = nameInput.trim();
+    if (!isValidName(trimmed)) return;
+    setSavingName(true);
+    try {
+      await updateUser({ name: trimmed });
+      // Reset prompt counter so it never shows again
+      await AsyncStorage.setItem(NAME_PROMPT_STORAGE_KEY, String(MAX_NAME_PROMPTS));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowNameModal(false);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSavingName(false);
+    }
+  }, [nameInput, updateUser]);
 
   // Ensure Convex user record exists whenever signed in but no record found
   useEffect(() => {
@@ -127,9 +190,82 @@ function InitialLayout() {
   return (
     <UserSwitchContext.Provider value={isSwitchingUsers}>
       <Slot />
+
+      {/* One-time name collection for existing users with generic names */}
+      <GlassModal
+        visible={showNameModal}
+        onClose={() => setShowNameModal(false)}
+        animationType="fade"
+        position="center"
+        avoidKeyboard
+      >
+        <View style={nameStyles.container}>
+          <View style={nameStyles.iconWrap}>
+            <MaterialCommunityIcons name="hand-wave" size={36} color={colors.accent.primary} />
+          </View>
+          <Text style={nameStyles.title}>What should we call you?</Text>
+          <Text style={nameStyles.subtitle}>
+            Your name helps personalise your Oja experience
+          </Text>
+          <GlassInput
+            placeholder="First name"
+            value={nameInput}
+            onChangeText={setNameInput}
+            autoCapitalize="words"
+            autoComplete="given-name"
+            iconLeft="account-outline"
+          />
+          <View style={{ height: spacing.md }} />
+          <GlassButton
+            variant="primary"
+            size="lg"
+            onPress={handleSaveName}
+            loading={savingName}
+            disabled={savingName || !nameInput.trim()}
+          >
+            Continue
+          </GlassButton>
+          <GlassButton
+            variant="ghost"
+            size="sm"
+            onPress={() => setShowNameModal(false)}
+            style={{ marginTop: spacing.xs }}
+          >
+            Skip for now
+          </GlassButton>
+        </View>
+      </GlassModal>
     </UserSwitchContext.Provider>
   );
 }
+
+const nameStyles = StyleSheet.create({
+  container: {
+    alignItems: "center",
+    paddingVertical: spacing.md,
+  },
+  iconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: `${colors.accent.primary}20`,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  title: {
+    ...typography.headlineMedium,
+    color: colors.text.primary,
+    textAlign: "center",
+    marginBottom: spacing.xs,
+  },
+  subtitle: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+    textAlign: "center",
+    marginBottom: spacing.lg,
+  },
+});
 
 export default function RootLayout() {
   return (

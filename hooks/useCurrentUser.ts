@@ -1,16 +1,16 @@
 import { useUser } from "@clerk/clerk-expo";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
+import { isGenericName } from "../lib/names";
 
 /**
  * Extract first name from full name.
  * Handles "John Smith" -> "John", "Mary-Jane" -> "Mary-Jane"
  * Ignores placeholder names like "User" or "Shopper"
  */
-function getFirstName(fullName?: string | null): string | undefined {
+function getFirstName(fullName?: string | null) {
   if (!fullName) return undefined;
-  const genericPlaceholders = ["User", "Shopper", "Anonymous"];
-  if (genericPlaceholders.includes(fullName)) return undefined;
+  if (isGenericName(fullName)) return undefined;
   return fullName.split(" ")[0];
 }
 

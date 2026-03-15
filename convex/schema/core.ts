@@ -58,6 +58,9 @@ export const coreTables = {
     // Push notifications
     expoPushToken: v.optional(v.string()), // Expo push token for notifications
 
+    // Name tracking
+    nameManuallySet: v.optional(v.boolean()), // True when user explicitly entered their name
+
     // Onboarding
     onboardingComplete: v.boolean(),
 

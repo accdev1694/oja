@@ -14,6 +14,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { detectLocation } from "@/lib/location/detectLocation";
 import { safeHaptics } from "@/lib/haptics/safeHaptics";
+import { isGenericName } from "@/lib/names";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ComponentProps } from "react";
@@ -33,6 +34,7 @@ import {
   borderRadius,
   animations,
 } from "@/components/ui/glass";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 // Cuisine options with emojis
 const CUISINES = [
@@ -66,6 +68,7 @@ export default function CuisineSelectionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user: clerkUser } = useUser();
+  const { user: convexUser, firstName: convexFirstName } = useCurrentUser();
   const getOrCreateUser = useMutation(api.users.getOrCreate);
   const setOnboardingData = useMutation(api.users.setOnboardingData);
 
@@ -133,9 +136,10 @@ export default function CuisineSelectionScreen() {
     setIsSaving(true);
 
     try {
-      // Use Clerk name if available, otherwise fallback to email prefix or "Shopper"
+      // Prefer existing Convex name (set on welcome screen), then Clerk, then email prefix
+      const convexName = convexUser?.name && !isGenericName(convexUser.name) ? convexUser.name : undefined;
       const fallbackName = clerkUser?.primaryEmailAddress?.emailAddress?.split("@")[0] || "Shopper";
-      const displayName = clerkUser?.firstName || clerkUser?.fullName || fallbackName;
+      const displayName = convexName || clerkUser?.firstName || clerkUser?.fullName || fallbackName;
 
       await setOnboardingData({
         name: displayName,
@@ -196,7 +200,9 @@ export default function CuisineSelectionScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Text style={styles.title}>Where are you cooking?</Text>
+        <Text style={styles.title}>
+          {convexFirstName ? `${convexFirstName}, where are you cooking?` : "Where are you cooking?"}
+        </Text>
 
         {/* Location Card */}
         <GlassCard variant="bordered" accentColor={colors.accent.primary} style={styles.locationCard}>

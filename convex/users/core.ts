@@ -2,6 +2,9 @@ import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { trackFunnelEvent, trackActivity } from "../lib/analytics";
 
+/** Generic placeholder names from identity providers — keep in sync with lib/names.ts */
+const GENERIC_NAMES = ["User", "Shopper", "Anonymous", "user", "shopper", "anonymous"];
+
 /**
  * Sync MFA status from the frontend (security requirement)
  */
@@ -81,8 +84,11 @@ export const getOrCreate = mutation({
     const now = Date.now();
 
     // Improved name extraction: Name -> Given Name -> Email Prefix -> "Shopper"
+    // Filter out generic placeholder names from identity providers
+    const identityName = identity.name && !GENERIC_NAMES.includes(identity.name) ? identity.name : undefined;
+    const givenName = identity.givenName && !GENERIC_NAMES.includes(identity.givenName) ? identity.givenName : undefined;
     const fallbackName = identity.email ? identity.email.split("@")[0] : "Shopper";
-    const displayName = identity.name || identity.givenName || fallbackName;
+    const displayName = identityName || givenName || fallbackName;
 
     const userId = await ctx.db.insert("users", {
       clerkId: identity.subject,
@@ -194,7 +200,10 @@ export const update = mutation({
       updatedAt: Date.now(),
     };
 
-    if (args.name !== undefined) updates.name = args.name;
+    if (args.name !== undefined) {
+      updates.name = args.name;
+      updates.nameManuallySet = true;
+    }
     if (args.defaultBudget !== undefined) updates.defaultBudget = args.defaultBudget;
     if (args.currency !== undefined) updates.currency = args.currency;
     if (args.postcodePrefix !== undefined) updates.postcodePrefix = args.postcodePrefix;

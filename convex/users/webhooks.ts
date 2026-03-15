@@ -33,13 +33,17 @@ export const handleClerkWebhook = action({
     } else if (type === "user.updated") {
       const clerkId = data.id;
       const email = data.email_addresses?.[0]?.email_address;
-      const name = `${data.first_name || ""} ${data.last_name || ""}`.trim();
+      const clerkName = `${data.first_name || ""} ${data.last_name || ""}`.trim();
       const user = await ctx.runQuery(api.users.getByClerkId, { clerkId });
       if (user) {
+        // Only overwrite name if the user hasn't manually set one in-app
+        const nameToUse = user.nameManuallySet
+          ? user.name
+          : (clerkName || user.name || "");
         await ctx.runMutation(internal.users.updateUserInfo, {
           userId: user._id,
           email: email || user.email || "",
-          name: name || user.name || "",
+          name: nameToUse,
         });
       }
     }
