@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, internalMutation } from "../_generated/server";
+import { query, mutation, internalMutation } from "../_generated/server";
 import { normalizeStoreName } from "../lib/storeNormalizer";
 import { computeConfidence, computeWeightedAverage } from "../lib/priceValidator";
 import { isValidProductName } from "../lib/communityHelpers";
@@ -153,6 +153,7 @@ export const upsertAIEstimate = mutation({
     size: v.optional(v.string()),
     unit: v.optional(v.string()),
     variantName: v.optional(v.string()),
+    confidence: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -163,7 +164,7 @@ export const upsertAIEstimate = mutation({
       await ctx.db.patch(existing._id, {
         unitPrice: args.unitPrice,
         averagePrice: args.unitPrice,
-        confidence: 0.05,
+        confidence: args.confidence ?? 0.05,
         updatedAt: now,
         ...(args.size && { size: args.size }),
         ...(args.unit && { unit: args.unit }),
@@ -179,7 +180,7 @@ export const upsertAIEstimate = mutation({
       unitPrice: args.unitPrice,
       averagePrice: args.unitPrice,
       reportCount: 0,
-      confidence: 0.05,
+      confidence: args.confidence ?? 0.05,
       lastSeenDate: now,
       lastReportedBy: args.userId,
       updatedAt: now,
@@ -187,5 +188,15 @@ export const upsertAIEstimate = mutation({
       ...(args.unit && { unit: args.unit }),
       ...(args.variantName && { variantName: args.variantName }),
     });
+  },
+});
+
+export const getByItemName = query({
+  args: { normalizedName: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("currentPrices")
+      .withIndex("by_item", (q) => q.eq("normalizedName", args.normalizedName))
+      .collect();
   },
 });

@@ -6,6 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Pressable,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
@@ -35,20 +36,20 @@ import {
 
 // Cuisine options with emojis
 const CUISINES = [
-  { id: "british", name: "British", emoji: "🇬🇧" },
-  { id: "nigerian", name: "Nigerian", emoji: "🇳🇬" },
-  { id: "indian", name: "Indian", emoji: "🇮🇳" },
-  { id: "chinese", name: "Chinese", emoji: "🇨🇳" },
-  { id: "italian", name: "Italian", emoji: "🇮🇹" },
-  { id: "pakistani", name: "Pakistani", emoji: "🇵🇰" },
-  { id: "caribbean", name: "Caribbean", emoji: "🇯🇲" },
-  { id: "mexican", name: "Mexican", emoji: "🇲🇽" },
-  { id: "middle-eastern", name: "Middle Eastern", emoji: "🇦🇪" },
-  { id: "japanese", name: "Japanese", emoji: "🇯🇵" },
-  { id: "korean", name: "Korean", emoji: "🇰🇷" },
-  { id: "thai", name: "Thai", emoji: "🇹🇭" },
-  { id: "vietnamese", name: "Vietnamese", emoji: "🇻🇳" },
-  { id: "ethiopian", name: "Ethiopian", emoji: "🇪🇹" },
+  { id: "british", name: "British", emoji: "\u{1F1EC}\u{1F1E7}" },
+  { id: "nigerian", name: "Nigerian", emoji: "\u{1F1F3}\u{1F1EC}" },
+  { id: "indian", name: "Indian", emoji: "\u{1F1EE}\u{1F1F3}" },
+  { id: "chinese", name: "Chinese", emoji: "\u{1F1E8}\u{1F1F3}" },
+  { id: "italian", name: "Italian", emoji: "\u{1F1EE}\u{1F1F9}" },
+  { id: "pakistani", name: "Pakistani", emoji: "\u{1F1F5}\u{1F1F0}" },
+  { id: "caribbean", name: "Caribbean", emoji: "\u{1F1EF}\u{1F1F2}" },
+  { id: "mexican", name: "Mexican", emoji: "\u{1F1F2}\u{1F1FD}" },
+  { id: "middle-eastern", name: "Middle Eastern", emoji: "\u{1F1E6}\u{1F1EA}" },
+  { id: "japanese", name: "Japanese", emoji: "\u{1F1EF}\u{1F1F5}" },
+  { id: "korean", name: "Korean", emoji: "\u{1F1F0}\u{1F1F7}" },
+  { id: "thai", name: "Thai", emoji: "\u{1F1F9}\u{1F1ED}" },
+  { id: "vietnamese", name: "Vietnamese", emoji: "\u{1F1FB}\u{1F1F3}" },
+  { id: "ethiopian", name: "Ethiopian", emoji: "\u{1F1EA}\u{1F1F9}" },
 ];
 
 const DIETARY_RESTRICTIONS = [
@@ -75,6 +76,8 @@ export default function CuisineSelectionScreen() {
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   const [selectedDietary, setSelectedDietary] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [postcodePrefix, setPostcodePrefix] = useState("");
+  const [isEditingPostcode, setIsEditingPostcode] = useState(false);
 
   useEffect(() => {
     initializeUser();
@@ -93,6 +96,9 @@ export default function CuisineSelectionScreen() {
     setCountry(location.country);
     setCountryCode(location.countryCode);
     setCurrency(location.currency);
+    if (location.postcodePrefix) {
+      setPostcodePrefix(location.postcodePrefix);
+    }
     setIsDetecting(false);
   }
 
@@ -136,6 +142,7 @@ export default function CuisineSelectionScreen() {
         country,
         cuisinePreferences: selectedCuisines,
         dietaryRestrictions: selectedDietary,
+        postcodePrefix: postcodePrefix || undefined,
       });
 
       safeHaptics.success();
@@ -205,6 +212,41 @@ export default function CuisineSelectionScreen() {
               <Text style={styles.locationText}>You&apos;re in {country}</Text>
               <Text style={styles.currencyText}>Prices shown in {currency}</Text>
             </View>
+          </View>
+          <View style={styles.postcodeRow}>
+            <MaterialCommunityIcons
+              name="map-marker-radius"
+              size={18}
+              color={colors.text.secondary}
+            />
+            {isEditingPostcode ? (
+              <TextInput
+                style={styles.postcodeInput}
+                value={postcodePrefix}
+                onChangeText={(text) => setPostcodePrefix(text.toUpperCase().slice(0, 5))}
+                onBlur={() => setIsEditingPostcode(false)}
+                onSubmitEditing={() => setIsEditingPostcode(false)}
+                placeholder="e.g. CV12"
+                placeholderTextColor={colors.text.disabled}
+                autoCapitalize="characters"
+                maxLength={5}
+                autoFocus
+              />
+            ) : (
+              <Pressable
+                onPress={() => { safeHaptics.light(); setIsEditingPostcode(true); }}
+                style={styles.postcodeDisplay}
+              >
+                <Text style={styles.postcodeText}>
+                  {postcodePrefix ? `Price area: ${postcodePrefix}` : "Set your area for local prices"}
+                </Text>
+                <MaterialCommunityIcons
+                  name="pencil"
+                  size={14}
+                  color={colors.accent.primary}
+                />
+              </Pressable>
+            )}
           </View>
         </GlassCard>
 
@@ -436,6 +478,34 @@ const styles = StyleSheet.create({
   currencyText: {
     ...typography.bodyMedium,
     color: colors.text.secondary,
+  },
+  postcodeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.08)",
+  },
+  postcodeDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    flex: 1,
+  },
+  postcodeText: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+  },
+  postcodeInput: {
+    ...typography.bodySmall,
+    color: colors.text.primary,
+    flex: 1,
+    padding: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.accent.primary,
+    paddingBottom: 2,
   },
   sectionHeader: {
     marginBottom: spacing.lg,

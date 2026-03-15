@@ -83,6 +83,7 @@ export default function ListDetailScreen() {
   const [editingItem, setEditingItem] = useState<ListItem | null>(null);
   const [showMidShopStorePicker, setShowMidShopStorePicker] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
 
   // ── Queries & Mutations ────────────────────────────────────────────────────
   const list = useQuery(api.shoppingLists.getById, { id });
@@ -97,6 +98,7 @@ export default function ListDetailScreen() {
   const removeMultiple = useMutation(api.listItems.removeMultiple);
   const setStore = useMutation(api.shoppingLists.setStore);
   const switchStoreMidShop = useMutation(api.shoppingLists.switchStoreMidShop);
+  const refreshPrices = useMutation(api.listItems.refreshListPrices);
 
   // ── Hooks ──────────────────────────────────────────────────────────────────
   const { isOwner, canEdit } = usePartnerRole(id);
@@ -194,6 +196,24 @@ export default function ListDetailScreen() {
       throw error;
     }
   }, [id, updateListName]);
+
+  const handleRefreshPrices = useCallback(async () => {
+    haptic("light");
+    setIsRefreshingPrices(true);
+    try {
+      const result = await refreshPrices({ listId: id });
+      haptic("success");
+      showToast(
+        `Updated ${result.updated} of ${result.total} prices`,
+        "currency-gbp",
+        colors.accent.primary
+      );
+    } catch (error) {
+      console.error("Price refresh failed:", error);
+    } finally {
+      setIsRefreshingPrices(false);
+    }
+  }, [refreshPrices, id, showToast]);
 
   // ── Multi-select ──────────────────────────────────────────────────────────
   const selectionActive = selectedIds.size > 0;
@@ -377,6 +397,30 @@ export default function ListDetailScreen() {
                   setShowAddModal(true);
                 }}
               />
+            )}
+
+            {canEdit && !isInProgress && items.length > 0 && (
+              <View style={styles.refreshPricesRow}>
+                <Pressable
+                  style={styles.refreshPricesButton}
+                  onPress={handleRefreshPrices}
+                  disabled={isRefreshingPrices}
+                >
+                  <MaterialCommunityIcons
+                    name="currency-gbp"
+                    size={16}
+                    color={isRefreshingPrices ? colors.text.disabled : colors.accent.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.refreshPricesText,
+                      isRefreshingPrices && { color: colors.text.disabled },
+                    ]}
+                  >
+                    {isRefreshingPrices ? "Refreshing..." : "Refresh Prices"}
+                  </Text>
+                </Pressable>
+              </View>
             )}
 
             {isInProgress && canEdit && (

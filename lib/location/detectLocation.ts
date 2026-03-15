@@ -11,6 +11,7 @@ export interface LocationData {
   country: string;
   countryCode: string;
   currency: string;
+  postcodePrefix?: string;
 }
 
 /**
@@ -101,6 +102,7 @@ export async function detectLocation(): Promise<LocationData> {
       country: "United Kingdom",
       countryCode: "GB",
       currency: "GBP",
+      postcodePrefix: undefined,
     };
   }
 
@@ -114,6 +116,7 @@ export async function detectLocation(): Promise<LocationData> {
         country: "United Kingdom",
         countryCode: "GB",
         currency: "GBP",
+        postcodePrefix: undefined,
       };
     }
 
@@ -127,7 +130,7 @@ export async function detectLocation(): Promise<LocationData> {
       reverseGeocodeAsync: (coords: {
         latitude: number;
         longitude: number;
-      }) => Promise<Array<{ isoCountryCode?: string }>>;
+      }) => Promise<Array<{ isoCountryCode?: string; postalCode?: string }>>;
       Accuracy: { Low: number };
     };
 
@@ -146,10 +149,20 @@ export async function detectLocation(): Promise<LocationData> {
       const country = getCountryName(countryCode);
       const currency = getCurrencyFromCountry(countryCode);
 
+      // Extract outward postcode (e.g., "CV12 5JL" -> "CV12", "SW1A 1AA" -> "SW1A", "M1 1AA" -> "M1")
+      let postcodePrefix;
+      if (geocode?.postalCode) {
+        const parts = geocode.postalCode.split(" ");
+        if (parts.length >= 1) {
+          postcodePrefix = parts[0].toUpperCase();
+        }
+      }
+
       return {
         country,
         countryCode,
         currency,
+        postcodePrefix,
       };
     }
 
@@ -158,6 +171,7 @@ export async function detectLocation(): Promise<LocationData> {
       country: "United Kingdom",
       countryCode: "GB",
       currency: "GBP",
+      postcodePrefix: undefined,
     };
   } catch (error) {
     console.error("Location detection failed:", error);
@@ -167,6 +181,7 @@ export async function detectLocation(): Promise<LocationData> {
       country: "United Kingdom",
       countryCode: "GB",
       currency: "GBP",
+      postcodePrefix: undefined,
     };
   }
 }

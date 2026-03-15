@@ -68,13 +68,63 @@ export const estimateItemPrice = action({
   args: {
     itemName: v.string(),
     userId: v.id("users"),
+    storeName: v.optional(v.string()),
+    postcodePrefix: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "ai_estimation" });
     if (!rateLimit.allowed) return null;
 
     const normalizedName = args.itemName.toLowerCase().trim();
-    const prompt = `Provide current UK supermarket price, category, and variants for "${args.itemName}".
+
+    // Fetch crowdsourced price context
+    let contextBlock = "";
+    let isAnchored = false;
+    try {
+      const crowdPrices = await ctx.runQuery(api.currentPrices.getByItemName, {
+        normalizedName,
+      });
+
+      const variants = await ctx.runQuery(api.itemVariants.getByBaseItem, {
+        baseItem: normalizedName,
+      });
+
+      // Filter to store-specific prices if store provided
+      const relevant = args.storeName
+        ? crowdPrices.filter(
+            (p) =>
+              p.storeName?.toLowerCase() === args.storeName?.toLowerCase() ||
+              p.normalizedStoreId === args.storeName
+          )
+        : crowdPrices;
+
+      const best = relevant.length > 0 ? relevant[0] : crowdPrices[0];
+
+      if (best) {
+        isAnchored = true;
+        contextBlock += "\nCommunity price data:";
+        if (args.storeName) contextBlock += `\n- Store: ${args.storeName}`;
+        if (args.postcodePrefix) contextBlock += `\n- Region: ${args.postcodePrefix}`;
+        if (best.averagePrice) contextBlock += `\n- Average price: \u00A3${best.averagePrice.toFixed(2)} (${best.reportCount} reports)`;
+        if (best.minPrice !== undefined && best.maxPrice !== undefined)
+          contextBlock += `\n- Price range: \u00A3${best.minPrice.toFixed(2)} - \u00A3${best.maxPrice.toFixed(2)}`;
+      }
+
+      if (variants.length > 0) {
+        const topVariants = [...variants]
+          .sort((a, b) => (b.scanCount || 0) - (a.scanCount || 0))
+          .slice(0, 3);
+        contextBlock += `\nCommon sizes: ${topVariants.map((v) => v.variantName).join(", ")}`;
+      }
+    } catch {
+      // Ignore -- context is optional
+    }
+
+    const prompt = `Provide current UK supermarket price, category, and variants for "${args.itemName}".${
+      contextBlock
+        ? `\n${contextBlock}\nUse the community data to anchor your estimate. Stay within the reported range unless you have strong reason to disagree.\n`
+        : ""
+    }
 Return ONLY valid JSON: {"name": "...", "normalizedName": "...", "category": "...", "estimatedPrice": 1.15, "hasVariants": true, "variants": [...]}`;
 
     try {
@@ -88,6 +138,7 @@ Return ONLY valid JSON: {"name": "...", "normalizedName": "...", "category": "..
         userId: args.userId,
         size: result.defaultSize || undefined,
         unit: result.defaultUnit || undefined,
+        confidence: isAnchored ? 0.3 : undefined,
       });
 
       if (result.hasVariants && result.variants?.length > 0) {

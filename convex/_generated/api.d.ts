@@ -144,6 +144,7 @@ import type * as pantry_helpers from "../pantry/helpers.js";
 import type * as pantry_index from "../pantry/index.js";
 import type * as pantry_lifecycle from "../pantry/lifecycle.js";
 import type * as pantry_preferences from "../pantry/preferences.js";
+import type * as pantry_pricing from "../pantry/pricing.js";
 import type * as pantry_restock from "../pantry/restock.js";
 import type * as partners from "../partners.js";
 import type * as partners_comments from "../partners/comments.js";
@@ -348,6 +349,7 @@ declare const fullApi: ApiFromModules<{
   "pantry/index": typeof pantry_index;
   "pantry/lifecycle": typeof pantry_lifecycle;
   "pantry/preferences": typeof pantry_preferences;
+  "pantry/pricing": typeof pantry_pricing;
   "pantry/restock": typeof pantry_restock;
   partners: typeof partners;
   "partners/comments": typeof partners_comments;

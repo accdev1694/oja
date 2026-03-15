@@ -50,6 +50,7 @@ export const pricingTables = {
     storeName: v.string(),
     storeAddress: v.optional(v.string()),
     normalizedStoreId: v.optional(v.string()),  // Normalized store ID (e.g., "tesco", "sainsburys")
+    region: v.optional(v.string()),
 
     // Purchase date
     purchaseDate: v.number(),
@@ -77,6 +78,7 @@ export const pricingTables = {
     // Store context
     storeName: v.string(),
     normalizedStoreId: v.optional(v.string()),
+    region: v.optional(v.string()),
 
     updatedAt: v.number(),
   })

@@ -194,7 +194,7 @@ export async function enrichGlobalFromReceipt(
   const user = await ctx.db.get(receipt.userId);
   // In a real app, we might extract the region from user.postcodePrefix or similar.
   // For now, we'll use a placeholder or country-level region if available.
-  const region = user?.country || "UK"; 
+  const region = user?.postcodePrefix || user?.country || "UK";
 
   for (const item of receipt.items) {
     const nameValid = isValidProductName(item.name);

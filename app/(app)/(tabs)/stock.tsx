@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 import {
   GlassScreen,
@@ -9,6 +11,7 @@ import {
 } from "@/components/ui/glass";
 
 import { Doc } from "@/convex/_generated/dataModel";
+import { haptic } from "@/lib/haptics/safeHaptics";
 
 import { stockStyles as styles, getGreeting } from "@/components/stock/stockStyles";
 import { StockLoadingSkeleton, StockEmptyPantry } from "@/components/stock/StockEmptyStates";
@@ -84,6 +87,23 @@ export default function PantryScreen() {
     dismissGestureOnboarding,
   } = useStockScreen();
 
+  const refreshPantryPrices = useMutation(api.pantryItems.refreshPantryPrices);
+  const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
+
+  const handleRefreshPantryPrices = useCallback(async () => {
+    haptic("light");
+    setIsRefreshingPrices(true);
+    try {
+      const result = await refreshPantryPrices({});
+      haptic("success");
+      console.log(`Pantry prices refreshed: ${result.updated} of ${result.total}`);
+    } catch (error) {
+      console.error("Pantry price refresh failed:", error);
+    } finally {
+      setIsRefreshingPrices(false);
+    }
+  }, [refreshPantryPrices]);
+
   // ── Loading & empty states ────────────────────────────────────────────
 
   if (items === undefined) {
@@ -110,6 +130,8 @@ export default function PantryScreen() {
               activeFilterCount={activeFilterCount}
               onOpenAddModal={handleOpenAddModal}
               onOpenFilter={handleOpenFilter}
+              onRefreshPrices={handleRefreshPantryPrices}
+              isRefreshingPrices={isRefreshingPrices}
             />
           }
         />

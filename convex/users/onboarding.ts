@@ -72,6 +72,7 @@ export const setOnboardingData = mutation({
     cuisinePreferences: v.array(v.string()),
     dietaryRestrictions: v.optional(v.array(v.string())),
     defaultBudget: v.optional(v.number()),
+    postcodePrefix: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -94,6 +95,7 @@ export const setOnboardingData = mutation({
       cuisinePreferences: args.cuisinePreferences,
       dietaryRestrictions: args.dietaryRestrictions,
       defaultBudget: args.defaultBudget,
+      postcodePrefix: args.postcodePrefix,
       updatedAt: Date.now(),
     });
 

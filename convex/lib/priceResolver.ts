@@ -147,7 +147,7 @@ export async function resolvePrice(
 
   if (currentPrices.length > 0) {
     const user = userId ? await ctx.db.get(userId) : null;
-    const userRegion = user?.country || "UK"; // Fallback to country/UK for now
+    const userRegion = user?.postcodePrefix || user?.country || "UK";
     const now = Date.now();
     const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { View, Text, Pressable, TextInput } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "@/components/ui/glass";
@@ -23,8 +23,20 @@ export const ListHeader = ({
   onOpenSettings,
   onShare,
 }: ListHeaderProps) => {
+  const [searchVisible, setSearchVisible] = useState(false);
+  const searchRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (searchVisible) {
+      setTimeout(() => searchRef.current?.focus(), 100);
+    } else if (searchTerm) {
+      onSearchChange("");
+    }
+  }, [searchVisible]);
+
   return (
     <View style={styles.header}>
+      {/* Row 1: Back + Title + Edit */}
       <View style={styles.headerTop}>
         <Pressable
           style={styles.backButton}
@@ -35,39 +47,67 @@ export const ListHeader = ({
         </Pressable>
 
         <View style={styles.titleContainer}>
-          <View style={styles.titleRow}>
-            <Text style={styles.title} numberOfLines={1}>
-              {title}
-            </Text>
-          </View>
-          {subtitle && (
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
-            </Text>
+          <Text style={styles.title} numberOfLines={1}>
+            {title}
+          </Text>
+        </View>
+
+        <Pressable style={styles.iconButtonSmall} onPress={onOpenSettings}>
+          <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.text.secondary} />
+        </Pressable>
+      </View>
+
+      {/* Row 2: Store name + Share + Search toggle */}
+      <View style={styles.headerSecondRow}>
+        <View style={styles.subtitleContainer}>
+          {subtitle ? (
+            <>
+              <MaterialCommunityIcons name="store-outline" size={14} color={colors.text.tertiary} />
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.subtitlePlaceholder}>No store selected</Text>
           )}
         </View>
-
-        <View style={styles.headerActions}>
-          <Pressable style={styles.iconButton} onPress={onShare}>
-            <MaterialCommunityIcons name="share-variant-outline" size={22} color={colors.text.secondary} />
+        <View style={styles.secondRowActions}>
+          <Pressable
+            style={styles.iconButtonSmall}
+            onPress={onShare}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="share-variant-outline" size={18} color={colors.text.secondary} />
           </Pressable>
-          <Pressable style={styles.iconButton} onPress={onOpenSettings}>
-            <MaterialCommunityIcons name="cog-outline" size={22} color={colors.text.secondary} />
+          <Pressable
+            style={[styles.iconButtonSmall, searchVisible && styles.iconButtonActive]}
+            onPress={() => setSearchVisible(!searchVisible)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons
+              name={searchVisible ? "close" : "magnify"}
+              size={18}
+              color={searchVisible ? colors.accent.primary : colors.text.secondary}
+            />
           </Pressable>
         </View>
       </View>
 
-      <View style={styles.searchBar}>
-        <MaterialCommunityIcons name="magnify" size={20} color={colors.text.tertiary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search items..."
-          placeholderTextColor={colors.text.disabled}
-          value={searchTerm}
-          onChangeText={onSearchChange}
-          clearButtonMode="while-editing"
-        />
-      </View>
+      {/* Collapsible search bar */}
+      {searchVisible && (
+        <View style={styles.searchBar}>
+          <MaterialCommunityIcons name="magnify" size={20} color={colors.text.tertiary} />
+          <TextInput
+            ref={searchRef}
+            style={styles.searchInput}
+            placeholder="Search items..."
+            placeholderTextColor={colors.text.disabled}
+            value={searchTerm}
+            onChangeText={onSearchChange}
+            clearButtonMode="while-editing"
+          />
+        </View>
+      )}
     </View>
   );
 };

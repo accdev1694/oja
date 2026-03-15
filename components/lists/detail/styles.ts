@@ -20,25 +20,42 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
   },
   titleContainer: {
     flex: 1,
     marginRight: spacing.sm,
   },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
   title: {
     ...typography.headlineMedium,
     color: colors.text.primary,
   },
+  headerSecondRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginLeft: 52,
+    marginBottom: spacing.md,
+  },
+  subtitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    flex: 1,
+  },
   subtitle: {
     ...typography.bodySmall,
     color: colors.text.secondary,
-    marginTop: 2,
+  },
+  subtitlePlaceholder: {
+    ...typography.bodySmall,
+    color: colors.text.disabled,
+    fontStyle: "italic",
+  },
+  secondRowActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
   },
   backButton: {
     width: 40,
@@ -49,17 +66,16 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: spacing.md,
   },
-  headerActions: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  iconButtonSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.glass.background,
     justifyContent: "center",
     alignItems: "center",
+  },
+  iconButtonActive: {
+    backgroundColor: colors.glass.backgroundActive,
   },
   searchBar: {
     flexDirection: "row",
@@ -300,5 +316,24 @@ export const styles = StyleSheet.create({
     ...typography.labelMedium,
     color: "#fff",
     fontWeight: "600",
+  },
+  refreshPricesRow: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+  },
+  refreshPricesButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    alignSelf: "flex-start",
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm,
+    backgroundColor: "rgba(0, 212, 170, 0.08)",
+  },
+  refreshPricesText: {
+    ...typography.labelSmall,
+    color: colors.accent.primary,
   },
 });

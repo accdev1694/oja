@@ -13,6 +13,7 @@ export const coreTables = {
     defaultBudget: v.optional(v.number()),
     currency: v.string(),
     country: v.optional(v.string()),
+    postcodePrefix: v.optional(v.string()),
     cuisinePreferences: v.optional(v.array(v.string())),
     dietaryRestrictions: v.optional(v.array(v.string())), // e.g. ["vegan", "gluten-free", "halal"]
     healthHistory: v.optional(v.array(v.object({

@@ -8,15 +8,32 @@ interface StockHeaderButtonsProps {
   activeFilterCount: number;
   onOpenAddModal: () => void;
   onOpenFilter: () => void;
+  onRefreshPrices?: () => void;
+  isRefreshingPrices?: boolean;
 }
 
 export const StockHeaderButtons = React.memo(function StockHeaderButtons({
   activeFilterCount,
   onOpenAddModal,
   onOpenFilter,
+  onRefreshPrices,
+  isRefreshingPrices,
 }: StockHeaderButtonsProps) {
   return (
     <View style={styles.headerButtons}>
+      {onRefreshPrices && (
+        <Pressable
+          style={[styles.addButton, isRefreshingPrices && { opacity: 0.5 }]}
+          onPress={onRefreshPrices}
+          disabled={isRefreshingPrices}
+        >
+          <MaterialCommunityIcons
+            name="currency-gbp"
+            size={18}
+            color={isRefreshingPrices ? colors.text.disabled : colors.accent.primary}
+          />
+        </Pressable>
+      )}
       <Pressable style={styles.addButton} onPress={onOpenAddModal}>
         <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
       </Pressable>

@@ -155,6 +155,7 @@ export const update = mutation({
     name: v.optional(v.string()),
     defaultBudget: v.optional(v.number()),
     currency: v.optional(v.string()),
+    postcodePrefix: v.optional(v.string()),
     showTutorialHints: v.optional(v.boolean()),
     preferences: v.optional(
       v.object({
@@ -196,6 +197,7 @@ export const update = mutation({
     if (args.name !== undefined) updates.name = args.name;
     if (args.defaultBudget !== undefined) updates.defaultBudget = args.defaultBudget;
     if (args.currency !== undefined) updates.currency = args.currency;
+    if (args.postcodePrefix !== undefined) updates.postcodePrefix = args.postcodePrefix;
     if (args.showTutorialHints !== undefined) updates.showTutorialHints = args.showTutorialHints;
     if (args.preferences !== undefined) updates.preferences = args.preferences;
 
