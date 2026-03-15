@@ -131,7 +131,7 @@ IMPORTANT RULES:
       const { result: parsed, metrics: aiMetrics } = await withAIFallbackInstrumented(
         "parseReceipt",
         async () => {
-          const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+          const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
           const result = await model.generateContent([
             { text: receiptPrompt },
             { inlineData: { mimeType: "image/jpeg", data: base64Image } },
@@ -309,7 +309,7 @@ Return ONLY valid JSON.`;
       const { result: parsed, metrics: aiMetrics } = await withAIFallbackInstrumented(
         "scanProduct",
         async () => {
-          const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+          const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
           const result = await model.generateContent([
             { text: productPrompt },
             { inlineData: { mimeType: "image/jpeg", data: base64Image } },

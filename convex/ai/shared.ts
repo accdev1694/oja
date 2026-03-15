@@ -119,7 +119,7 @@ export async function withAIFallbackInstrumented<T>(
  */
 export async function geminiGenerateInstrumented(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<InstrumentedResult<string>> {
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash-lite",
     generationConfig: {
       temperature: options?.temperature ?? 0.7,
       maxOutputTokens: options?.maxTokens ?? 4000,

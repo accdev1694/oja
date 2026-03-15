@@ -188,7 +188,7 @@ export const PlatformAIUsageMonitor = ({ data, todayData, capacityData }: Platfo
             <MaterialCommunityIcons name="google" size={16} color="#4285F4" />
             <Text style={styles.quotaLabel}>Gemini (Primary)</Text>
             <Text style={styles.quotaValue}>{data.totalRequests - (data.totalFallbacks ?? 0)} reqs</Text>
-            <Text style={styles.quotaMeta}>15 RPM / 1,500 RPD</Text>
+            <Text style={styles.quotaMeta}>15 RPM / 1,000 RPD</Text>
           </View>
           <View style={styles.quotaBox}>
             <MaterialCommunityIcons name="robot-outline" size={16} color="#10A37F" />
@@ -304,8 +304,8 @@ export const PlatformAIUsageMonitor = ({ data, todayData, capacityData }: Platfo
                 {capacityData.dailyTrend.slice(-14).map((day, i) => {
                   const maxReqs = Math.max(...capacityData.dailyTrend.slice(-14).map(d => d.requests), 1);
                   const barHeight = Math.max((day.requests / maxReqs) * 40, 2);
-                  const barColor = day.requests > 1400 ? colors.semantic.danger :
-                    day.requests > 1000 ? colors.semantic.warning : colors.accent.primary;
+                  const barColor = day.requests > 950 ? colors.semantic.danger :
+                    day.requests > 700 ? colors.semantic.warning : colors.accent.primary;
                   return (
                     <View key={day.date} style={styles.trendBarWrapper}>
                       <View style={[styles.trendBar, { height: barHeight, backgroundColor: barColor }]} />
@@ -320,15 +320,15 @@ export const PlatformAIUsageMonitor = ({ data, todayData, capacityData }: Platfo
               <View style={styles.thresholdLegend}>
                 <View style={styles.thresholdItem}>
                   <View style={[styles.thresholdDot, { backgroundColor: colors.accent.primary }]} />
-                  <Text style={styles.thresholdText}>&lt;1,000 Safe</Text>
+                  <Text style={styles.thresholdText}>&lt;700 Safe</Text>
                 </View>
                 <View style={styles.thresholdItem}>
                   <View style={[styles.thresholdDot, { backgroundColor: colors.semantic.warning }]} />
-                  <Text style={styles.thresholdText}>1,000-1,400 Caution</Text>
+                  <Text style={styles.thresholdText}>700-950 Caution</Text>
                 </View>
                 <View style={styles.thresholdItem}>
                   <View style={[styles.thresholdDot, { backgroundColor: colors.semantic.danger }]} />
-                  <Text style={styles.thresholdText}>&gt;1,400 Critical</Text>
+                  <Text style={styles.thresholdText}>&gt;950 Critical</Text>
                 </View>
               </View>
             </View>
@@ -396,7 +396,7 @@ export const PlatformAIUsageMonitor = ({ data, todayData, capacityData }: Platfo
           <View style={styles.matrixBlock}>
             <Text style={styles.matrixTitle}>When to Upgrade</Text>
             <View style={styles.matrixRow}>
-              <Text style={styles.matrixSignal}>Daily Gemini RPD &gt; 1,000</Text>
+              <Text style={styles.matrixSignal}>Daily Gemini RPD &gt; 700</Text>
               <Text style={styles.matrixAction}>Plan Vertex AI migration</Text>
             </View>
             <View style={styles.matrixRow}>

@@ -2,12 +2,12 @@
  * Centralized AI usage tracking with cost estimation.
  *
  * Calculates estimated costs based on provider pricing:
- * - Gemini 2.0 Flash (Vertex AI): $0.075/1M input, $0.30/1M output
+ * - Gemini 2.5 Flash-Lite (AI Studio): $0.075/1M input, $0.30/1M output
  * - OpenAI gpt-4o-mini: $0.15/1M input, $0.60/1M output
  * - Azure TTS Neural: $16/1M characters
  *
  * Provider free tier limits (the real constraints):
- * - Gemini (AI Studio): 15 RPM, 1,500 RPD
+ * - Gemini 2.5 Flash-Lite (AI Studio): 15 RPM, 1,000 RPD
  * - Azure TTS: 500K chars/month
  */
 
@@ -22,7 +22,7 @@ const COST_TABLE = {
 export const PROVIDER_LIMITS = {
   gemini: {
     requestsPerMinute: 15,
-    requestsPerDay: 1500,
+    requestsPerDay: 1000,
     tokensPerMinute: 1_000_000,
   },
   openai: {

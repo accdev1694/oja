@@ -229,7 +229,7 @@ export const getPlatformAIUsage = query({
         weeklyAverageTokens: Math.round(totalTokens / weeksInMonthSoFar),
         daysUntilRenewal,
         renewalDate: nextMonth.getTime(),
-        activeProvider: "Gemini 2.0 Flash",
+        activeProvider: "Gemini 2.5 Flash-Lite",
         totalCost: Math.round(totalCost * 10000) / 10000,
         totalVision,
         totalFallbacks,
@@ -243,7 +243,7 @@ export const getPlatformAIUsage = query({
 
 /**
  * Get today's AI request count — the single most important scaling metric.
- * Gemini free tier limit: 1,500 requests per day.
+ * Gemini 2.5 Flash-Lite free tier limit: 1,000 requests per day.
  */
 export const getTodayAIRequestCount = query({
   args: {},
@@ -384,7 +384,7 @@ export const getCapacityPlanningData = query({
       ? ((recentUsers.length - priorUsers.length) / priorUsers.length) * 100
       : 0;
 
-    // Projections: days until Gemini free tier exceeded (1,500 RPD)
+    // Projections: days until Gemini free tier exceeded (1,000 RPD)
     const geminiDailyLimit = PROVIDER_LIMITS.gemini.requestsPerDay;
     let daysUntilLimit = null;
     if (avgRequestsPerDay > 0 && growthRate > 0) {
@@ -414,14 +414,14 @@ export const getCapacityPlanningData = query({
 
     // Scaling recommendation
     let recommendation = "You're well within free tier limits. No action needed.";
-    if (avgRequestsPerDay > 1400) {
-      recommendation = "URGENT: Exceeding Gemini free tier. Migrate to Vertex AI immediately.";
-    } else if (avgRequestsPerDay > 1000) {
-      recommendation = "Approaching Gemini free tier limit. Start planning Vertex AI migration.";
+    if (avgRequestsPerDay > 950) {
+      recommendation = "URGENT: Exceeding Gemini free tier (1,000 RPD). Enable billing immediately.";
+    } else if (avgRequestsPerDay > 700) {
+      recommendation = "Approaching Gemini free tier limit. Start planning paid tier migration.";
     } else if (daysUntilLimit !== null && daysUntilLimit < 30) {
-      recommendation = `At current growth, you'll hit the Gemini free tier in ~${daysUntilLimit} days. Plan for Vertex AI Pay-as-you-go (~$${(avgCostPerDay * 30).toFixed(2)}/month).`;
-    } else if (avgRequestsPerDay > 500) {
-      recommendation = "Moderate usage. Monitor trends and plan for paid tier when approaching 1,000 RPD.";
+      recommendation = `At current growth, you'll hit the Gemini free tier in ~${daysUntilLimit} days. Plan for Pay-as-you-go (~$${(avgCostPerDay * 30).toFixed(2)}/month).`;
+    } else if (avgRequestsPerDay > 400) {
+      recommendation = "Moderate usage. Monitor trends and plan for paid tier when approaching 700 RPD.";
     }
 
     // Fallback health
