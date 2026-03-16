@@ -214,7 +214,7 @@ export const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing["6xl"],
   },
   tripControls: {
     flexDirection: "row",

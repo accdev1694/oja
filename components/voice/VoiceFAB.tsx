@@ -37,6 +37,8 @@ const FAB_SIZE = 52;
 const STORAGE_KEY = "@oja_voice_fab_position";
 /** Minimum Y from top of screen — keeps the FAB below any header variant. */
 const MIN_TOP_PX = 180;
+/** Extra bottom padding on list detail to clear the footer buttons. */
+const LIST_DETAIL_FOOTER_HEIGHT = 100;
 
 interface Props {
   activeListId?: Id<"shoppingLists">;
@@ -53,6 +55,7 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
 
   // Shared values for bounds (updated from onLayout, read in worklets)
   const boundsMaxX = useSharedValue(0);
+  const baseMaxY = useSharedValue(0);
   const boundsMaxY = useSharedValue(0);
   const boundsSnapRight = useSharedValue(0);
   const boundsMidX = useSharedValue(0);
@@ -65,6 +68,8 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
   const isPressed = useSharedValue(false);
   const isDragging = useSharedValue(false);
 
+  const isListDetail = /^\/list\/[^/]+$/.test(pathname || "");
+
   // Called when the full-screen overlay measures itself
   const handleLayout = useCallback(
     (e: LayoutChangeEvent) => {
@@ -74,7 +79,8 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
       const maxY = height - TAB_BAR_HEIGHT - FAB_SIZE - insets.bottom;
 
       boundsMaxX.value = maxX;
-      boundsMaxY.value = maxY;
+      baseMaxY.value = maxY;
+      boundsMaxY.value = isListDetail ? maxY - LIST_DETAIL_FOOTER_HEIGHT : maxY;
       boundsSnapRight.value = maxX - spacing.md;
       boundsMidX.value = width / 2;
 
@@ -108,8 +114,21 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
           });
       }
     },
-    [layoutReady, insets.bottom]
+    [layoutReady, insets.bottom, isListDetail]
   );
+
+  // Adjust bounds when entering/leaving list detail (footer overlaps FAB zone)
+  useEffect(() => {
+    if (!layoutReady) return;
+    const newMaxY = isListDetail
+      ? baseMaxY.value - LIST_DETAIL_FOOTER_HEIGHT
+      : baseMaxY.value;
+    boundsMaxY.value = newMaxY;
+    // Nudge FAB up if it's now below the new limit
+    if (translateY.value > newMaxY) {
+      translateY.value = withSpring(newMaxY, { damping: 15, stiffness: 150 });
+    }
+  }, [isListDetail, layoutReady]);
 
   // Save position helper
   const savePosition = (x: number, y: number) => {

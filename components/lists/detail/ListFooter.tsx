@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { GlassButton, colors, spacing, typography } from "@/components/ui/glass";
 import { styles } from "./styles";
@@ -30,7 +31,11 @@ export const ListFooter = ({
   onToggleCheckedItems,
 }: ListFooterProps) => {
   return (
-    <View style={[styles.footer, { bottom: insetsBottom, paddingBottom: spacing.md }]}>
+    <LinearGradient
+      colors={["rgba(13, 21, 40, 0)", "rgba(13, 21, 40, 0.6)", colors.background.primary]}
+      locations={[0, 0.3, 0.55]}
+      style={[styles.footer, { bottom: insetsBottom, paddingBottom: spacing.md }]}
+    >
       {activeShopper && !isInProgress && (
         <View style={styles.activeShopperBanner}>
           <MaterialCommunityIcons name="account-search" size={18} color={colors.accent.primary} />
@@ -86,6 +91,6 @@ export const ListFooter = ({
           </GlassButton>
         )}
       </View>
-    </View>
+    </LinearGradient>
   );
 };
