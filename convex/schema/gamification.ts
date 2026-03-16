@@ -51,7 +51,7 @@ export const gamificationTables = {
     userId: v.id("users"),
     totalPoints: v.number(),        // Lifetime earned
     availablePoints: v.number(),    // Current balance (redeemable)
-    pendingPoints: v.number(),      // Awaiting next billing cycle
+    pendingPoints: v.optional(v.number()),  // DEPRECATED: unused, kept for backward compat
     pointsUsed: v.number(),         // Historical redemptions
     tier: v.string(),               // bronze/silver/gold/platinum
     tierProgress: v.number(),       // Lifetime scans (for tier calc)
@@ -110,7 +110,8 @@ export const gamificationTables = {
     .index("by_active", ["isActive"])
     .index("by_dates", ["startDate", "endDate"]),
 
-  // Loyalty points balance
+  // DEPRECATED: Legacy loyalty points (migrated to pointsBalance/pointsTransactions)
+  // Keep in schema until all data is verified migrated and tables emptied
   loyaltyPoints: defineTable({
     userId: v.id("users"),
     points: v.number(),
@@ -121,7 +122,8 @@ export const gamificationTables = {
   })
     .index("by_user", ["userId"]),
 
-  // Loyalty point transactions
+  // DEPRECATED: Legacy point transactions (migrated to pointsTransactions)
+  // Keep in schema until all data is verified migrated and tables emptied
   pointTransactions: defineTable({
     userId: v.id("users"),
     amount: v.number(),

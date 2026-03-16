@@ -35,7 +35,8 @@ export const subscriptionTables = {
   })
     .index("by_month", ["month"]),
 
-  // Scan credits (receipt scan discount toward subscription)
+  // DEPRECATED: Legacy scan credits (migrated to pointsBalance/pointsTransactions)
+  // Keep in schema until all data is verified migrated and tables emptied
   scanCredits: defineTable({
     userId: v.id("users"),
     periodStart: v.number(),
@@ -58,7 +59,8 @@ export const subscriptionTables = {
     .index("by_user", ["userId"])
     .index("by_user_period", ["userId", "periodEnd"]),
 
-  // Individual scan credit events (audit trail)
+  // DEPRECATED: Legacy scan credit events (migrated to pointsTransactions)
+  // Keep in schema until all data is verified migrated and tables emptied
   scanCreditTransactions: defineTable({
     userId: v.id("users"),
     scanCreditId: v.id("scanCredits"),

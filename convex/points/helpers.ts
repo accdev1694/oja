@@ -21,7 +21,6 @@ export async function getOrCreatePointsBalance(ctx: MutationCtx, userId: Id<"use
       userId,
       totalPoints: 0,
       availablePoints: 0,
-      pendingPoints: 0,
       pointsUsed: 0,
       tier: "bronze",
       tierProgress: 0,
