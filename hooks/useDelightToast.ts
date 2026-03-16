@@ -109,6 +109,21 @@ export function useDelightToast() {
   );
 
   /**
+   * Show points earned celebration toast
+   */
+  const onPointsEarned = useCallback(
+    (points: number, streakBonus?: number) => {
+      const total = points + (streakBonus || 0);
+      const bonusSuffix = streakBonus ? ` (+${streakBonus} streak bonus!)` : "";
+      const msg = firstName
+        ? `${firstName}, you earned +${total} points!${bonusSuffix}`
+        : `+${total} points earned!${bonusSuffix}`;
+      showToast(msg, "star-circle", "#00D4AA");
+    },
+    [showToast, firstName]
+  );
+
+  /**
    * Show savings milestone celebration
    * Milestones: £10, £25, £50, £100, £250, £500
    */
@@ -137,6 +152,7 @@ export function useDelightToast() {
     onMundaneAction,
     onAchievementUnlock,
     onNewRecord,
+    onPointsEarned,
     onSavingsMilestone,
   };
 }

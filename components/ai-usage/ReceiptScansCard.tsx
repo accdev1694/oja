@@ -10,12 +10,12 @@ import {
 
 /**
  * Receipt scan statistics card.
- * Shows scans this month, lifetime scans, and credits earned.
+ * Shows scans this month, lifetime scans, and points earned.
  */
 interface ReceiptStats {
   scansThisPeriod: number;
   lifetimeScans: number;
-  creditsEarned: number;
+  pointsEarned: number;
 }
 
 interface ReceiptScansCardProps {
@@ -59,15 +59,15 @@ export function ReceiptScansCard({ receipts, isAdmin }: ReceiptScansCardProps) {
 
           <View style={styles.receiptStat}>
             <MaterialCommunityIcons
-              name="cash"
+              name="star-circle"
               size={20}
               color={colors.semantic.success}
             />
             <View style={styles.receiptStatInfo}>
               <Text style={[styles.receiptStatValue, { color: colors.semantic.success }]}>
-                £{receipts.creditsEarned.toFixed(2)}
+                {receipts.pointsEarned.toLocaleString()} pts
               </Text>
-              <Text style={styles.receiptStatLabel}>{isAdmin ? "earned" : "saved"}</Text>
+              <Text style={styles.receiptStatLabel}>earned</Text>
             </View>
           </View>
         </View>
@@ -80,8 +80,8 @@ export function ReceiptScansCard({ receipts, isAdmin }: ReceiptScansCardProps) {
           />
           <Text style={styles.receiptNoteText}>
             {isAdmin
-              ? "Scan receipts to earn cashback rewards. Maximum rewards enabled for Admin."
-              : "Scan receipts to earn credits off your subscription. Unlimited for Premium."}
+              ? "Scan receipts to earn points. Maximum rewards enabled for Admin."
+              : "Scan receipts to earn points toward your subscription. Unlimited scanning for Premium."}
           </Text>
         </View>
       </GlassCard>

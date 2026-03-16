@@ -43,6 +43,7 @@ interface ReceiptSavedViewProps {
   list?: {
     storeSegments?: StoreSegment[];
   } | null;
+  pointsEarned?: number;
   onGoBack: () => void;
   onCreateListFromReceipt: () => void;
   onAddToPantry: () => Promise<void>;
@@ -54,6 +55,7 @@ export function ReceiptSavedView({
   receipt,
   receiptId,
   list,
+  pointsEarned,
   onGoBack,
   onCreateListFromReceipt,
   onAddToPantry,
@@ -84,6 +86,12 @@ export function ReceiptSavedView({
             <Text style={styles.successSubtitle}>
               Price history has been updated
             </Text>
+            {pointsEarned != null && pointsEarned > 0 && (
+              <View style={styles.pointsBadge}>
+                <MaterialCommunityIcons name="star-circle" size={20} color={colors.accent.primary} />
+                <Text style={styles.pointsBadgeText}>+{pointsEarned} points earned</Text>
+              </View>
+            )}
           </View>
         </GlassCard>
 
@@ -224,6 +232,21 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing.xs,
     textAlign: "center",
+  },
+  pointsBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: `${colors.accent.primary}15`,
+    borderRadius: 20,
+  },
+  pointsBadgeText: {
+    ...typography.labelMedium,
+    color: colors.accent.primary,
+    fontWeight: "700",
   },
   summaryRow: {
     flexDirection: "row",

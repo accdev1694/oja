@@ -62,7 +62,7 @@ export default function AIUsageScreen() {
   }
 
   const voice = usageSummary?.voice ?? { usage: 0, limit: 200, percentage: 0 };
-  const receipts = usageSummary?.receipts ?? { scansThisPeriod: 0, creditsEarned: 0, lifetimeScans: 0 };
+  const receipts = usageSummary?.receipts ?? { scansThisPeriod: 0, pointsEarned: 0, lifetimeScans: 0 };
   const features = usageSummary?.features ?? {};
   const settings = usageSummary?.aiSettings ?? { voiceEnabled: true, usageAlerts: true };
 

@@ -413,7 +413,7 @@ export default function ListDetailScreen() {
             spent={spent}
             mode={isInProgress ? "shopping" : "active"}
             onPress={canEdit ? handleBudgetDialPress : undefined}
-            storeName={storeDisplayName}
+            storeName={list?.storeName}
             storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
           />
         </AnimatedSection>

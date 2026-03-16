@@ -26,6 +26,7 @@ import {
 import { TripSummaryCards } from "@/components/receipt/TripSummaryCards";
 import { ReceiptSavedView } from "@/components/receipt/ReceiptSavedView";
 import { StoreMismatchCard } from "@/components/receipt/StoreMismatchCard";
+import { useDelightToast } from "@/hooks/useDelightToast";
 
 export default function ReconciliationScreen() {
   const params = useLocalSearchParams();
@@ -33,6 +34,7 @@ export default function ReconciliationScreen() {
   const listId = (params.listId as string) as Id<"shoppingLists"> | undefined;
   const router = useRouter();
   const { alert } = useGlassAlert();
+  const { onPointsEarned } = useDelightToast();
 
   const receipt = useQuery(api.receipts.getById, { id: receiptId });
   const list = useQuery(
@@ -110,6 +112,7 @@ export default function ReconciliationScreen() {
         receipt={receipt}
         receiptId={receiptId}
         list={list}
+        pointsEarned={receipt.pointsEarned ?? 0}
         onGoBack={() => {
           if (router.canGoBack()) {
             router.back();
@@ -192,21 +195,29 @@ export default function ReconciliationScreen() {
         id: listId,
         receiptId,
         actualTotal,
-        pointsEarned: 0,
+        pointsEarned: receipt?.pointsEarned ?? 0,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Celebrate points earned
+      const earnedPts = receipt?.pointsEarned ?? 0;
+      if (earnedPts > 0) {
+        onPointsEarned(earnedPts);
+      }
 
       const restockMessage =
         result.restockedItems.length > 0
           ? `Pantry updated: ${result.restockedItems.length} item${result.restockedItems.length !== 1 ? "s" : ""} restocked`
           : "";
 
+      const pointsMessage = earnedPts > 0 ? `+${earnedPts} points earned` : "";
+
       const savingsMessage = savedMoney
         ? `Great job! You saved £${Math.abs(difference).toFixed(2)}!`
         : "Shopping trip completed successfully";
 
-      const messageParts = [savingsMessage, restockMessage].filter(Boolean);
+      const messageParts = [savingsMessage, pointsMessage, restockMessage].filter(Boolean);
       const fullMessage = messageParts.join("\n\n");
 
       const navigateToHistory = () => router.push("/(app)/(tabs)");

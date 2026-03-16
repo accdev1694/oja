@@ -7,9 +7,10 @@ import { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 import {
   GlassScreen, GlassCard, GlassButton, GlassInput, SimpleHeader,
-  GlassErrorState, GlassSkeleton, GlassModal, colors, typography, spacing, useGlassAlert,
+  GlassErrorState, GlassSkeleton, GlassModal, GlassToast, colors, typography, spacing, useGlassAlert,
 } from "@/components/ui/glass";
 import { useHint } from "@/hooks/useHint";
+import { useDelightToast } from "@/hooks/useDelightToast";
 import { HintOverlay } from "@/components/tutorial/HintOverlay";
 import { UnmatchedItemsModal } from "@/components/receipt/UnmatchedItemsModal";
 import { ReceiptStoreInfo } from "@/components/receipt/ReceiptStoreInfo";
@@ -29,6 +30,7 @@ export default function ConfirmReceiptScreen() {
   const receiptId = id as Id<"receipts">;
   const itemsRef = useRef<View>(null);
   const reviewHint = useHint("scan_review", "delayed");
+  const { toast, dismiss, onPointsEarned } = useDelightToast();
 
   // ── Data queries & mutations ────────────────────────────────────────
   const receipt = useQuery(api.receipts.getById, { id: receiptId });
@@ -61,6 +63,7 @@ export default function ConfirmReceiptScreen() {
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemQuantity, setNewItemQuantity] = useState("1");
   const [receiptSaved, setReceiptSaved] = useState(false);
+  const [savedPointsEarned, setSavedPointsEarned] = useState(0);
   const [addedToPantry, setAddedToPantry] = useState(false);
   const [showUnmatchedModal, setShowUnmatchedModal] = useState(false);
 
@@ -137,7 +140,11 @@ export default function ConfirmReceiptScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       if (receipt) { const dup = await checkDuplicate({ receiptId, storeName: receipt.storeName, total, purchaseDate: receipt.purchaseDate }); if (dup.isDuplicate && dup.existingReceipt) { setDuplicateInfo({ storeName: dup.existingReceipt.storeName, total: dup.existingReceipt.total, date: dup.existingReceipt.date }); setShowDuplicateModal(true); return; } }
-      await updateReceipt({ id: receiptId, items: editedItems, subtotal, total, processingStatus: "completed" });
+      const updatedReceipt = await updateReceipt({ id: receiptId, items: editedItems, subtotal, total, processingStatus: "completed", imageHash: receipt?.imageHash, storeName: receipt?.storeName, purchaseDate: receipt?.purchaseDate, imageQuality: receipt?.imageQuality });
+      if (updatedReceipt?.pointsEarned && updatedReceipt.pointsEarned > 0) {
+        setSavedPointsEarned(updatedReceipt.pointsEarned);
+        onPointsEarned(updatedReceipt.pointsEarned);
+      }
       await savePriceHistory({ receiptId }); await upsertCurrentPrices({ receiptId });
       try { await improveArchivedPrices({ receiptId }); } catch { /* non-critical */ }
       let listPricesUpdated = 0;
@@ -159,6 +166,7 @@ export default function ConfirmReceiptScreen() {
   if (receiptSaved) return (
     <ReceiptSavedView receipt={{ total, storeName: receipt.storeName, items: editedItems }} receiptId={receiptId}
       list={shoppingList ? { storeSegments: shoppingList.storeSegments } : null}
+      pointsEarned={savedPointsEarned}
       onGoBack={goBack} onCreateListFromReceipt={handleCreateListFromReceipt}
       onAddToPantry={handlePostSaveUpdatePantry} onDone={handleDoneNavigation} onDeleteReceipt={handleDeleteReceipt} />
   );
@@ -221,6 +229,7 @@ export default function ConfirmReceiptScreen() {
 
       <UnmatchedItemsModal visible={showUnmatchedModal} onClose={() => { setShowUnmatchedModal(false); setReceiptSaved(true); }} receiptId={receiptId} onComplete={() => { setShowUnmatchedModal(false); setReceiptSaved(true); }} />
       <HintOverlay visible={reviewHint.shouldShow} targetRef={itemsRef} title="Review Scan" content="Quickly check if the AI caught everything. Tap any name or price to correct it." onDismiss={reviewHint.dismiss} position="below" />
+      <GlassToast message={toast.message} icon={toast.icon} iconColor={toast.iconColor} visible={toast.visible} onDismiss={dismiss} duration={4000} />
     </GlassScreen>
   );
 }

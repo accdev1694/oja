@@ -11,6 +11,7 @@ import {
   GlassCard,
   SimpleHeader,
   GlassCollapsible,
+  GlassSkeleton,
   colors,
   typography,
   spacing,
@@ -258,7 +259,7 @@ export default function PointsHistoryScreen() {
               <GuideItem
                 icon="chart-line"
                 title="Earning More"
-                desc="Higher tiers (Silver, Gold, Platinum) earn more points per scan. Premium users get a 25% bonus!"
+                desc="Higher tiers earn more per scan: Bronze 150, Silver 175, Gold 200, Platinum 225. Free plan earns 100 per scan."
               />
               <GuideItem
                 icon="clock"
@@ -276,7 +277,13 @@ export default function PointsHistoryScreen() {
   const ListEmptyComponent = useMemo(
     () => {
       if (!history) {
-        return <Text style={styles.loadingText}>Loading history...</Text>;
+        return (
+          <View style={{ paddingVertical: spacing.xl, gap: spacing.md }}>
+            <GlassSkeleton variant="card" />
+            <GlassSkeleton variant="card" />
+            <GlassSkeleton variant="card" />
+          </View>
+        );
       }
       return (
         <GlassCard style={styles.emptyCard}>
