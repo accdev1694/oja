@@ -106,7 +106,8 @@ export default function ListDetailScreen() {
 
   // ── Hooks ──────────────────────────────────────────────────────────────────
   const { isOwner, isPartner, canEdit } = usePartnerRole(id);
-  const isShared = isOwner || isPartner;
+  const hasPartners = (partners?.length ?? 0) > 0;
+  const isShared = hasPartners && (isOwner || isPartner);
 
   // Partner mode queries (skip if not shared)
   const chatMessageCount = useQuery(
@@ -519,6 +520,8 @@ export default function ListDetailScreen() {
         onOpenSettings={() => setShowEditModal(true)}
         onAddItem={() => setShowAddModal(true)}
         onShare={() => router.push(`/(app)/partners?listId=${id}`)}
+        onHealthCheck={() => setShowHealthModal(true)}
+        hasItems={(items?.length ?? 0) > 0}
         isShared={isShared}
         onOpenChat={() => setShowChat(true)}
         unreadChatCount={chatMessageCount ?? 0}

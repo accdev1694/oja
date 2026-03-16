@@ -13,6 +13,8 @@ interface ListHeaderProps {
   onOpenSettings: () => void;
   onAddItem: () => void;
   onShare: () => void;
+  onHealthCheck?: () => void;
+  hasItems?: boolean;
   isShared?: boolean;
   onOpenChat?: () => void;
   unreadChatCount?: number;
@@ -27,6 +29,8 @@ export const ListHeader = ({
   onOpenSettings,
   onAddItem,
   onShare,
+  onHealthCheck,
+  hasItems,
   isShared,
   onOpenChat,
   unreadChatCount,
@@ -92,8 +96,21 @@ export const ListHeader = ({
             onPress={onShare}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <MaterialCommunityIcons name="share-variant-outline" size={18} color={colors.text.secondary} />
+            <MaterialCommunityIcons
+              name={isShared ? "account-group" : "share-variant-outline"}
+              size={18}
+              color={isShared ? colors.accent.primary : colors.text.secondary}
+            />
           </Pressable>
+          {hasItems && onHealthCheck && (
+            <Pressable
+              style={styles.iconButtonSmall}
+              onPress={onHealthCheck}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialCommunityIcons name="heart-pulse" size={18} color={colors.semantic.success} />
+            </Pressable>
+          )}
           {isShared && onOpenChat && (
             <Pressable
               style={styles.iconButtonSmall}

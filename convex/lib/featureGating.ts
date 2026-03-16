@@ -9,15 +9,50 @@ import { DataModel, Id } from "../_generated/dataModel";
 // AI feature limits by plan (monthly)
 export const AI_LIMITS = {
   voice: {
-    free: 10, // Down from 20
+    free: 10,
     premium_monthly: 200,
     premium_annual: 200,
   },
   // Receipts: free users get unlimited for tracking, but point-earning scans are limited to 1/mo
-  receipt: {
+  receipt_scan: {
     free: -1, // Unlimited receipt scanning for tracking
-    premium_monthly: -1, // unlimited
-    premium_annual: -1, // unlimited
+    premium_monthly: -1,
+    premium_annual: -1,
+  },
+  price_estimate: {
+    free: 30,
+    premium_monthly: 200,
+    premium_annual: 200,
+  },
+  health_analysis: {
+    free: 10,
+    premium_monthly: 50,
+    premium_annual: 50,
+  },
+  list_suggestions: {
+    free: 20,
+    premium_monthly: 100,
+    premium_annual: 100,
+  },
+  product_scan: {
+    free: 20,
+    premium_monthly: 100,
+    premium_annual: 100,
+  },
+  item_variants: {
+    free: 15,
+    premium_monthly: 60,
+    premium_annual: 60,
+  },
+  pantry_seed: {
+    free: 3,
+    premium_monthly: 10,
+    premium_annual: 10,
+  },
+  tts: {
+    free: 50,
+    premium_monthly: 300,
+    premium_annual: 300,
   },
 } as const;
 
