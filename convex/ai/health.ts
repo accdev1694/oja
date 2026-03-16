@@ -59,10 +59,18 @@ export const analyzeListHealth = action({
     });
     if (!user) throw new Error("User not found");
 
-    // Check per-user monthly cap
+    // Check per-user monthly cap — return a graceful fallback instead of throwing
     const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "health_analysis" });
     if (!usageCheck.allowed) {
-      throw new Error("You've reached your monthly health analysis limit. Upgrade for more.");
+      return {
+        score: 0,
+        summary: "You've reached your monthly health analysis limit. Upgrade to Premium for more analyses.",
+        strengths: [],
+        weaknesses: [],
+        swaps: [],
+        itemCountAtAnalysis: 0,
+        updatedAt: Date.now(),
+      };
     }
 
     // Enforce Gemini free tier RPD quota

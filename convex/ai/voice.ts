@@ -50,6 +50,17 @@ Return JSON with action, listName, matchedListId, items, confidence.`;
     try {
       const { result: raw, metrics: aiMetrics } = await smartGenerateInstrumented(prompt, "parseVoiceCommand", { temperature: 0.2 });
 
+      // Track successful AI call with provider metrics
+      await ctx.runMutation(api.aiUsage.trackAICall, {
+        feature: "voice",
+        provider: aiMetrics.provider,
+        inputTokens: aiMetrics.inputTokens,
+        outputTokens: aiMetrics.outputTokens,
+        estimatedCostUsd: aiMetrics.estimatedCostUsd,
+        isVision: false,
+        isFallback: aiMetrics.isFallback,
+      });
+
       return JSON.parse(stripCodeBlocks(raw));
     } catch (error) {
       console.error("parseVoiceCommand failed:", error);

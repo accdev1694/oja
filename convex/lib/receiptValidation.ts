@@ -135,13 +135,14 @@ export async function validateReceiptData(
     }
   }
 
-  // 6. Rate limiting (Daily)
+  // 6. Rate limiting (Daily) — query by createdAt (upload time) not purchaseDate
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
-  
+
   const todayScans = await ctx.db
     .query("receipts")
-    .withIndex("by_user_date", (q) => q.eq("userId", userId).gte("purchaseDate", todayStart.getTime()))
+    .withIndex("by_created", (q) => q.gte("createdAt", todayStart.getTime()))
+    .filter((q) => q.eq(q.field("userId"), userId))
     .collect();
     
   if (todayScans.length >= 2) { // Max 2 per day to prevent spam

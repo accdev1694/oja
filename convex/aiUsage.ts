@@ -2,7 +2,7 @@ import { query, mutation, internalMutation, internalQuery } from "./_generated/s
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { AI_LIMITS, getAILimit } from "./lib/featureGating";
+import { AI_LIMITS, getAILimit, isEffectivelyPremium } from "./lib/featureGating";
 import { checkRateLimit as performRateLimitCheck } from "./lib/rateLimit";
 import { PROVIDER_LIMITS } from "./lib/aiTracking";
 
@@ -288,28 +288,33 @@ export const canUseFeature = query({
       )
       .unique();
 
+    // Always resolve the user's current plan limit to handle mid-period downgrades
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .order("desc")
+      .first();
+    const plan = user.isAdmin ? "premium_annual" : (subscription && isEffectivelyPremium(subscription) ? (subscription.plan ?? "free") : "free");
+    const featureKey = args.feature as keyof typeof AI_LIMITS;
+    const currentLimit = AI_LIMITS[featureKey]
+      ? getAILimit(plan, featureKey)
+      : 999999;
+    const effectiveLimit = currentLimit === -1 ? 999999 : currentLimit;
+
     if (!usage) {
-      // No usage yet this period — look up actual plan limit
-      const subscription = await ctx.db
-        .query("subscriptions")
-        .withIndex("by_user", (q) => q.eq("userId", user._id))
-        .unique();
-      const plan = subscription?.plan ?? "free";
-      const featureKey = args.feature as keyof typeof AI_LIMITS;
-      const actualLimit = AI_LIMITS[featureKey]
-        ? getAILimit(plan, featureKey)
-        : 999999;
-      const displayLimit = actualLimit === -1 ? 999999 : actualLimit;
-      return { allowed: true, usage: 0, limit: displayLimit, percentage: 0 };
+      return { allowed: true, usage: 0, limit: effectiveLimit, percentage: 0 };
     }
 
-    const percentage = Math.round((usage.requestCount / usage.limit) * 100);
+    // If stored limit differs from current plan limit (e.g. user downgraded), use the lower value
+    const activeLimit = Math.min(usage.limit, effectiveLimit);
 
-    if (usage.requestCount >= usage.limit) {
+    const percentage = Math.round((usage.requestCount / activeLimit) * 100);
+
+    if (usage.requestCount >= activeLimit) {
       return {
         allowed: false,
         usage: usage.requestCount,
-        limit: usage.limit,
+        limit: activeLimit,
         percentage: 100,
         reason: `Monthly ${args.feature} limit reached`,
       };
@@ -318,7 +323,7 @@ export const canUseFeature = query({
     return {
       allowed: true,
       usage: usage.requestCount,
-      limit: usage.limit,
+      limit: activeLimit,
       percentage,
     };
   },
@@ -357,11 +362,10 @@ export const getUsageSummary = query({
       };
     }
 
-    // Get scan credits too (receipts earn discount)
-    const scanCredits = await ctx.db
-      .query("scanCredits")
+    // Get points balance for receipt stats
+    const pointsBalance = await ctx.db
+      .query("pointsBalance")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .order("desc")
       .first();
 
     // Look up user's plan to provide fallback limits for features with no usage record yet
@@ -388,9 +392,9 @@ export const getUsageSummary = query({
       // Individual feature accessors (backward compat)
       voice: features.voice,
       receipts: {
-        scansThisPeriod: scanCredits?.scansThisPeriod ?? 0,
-        creditsEarned: scanCredits?.creditsEarned ?? 0,
-        lifetimeScans: scanCredits?.lifetimeScans ?? 0,
+        scansThisPeriod: pointsBalance?.earningScansThisMonth ?? 0,
+        pointsEarned: pointsBalance?.totalPoints ?? 0,
+        lifetimeScans: pointsBalance?.tierProgress ?? 0,
       },
       // All AI features with caps
       features,
