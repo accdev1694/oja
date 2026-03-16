@@ -1,9 +1,10 @@
 import { v } from "convex/values";
 import { mutation } from "../_generated/server";
-import { 
-  requireUser, 
+import { api } from "../_generated/api";
+import {
+  requireUser,
   findExistingPantryItem,
-  enforceActiveCap 
+  enforceActiveCap
 } from "./helpers";
 import { getIconForItem } from "../iconMapping";
 import { canAddPantryItem } from "../lib/featureGating";
@@ -225,7 +226,7 @@ export const addFromReceipt = mutation({
 
     await enforceActiveCap(ctx, user._id);
 
-    return await ctx.db.insert("pantryItems", {
+    const itemId = await ctx.db.insert("pantryItems", {
       userId: user._id,
       name: toGroceryTitleCase(args.name),
       category: args.category || "Pantry Staples",
@@ -242,5 +243,27 @@ export const addFromReceipt = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // Update add_items challenge progress
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const challenges = await ctx.db
+        .query("weeklyChallenges")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .collect();
+      const active = challenges.find(
+        (c) => c.type === "add_items" && c.endDate >= today && !c.completedAt
+      );
+      if (active) {
+        await ctx.runMutation(api.insights.updateChallengeProgress, {
+          challengeId: active._id,
+          increment: 1,
+        });
+      }
+    } catch {
+      // non-critical
+    }
+
+    return itemId;
   },
 });

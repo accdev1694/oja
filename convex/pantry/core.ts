@@ -1,11 +1,13 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { api, internal } from "../_generated/api";
-import { 
-  requireUser, 
-  optionalUser, 
-  enforceActiveCap, 
-  findExistingPantryItem 
+import { Id } from "../_generated/dataModel";
+import {
+  requireUser,
+  optionalUser,
+  enforceActiveCap,
+  findExistingPantryItem,
+  MutationCtx,
 } from "./helpers";
 import { getIconForItem } from "../iconMapping";
 import { canAddPantryItem } from "../lib/featureGating";
@@ -13,6 +15,28 @@ import { isDuplicateItem } from "../lib/fuzzyMatch";
 import { toGroceryTitleCase } from "../lib/titleCase";
 import { cleanItemForStorage } from "../lib/itemNameParser";
 import { enrichGlobalFromProductScan } from "../lib/globalEnrichment";
+
+/** Update the "add_items" weekly challenge progress if one is active */
+async function updateAddItemsChallenge(ctx: MutationCtx, userId: Id<"users">, count: number) {
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const challenges = await ctx.db
+      .query("weeklyChallenges")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const active = challenges.find(
+      (c) => c.type === "add_items" && c.endDate >= today && !c.completedAt
+    );
+    if (active) {
+      await ctx.runMutation(api.insights.updateChallengeProgress, {
+        challengeId: active._id,
+        increment: count,
+      });
+    }
+  } catch {
+    // non-critical — don't block pantry operations
+  }
+}
 
 export const getByUser = query({
   args: {},
@@ -90,6 +114,7 @@ export const create = mutation({
     });
 
     await ctx.runMutation(internal.insights.checkPantryAchievements, { userId: user._id });
+    await updateAddItemsChallenge(ctx, user._id, 1);
     return itemId;
   },
 });
@@ -192,6 +217,7 @@ export const bulkCreate = mutation({
     await Promise.all(promises);
     if (newItems.length > 0) {
       await ctx.runMutation(internal.insights.checkPantryAchievements, { userId: user._id });
+      await updateAddItemsChallenge(ctx, user._id, newItems.length);
     }
 
     return { count: promises.length, skipped: args.items.length - newItems.length };
@@ -310,6 +336,9 @@ export const addBatchFromScan = mutation({
 
     if (added > 0 || restocked > 0) {
       await ctx.runMutation(internal.insights.checkPantryAchievements, { userId: user._id });
+    }
+    if (added > 0) {
+      await updateAddItemsChallenge(ctx, user._id, added);
     }
 
     return { added, restocked };

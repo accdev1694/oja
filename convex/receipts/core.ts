@@ -96,6 +96,8 @@ export const create = mutation({
     const now = Date.now();
     const finalStoreName = args.storeName || "Unknown Store";
 
+    const isCompleted = !!args.items;
+
     const receiptId = await ctx.db.insert("receipts", {
       userId: user._id,
       listId: args.listId,
@@ -106,13 +108,63 @@ export const create = mutation({
       tax: args.tax,
       total: args.total || 0,
       items: (args.items || []).map(item => ({ ...item, name: toGroceryTitleCase(item.name) })),
-      processingStatus: args.items ? "completed" : "pending",
+      processingStatus: isCompleted ? "completed" : "pending",
       purchaseDate: args.purchaseDate || now,
       imageQuality: args.imageQuality,
       imageHash: args.imageHash,
       createdAt: now,
       ...(args.isAdminSeed && { isAdminSeed: true }),
     });
+
+    // Award points when receipt is created directly as completed with imageHash
+    if (isCompleted && args.imageHash) {
+      // Validate BEFORE inserting hash (validation checks for duplicate hashes)
+      const validation = await validateReceiptData(ctx, user._id, args.imageHash, {
+        storeName: args.storeName,
+        total: args.total ?? 0,
+        purchaseDate: args.purchaseDate,
+        items: args.items,
+        imageQuality: args.imageQuality,
+      });
+
+      // Record hash after validation
+      await ctx.db.insert("receiptHashes", {
+        userId: user._id,
+        imageHash: args.imageHash,
+        receiptId,
+        storeName: args.storeName,
+        receiptDate: args.purchaseDate,
+        totalAmount: args.total,
+        ocrConfidence: args.imageQuality,
+        firstSeenAt: now,
+        createdAt: now,
+      });
+
+      if (validation.isValid) {
+        const pointsResult = await processEarnPoints(ctx, user._id, receiptId);
+        if (pointsResult && pointsResult.earned) {
+          await ctx.db.patch(receiptId, {
+            earnedPoints: true,
+            pointsEarned: (pointsResult.pointsAmount ?? 0) + (pointsResult.bonusPoints || 0),
+            fraudFlags: validation.flags,
+          });
+        } else {
+          await ctx.db.patch(receiptId, { fraudFlags: validation.flags });
+        }
+      } else {
+        await ctx.db.patch(receiptId, { fraudFlags: validation.flags });
+      }
+
+      await enrichGlobalFromReceipt(ctx as MutationCtx, {
+        userId: user._id,
+        storeName: finalStoreName,
+        normalizedStoreId: args.storeName ? (normalizeStoreName(args.storeName) ?? undefined) : undefined,
+        purchaseDate: args.purchaseDate || now,
+        items: (args.items || []).map(item => ({ ...item, name: toGroceryTitleCase(item.name) })),
+      });
+      await trackFunnelEvent(ctx, user._id, "first_scan");
+      await trackActivity(ctx, user._id, "receipt_processed", { receiptId, storeName: finalStoreName });
+    }
 
     await trackFunnelEvent(ctx, user._id, "first_receipt");
     await trackActivity(ctx, user._id, "upload_receipt", { receiptId });
@@ -167,19 +219,8 @@ export const update = mutation({
     if (args.imageQuality !== undefined) updates.imageQuality = args.imageQuality;
     if (args.imageHash !== undefined) updates.imageHash = args.imageHash;
 
-    if (args.processingStatus === "completed" && args.imageHash) {
-      await ctx.db.insert("receiptHashes", {
-        userId: user._id,
-        imageHash: args.imageHash,
-        receiptId: args.id,
-        storeName: args.storeName,
-        receiptDate: args.purchaseDate,
-        totalAmount: args.total,
-        ocrConfidence: args.imageQuality,
-        firstSeenAt: Date.now(),
-        createdAt: Date.now(),
-      });
-
+    if (args.processingStatus === "completed" && args.imageHash && !receipt.earnedPoints) {
+      // Validate BEFORE inserting hash (validation checks for duplicate hashes)
       const validation = await validateReceiptData(ctx, user._id, args.imageHash, {
         storeName: args.storeName,
         total: args.total ?? receipt.total ?? 0,
@@ -188,8 +229,27 @@ export const update = mutation({
         imageQuality: args.imageQuality
       });
 
+      // Only insert hash if not already recorded (create path may have done it)
+      const existingHash = await ctx.db
+        .query("receiptHashes")
+        .withIndex("by_hash", (q) => q.eq("imageHash", args.imageHash!))
+        .first();
+      if (!existingHash) {
+        await ctx.db.insert("receiptHashes", {
+          userId: user._id,
+          imageHash: args.imageHash,
+          receiptId: args.id,
+          storeName: args.storeName,
+          receiptDate: args.purchaseDate,
+          totalAmount: args.total,
+          ocrConfidence: args.imageQuality,
+          firstSeenAt: Date.now(),
+          createdAt: Date.now(),
+        });
+      }
+
       updates.fraudFlags = validation.flags;
-      if (validation.isValid && !receipt.earnedPoints) {
+      if (validation.isValid) {
         const pointsResult = await processEarnPoints(ctx, user._id, args.id);
         if (pointsResult && pointsResult.earned) {
           updates.earnedPoints = true;
