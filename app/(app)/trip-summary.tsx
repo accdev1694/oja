@@ -407,10 +407,13 @@ export default function TripSummaryScreen() {
             } else if (list.storeName) {
               names.push(list.storeName);
             }
+            const storeLabel = names.length <= 2
+              ? names.join(" | ")
+              : `${names[0]} | ${names[1]} | more...`;
             return names.length > 0 ? (
               <View style={styles.row}>
                 <Text style={styles.rowLabel}>{names.length > 1 ? "Stores" : "Store"}</Text>
-                <Text style={styles.rowValue}>{names.join(" | ")}</Text>
+                <Text style={styles.rowValue}>{storeLabel}</Text>
               </View>
             ) : null;
           })()}

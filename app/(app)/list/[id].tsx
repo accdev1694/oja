@@ -340,12 +340,8 @@ export default function ListDetailScreen() {
       for (const seg of segments) {
         if (!unique.includes(seg.storeName)) unique.push(seg.storeName);
       }
-      if (unique.length === 1) return unique[0];
-      if (unique.length === 2) return `${unique[0]} → ${unique[1]}`;
-      const first = unique[0];
-      const current = unique[unique.length - 1];
-      const remaining = unique.length - 2;
-      return `${first} → ${current} + ${remaining} more`;
+      if (unique.length <= 2) return unique.join(" | ");
+      return `${unique[0]} | ${unique[1]} | more...`;
     }
     return list?.storeName;
   }, [list?.storeSegments, list?.storeName]);

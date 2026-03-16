@@ -34,7 +34,6 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginLeft: 52,
     marginBottom: spacing.md,
   },
   subtitleContainer: {
@@ -67,9 +66,9 @@ export const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   iconButtonSmall: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: colors.glass.background,
     justifyContent: "center",
     alignItems: "center",

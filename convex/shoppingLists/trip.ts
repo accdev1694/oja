@@ -28,11 +28,18 @@ export const markTripStart = mutation({
     if (!perms.canEdit) throw new Error("Unauthorized");
 
     if (!list.shoppingStartedAt) {
+      // Seed the initial store into storeSegments so the full trip journey
+      // is recorded (not just mid-trip switches)
+      const initialSegments = args.storeId && args.storeName
+        ? [{ storeId: args.storeId, storeName: args.storeName, switchedAt: Date.now() }]
+        : undefined;
+
       await ctx.db.patch(args.id, {
         shoppingStartedAt: Date.now(),
         activeShopperId: user._id,
         normalizedStoreId: args.storeId,
         storeName: args.storeName,
+        ...(initialSegments ? { storeSegments: initialSegments } : {}),
         updatedAt: Date.now(),
       });
     }

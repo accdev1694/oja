@@ -100,6 +100,9 @@ export const HistoryCard = React.memo(function HistoryCard({
   } else if (list.storeName) {
     storeNames.push(list.storeName);
   }
+  const storeLabel = storeNames.length <= 2
+    ? storeNames.join(" | ")
+    : `${storeNames[0]} | ${storeNames[1]} | more...`;
 
   const renderRightActions = useCallback(() => {
     if (!onUseAsTemplate) return null;
@@ -211,7 +214,7 @@ export const HistoryCard = React.memo(function HistoryCard({
                   <View style={styles.metaItem}>
                     <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
                     <Text style={styles.metaText} numberOfLines={1}>
-                      {storeNames.join(" • ")}
+                      {storeLabel}
                     </Text>
                   </View>
                 )}

@@ -185,7 +185,7 @@ export const ListCard = React.memo(function ListCard({
   const progressText = getProgressText(list);
   const isInProgress = !!list.isInProgress;
 
-  // Collect unique store names
+  // Collect unique store names from segments, falling back to storeName
   const storeNames: string[] = [];
   if (list.storeSegments && list.storeSegments.length > 0) {
     for (const seg of list.storeSegments) {
@@ -194,6 +194,9 @@ export const ListCard = React.memo(function ListCard({
   } else if (list.storeName) {
     storeNames.push(list.storeName);
   }
+  const storeLabel = storeNames.length <= 2
+    ? storeNames.join(" | ")
+    : `${storeNames[0]} | ${storeNames[1]} | more...`;
 
   const isEditable = list.status !== "completed" && list.status !== "archived";
 
@@ -256,7 +259,7 @@ export const ListCard = React.memo(function ListCard({
                 <View style={styles.storeInfo}>
                   <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
                   <Text style={styles.metaText} numberOfLines={1}>
-                    {storeNames.join(" \u2022 ")}
+                    {storeLabel}
                   </Text>
                 </View>
               )}
@@ -265,7 +268,7 @@ export const ListCard = React.memo(function ListCard({
             <View style={styles.storeRow}>
               <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
               <Text style={styles.metaText} numberOfLines={1}>
-                {storeNames.join(" \u2022 ")}
+                {storeLabel}
               </Text>
             </View>
           ) : null}

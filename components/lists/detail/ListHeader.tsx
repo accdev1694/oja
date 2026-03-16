@@ -89,7 +89,7 @@ export const ListHeader = ({
             onPress={onAddItem}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <MaterialCommunityIcons name="plus" size={20} color={colors.accent.primary} />
+            <MaterialCommunityIcons name="plus" size={16} color={colors.accent.primary} />
           </Pressable>
           <Pressable
             style={styles.iconButtonSmall}
@@ -98,7 +98,7 @@ export const ListHeader = ({
           >
             <MaterialCommunityIcons
               name={isShared ? "account-group" : "share-variant-outline"}
-              size={18}
+              size={16}
               color={isShared ? colors.accent.primary : colors.text.secondary}
             />
           </Pressable>
@@ -108,7 +108,7 @@ export const ListHeader = ({
               onPress={onHealthCheck}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <MaterialCommunityIcons name="heart-pulse" size={18} color={colors.semantic.success} />
+              <MaterialCommunityIcons name="heart-pulse" size={16} color={colors.semantic.success} />
             </Pressable>
           )}
           {isShared && onOpenChat && (
@@ -118,7 +118,7 @@ export const ListHeader = ({
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <View>
-                <MaterialCommunityIcons name="chat-outline" size={18} color={colors.accent.primary} />
+                <MaterialCommunityIcons name="chat-outline" size={16} color={colors.accent.primary} />
                 {(unreadChatCount ?? 0) > 0 && (
                   <View style={styles.chatBadge}>
                     <Text style={styles.chatBadgeText}>
@@ -136,7 +136,7 @@ export const ListHeader = ({
           >
             <MaterialCommunityIcons
               name={searchVisible ? "close" : "magnify"}
-              size={18}
+              size={16}
               color={searchVisible ? colors.accent.primary : colors.text.secondary}
             />
           </Pressable>
