@@ -1,6 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "expo-router";
-import { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -34,7 +33,7 @@ export function useListsScreen() {
   }
   const { unreadCount } = useNotifications();
 
-  const [tabMode, setTabMode] = useState<"active" | "history">("active");
+  const [tabMode, setTabMode] = useState("active");
   const [isCreating, setIsCreating] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [animationKey, setAnimationKey] = useState(0);
@@ -46,18 +45,18 @@ export function useListsScreen() {
 
   // Template Modal State
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<Id<"shoppingLists"> | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState(null);
   const [selectedTemplateName, setSelectedTemplateName] = useState("");
-
-  // Multi-Select Template State
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-  const [selectedHistoryLists, setSelectedHistoryLists] = useState<Set<Id<"shoppingLists">>>(new Set());
-  const [showCombineModal, setShowCombineModal] = useState(false);
 
   // Edit List Name State
   const [showEditNameModal, setShowEditNameModal] = useState(false);
-  const [editingListId, setEditingListId] = useState<Id<"shoppingLists"> | null>(null);
+  const [editingListId, setEditingListId] = useState(null);
   const [editingListName, setEditingListName] = useState("");
+
+  // History Filter State
+  const [historySearchQuery, setHistorySearchQuery] = useState("");
+  const [historyStoreFilter, setHistoryStoreFilter] = useState(null);
+  const [historyDateFilter, setHistoryDateFilter] = useState(null);
 
   // Trigger animations every time this tab gains focus
   useFocusEffect(
@@ -70,20 +69,9 @@ export function useListsScreen() {
   const handleTabSwitch = useCallback((index: number) => {
     const mode = index === 0 ? "active" : "history";
     if (mode === tabMode) return;
-    setTabMode(mode as "active" | "history");
-    setIsMultiSelectMode(false);
-    setSelectedHistoryLists(new Set());
+    setTabMode(mode);
     setAnimationKey((prev) => prev + 1);
   }, [tabMode]);
-
-  const handleToggleSelect = useCallback((id: Id<"shoppingLists">) => {
-    setSelectedHistoryLists(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
 
   const showListLimitAlert = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -97,33 +85,20 @@ export function useListsScreen() {
     );
   }, [alert, router]);
 
-  const isListLimitError = useCallback((error: unknown) => {
+  const isListLimitError = useCallback((error: any) => {
     const msg = error instanceof Error ? error.message : String(error);
     return msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium");
   }, []);
 
-  const handleConfirmCombine = useCallback(async (newName: string, budget?: number) => {
-    if (selectedHistoryLists.size === 0) return;
-    try {
-      const result = await createFromMultiple(Array.from(selectedHistoryLists), newName, budget);
-      setShowCombineModal(false);
-      setIsMultiSelectMode(false);
-      setSelectedHistoryLists(new Set());
-      router.push(`/list/${result.listId}`);
-    } catch (error: unknown) {
-      if (isListLimitError(error)) showListLimitAlert();
-    }
-  }, [selectedHistoryLists, createFromMultiple, router, isListLimitError, showListLimitAlert]);
-
-  const handleListPress = useCallback((id: Id<"shoppingLists">) => {
+  const handleListPress = useCallback((id: any) => {
     router.push(`/list/${id}`);
   }, [router]);
 
-  const handleDeletePress = useCallback((id: Id<"shoppingLists">, name: string) => {
+  const handleDeletePress = useCallback((id: any, name: string) => {
     deleteList(id, name);
   }, [deleteList]);
 
-  const handleEditName = useCallback((id: Id<"shoppingLists">, currentName: string) => {
+  const handleEditName = useCallback((id: any, currentName: string) => {
     setEditingListId(id);
     setEditingListName(currentName);
     setShowEditNameModal(true);
@@ -135,30 +110,43 @@ export function useListsScreen() {
     if (success) setShowEditNameModal(false);
   }, [updateListName, editingListId]);
 
-  const handleHistoryPress = useCallback((id: Id<"shoppingLists">) => {
+  const handleHistoryPress = useCallback((id: any) => {
     router.push(`/trip-summary?id=${id}`);
   }, [router]);
 
-  const handleSharedPress = useCallback((id: Id<"shoppingLists">) => {
+  const handleSharedPress = useCallback((id: any) => {
     router.push(`/list/${id}`);
   }, [router]);
 
-  const handleUseAsTemplate = useCallback((listId: Id<"shoppingLists">, listName: string) => {
+  const handleUseAsTemplate = useCallback((listId: any, listName: string) => {
     setSelectedTemplateId(listId);
     setSelectedTemplateName(listName);
     setShowTemplateModal(true);
   }, []);
 
-  const handleConfirmTemplate = useCallback(async (newName: string) => {
+  // Handles both single template and combine flow
+  // When additionalListIds is provided, routes to createFromMultiple
+  const handleConfirmTemplate = useCallback(async (newName: string, budget: any, additionalListIds: any) => {
     if (!selectedTemplateId) return;
     try {
-      const result = await createFromTemplate(selectedTemplateId, newName);
+      let result;
+      if (additionalListIds && additionalListIds.length > 0) {
+        // Combine mode: merge source + additional lists
+        result = await createFromMultiple(
+          [selectedTemplateId, ...additionalListIds],
+          newName,
+          budget
+        );
+      } else {
+        // Single template mode
+        result = await createFromTemplate(selectedTemplateId, newName);
+      }
       setShowTemplateModal(false);
       router.push(`/list/${result.listId}`);
-    } catch (error: unknown) {
+    } catch (error) {
       if (isListLimitError(error)) showListLimitAlert();
     }
-  }, [selectedTemplateId, createFromTemplate, router, isListLimitError, showListLimitAlert]);
+  }, [selectedTemplateId, createFromTemplate, createFromMultiple, router, isListLimitError, showListLimitAlert]);
 
   const stableFormatDateTime = useCallback((timestamp: number) => {
     const date = new Date(timestamp);
@@ -180,7 +168,7 @@ export function useListsScreen() {
       const listId = await createList({ name, budget: 50 });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.push(`/list/${listId}`);
-    } catch (error: unknown) {
+    } catch (error) {
       console.error("Failed to create list:", error);
       if (isListLimitError(error)) {
         showListLimitAlert();
@@ -197,18 +185,12 @@ export function useListsScreen() {
     setShowTemplatePickerModal(true);
   }, []);
 
-  const handlePickTemplate = useCallback((listId: Id<"shoppingLists">, listName: string) => {
+  const handlePickTemplate = useCallback((listId: any, listName: string) => {
     setShowTemplatePickerModal(false);
     setSelectedTemplateId(listId);
     setSelectedTemplateName(listName);
     setShowTemplateModal(true);
   }, []);
-
-  const handleToggleMultiSelect = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsMultiSelectMode(!isMultiSelectMode);
-    if (isMultiSelectMode) setSelectedHistoryLists(new Set());
-  }, [isMultiSelectMode]);
 
   const handleShowNotifications = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -221,10 +203,81 @@ export function useListsScreen() {
     setSelectedTemplateName("");
   }, []);
 
-  const currentData = tabMode === "active" ? lists : history;
-  const isLoaded = currentData !== undefined;
+  // Extract unique store names from full (unfiltered) history
+  const historyStores = useMemo(() => {
+    if (!history) return [];
+    const storeSet = new Set();
+    for (const list of history) {
+      if (list.storeSegments && list.storeSegments.length > 0) {
+        for (const seg of list.storeSegments) {
+          storeSet.add(seg.storeName);
+        }
+      } else if (list.storeName) {
+        storeSet.add(list.storeName);
+      }
+    }
+    return Array.from(storeSet).sort();
+  }, [history]);
+
+  // Filter history based on search, store, and date filters
+  const filteredHistory = useMemo(() => {
+    if (!history) return [];
+    let result = history;
+
+    // Text search: filter by name or store
+    if (historySearchQuery.trim()) {
+      const q = historySearchQuery.toLowerCase().trim();
+      result = result.filter((list) => {
+        const nameMatch = list.name.toLowerCase().includes(q);
+        const storeMatch = list.storeName && list.storeName.toLowerCase().includes(q);
+        const segmentMatch = list.storeSegments?.some(
+          (seg) => seg.storeName.toLowerCase().includes(q)
+        );
+        return nameMatch || storeMatch || segmentMatch;
+      });
+    }
+
+    // Store filter
+    if (historyStoreFilter) {
+      result = result.filter((list) => {
+        if (list.storeSegments && list.storeSegments.length > 0) {
+          return list.storeSegments.some((seg) => seg.storeName === historyStoreFilter);
+        }
+        return list.storeName === historyStoreFilter;
+      });
+    }
+
+    // Date filter
+    if (historyDateFilter) {
+      const now = Date.now();
+      const cutoffs = { month: 30, "3months": 90, year: 365 };
+      const days = cutoffs[historyDateFilter];
+      if (days) {
+        const cutoff = now - days * 24 * 60 * 60 * 1000;
+        result = result.filter((list) => {
+          const ts = list.completedAt ?? list.createdAt;
+          return ts >= cutoff;
+        });
+      }
+    }
+
+    return result;
+  }, [history, historySearchQuery, historyStoreFilter, historyDateFilter]);
+
+  const hasActiveFilters = !!(historySearchQuery.trim() || historyStoreFilter || historyDateFilter);
+
+  const clearHistoryFilters = useCallback(() => {
+    setHistorySearchQuery("");
+    setHistoryStoreFilter(null);
+    setHistoryDateFilter(null);
+  }, []);
+
+  const currentData = tabMode === "active" ? lists : filteredHistory;
+  const isLoaded = (tabMode === "active" ? lists : history) !== undefined;
   const displayList = currentData ?? [];
-  const hasAnyActiveLists = displayList.length > 0 || activeShared.length > 0;
+  const hasAnyActiveLists = tabMode === "active"
+    ? (displayList.length > 0 || activeShared.length > 0)
+    : displayList.length > 0;
 
   return {
     // Data
@@ -239,26 +292,28 @@ export function useListsScreen() {
     // UI State
     tabMode,
     isCreating,
-    isMultiSelectMode,
     animationKey,
     pageAnimationKey,
     showNotifications,
+
+    // Filter State
+    historySearchQuery,
+    historyStoreFilter,
+    historyDateFilter,
+    historyStores,
+    hasActiveFilters,
 
     // Modal State
     showCreateOptionsModal,
     showTemplatePickerModal,
     showTemplateModal,
-    showCombineModal,
     showEditNameModal,
     selectedTemplateId,
     selectedTemplateName,
     editingListName,
-    selectedHistoryLists,
 
     // Handlers
     handleTabSwitch,
-    handleToggleSelect,
-    handleConfirmCombine,
     handleListPress,
     handleDeletePress,
     handleEditName,
@@ -272,15 +327,19 @@ export function useListsScreen() {
     handleCreateFromScratch,
     handleShowTemplatePicker,
     handlePickTemplate,
-    handleToggleMultiSelect,
     handleShowNotifications,
     handleCloseTemplate,
+    clearHistoryFilters,
+
+    // Filter setters
+    setHistorySearchQuery,
+    setHistoryStoreFilter,
+    setHistoryDateFilter,
 
     // Modal close helpers
     setShowNotifications,
     setShowCreateOptionsModal,
     setShowTemplatePickerModal,
-    setShowCombineModal,
     setShowEditNameModal,
   };
 }

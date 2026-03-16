@@ -102,9 +102,26 @@ export const getHistory = query({
       .order("desc")
       .collect();
 
-    return [...archived, ...completed].sort(
+    const sorted = [...archived, ...completed].sort(
       (a, b) => (b.completedAt ?? b.updatedAt) - (a.completedAt ?? a.updatedAt)
     );
+
+    const enriched = await Promise.all(
+      sorted.map(async (list) => {
+        const items = await ctx.db
+          .query("listItems")
+          .withIndex("by_list", (q) => q.eq("listId", list._id))
+          .collect();
+
+        return {
+          ...list,
+          itemCount: items.length,
+          checkedCount: items.filter((i) => i.isChecked).length,
+        };
+      })
+    );
+
+    return enriched;
   },
 });
 

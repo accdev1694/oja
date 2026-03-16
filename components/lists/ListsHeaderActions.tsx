@@ -1,6 +1,5 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   colors,
@@ -12,25 +11,13 @@ import {
 const ListsHeaderActions = React.memo(function ListsHeaderActions({
   tabMode,
   isCreating,
-  isMultiSelectMode,
-  hasHistory,
   unreadCount,
   onCreateListFlow,
-  onToggleMultiSelect,
   onShowNotifications,
-}: {
-  tabMode: "active" | "history";
-  isCreating: boolean;
-  isMultiSelectMode: boolean;
-  hasHistory: boolean;
-  unreadCount: number;
-  onCreateListFlow: () => void;
-  onToggleMultiSelect: () => void;
-  onShowNotifications: () => void;
-}) {
+}: any) {
   return (
     <View style={styles.headerActions}>
-      {tabMode === "active" ? (
+      {tabMode === "active" && (
         <Pressable
           style={[styles.addButton, isCreating && { opacity: 0.5 }]}
           onPress={onCreateListFlow}
@@ -38,17 +25,6 @@ const ListsHeaderActions = React.memo(function ListsHeaderActions({
         >
           <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
         </Pressable>
-      ) : (
-        hasHistory && (
-          <Pressable
-            style={styles.selectTextButton}
-            onPress={onToggleMultiSelect}
-          >
-            <Text style={styles.selectTextButtonLabel}>
-              {isMultiSelectMode ? "Cancel" : "Select"}
-            </Text>
-          </Pressable>
-        )
       )}
       <Pressable
         onPress={onShowNotifications}
@@ -114,15 +90,5 @@ const styles = StyleSheet.create({
     ...typography.labelSmall,
     color: colors.text.inverse,
     fontSize: 10,
-  },
-  selectTextButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    justifyContent: "center",
-  },
-  selectTextButtonLabel: {
-    ...typography.labelMedium,
-    color: colors.accent.primary,
-    fontWeight: "600",
   },
 });

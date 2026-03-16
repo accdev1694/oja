@@ -3,7 +3,7 @@ import {
   StyleSheet,
   ScrollView,
 } from "react-native";
-import React, { useRef } from "react";
+import React, { useRef, useMemo } from "react";
 
 import {
   GlassScreen,
@@ -21,7 +21,8 @@ import { HistoryListsContent } from "@/components/lists/HistoryListsContent";
 import { ListsHeaderActions } from "@/components/lists/ListsHeaderActions";
 import { ListsModals } from "@/components/lists/ListsModals";
 import { ListsTutorialHints } from "@/components/lists/ListsTutorialHints";
-import { CombineActionBar } from "@/components/lists/CombineActionBar";
+import { HistoryStatsStrip } from "@/components/lists/HistoryStatsStrip";
+import { HistoryFilters } from "@/components/lists/HistoryFilters";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { SeasonalEventBanner } from "@/components/ui/SeasonalEventBanner";
 import { NotificationDropdown } from "@/components/partners/NotificationDropdown";
@@ -34,23 +35,24 @@ export default function ListsScreen() {
 
   const {
     lists, history, activeShared, displayList, isLoaded, hasAnyActiveLists, unreadCount,
-    tabMode, isCreating, isMultiSelectMode, animationKey, pageAnimationKey, showNotifications,
+    tabMode, isCreating, animationKey, pageAnimationKey, showNotifications,
+    historySearchQuery, historyStoreFilter, historyDateFilter, historyStores, hasActiveFilters,
     showCreateOptionsModal, showTemplatePickerModal, showTemplateModal,
-    showCombineModal, showEditNameModal, selectedTemplateId, selectedTemplateName,
-    editingListName, selectedHistoryLists,
-    handleTabSwitch, handleToggleSelect, handleConfirmCombine,
+    showEditNameModal, selectedTemplateId, selectedTemplateName, editingListName,
+    handleTabSwitch,
     handleListPress, handleDeletePress, handleEditName, handleSaveListName,
     handleHistoryPress, handleSharedPress, handleUseAsTemplate, handleConfirmTemplate,
     stableFormatDateTime, handleCreateListFlow, handleCreateFromScratch,
-    handleShowTemplatePicker, handlePickTemplate, handleToggleMultiSelect,
-    handleShowNotifications, handleCloseTemplate,
+    handleShowTemplatePicker, handlePickTemplate,
+    handleShowNotifications, handleCloseTemplate, clearHistoryFilters,
+    setHistorySearchQuery, setHistoryStoreFilter, setHistoryDateFilter,
     setShowNotifications, setShowCreateOptionsModal, setShowTemplatePickerModal,
-    setShowCombineModal, setShowEditNameModal,
+    setShowEditNameModal,
   } = useListsScreen();
 
   // Hint targets
-  const headerRef = useRef<View>(null);
-  const createCardRef = useRef<View>(null);
+  const headerRef = useRef(null);
+  const createCardRef = useRef(null);
 
   // Hints
   const welcomeHint = useHint("lists_welcome", "delayed");
@@ -65,6 +67,85 @@ export default function ListsScreen() {
       hintId: "lists_templates",
       condition: (lists?.length ?? 0) + activeShared.length >= 3,
     },
+  ]);
+
+  // Subtitle for header
+  const subtitle = useMemo(() => {
+    if (tabMode === "active") {
+      const count = lists?.length ?? 0;
+      return `${count} active list${count !== 1 ? "s" : ""}`;
+    }
+    const total = history?.length ?? 0;
+    const filtered = displayList.length;
+    if (hasActiveFilters) {
+      return `${filtered} of ${total} trip${total !== 1 ? "s" : ""}`;
+    }
+    return `${total} trip${total !== 1 ? "s" : ""}`;
+  }, [tabMode, lists, history, displayList, hasActiveFilters]);
+
+  // Shared tab toggle + banners (used in both modes)
+  const sharedBanners = useMemo(() => (
+    <View key={`page-${pageAnimationKey}`}>
+      {/* Tab Toggle */}
+      <AnimatedSection key={`toggle-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={0}>
+        <GlassCapsuleSwitcher
+          tabs={[
+            {
+              label: "Active",
+              activeColor: colors.accent.primary,
+              icon: "clipboard-list",
+              badge: ((lists?.length ?? 0) + activeShared.length) > 0
+                ? (lists?.length ?? 0) + activeShared.length
+                : undefined,
+            },
+            {
+              label: "History",
+              activeColor: colors.accent.primary,
+              icon: "history",
+              badge: history && history.length > 0 ? history.length : undefined,
+            },
+          ]}
+          activeIndex={tabMode === "active" ? 0 : 1}
+          onTabChange={handleTabSwitch}
+          style={styles.tabContainer}
+        />
+      </AnimatedSection>
+
+      {/* Trial Nudge Banner */}
+      <AnimatedSection key={`nudge-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={50}>
+        <TrialNudgeBanner />
+      </AnimatedSection>
+
+      {/* Seasonal Event Banner */}
+      <AnimatedSection key={`event-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={75}>
+        <SeasonalEventBanner />
+      </AnimatedSection>
+
+      {/* Contextual Tips */}
+      <AnimatedSection key={`tip-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={100}>
+        <TipBanner context="lists" />
+      </AnimatedSection>
+
+      {/* History Stats Strip + Filters (only in history mode) */}
+      {tabMode === "history" && (
+        <View style={styles.historyHeaderContent}>
+          <HistoryStatsStrip history={displayList} />
+          <HistoryFilters
+            searchQuery={historySearchQuery}
+            storeFilter={historyStoreFilter}
+            dateFilter={historyDateFilter}
+            stores={historyStores}
+            onSearchChange={setHistorySearchQuery}
+            onStoreChange={setHistoryStoreFilter}
+            onDateChange={setHistoryDateFilter}
+          />
+        </View>
+      )}
+    </View>
+  ), [
+    pageAnimationKey, lists, activeShared, history, tabMode, handleTabSwitch,
+    displayList, historySearchQuery, historyStoreFilter, historyDateFilter, historyStores,
+    setHistorySearchQuery, setHistoryStoreFilter, setHistoryDateFilter,
   ]);
 
   // Loading state with skeletons
@@ -92,113 +173,62 @@ export default function ListsScreen() {
         <SimpleHeader
           title={firstName ? `${firstName}'s Lists` : "Shopping Lists"}
           accentColor={colors.semantic.lists}
-          subtitle={
-            tabMode === "active"
-              ? `${lists?.length ?? 0} active list${(lists?.length ?? 0) !== 1 ? "s" : ""}`
-              : `${history?.length ?? 0} archived list${(history?.length ?? 0) !== 1 ? "s" : ""}`
-          }
+          subtitle={subtitle}
           rightElement={
             <ListsHeaderActions
               tabMode={tabMode}
               isCreating={isCreating}
-              isMultiSelectMode={isMultiSelectMode}
-              hasHistory={(history?.length ?? 0) > 0}
               unreadCount={unreadCount}
               onCreateListFlow={handleCreateListFlow}
-              onToggleMultiSelect={handleToggleMultiSelect}
               onShowNotifications={handleShowNotifications}
             />
           }
         />
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View key={pageAnimationKey}>
-          {/* Tab Toggle */}
-          <AnimatedSection key={`toggle-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={0}>
-            <GlassCapsuleSwitcher
-              tabs={[
-                {
-                  label: "Active",
-                  activeColor: colors.accent.primary,
-                  icon: "clipboard-list",
-                  badge: ((lists?.length ?? 0) + activeShared.length) > 0
-                    ? (lists?.length ?? 0) + activeShared.length
-                    : undefined,
-                },
-                {
-                  label: "History",
-                  activeColor: colors.accent.primary,
-                  icon: "history",
-                  badge: history && history.length > 0 ? history.length : undefined,
-                },
-              ]}
-              activeIndex={tabMode === "active" ? 0 : 1}
-              onTabChange={handleTabSwitch}
-              style={styles.tabContainer}
-            />
-          </AnimatedSection>
-
-          {/* Trial Nudge Banner */}
-          <AnimatedSection key={`nudge-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={50}>
-            <TrialNudgeBanner />
-          </AnimatedSection>
-
-          {/* Seasonal Event Banner */}
-          <AnimatedSection key={`event-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={75}>
-            <SeasonalEventBanner />
-          </AnimatedSection>
-
-          {/* Contextual Tips */}
-          <AnimatedSection key={`tip-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={100}>
-            <TipBanner context="lists" />
-          </AnimatedSection>
-
-          {/* Content */}
-          <View key={animationKey}>
-            {tabMode === "active" ? (
-              <ActiveListsContent
-                displayList={displayList}
-                activeShared={activeShared}
-                hasAnyActiveLists={hasAnyActiveLists}
-                isCreating={isCreating}
-                animationKey={animationKey}
-                createCardRef={createCardRef}
-                onCreateListFlow={handleCreateListFlow}
-                onListPress={handleListPress}
-                onDeletePress={handleDeletePress}
-                onEditName={handleEditName}
-                onSharedPress={handleSharedPress}
-                formatDateTime={stableFormatDateTime}
-              />
-            ) : (
-              <HistoryListsContent
-                displayList={displayList}
-                animationKey={animationKey}
-                isMultiSelectMode={isMultiSelectMode}
-                selectedHistoryLists={selectedHistoryLists}
-                onHistoryPress={handleHistoryPress}
-                onUseAsTemplate={handleUseAsTemplate}
-                onToggleSelect={handleToggleSelect}
-                formatDateTime={stableFormatDateTime}
-              />
-            )}
-          </View>
+      {tabMode === "history" ? (
+        /* History mode: FlashList handles its own scrolling */
+        <View style={styles.flashListContainer}>
+          <HistoryListsContent
+            displayList={displayList}
+            animationKey={animationKey}
+            onHistoryPress={handleHistoryPress}
+            onUseAsTemplate={handleUseAsTemplate}
+            formatDateTime={stableFormatDateTime}
+            headerContent={sharedBanners}
+            hasActiveFilters={hasActiveFilters}
+            onClearFilters={clearHistoryFilters}
+          />
         </View>
+      ) : (
+        /* Active mode: keep existing ScrollView */
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {sharedBanners}
 
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
+          {/* Active Content */}
+          <View key={`active-${animationKey}`}>
+            <ActiveListsContent
+              displayList={displayList}
+              activeShared={activeShared}
+              hasAnyActiveLists={hasAnyActiveLists}
+              isCreating={isCreating}
+              animationKey={animationKey}
+              createCardRef={createCardRef}
+              onCreateListFlow={handleCreateListFlow}
+              onListPress={handleListPress}
+              onDeletePress={handleDeletePress}
+              onEditName={handleEditName}
+              onSharedPress={handleSharedPress}
+              formatDateTime={stableFormatDateTime}
+            />
+          </View>
 
-      {/* Multi-Select Combine Action */}
-      {isMultiSelectMode && (
-        <CombineActionBar
-          selectedCount={selectedHistoryLists.size}
-          onCombine={() => setShowCombineModal(true)}
-        />
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
       )}
 
       {/* Notifications Dropdown */}
@@ -212,12 +242,10 @@ export default function ListsScreen() {
         showCreateOptionsModal={showCreateOptionsModal}
         showTemplatePickerModal={showTemplatePickerModal}
         showTemplateModal={showTemplateModal}
-        showCombineModal={showCombineModal}
         showEditNameModal={showEditNameModal}
         selectedTemplateId={selectedTemplateId}
         selectedTemplateName={selectedTemplateName}
         editingListName={editingListName}
-        selectedHistoryLists={selectedHistoryLists}
         historyLists={history || []}
         hasHistory={(history?.length ?? 0) > 0}
         onCloseCreateOptions={() => setShowCreateOptionsModal(false)}
@@ -227,8 +255,6 @@ export default function ListsScreen() {
         onPickTemplate={handlePickTemplate}
         onCloseTemplate={handleCloseTemplate}
         onConfirmTemplate={handleConfirmTemplate}
-        onCloseCombine={() => setShowCombineModal(false)}
-        onConfirmCombine={handleConfirmCombine}
         onCloseEditName={() => setShowEditNameModal(false)}
         onSaveListName={handleSaveListName}
       />
@@ -253,6 +279,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     gap: spacing.md,
   },
+  flashListContainer: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
@@ -265,5 +294,8 @@ const styles = StyleSheet.create({
   tabContainer: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
+  },
+  historyHeaderContent: {
+    paddingHorizontal: spacing.lg,
   },
 });
