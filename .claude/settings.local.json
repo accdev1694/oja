@@ -195,7 +195,9 @@
       "Bash(claude --version)",
       "Bash(claude models list:*)",
       "Bash(claude /models)",
-      "Bash(del C:UsersdilocDocumentsprogrammerojadebug.md)"
+      "Bash(del C:UsersdilocDocumentsprogrammerojadebug.md)",
+      "Bash(Store2)",
+      "Bash(more...\" across all surfaces \\(ListCard, HistoryCard,\nlist detail header, trip summary\\). Make header second row full-width and\nreduce action icon sizes for more room.\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   },
   "enableAllProjectMcpServers": true,

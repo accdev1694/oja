@@ -366,10 +366,11 @@ Reference implementation: `list/[id].tsx` - dynamic overlap algorithm using `use
 6. **Zero-Blank Prices** - Every item must show a price (3-layer cascade)
 7. **Validated icons only** - Use `iconMatcher.ts` for MaterialCommunityIcons
 8. **NEVER kill node.exe** - Kills Claude Code itself. Use `npx kill-port <port>` instead
-9. **NEVER use types** - Never use TypeScript type annotations (`: any`, `: string`, interfaces, type casts) when writing code
-10. **Parallel sub-agents** - Deploy multiple sub-agents in parallel where possible
-11. **Never fix without approval** - Present analysis and proposed solution first
-12. **Size/Weight formatting (MANDATORY UTILITY USAGE):**
+9. **NEVER use types** - Never use TypeScript type annotations (`: any`, `: string`, interfaces, type casts, `type` aliases) when writing NEW code. No `interface`, no `type X = ...`, no `: string` parameter annotations. Existing typed code may remain but NEW code must be type-free.
+10. **Max 400 lines per file** - No single file may exceed 400 lines. If a file approaches this limit, extract components, helpers, or logic into separate files. This applies to all new and modified files.
+11. **Parallel sub-agents** - Deploy multiple sub-agents in parallel where possible
+12. **Never fix without approval** - Present analysis and proposed solution first
+13. **Size/Weight formatting (MANDATORY UTILITY USAGE):**
     ```typescript
     // WRONG - Never create items without utility
     await createItem({ name: "500ml Milk", size: "per item" })
@@ -391,11 +392,11 @@ Reference implementation: `list/[id].tsx` - dynamic overlap algorithm using `use
     - See **"Item Name Parser (MANDATORY)"** section for full documentation
     - Import: `@/convex/lib/itemNameParser` (works in frontend & backend)
     - Reference: `PersonalizedSuggestions.tsx`, `HealthAnalysisModal.tsx`, `lib/voice/declarations.ts`
-13. **Convex cross-function calls:**
+14. **Convex cross-function calls:**
     - Import `api` from `./_generated/api`: `import { api } from "./_generated/api";`
     - Use `ctx.runQuery(api.module.functionName, args)` or `ctx.runMutation(api.module.functionName, args)`
     - Example: `await ctx.runQuery(api.admin.getAnalytics, {})` -- not `await ctx.runQuery(query.getAnalytics, {})}`
-14. **Post-Refactor Validation (CRITICAL):**
+15. **Post-Refactor Validation (CRITICAL):**
     - **ALWAYS run `npx expo start`** after completing any refactor to verify no syntax errors
     - **Check JSX tag matching** - Every `<View>` must close with `</View>`, not `</Animated.View>` or vice versa
     - **Run `npm run typecheck`** to catch TypeScript errors
@@ -403,7 +404,7 @@ Reference implementation: `list/[id].tsx` - dynamic overlap algorithm using `use
     - **DO NOT mark refactor complete** until the app loads successfully without errors
     - Common mistake after major refactors: JSX tag mismatches (e.g., opening `<View>` but closing with `</Animated.View>`)
     - This validation step is MANDATORY - skipping it leads to runtime errors that break development
-15. **Modular backend pattern:**
+16. **Modular backend pattern:**
     - Large backend modules are split into subdirectories (e.g., `convex/ai/`, `convex/pantry/`, `convex/listItems/`, `convex/shoppingLists/`, `convex/insights/`, `convex/admin/`, `convex/lib/voice/`)
     - Root barrel files (e.g., `convex/ai.ts`) re-export from the subdirectory for API compatibility
     - New functions go in the appropriate subfile, NOT the barrel
@@ -485,7 +486,7 @@ E2E_CLERK_USER_USERNAME, E2E_CLERK_USER_PASSWORD
 - **Points System:** Receipt scans earn points (not GBP credits)
   - Bronze (0 scans): 150 pts/scan, max 4 earning scans/mo
   - Silver (20 scans): 175 pts/scan, max 5/mo
-  - Gold (50 scans): 200 pts/scan, max 5/mo
+  - Gold (50 scans): 200 pts/scan, max 6/mo
   - Platinum (100 scans): 225 pts/scan, max 6/mo
   - Free users: 100 pts/scan, max 1 earning scan/mo
 - **Stripe Flow:** createCheckoutSession -> Stripe Checkout -> `checkout.session.completed` webhook -> subscription active
