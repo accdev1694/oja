@@ -30,6 +30,10 @@ export const generateItemVariants = action({
   handler: async (ctx, args) => {
     if (args.items.length === 0) return [];
 
+    // Check per-user monthly cap
+    const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "item_variants" });
+    if (!usageCheck.allowed) return [];
+
     // Enforce Gemini free tier RPD quota
     try {
       await enforceGeminiQuota(ctx);
@@ -97,6 +101,10 @@ export const estimateItemPrice = action({
   handler: async (ctx, args) => {
     const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "ai_estimation" });
     if (!rateLimit.allowed) return null;
+
+    // Check per-user monthly cap
+    const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "price_estimate" });
+    if (!usageCheck.allowed) return null;
 
     // Enforce Gemini free tier RPD quota
     try {

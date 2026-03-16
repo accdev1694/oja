@@ -159,6 +159,13 @@ export const textToSpeech = action({
     userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
+    // Check per-user monthly TTS cap
+    const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "tts" });
+    if (!usageCheck.allowed) {
+      console.warn("[TTS] Monthly TTS cap reached — falling back to device TTS");
+      return { audioBase64: null, provider: null, error: "TTS limit reached" };
+    }
+
     const azureKey = process.env.AZURE_SPEECH_KEY;
     if (!azureKey) {
       console.warn("[TTS] AZURE_SPEECH_KEY not configured — falling back to device TTS");

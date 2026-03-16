@@ -264,6 +264,12 @@ export const scanProduct = action({
     storageId: v.string(),
   },
   handler: async (ctx, args) => {
+    // Check per-user monthly cap
+    const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "product_scan" });
+    if (!usageCheck.allowed) {
+      return { success: false, rejection: "You've reached your monthly product scan limit. Upgrade for more.", confidence: 0 };
+    }
+
     // Enforce Gemini free tier RPD quota
     try {
       await enforceGeminiQuota(ctx);

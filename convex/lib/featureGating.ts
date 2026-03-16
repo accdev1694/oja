@@ -60,7 +60,7 @@ export function getFreeFeatures() {
   return {
     maxLists: 2, // Down from 3
     maxPantryItems: 30, // Down from 50
-    maxReceiptScans: AI_LIMITS.receipt.free,
+    maxReceiptScans: AI_LIMITS.receipt_scan.free,
     maxVoiceRequests: AI_LIMITS.voice.free,
     receiptScanning: true,
     priceHistory: true,

@@ -17,6 +17,7 @@ import {
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { VoiceUsageCard } from "@/components/ai-usage/VoiceUsageCard";
 import { ReceiptScansCard } from "@/components/ai-usage/ReceiptScansCard";
+import { FeatureUsageCard } from "@/components/ai-usage/FeatureUsageCard";
 
 /**
  * AI Usage Screen
@@ -62,6 +63,7 @@ export default function AIUsageScreen() {
 
   const voice = usageSummary?.voice ?? { usage: 0, limit: 200, percentage: 0 };
   const receipts = usageSummary?.receipts ?? { scansThisPeriod: 0, creditsEarned: 0, lifetimeScans: 0 };
+  const features = usageSummary?.features ?? {};
   const settings = usageSummary?.aiSettings ?? { voiceEnabled: true, usageAlerts: true };
 
   return (
@@ -83,6 +85,9 @@ export default function AIUsageScreen() {
 
         {/* Receipt Scans */}
         <ReceiptScansCard receipts={receipts} isAdmin={isAdmin} />
+
+        {/* AI Feature Limits */}
+        <FeatureUsageCard features={features} isAdmin={isAdmin} />
 
         {/* Tier Progress */}
         {pointsBalance && (

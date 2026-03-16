@@ -54,6 +54,10 @@ export const generateHybridSeedItems = action({
     const { country, cuisines } = args;
     const totalItems = 200;
 
+    // Check per-user monthly cap — fall back to hardcoded items if exceeded
+    const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "pantry_seed" });
+    if (!usageCheck.allowed) return getFallbackItems(country, cuisines);
+
     // Enforce Gemini free tier RPD quota — fall back to hardcoded items if exhausted
     try {
       await enforceGeminiQuota(ctx);

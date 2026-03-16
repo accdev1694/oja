@@ -364,25 +364,36 @@ export const getUsageSummary = query({
       .order("desc")
       .first();
 
-    // Look up actual plan limit for voice if no usage record exists yet
-    let voiceFallback = { usage: 0, limit: 10, percentage: 0 };
-    if (!summary.voice) {
-      const subscription = await ctx.db
-        .query("subscriptions")
-        .withIndex("by_user", (q) => q.eq("userId", user._id))
-        .unique();
-      const plan = subscription?.plan ?? "free";
-      const voiceLimit = getAILimit(plan, "voice");
-      voiceFallback = { usage: 0, limit: voiceLimit === -1 ? 999999 : voiceLimit, percentage: 0 };
+    // Look up user's plan to provide fallback limits for features with no usage record yet
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .unique();
+    const plan = subscription?.plan ?? "free";
+
+    // Build fallback for any feature that has no usage record this period
+    const featureKeys = Object.keys(AI_LIMITS) as (keyof typeof AI_LIMITS)[];
+    const features: Record<string, { usage: number; limit: number; percentage: number }> = {};
+    for (const key of featureKeys) {
+      if (summary[key]) {
+        features[key] = summary[key];
+      } else {
+        const limit = getAILimit(plan, key);
+        const displayLimit = limit === -1 ? 999999 : limit;
+        features[key] = { usage: 0, limit: displayLimit, percentage: 0 };
+      }
     }
 
     return {
-      voice: summary.voice ?? voiceFallback,
+      // Individual feature accessors (backward compat)
+      voice: features.voice,
       receipts: {
         scansThisPeriod: scanCredits?.scansThisPeriod ?? 0,
         creditsEarned: scanCredits?.creditsEarned ?? 0,
         lifetimeScans: scanCredits?.lifetimeScans ?? 0,
       },
+      // All AI features with caps
+      features,
       aiSettings: user.aiSettings ?? { voiceEnabled: true, usageAlerts: true },
     };
   },
@@ -626,13 +637,21 @@ export const trackTTSUsage = internalMutation({
       .unique();
 
     if (!usage) {
+      // Look up actual TTS limit from plan
+      const subscription = await ctx.db
+        .query("subscriptions")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .unique();
+      const plan = subscription?.plan ?? "free";
+      const limit = getAILimit(plan, "tts");
+
       const usageId = await ctx.db.insert("aiUsage", {
         userId: args.userId,
         feature: "tts",
         periodStart: start,
         periodEnd: end,
         requestCount: 0,
-        limit: 999999, // TTS is unlimited but tracked
+        limit: limit === -1 ? 999999 : limit,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
@@ -659,7 +678,7 @@ export const trackTTSUsage = internalMutation({
 
 /**
  * Get today's total Gemini request count across ALL users and features.
- * Used by AI actions to enforce the 1,500 RPD free tier hard cap.
+ * Used by AI actions to enforce the 1,000 RPD free tier hard cap (Gemini 2.5 Flash-Lite).
  */
 export const getGeminiRPDToday = internalQuery({
   args: {},

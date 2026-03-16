@@ -17,6 +17,10 @@ export const generateListSuggestions = action({
     const { currentItems, excludeItems } = args;
     if (currentItems.length === 0) return [];
 
+    // Check per-user monthly cap — fall back to hardcoded pairings if exceeded
+    const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "list_suggestions" });
+    if (!usageCheck.allowed) return getFallbackSuggestions(currentItems);
+
     // Enforce Gemini free tier RPD quota — fall back to hardcoded pairings if exhausted
     try {
       await enforceGeminiQuota(ctx);

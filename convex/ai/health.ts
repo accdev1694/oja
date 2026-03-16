@@ -59,6 +59,12 @@ export const analyzeListHealth = action({
     });
     if (!user) throw new Error("User not found");
 
+    // Check per-user monthly cap
+    const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "health_analysis" });
+    if (!usageCheck.allowed) {
+      throw new Error("You've reached your monthly health analysis limit. Upgrade for more.");
+    }
+
     // Enforce Gemini free tier RPD quota
     try {
       await enforceGeminiQuota(ctx);
