@@ -22,7 +22,7 @@ interface StockBannersProps {
   duplicateGroups: DuplicateGroup[] | undefined;
   onMergeDuplicates: () => void;
   attentionCount: number;
-  items: { length: number }[];
+  itemCount: number;
   capsuleActiveIndex: number;
   onViewModeSwitch: (index: number) => void;
   tabsRef: React.RefObject<View | null>;
@@ -36,7 +36,7 @@ export const StockBanners = React.memo(function StockBanners({
   duplicateGroups,
   onMergeDuplicates,
   attentionCount,
-  items,
+  itemCount,
   capsuleActiveIndex,
   onViewModeSwitch,
   tabsRef,
@@ -86,7 +86,7 @@ export const StockBanners = React.memo(function StockBanners({
                 label: "All Items",
                 activeColor: colors.accent.primary,
                 icon: "view-list-outline",
-                badge: items.length,
+                badge: itemCount,
               },
             ]}
             activeIndex={capsuleActiveIndex}

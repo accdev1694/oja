@@ -114,12 +114,14 @@ export const StockListHeader = React.memo(function StockListHeader({
   }
 
   return (
-    <>
-      {hasExpandedCategory && (
-        <View style={styles.hintRow}>
-          <TypewriterHint text="Swipe left/right to adjust stock level" />
-        </View>
-      )}
-    </>
+    <View style={styles.hintRow}>
+      <TypewriterHint
+        text={
+          hasExpandedCategory
+            ? "Swipe left/right to adjust stock level"
+            : "Tap a category to see what\u2019s inside"
+        }
+      />
+    </View>
   );
 });

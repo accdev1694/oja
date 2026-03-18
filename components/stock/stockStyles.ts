@@ -89,7 +89,7 @@ export const stockStyles = StyleSheet.create({
   },
   searchContainer: {
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xs,
   },
   listWrapper: {
     flex: 1,
@@ -124,14 +124,14 @@ export const stockStyles = StyleSheet.create({
   },
   hintRow: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.xs,
   },
   categoryHeader: {
     flexDirection: "row",

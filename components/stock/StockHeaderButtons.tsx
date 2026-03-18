@@ -28,8 +28,8 @@ export const StockHeaderButtons = React.memo(function StockHeaderButtons({
           disabled={isRefreshingPrices}
         >
           <MaterialCommunityIcons
-            name="currency-gbp"
-            size={18}
+            name="cash-sync"
+            size={22}
             color={isRefreshingPrices ? colors.text.disabled : colors.accent.primary}
           />
         </Pressable>

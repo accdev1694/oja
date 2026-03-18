@@ -148,7 +148,7 @@ export default function PantryScreen() {
             }
             onMergeDuplicates={handleMergeDuplicates}
             attentionCount={attentionCount}
-            items={items ? [{ length: items.length }] : []}
+            itemCount={items ? items.length : 0}
             capsuleActiveIndex={capsuleActiveIndex}
             onViewModeSwitch={handleViewModeSwitch}
             tabsRef={tabsRef}
