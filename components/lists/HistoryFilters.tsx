@@ -1,20 +1,16 @@
-import React, { useCallback, useRef, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import React, { useCallback, useRef, useEffect, useMemo } from "react";
+import { View, StyleSheet } from "react-native";
 import {
   GlassSearchInput,
-  colors,
-  typography,
+  GlassDropdown,
   spacing,
-  borderRadius,
 } from "@/components/ui/glass";
 
 const DATE_OPTIONS = [
-  { key: null, label: "All" },
-  { key: "month", label: "This Month" },
-  { key: "3months", label: "3 Months" },
-  { key: "year", label: "This Year" },
+  { value: null, label: "All Time", icon: "calendar" },
+  { value: "month", label: "This Month", icon: "calendar" },
+  { value: "3months", label: "3 Months", icon: "calendar" },
+  { value: "year", label: "This Year", icon: "calendar" },
 ];
 
 const HistoryFilters = React.memo(function HistoryFilters({
@@ -28,7 +24,6 @@ const HistoryFilters = React.memo(function HistoryFilters({
 }: any) {
   const searchTimeout = useRef<any>(null);
 
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -42,19 +37,16 @@ const HistoryFilters = React.memo(function HistoryFilters({
     }, 300);
   }, [onSearchChange]);
 
-  const handleStorePress = useCallback((store: any) => {
-    Haptics.selectionAsync();
-    onStoreChange(store === storeFilter ? null : store);
-  }, [storeFilter, onStoreChange]);
-
-  const handleDatePress = useCallback((date: any) => {
-    Haptics.selectionAsync();
-    onDateChange(date === dateFilter ? null : date);
-  }, [dateFilter, onDateChange]);
+  const storeOptions = useMemo(() => {
+    const opts = [{ value: null, label: "All Stores", icon: "store" }];
+    for (const store of stores) {
+      opts.push({ value: store, label: store, icon: "store" });
+    }
+    return opts;
+  }, [stores]);
 
   return (
     <View style={styles.container}>
-      {/* Search bar */}
       <GlassSearchInput
         placeholder="Search trips..."
         defaultValue={searchQuery}
@@ -62,74 +54,26 @@ const HistoryFilters = React.memo(function HistoryFilters({
         style={styles.searchBar}
       />
 
-      {/* Date filter pills */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.pillRow}
-      >
-        {DATE_OPTIONS.map((opt) => {
-          const active = opt.key === dateFilter;
-          return (
-            <Pressable
-              key={opt.key ?? "all-date"}
-              style={[styles.pill, active && styles.pillActive]}
-              onPress={() => handleDatePress(opt.key)}
-            >
-              <MaterialCommunityIcons
-                name="calendar"
-                size={14}
-                color={active ? colors.accent.primary : colors.text.tertiary}
-              />
-              <Text style={[styles.pillText, active && styles.pillTextActive]}>
-                {opt.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {/* Store filter pills (only if stores exist) */}
-      {stores.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.pillRow}
-        >
-          <Pressable
-            style={[styles.pill, !storeFilter && styles.pillActive]}
-            onPress={() => handleStorePress(null)}
-          >
-            <MaterialCommunityIcons
-              name="store"
-              size={14}
-              color={!storeFilter ? colors.accent.primary : colors.text.tertiary}
-            />
-            <Text style={[styles.pillText, !storeFilter && styles.pillTextActive]}>
-              All Stores
-            </Text>
-          </Pressable>
-          {stores.map((store: any) => {
-            const active = store === storeFilter;
-            return (
-              <Pressable
-                key={store}
-                style={[styles.pill, active && styles.pillActive]}
-                onPress={() => handleStorePress(store)}
-              >
-                <MaterialCommunityIcons
-                  name="store"
-                  size={14}
-                  color={active ? colors.accent.primary : colors.text.tertiary}
-                />
-                <Text style={[styles.pillText, active && styles.pillTextActive]} numberOfLines={1}>
-                  {store}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
+      <View style={styles.dropdownRow}>
+        <GlassDropdown
+          label="Sort by time"
+          options={DATE_OPTIONS}
+          selected={dateFilter}
+          onSelect={onDateChange}
+          placeholder="All Time"
+          style={styles.dropdown}
+        />
+        {stores.length > 0 && (
+          <GlassDropdown
+            label="Sort by store"
+            options={storeOptions}
+            selected={storeFilter}
+            onSelect={onStoreChange}
+            placeholder="All Stores"
+            style={styles.dropdown}
+          />
+        )}
+      </View>
     </View>
   );
 });
@@ -144,32 +88,11 @@ const styles = StyleSheet.create({
   searchBar: {
     marginBottom: spacing.xs,
   },
-  pillRow: {
+  dropdownRow: {
     flexDirection: "row",
-    gap: spacing.xs,
-    paddingRight: spacing.md,
+    gap: spacing.sm,
   },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: `${colors.glass.border}40`,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    height: 32,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    gap: spacing.xs,
-  },
-  pillActive: {
-    backgroundColor: `${colors.accent.primary}20`,
-    borderColor: colors.accent.primary,
-  },
-  pillText: {
-    ...typography.labelSmall,
-    color: colors.text.secondary,
-  },
-  pillTextActive: {
-    color: colors.accent.primary,
-    fontWeight: "600",
+  dropdown: {
+    flex: 1,
   },
 });

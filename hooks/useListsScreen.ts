@@ -255,7 +255,7 @@ export function useListsScreen() {
       if (days) {
         const cutoff = now - days * 24 * 60 * 60 * 1000;
         result = result.filter((list) => {
-          const ts = list.completedAt ?? list.createdAt;
+          const ts = list.createdAt ?? list._creationTime;
           return ts >= cutoff;
         });
       }

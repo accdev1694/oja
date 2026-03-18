@@ -62,9 +62,7 @@ export const HistoryCard = React.memo(function HistoryCard({
   const savedMoney = diff > 0 && budget > 0;
   const hasSpendData = budget > 0 && actual > 0;
 
-  const completedDate = list.completedAt
-    ? formatShortDate(list.completedAt)
-    : formatShortDate(list.createdAt);
+  const completedDate = formatShortDate(list.createdAt ?? list._creationTime);
 
   // Collect unique store names from segments, falling back to the list's storeName
   const storeNames: string[] = [];
@@ -77,9 +75,7 @@ export const HistoryCard = React.memo(function HistoryCard({
   } else if (list.storeName) {
     storeNames.push(list.storeName);
   }
-  const storeLabel = storeNames.length <= 2
-    ? storeNames.join(" | ")
-    : `${storeNames[0]} | ${storeNames[1]} | more...`;
+  const storeLabel = storeNames.join(" | ");
 
   const hasReceipt = !!(list.receiptId || (list.receiptIds && list.receiptIds.length > 0));
 
@@ -166,30 +162,44 @@ export const HistoryCard = React.memo(function HistoryCard({
                     {list.checkedCount ?? 0}/{list.itemCount ?? 0} items
                   </Text>
                   {list.healthAnalysis?.score != null && (
-                    <View style={[styles.healthDot, { backgroundColor: getHealthColor(list.healthAnalysis.score) }]} />
+                    <MaterialCommunityIcons name="heart-pulse" size={14} color={getHealthColor(list.healthAnalysis.score)} />
                   )}
                 </View>
               </View>
             </View>
 
-            {/* Bottom row: date, store, receipt indicator */}
+            {/* Bottom row: date, store, receipt indicator + shop again */}
             <View style={styles.bottomRow}>
-              <View style={styles.metaItem}>
-                <MaterialCommunityIcons name="calendar" size={14} color={colors.text.tertiary} />
-                <Text style={styles.metaText}>{completedDate}</Text>
+              <View style={styles.metaRow}>
+                <View style={styles.metaItem}>
+                  <MaterialCommunityIcons name="calendar" size={14} color={colors.text.tertiary} />
+                  <Text style={styles.metaText}>{completedDate}</Text>
+                </View>
+                {storeNames.length > 0 && (
+                  <View style={styles.metaItem}>
+                    <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
+                    <Text style={styles.metaText} numberOfLines={1}>
+                      {storeLabel}
+                    </Text>
+                  </View>
+                )}
+                {hasReceipt && (
+                  <View style={styles.metaItem}>
+                    <MaterialCommunityIcons name="receipt" size={14} color={colors.text.tertiary} />
+                  </View>
+                )}
               </View>
-              {storeNames.length > 0 && (
-                <View style={styles.metaItem}>
-                  <MaterialCommunityIcons name="store" size={14} color={colors.text.tertiary} />
-                  <Text style={styles.metaText} numberOfLines={1}>
-                    {storeLabel}
-                  </Text>
-                </View>
-              )}
-              {hasReceipt && (
-                <View style={styles.metaItem}>
-                  <MaterialCommunityIcons name="receipt" size={14} color={colors.text.tertiary} />
-                </View>
+              {onUseAsTemplate && (
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    onUseAsTemplate(list._id, list.name);
+                  }}
+                  style={styles.shopAgainIcon}
+                  hitSlop={8}
+                >
+                  <MaterialCommunityIcons name="cart-arrow-right" size={18} color={colors.accent.primary} />
+                </Pressable>
               )}
             </View>
           </GlassCard>
@@ -247,10 +257,11 @@ const styles = StyleSheet.create({
   pointsText: { ...typography.labelSmall, color: colors.accent.secondary, fontWeight: "600", fontSize: 11 },
   itemCountContainer: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   itemCountText: { ...typography.bodySmall, color: colors.text.secondary },
-  healthDot: { width: 8, height: 8, borderRadius: 4 },
-  bottomRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  bottomRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 },
   metaItem: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   metaText: { ...typography.bodySmall, color: colors.text.tertiary },
+  shopAgainIcon: { padding: spacing.xs },
   swipeAction: {
     backgroundColor: colors.semantic.success, justifyContent: "center", alignItems: "center",
     width: 120, borderRadius: borderRadius.lg, marginBottom: spacing.md,

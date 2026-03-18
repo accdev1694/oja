@@ -103,7 +103,7 @@ export const getHistory = query({
       .collect();
 
     const sorted = [...archived, ...completed].sort(
-      (a, b) => (b.completedAt ?? b.updatedAt) - (a.completedAt ?? a.updatedAt)
+      (a, b) => (b.createdAt ?? b._creationTime) - (a.createdAt ?? a._creationTime)
     );
 
     const enriched = await Promise.all(

@@ -35,7 +35,7 @@ const HistoryListsContent = React.memo(function HistoryListsContent({
     let currentMonth = "";
 
     for (const list of displayList) {
-      const ts = list.completedAt ?? list.createdAt;
+      const ts = list.createdAt ?? list._creationTime;
       const date = new Date(ts);
       const monthYear = `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
 
@@ -56,7 +56,7 @@ const HistoryListsContent = React.memo(function HistoryListsContent({
       }
 
       return (
-        <Animated.View entering={FadeInDown.duration(300).delay(50)}>
+        <Animated.View style={styles.itemWrapper} entering={FadeInDown.duration(300).delay(50)}>
           <HistoryCard
             list={item}
             onPress={onHistoryPress}
@@ -132,13 +132,16 @@ export { HistoryListsContent };
 
 const styles = StyleSheet.create({
   listContent: {
-    paddingHorizontal: spacing.lg,
     paddingBottom: 140,
     paddingTop: spacing.sm,
+  },
+  itemWrapper: {
+    paddingHorizontal: spacing.lg,
   },
   monthHeader: {
     ...typography.labelLarge,
     color: colors.text.secondary,
+    paddingHorizontal: spacing.lg,
     marginLeft: spacing.xs,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
@@ -148,6 +151,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
     paddingTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
   emptyTitle: {
     ...typography.headlineMedium,
