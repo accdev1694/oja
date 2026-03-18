@@ -249,7 +249,7 @@ export default function AppLayout() {
   return (
     <View style={{ flex: 1 }}>
       <ImpersonationBanner />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background.primary } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="list/[id]" />
         <Stack.Screen

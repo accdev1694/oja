@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
   monthlyCapValue: { ...typography.labelSmall, color: colors.text.secondary, fontWeight: "600" },
 
   // History
-  monthHeader: { ...typography.labelLarge, color: colors.text.secondary, marginLeft: spacing.xs, marginTop: spacing.sm, marginBottom: spacing.sm, fontWeight: "600" },
+  monthHeader: { ...typography.labelLarge, color: colors.text.secondary, marginTop: spacing.sm, marginBottom: spacing.sm, fontWeight: "600" },
   emptyCard: { alignItems: "center", padding: spacing.xl, gap: spacing.sm },
   emptyTitle: { ...typography.headlineSmall, color: colors.text.primary },
   emptySub: { ...typography.bodyMedium, color: colors.text.secondary, textAlign: "center" },

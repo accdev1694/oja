@@ -1,4 +1,5 @@
 import { Tabs } from "expo-router";
+import { colors } from "@/components/ui/glass";
 
 export default function TabLayout() {
   return (
@@ -6,6 +7,7 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: { display: "none" },
+        sceneStyle: { backgroundColor: colors.background.primary },
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Lists" }} />
