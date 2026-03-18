@@ -5,6 +5,7 @@ import { Id, Doc } from "../_generated/dataModel";
 import { smartGenerateInstrumented, stripCodeBlocks, enforceGeminiQuota, GeminiQuotaExhaustedError } from "./shared";
 import { calculateSimilarity } from "../lib/fuzzyMatch";
 import { cleanItemForStorage } from "../lib/itemNameParser";
+import { normalizeCategory } from "../lib/categoryNormalizer";
 
 interface HealthSwap {
   originalName: string;
@@ -196,7 +197,7 @@ Return ONLY valid JSON in this exact format:
         ...swap,
         suggestedName: cleaned.name,
         originalId: highestSimilarity > 60 ? bestMatch?._id : undefined,
-        suggestedCategory: swap.suggestedCategory || bestMatch?.category || "Pantry Staples",
+        suggestedCategory: normalizeCategory(swap.suggestedCategory || bestMatch?.category || "Pantry Staples"),
         suggestedSize: cleaned.size,
         suggestedUnit: cleaned.unit,
         priceDelta: swap.priceDelta ? parseFloat(String(swap.priceDelta).replace(/^\+/, '')) : undefined,

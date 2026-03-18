@@ -12,6 +12,7 @@ import {
 import { metricsFromGemini } from "../lib/aiTracking";
 import type { AICallMetrics } from "../lib/aiTracking";
 import { toGroceryTitleCase } from "../lib/titleCase";
+import { AI_CATEGORY_PROMPT, normalizeCategory } from "../lib/categoryNormalizer";
 
 /**
  * Parse receipt using Gemini Vision API
@@ -302,7 +303,7 @@ The photo shows a physical product (front, back, or side) or loose items.
 
 FIELDS:
 - name: (string) Concise product name (MAX 30 chars). e.g. "Semi-Skimmed Milk", "6pk Coke", "5 Bananas", "Chicken Breast".
-- category: (string) One of: "Dairy & Eggs", "Meat & Fish", "Fruits & Vegetables", "Bakery", "Drinks", "Snacks & Sweets", "Canned & Jarred", "Frozen", "Household", "Personal Care", "Condiments & Sauces", "Grains & Pasta", "Baking", "Baby & Kids", "Pet", "Other".
+- category: (string) One of: ${AI_CATEGORY_PROMPT}.
 - quantity: (number) Usually 1. Only use > 1 if you see multiple distinct packages of the exact same product.
 - size: (string or null) e.g., "500g", "2L", "4 pack", "2pt". 
 - sizeSource: (string) One of "visible", "estimated", or "unknown".
@@ -353,7 +354,7 @@ Return ONLY valid JSON.`;
       return {
         success: true,
         name: typeof parsed.name === "string" ? toGroceryTitleCase(parsed.name.slice(0, 30)) : "Unknown Product",
-        category: typeof parsed.category === "string" ? parsed.category : "Other",
+        category: typeof parsed.category === "string" ? normalizeCategory(parsed.category) : "Other",
         quantity: typeof parsed.quantity === "number" ? parsed.quantity : 1,
         size: typeof parsed.size === "string" ? parsed.size : undefined,
         unit: typeof parsed.unit === "string" ? parsed.unit : undefined,

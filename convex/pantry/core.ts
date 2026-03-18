@@ -14,6 +14,7 @@ import { canAddPantryItem } from "../lib/featureGating";
 import { isDuplicateItem } from "../lib/fuzzyMatch";
 import { toGroceryTitleCase } from "../lib/titleCase";
 import { cleanItemForStorage } from "../lib/itemNameParser";
+import { normalizeCategory } from "../lib/categoryNormalizer";
 import { enrichGlobalFromProductScan } from "../lib/globalEnrichment";
 
 /** Update the "add_items" weekly challenge progress if one is active */
@@ -98,11 +99,12 @@ export const create = mutation({
 
     await enforceActiveCap(ctx, user._id);
 
+    const normalizedCat = normalizeCategory(args.category);
     const itemId = await ctx.db.insert("pantryItems", {
       userId: user._id,
       name: toGroceryTitleCase(args.name),
-      category: args.category,
-      icon: getIconForItem(toGroceryTitleCase(args.name), args.category),
+      category: normalizedCat,
+      icon: getIconForItem(toGroceryTitleCase(args.name), normalizedCat),
       stockLevel: args.stockLevel,
       status: "active",
       nameSource: "system",
@@ -193,12 +195,13 @@ export const bulkCreate = mutation({
       return false;
     });
 
-    const promises = newItems.map((item) =>
-      ctx.db.insert("pantryItems", {
+    const promises = newItems.map((item) => {
+      const normCat = normalizeCategory(item.category);
+      return ctx.db.insert("pantryItems", {
         userId: user._id,
         name: toGroceryTitleCase(item.name),
-        category: item.category,
-        icon: getIconForItem(toGroceryTitleCase(item.name), item.category),
+        category: normCat,
+        icon: getIconForItem(toGroceryTitleCase(item.name), normCat),
         stockLevel: item.stockLevel,
         status: "active",
         nameSource: "system",
@@ -211,8 +214,8 @@ export const bulkCreate = mutation({
         autoAddToList: false,
         createdAt: now,
         updatedAt: now,
-      })
-    );
+      });
+    });
 
     await Promise.all(promises);
     if (newItems.length > 0) {
@@ -310,11 +313,12 @@ export const addBatchFromScan = mutation({
         await enforceActiveCap(ctx, user._id);
 
         const cleaned = cleanItemForStorage(toGroceryTitleCase(item.name), item.size, item.unit);
+        const normCat = normalizeCategory(item.category);
         await ctx.db.insert("pantryItems", {
           userId: user._id,
           name: cleaned.name,
-          category: item.category,
-          icon: getIconForItem(cleaned.name, item.category),
+          category: normCat,
+          icon: getIconForItem(cleaned.name, normCat),
           stockLevel: "stocked",
           status: "active",
           nameSource: "system",

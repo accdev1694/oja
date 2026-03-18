@@ -11,6 +11,7 @@ import {
 } from "./shared";
 import { toGroceryTitleCase } from "../lib/titleCase";
 import { cleanItemForStorage } from "../lib/itemNameParser";
+import { AI_CATEGORY_PROMPT } from "../lib/categoryNormalizer";
 
 export interface SeedItem {
   name: string;
@@ -127,7 +128,7 @@ TASK: Generate exactly ${totalItems} household stock items in JSON format:
 2. ${culturalItems} items for:
 ${cuisineBreakdown}
 
-CATEGORIES: Dairy, Bakery, Produce, Meat, Pantry Staples, Spices & Seasonings, Condiments, Beverages, Snacks, Frozen, Canned Goods, Grains & Pasta, Oils & Vinegars, Baking, Ethnic Ingredients, Household, Personal Care, Health & Wellness, Baby & Kids, Pets, Electronics, Clothing, Garden & Outdoor, Office & Stationery
+CATEGORIES: ${AI_CATEGORY_PROMPT}
 
 Return ONLY JSON array of items with name, category, stockLevel, source, estimatedPrice, hasVariants, defaultSize, defaultUnit.`;
     } else {

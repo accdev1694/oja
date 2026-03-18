@@ -8,6 +8,7 @@ import {
   GeminiQuotaExhaustedError,
 } from "./shared";
 import { toGroceryTitleCase } from "../lib/titleCase";
+import { normalizeCategory } from "../lib/categoryNormalizer";
 
 interface ParsedVariant {
   baseItem: string;
@@ -199,7 +200,7 @@ Return ONLY valid JSON: {"name": "...", "normalizedName": "...", "category": "..
             variantName: variant.variantName,
             size: variant.size,
             unit: variant.unit,
-            category: result.category,
+            category: normalizeCategory(result.category),
             source: "ai_seeded",
             estimatedPrice: variant.estimatedPrice,
           })),
@@ -208,7 +209,7 @@ Return ONLY valid JSON: {"name": "...", "normalizedName": "...", "category": "..
 
       return {
         estimatedPrice: result.estimatedPrice,
-        category: result.category,
+        category: normalizeCategory(result.category),
         hasVariants: result.hasVariants,
         defaultSize: result.defaultSize,
         defaultUnit: result.defaultUnit,

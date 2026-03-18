@@ -71,6 +71,7 @@ import type * as lib_aiTracking from "../lib/aiTracking.js";
 import type * as lib_alerts from "../lib/alerts.js";
 import type * as lib_analytics from "../lib/analytics.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_categoryNormalizer from "../lib/categoryNormalizer.js";
 import type * as lib_communityHelpers from "../lib/communityHelpers.js";
 import type * as lib_featureGating from "../lib/featureGating.js";
 import type * as lib_fuzzyMatch from "../lib/fuzzyMatch.js";
@@ -277,6 +278,7 @@ declare const fullApi: ApiFromModules<{
   "lib/alerts": typeof lib_alerts;
   "lib/analytics": typeof lib_analytics;
   "lib/auth": typeof lib_auth;
+  "lib/categoryNormalizer": typeof lib_categoryNormalizer;
   "lib/communityHelpers": typeof lib_communityHelpers;
   "lib/featureGating": typeof lib_featureGating;
   "lib/fuzzyMatch": typeof lib_fuzzyMatch;
