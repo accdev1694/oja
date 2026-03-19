@@ -27,8 +27,6 @@ export interface StickyBudgetBarProps {
   remaining: number;
   /** Label shown under the active value ("planned" or "spent") */
   label: string;
-  /** Whether in planning mode (determines accent colour) */
-  isPlanning: boolean;
   /** Animated scroll position from the parent FlashList */
   scrollY: SharedValue<number>;
   /** Threshold at which the bar appears */
@@ -44,7 +42,6 @@ export const StickyBudgetBar = memo(function StickyBudgetBar({
   activeValue,
   remaining,
   label,
-  isPlanning,
   scrollY,
   scrollThreshold,
   onPress,
@@ -86,10 +83,10 @@ export const StickyBudgetBar = memo(function StickyBudgetBar({
           </Text>
         </View>
         <View style={styles.center}>
-          <Text style={[styles.label, { color: isPlanning ? colors.accent.secondary : barColor }]}>
+          <Text style={[styles.label, { color: barColor }]}>
             {label.charAt(0).toUpperCase() + label.slice(1)}
           </Text>
-          <Text style={[styles.value, { color: isPlanning ? colors.accent.secondary : barColor }]}>
+          <Text style={[styles.value, { color: barColor }]}>
             {"\u00A3"}{activeValue.toFixed(2)}
           </Text>
         </View>

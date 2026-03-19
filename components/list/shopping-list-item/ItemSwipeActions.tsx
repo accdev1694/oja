@@ -5,18 +5,14 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { styles } from "./styles";
 
 interface ItemSwipeActionsProps {
-  isShopping: boolean;
   leftActionStyle: Record<string, unknown>;
   rightActionStyle: Record<string, unknown>;
 }
 
 export const ItemSwipeActions = ({
-  isShopping,
   leftActionStyle,
   rightActionStyle,
 }: ItemSwipeActionsProps) => {
-  if (isShopping) return null;
-
   return (
     <>
       <Animated.View style={[styles.swipeAction, styles.swipeActionLeft, leftActionStyle]}>

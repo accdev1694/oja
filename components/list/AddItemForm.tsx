@@ -43,8 +43,6 @@ export interface AddItemFormProps {
   listUserId?: Id<"users">;
   /** The list's storeName — used for variant price lookup */
   listStoreName?: string;
-  /** Current list status */
-  listStatus?: string;
   /** Existing items — used for duplicate detection */
   existingItems: ListItem[] | undefined;
   /** Whether the form panel is visible (controlled by parent) */
@@ -69,7 +67,6 @@ export const AddItemForm = memo(function AddItemForm({
   listId,
   listUserId,
   listStoreName,
-  listStatus,
   existingItems,
   isVisible,
   onToggleVisible,
@@ -380,23 +377,12 @@ export const AddItemForm = memo(function AddItemForm({
             text: "Add as Separate",
             onPress: async () => {
               setIsAddingItem(true);
-              // If in shopping mode with budget, show mid-shop modal
-              if (listStatus === "shopping" && budget > 0) {
-                openMidShopModal();
-              } else {
-                await addAsNewItem();
-              }
+              await addAsNewItem();
               setIsAddingItem(false);
             },
           },
         ]
       );
-      return;
-    }
-
-    // If in shopping mode with budget, show mid-shop modal
-    if (listStatus === "shopping" && budget > 0) {
-      openMidShopModal();
       return;
     }
 
@@ -479,10 +465,8 @@ export const AddItemForm = memo(function AddItemForm({
     searchItemSuggestions(text);
     setShowSuggestionsDropdown(text.trim().length >= 2);
     // Pre-warm the Convex cache for variant data (helps inline chips load faster)
-    if (listStatus !== "shopping") {
-      triggerPrefetch(text);
-    }
-  }, [triggerPrefetch, listStatus, searchItemSuggestions]);
+    triggerPrefetch(text);
+  }, [triggerPrefetch, searchItemSuggestions]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
