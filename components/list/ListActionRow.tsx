@@ -108,16 +108,16 @@ export const ListActionRow = memo(function ListActionRow({
               accessibilityLabel={hasStore ? `Store: ${storeName}` : "Select store"}
               accessibilityRole="button"
             >
-              {hasStore && storeColor ? (
-                <View
-                  style={[styles.storeDot, { backgroundColor: storeColor }]}
-                />
-              ) : null}
+              <MaterialCommunityIcons
+                name={hasStore ? "swap-horizontal" : "store-outline"}
+                size={16}
+                color={hasStore ? colors.accent.primary : colors.text.secondary}
+              />
               <Text
                 style={[styles.buttonText, hasStore && styles.storeNameText]}
                 numberOfLines={1}
               >
-                {hasStore && storeName ? storeName : "Store"}
+                {hasStore ? "Switch Store" : "Store"}
               </Text>
               <MaterialCommunityIcons
                 name={showStoreDropdown ? "chevron-up" : "chevron-down"}

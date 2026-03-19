@@ -42,6 +42,9 @@ export type ListItem = {
   // Size fields for display (e.g., "250g", "2pt")
   size?: string;
   unit?: string;
+  // Store where item was checked off
+  purchasedAtStoreId?: string;
+  purchasedAtStoreName?: string;
   // Phase 3: Size/Price Modal override tracking
   originalSize?: string;
   priceOverride?: boolean;
@@ -69,7 +72,6 @@ export interface ShoppingListItemProps {
   onRemove: (itemId: Id<"listItems">, itemName: string) => void;
   onEdit: (item: ListItem) => void;
   onPriorityChange: (itemId: Id<"listItems">, priority: "must-have" | "should-have" | "nice-to-have") => void;
-  isShopping: boolean;
   canEdit?: boolean;
   onAddToList?: () => void;
   // Partner mode props
@@ -96,7 +98,6 @@ export const ShoppingListItem = memo(function ShoppingListItem({
   onRemove,
   onEdit,
   onPriorityChange,
-  isShopping,
   canEdit = true,
   onAddToList,
   isOwner,
@@ -135,21 +136,12 @@ export const ShoppingListItem = memo(function ShoppingListItem({
       return;
     }
 
-    if (isShopping) {
-      // Shopping: tap = check off
-      if (canEdit) {
-        // Snappy haptic and immediate toggle
-        haptic("medium");
-        onToggle(item._id);
-      }
-    } else {
-      // Planning: tap = edit
-      if (canEdit && !item.isChecked) {
-        haptic("light");
-        onEdit(item);
-      }
+    // Tap always toggles checked state (unified list — no mode split)
+    if (canEdit) {
+      haptic("medium");
+      onToggle(item._id);
     }
-  }, [selectionActive, isShopping, canEdit, item._id, item.isChecked, onToggle, onEdit, onSelectToggle]);
+  }, [selectionActive, canEdit, item._id, onToggle, onSelectToggle]);
 
   const handleLongPress = useCallback(() => {
     // Both modes: long press = toggle selection
@@ -157,7 +149,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
     onSelectToggle?.(item._id);
   }, [item._id, onSelectToggle]);
 
-  // ── Priority swipe (planning mode only) ─────────────────────────────────
+  // ── Priority swipe ─────────────────────────────────────────────────────
   const triggerPriorityChange = useCallback((direction: "left" | "right") => {
     const currentIndex = PRIORITY_ORDER.indexOf(currentPriority);
     let newIndex: number;
@@ -176,7 +168,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
 
   const panGesture = Gesture.Pan()
     .activeOffsetX([-20, 20])
-    .enabled(canEdit && !isShopping)
+    .enabled(canEdit)
     .onUpdate((event) => {
       translateX.value = Math.max(-80, Math.min(80, event.translationX));
     })
@@ -212,15 +204,14 @@ export const ShoppingListItem = memo(function ShoppingListItem({
   }, [item.name, item.size, item.unit]);
 
 
-  // Selected state background tint (planning mode)
+  // Selected state background tint
   const selectedTint = isSelected
     ? { backgroundColor: `${colors.accent.primary}15` }
     : undefined;
 
   return (
     <View style={styles.swipeContainer}>
-      <ItemSwipeActions 
-        isShopping={isShopping}
+      <ItemSwipeActions
         leftActionStyle={leftActionStyle}
         rightActionStyle={rightActionStyle}
       />
@@ -239,15 +230,13 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                 delayLongPress={400}
                 android_ripple={{ color: `${colors.accent.primary}20` }}
               >
-                {/* Checkbox — visible in selection mode OR shopping mode (not in planning) */}
-                {(selectionActive || (isShopping && !selectionActive)) && (
-                  <GlassCircularCheckbox
-                    checked={selectionActive ? !!isSelected : item.isChecked}
-                    size="xs"
-                    style={{ marginRight: spacing.xs }}
-                    onToggle={handlePress}
-                  />
-                )}
+                {/* Checkbox — always visible (unified list) */}
+                <GlassCircularCheckbox
+                  checked={selectionActive ? !!isSelected : item.isChecked}
+                  size="xs"
+                  style={{ marginRight: spacing.xs }}
+                  onToggle={handlePress}
+                />
 
                 {/* Item details: Two-line layout */}
                 <View style={styles.itemDetailsColumn}>
@@ -378,7 +367,6 @@ export const ShoppingListItem = memo(function ShoppingListItem({
     prevProps.onRemove === nextProps.onRemove &&
     prevProps.onEdit === nextProps.onEdit &&
     prevProps.onPriorityChange === nextProps.onPriorityChange &&
-    prevProps.isShopping === nextProps.isShopping &&
     prevProps.canEdit === nextProps.canEdit &&
     prevProps.onAddToList === nextProps.onAddToList &&
     prevProps.isOwner === nextProps.isOwner &&

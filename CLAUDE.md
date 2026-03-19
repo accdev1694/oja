@@ -141,6 +141,19 @@ npm run typecheck                 # TypeScript check
 - **Weekly:** admin log archiving, summary reports, stock reminders (Wed/Fri)
 - **Monthly:** analytics, points expiry, price history compression, stale product prune, receipt image cleanup, webhook cleanup, financial reports
 
+### List Detail Store Tracking
+
+**Header subtitle** shows stores the user actually shopped at, not just the selected store.
+
+- **Confirmed stores:** Stores where at least one item was checked off. Permanently displayed, pipe-separated.
+- **Tentative store:** The current active store if no items checked off there yet. Shown as a preview but replaced/dropped on next store switch.
+- **No duplicates.** Switching back to a confirmed store clears the tentative slot.
+- **Data:** Each `listItem` records `purchasedAtStoreId`/`purchasedAtStoreName` on check-off (cleared on uncheck) via the `toggleChecked` mutation.
+- **Budget dial** shows the current active store. **Header subtitle** shows the shopping history.
+- **"Switch Store" button** (`ListActionRow`) replaces store name display once a store is selected — store identity lives in the dial, the button is an action.
+
+**Key files:** `app/(app)/list/[id].tsx` (storeDisplayName memo), `convex/listItems/core.ts` (toggleChecked), `components/list/ListActionRow.tsx`
+
 ### Price Intelligence (Zero-Blank Prices)
 
 **Every item shows a price.** Three-layer cascade:

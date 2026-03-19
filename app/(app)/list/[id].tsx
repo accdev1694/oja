@@ -31,7 +31,6 @@ import { EditBudgetModal } from "@/components/list/modals/EditBudgetModal";
 import type { TripStats } from "@/hooks/useTripSummary";
 import { ScanReceiptNudgeModal } from "@/components/list/modals/ScanReceiptNudgeModal";
 import { ListActionRow } from "@/components/list/ListActionRow";
-import { StoreDropdownSheet } from "@/components/list/StoreDropdownSheet";
 
 import { haptic } from "@/lib/haptics/safeHaptics";
 import { usePartnerRole } from "@/hooks/usePartnerRole";
@@ -82,7 +81,6 @@ export default function ListDetailScreen() {
   const [showScanNudge, setShowScanNudge] = useState(false);
   const [tripSummary, setTripSummary] = useState<TripStats | null>(null);
   const [editingItem, setEditingItem] = useState<ListItem | null>(null);
-  const [showMidShopStorePicker, setShowMidShopStorePicker] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -101,7 +99,6 @@ export default function ListDetailScreen() {
   const updateListName = useMutation(api.shoppingLists.update);
   const removeMultiple = useMutation(api.listItems.removeMultiple);
   const setStore = useMutation(api.shoppingLists.setStore);
-  const switchStoreMidShop = useMutation(api.shoppingLists.switchStoreMidShop);
   const refreshPrices = useMutation(api.listItems.refreshListPrices);
 
   // ── Hooks ──────────────────────────────────────────────────────────────────
@@ -119,12 +116,10 @@ export default function ListDetailScreen() {
     api.partners.getCommentCounts,
     isShared && itemIds.length > 0 ? { listItemIds: itemIds } : "skip"
   );
-  const { 
-    isInProgress, 
-    isFinishing, 
-    startTrip, 
-    finishTrip, 
-  } = useTripLogic({ 
+  const {
+    isFinishing,
+    finishTrip,
+  } = useTripLogic({
     listId: id,
     onTripFinished: (summary: unknown) => {
       setTripSummary(summary as TripStats);
@@ -192,18 +187,6 @@ export default function ListDetailScreen() {
     }
   }, [setStore, id, alert]);
 
-  const handleMidShopStoreSwitch = useCallback(async (storeId: string) => {
-    setShowMidShopStorePicker(false);
-    try {
-      const result = await switchStoreMidShop({ listId: id, newStoreId: storeId });
-      haptic("success");
-      showToast(`Switched to ${result.storeName}`, "cart", colors.accent.primary);
-    } catch (error) {
-      console.error("Failed to switch store:", error);
-      showToast("Failed to switch store", "alert-circle", colors.semantic.danger);
-    }
-  }, [switchStoreMidShop, id, showToast]);
-
   const handleSaveBudget = useCallback(async (newBudget: number | undefined) => {
     try {
       await updateListName({ id, budget: newBudget });
@@ -233,7 +216,7 @@ export default function ListDetailScreen() {
       haptic("success");
       showToast(
         `Updated ${result.updated} of ${result.total} prices`,
-        "currency-gbp",
+        "cash-sync",
         colors.accent.primary
       );
     } catch (error) {
@@ -333,18 +316,31 @@ export default function ListDetailScreen() {
     };
   }, [items, searchTerm, showCheckedItems, list?.budget]);
 
+  // Header subtitle: confirmed stores (have checked items) + tentative current store
   const storeDisplayName = useMemo(() => {
-    const segments = list?.storeSegments as { storeName: string }[] | undefined;
-    if (segments && segments.length > 0) {
-      const unique: string[] = [];
-      for (const seg of segments) {
-        if (!unique.includes(seg.storeName)) unique.push(seg.storeName);
+    // 1. Confirmed stores: unique stores where items were actually checked off
+    const confirmed: string[] = [];
+    if (items) {
+      for (const item of items) {
+        if (item.isChecked && item.purchasedAtStoreName && !confirmed.includes(item.purchasedAtStoreName)) {
+          confirmed.push(item.purchasedAtStoreName);
+        }
       }
-      if (unique.length <= 2) return unique.join(" | ");
-      return `${unique[0]} | ${unique[1]} | more...`;
     }
-    return list?.storeName;
-  }, [list?.storeSegments, list?.storeName]);
+
+    // 2. Tentative store: current active store if not already confirmed
+    const activeStore = list?.storeName;
+    const isConfirmed = activeStore && confirmed.includes(activeStore);
+    const tentative = activeStore && !isConfirmed ? activeStore : null;
+
+    // 3. Build display: confirmed | tentative
+    const parts = [...confirmed];
+    if (tentative) parts.push(tentative);
+
+    if (parts.length === 0) return undefined;
+    if (parts.length <= 3) return parts.join(" | ");
+    return `${parts[0]} | ${parts[1]} | +${parts.length - 2} more`;
+  }, [items, list?.storeName]);
 
   const receiptStreakCount = useMemo(() => {
     const streak = streaks?.find((s: { type: string; currentCount: number }) => s.type === "receipt_scanner");
@@ -365,7 +361,6 @@ export default function ListDetailScreen() {
     return (
       <ShoppingListItem
         item={item}
-        isShopping={isInProgress}
         canEdit={canEdit}
         onToggle={handleToggleItem}
         onRemove={handleRemoveItem}
@@ -379,7 +374,7 @@ export default function ListDetailScreen() {
         onOpenComments={isShared ? handleOpenComments : undefined}
       />
     );
-  }, [isInProgress, canEdit, handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange, selectionActive, selectedIds, handleSelectToggle, isOwner, isShared, commentCounts, handleOpenComments]);
+  }, [canEdit, handleToggleItem, handleRemoveItem, handleEditItem, handlePriorityChange, selectionActive, selectedIds, handleSelectToggle, isOwner, isShared, commentCounts, handleOpenComments]);
 
   const listKeyExtractor = useCallback((item: CategorizedItem) => item._id, []);
 
@@ -392,17 +387,6 @@ export default function ListDetailScreen() {
     setShowAddModal(true);
   }, []);
 
-  const handleOpenMidShopStorePicker = useCallback(() => {
-    haptic("light");
-    setShowMidShopStorePicker(true);
-  }, []);
-
-  const handleMidShopAddItems = useCallback(() => {
-    haptic("light");
-    setEditingItem(null);
-    setShowAddModal(true);
-  }, []);
-
   const listHeaderComponent = useMemo(
     () => (
       <View>
@@ -411,16 +395,15 @@ export default function ListDetailScreen() {
             budget={list?.budget || 0}
             planned={estimatedTotal}
             spent={spent}
-            mode={isInProgress ? "shopping" : "active"}
             onPress={canEdit ? handleBudgetDialPress : undefined}
             storeName={list?.storeName}
             storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
           />
         </AnimatedSection>
 
-        {canEdit && !isInProgress && (
+        {canEdit && (
           <ListActionRow
-            storeName={storeDisplayName}
+            storeName={list?.storeName}
             storeColor={list?.normalizedStoreId ? getStoreInfoSafe(list.normalizedStoreId)?.color : undefined}
             hasStore={!!list?.normalizedStoreId}
             currentStoreId={list?.normalizedStoreId}
@@ -431,7 +414,7 @@ export default function ListDetailScreen() {
           />
         )}
 
-        {canEdit && !isInProgress && (items?.length ?? 0) > 0 && (
+        {canEdit && (items?.length ?? 0) > 0 && (
           <View style={styles.refreshPricesRow}>
             <Pressable
               style={styles.refreshPricesButton}
@@ -439,7 +422,7 @@ export default function ListDetailScreen() {
               disabled={isRefreshingPrices}
             >
               <MaterialCommunityIcons
-                name="currency-gbp"
+                name="cash-sync"
                 size={16}
                 color={isRefreshingPrices ? colors.text.disabled : colors.accent.primary}
               />
@@ -454,31 +437,11 @@ export default function ListDetailScreen() {
             </Pressable>
           </View>
         )}
-
-        {isInProgress && canEdit && (
-          <View style={styles.midShopActions}>
-            <Pressable
-              style={styles.midShopButton}
-              onPress={handleOpenMidShopStorePicker}
-            >
-              <MaterialCommunityIcons name="swap-horizontal" size={18} color={colors.accent.primary} />
-              <Text style={styles.midShopButtonText}>Switch Store</Text>
-            </Pressable>
-            <Pressable
-              style={styles.midShopButton}
-              onPress={handleMidShopAddItems}
-            >
-              <MaterialCommunityIcons name="plus" size={18} color={colors.accent.primary} />
-              <Text style={styles.midShopButtonText}>Add Items</Text>
-            </Pressable>
-          </View>
-        )}
       </View>
     ),
-    [list?.budget, list?.normalizedStoreId, estimatedTotal, spent, isInProgress, canEdit,
-     storeDisplayName, userFavorites, items?.length, isRefreshingPrices,
-     handleBudgetDialPress, handleSelectStore, handleOpenAddModal, handleRefreshPrices,
-     handleOpenMidShopStorePicker, handleMidShopAddItems]
+    [list?.budget, list?.normalizedStoreId, list?.storeName, estimatedTotal, spent, canEdit,
+     userFavorites, items?.length, isRefreshingPrices,
+     handleBudgetDialPress, handleSelectStore, handleOpenAddModal, handleRefreshPrices]
   );
 
   if (list === undefined || items === undefined) {
@@ -553,29 +516,14 @@ export default function ListDetailScreen() {
 
       {!selectionActive && (
         <ListFooter
-          isInProgress={isInProgress}
           isFinishing={isFinishing}
-          onStartTrip={() => startTrip(list.normalizedStoreId, list.storeName)}
           onFinishTrip={finishTrip}
-          activeShopper={list.activeShopperId ? { name: partners?.find((p) => p.userId === list.activeShopperId)?.userName || "Partner" } : null}
           checkedCount={checkedCount}
           totalCount={items.length}
           insetsBottom={tabBarBottom}
           showCheckedItems={showCheckedItems}
           onToggleCheckedItems={() => setShowCheckedItems(prev => !prev)}
         />
-      )}
-
-      {!isInProgress && (
-        <Pressable
-          style={[styles.quickAddButton, { bottom: tabBarBottom + 80 }]}
-          onPress={() => {
-            setEditingItem(null);
-            setShowAddModal(true);
-          }}
-        >
-          <MaterialCommunityIcons name="plus" size={32} color="#fff" />
-        </Pressable>
       )}
 
       {/* Modals */}
@@ -633,14 +581,6 @@ export default function ListDetailScreen() {
         storeName={list.storeName}
         pointsBalance={pointsBalance ?? null}
         streakCount={receiptStreakCount}
-      />
-
-      <StoreDropdownSheet
-        visible={showMidShopStorePicker}
-        onClose={() => setShowMidShopStorePicker(false)}
-        onSelect={handleMidShopStoreSwitch}
-        currentStoreId={list.normalizedStoreId}
-        userFavorites={userFavorites}
       />
 
       <HealthAnalysisModal
