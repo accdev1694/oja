@@ -25,7 +25,7 @@ import { getRelativeListName } from "@/lib/list/helpers";
 // Types
 // ---------------------------------------------------------------------------
 
-type ListStatus = "active" | "shopping" | "completed" | "archived";
+type ListStatus = "active" | "completed" | "archived";
 
 export interface ListCardProps {
   list: {

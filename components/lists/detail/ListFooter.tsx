@@ -2,13 +2,11 @@ import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { GlassButton, colors, spacing, typography } from "@/components/ui/glass";
+import { GlassButton, colors, spacing } from "@/components/ui/glass";
 import { styles } from "./styles";
 
 interface ListFooterProps {
-  isInProgress: boolean;
   isFinishing: boolean;
-  onStartTrip: () => void;
   onFinishTrip: () => void;
   activeShopper?: { name: string } | null;
   checkedCount: number;
@@ -19,9 +17,7 @@ interface ListFooterProps {
 }
 
 export const ListFooter = ({
-  isInProgress,
   isFinishing,
-  onStartTrip,
   onFinishTrip,
   activeShopper,
   checkedCount,
@@ -36,15 +32,6 @@ export const ListFooter = ({
       locations={[0, 0.3, 0.55]}
       style={[styles.footer, { bottom: insetsBottom, paddingBottom: spacing.md }]}
     >
-      {activeShopper && !isInProgress && (
-        <View style={styles.activeShopperBanner}>
-          <MaterialCommunityIcons name="account-search" size={18} color={colors.accent.primary} />
-          <Text style={styles.activeShopperText}>
-            {activeShopper.name} is currently shopping this list
-          </Text>
-        </View>
-      )}
-
       <View style={styles.tripControls}>
         {totalCount > 0 && (
           <Pressable
@@ -68,28 +55,16 @@ export const ListFooter = ({
           </Pressable>
         )}
 
-        {!isInProgress ? (
-          <GlassButton
-            variant="primary"
-            size="md"
-            icon="cart-arrow-right"
-            onPress={onStartTrip}
-            style={{ flex: 1, shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 10 }}
-          >
-            Start Shopping
-          </GlassButton>
-        ) : (
-          <GlassButton
-            variant="primary"
-            size="md"
-            icon="check-all"
-            onPress={onFinishTrip}
-            loading={isFinishing}
-            style={{ flex: 1, shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 10 }}
-          >
-            {checkedCount === totalCount ? "Finish & Log" : `Finish (${checkedCount}/${totalCount})`}
-          </GlassButton>
-        )}
+        <GlassButton
+          variant="primary"
+          size="md"
+          icon="check-all"
+          onPress={onFinishTrip}
+          loading={isFinishing}
+          style={{ flex: 1, shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 10 }}
+        >
+          {checkedCount === totalCount ? "Finish & Log" : `Finish (${checkedCount}/${totalCount})`}
+        </GlassButton>
       </View>
     </LinearGradient>
   );
