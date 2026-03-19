@@ -22,7 +22,6 @@ interface DialSvgArcsProps {
   strokeWidth: number
   startRotation: number
   spentColor: string
-  isPlanning: boolean
   storeName: string | undefined
   storeArcRadius: number
   storeFontSize: number
@@ -45,7 +44,6 @@ export function DialSvgArcs({
   strokeWidth,
   startRotation,
   spentColor,
-  isPlanning,
   storeName,
   storeArcRadius,
   storeFontSize,
@@ -185,17 +183,15 @@ export function DialSvgArcs({
         strokeWidth={1.5}
         strokeLinecap="round"
       />
-      {!isPlanning && (
-        <Line
-          x1={center}
-          y1={innerSepY1}
-          x2={center}
-          y2={innerSepY2}
-          stroke="rgba(255, 255, 255, 0.25)"
-          strokeWidth={1.5}
-          strokeLinecap="round"
-        />
-      )}
+      <Line
+        x1={center}
+        y1={innerSepY1}
+        x2={center}
+        y2={innerSepY2}
+        stroke="rgba(255, 255, 255, 0.25)"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+      />
 
       {/* Store name curved along bottom */}
       {storeName &&

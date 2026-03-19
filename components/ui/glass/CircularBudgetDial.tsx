@@ -1,8 +1,8 @@
 /**
  * CircularBudgetDial - Two-arc SVG budget dial (200px default)
  *
- * Outer arc (indigo): planned total vs budget — prominent in planning mode
- * Inner arc (green→amber→red): actual spent vs budget — prominent in shopping mode
+ * Outer arc (indigo): planned total vs budget
+ * Inner arc (green→amber→red): actual spent vs budget
  *
  * Both arcs start at 6 o'clock and fill clockwise.
  * Over-budget: red overflow arc continues past 6 o'clock.
@@ -25,7 +25,6 @@ interface CircularBudgetDialProps {
   budget: number
   planned: number
   spent: number
-  mode: string
   size?: number
   currency?: string
   onPress?: () => void
@@ -38,7 +37,6 @@ export function CircularBudgetDial({
   budget,
   planned,
   spent,
-  mode,
   size = 200,
   currency = '£',
   onPress,
@@ -63,11 +61,7 @@ export function CircularBudgetDial({
   // Start at 6 o'clock (bottom) — SVG default is 3 o'clock, so rotate 90°
   const startRotation = 90
 
-  const isPlanning = mode === 'active'
-  const isFinished = mode === 'completed' || mode === 'archived'
-
   // "Left" is always relative to budget (the financial constraint)
-  // In planning: over = planned > budget. In shopping: over = spent > budget.
   const remaining = budget - spent
   const isOverBudget = spent > budget
   const isPlannedOver = planned > budget
@@ -89,7 +83,7 @@ export function CircularBudgetDial({
       : colors.semantic.success
 
   // --- Opacity ---
-  const outerFillOpacity = isFinished ? 0.3 : 0.5
+  const outerFillOpacity = 0.5
   const innerFillOpacity = 1.0
 
   // --- Sentiment (unified - always based on spent vs budget) ---
@@ -187,7 +181,6 @@ export function CircularBudgetDial({
           strokeWidth={strokeWidth}
           startRotation={startRotation}
           spentColor={spentColor}
-          isPlanning={isPlanning}
           storeName={storeName}
           storeArcRadius={storeArcRadius}
           storeFontSize={storeFontSize}
@@ -226,46 +219,28 @@ export function CircularBudgetDial({
             {budget.toFixed(2)}
           </Text>
 
-          {isPlanning ? (
-            <>
-              {/* Planning: planned + left (relative to budget) */}
-              <Text
-                style={[styles.metricLabel, { color: colors.accent.secondary }]}
-              >
-                {currency}
-                {planned.toFixed(2)} planned
-              </Text>
-              <Text
-                style={[
-                  styles.remainingLabel,
-                  { color: plannedRemainingColor },
-                ]}
-              >
-                {isPlannedOver
-                  ? `${currency}${Math.abs(plannedRemaining).toFixed(2)} over`
-                  : `${currency}${plannedRemaining.toFixed(2)} left`}
-              </Text>
-            </>
-          ) : (
-            <>
-              {/* Shopping: planned (dim reference) + spent (active) + left */}
-              <Text
-                style={[styles.plannedRef, { color: colors.accent.secondary }]}
-              >
-                {currency}
-                {planned.toFixed(2)} planned
-              </Text>
-              <Text style={[styles.metricLabel, { color: spentColor }]}>
-                {currency}
-                {spent.toFixed(2)} spent
-              </Text>
-              <Text style={[styles.remainingLabel, { color: remainingColor }]}>
-                {isOverBudget
-                  ? `${currency}${Math.abs(remaining).toFixed(2)} over`
-                  : `${currency}${remaining.toFixed(2)} left`}
-              </Text>
-            </>
+          {/* Planned + spent + remaining */}
+          <Text
+            style={[styles.plannedRef, { color: colors.accent.secondary }]}
+          >
+            {currency}
+            {planned.toFixed(2)} planned
+          </Text>
+          {spent > 0 && (
+            <Text style={[styles.metricLabel, { color: spentColor }]}>
+              {currency}
+              {spent.toFixed(2)} spent
+            </Text>
           )}
+          <Text style={[styles.remainingLabel, { color: spent > 0 ? remainingColor : plannedRemainingColor }]}>
+            {spent > 0
+              ? (isOverBudget
+                  ? `${currency}${Math.abs(remaining).toFixed(2)} over`
+                  : `${currency}${remaining.toFixed(2)} left`)
+              : (isPlannedOver
+                  ? `${currency}${Math.abs(plannedRemaining).toFixed(2)} over`
+                  : `${currency}${plannedRemaining.toFixed(2)} left`)}
+          </Text>
         </View>
       </Animated.View>
       {sentiment && (
