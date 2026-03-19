@@ -20,21 +20,23 @@ interface PantryItemData {
 interface PantryRowProps {
   item: PantryItemData;
   isOnList: boolean;
-  onAdd: (item: PantryItemData) => void;
+  isSelected: boolean;
+  onToggleSelect: (id: Id<"pantryItems">) => void;
 }
 
 const PantryRow = memo(function PantryRow({
   item,
   isOnList,
-  onAdd,
+  isSelected,
+  onToggleSelect,
 }: PantryRowProps) {
   const iconName = (item.icon ?? "food-variant") as keyof typeof MaterialCommunityIcons.glyphMap;
 
   return (
     <Pressable
-      style={styles.row}
+      style={[styles.row, isSelected && styles.rowSelected]}
       onPress={() => {
-        if (!isOnList) onAdd(item);
+        if (!isOnList) onToggleSelect(item._id);
       }}
       disabled={isOnList}
     >
@@ -48,17 +50,15 @@ const PantryRow = memo(function PantryRow({
             />
           </View>
         ) : (
-          <Pressable
-            style={styles.addButton}
-            onPress={() => onAdd(item)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons
-              name="plus-circle-outline"
-              size={22}
-              color={colors.text.secondary}
-            />
-          </Pressable>
+          <View style={[styles.selectCircle, isSelected && styles.selectCircleActive]}>
+            {isSelected && (
+              <MaterialCommunityIcons
+                name="check"
+                size={14}
+                color="#fff"
+              />
+            )}
+          </View>
         )}
         <View style={styles.pantryIconContainer}>
           <MaterialCommunityIcons
@@ -109,12 +109,13 @@ interface PantryViewProps {
   allAddableCount: number;
   pantryFilter: "low" | "all";
   onFilterChange: (index: number) => void;
-  onBulkAdd: (filter: "low" | "all") => void;
+  onSelectAll: (filter: "low" | "all") => void;
   bulkAddingFilter: "low" | "all" | null;
   capsulePulseStyle: { transform: { scale: number }[] };
   pantryListData: PantryItemData[];
   isItemOnList: (name: string) => boolean;
-  onAddPantryItem: (item: PantryItemData) => void;
+  selectedIds: Set<Id<"pantryItems">>;
+  onToggleSelect: (id: Id<"pantryItems">) => void;
 }
 
 export const PantryView = ({
@@ -125,22 +126,24 @@ export const PantryView = ({
   allAddableCount,
   pantryFilter,
   onFilterChange,
-  onBulkAdd,
+  onSelectAll,
   bulkAddingFilter,
   capsulePulseStyle,
   pantryListData,
   isItemOnList,
-  onAddPantryItem,
+  selectedIds,
+  onToggleSelect,
 }: PantryViewProps) => {
   const renderPantryItem = useCallback(
     ({ item }: ListRenderItemInfo<PantryItemData>) => (
       <PantryRow
         item={item}
         isOnList={isItemOnList(item.name)}
-        onAdd={onAddPantryItem}
+        isSelected={selectedIds.has(item._id)}
+        onToggleSelect={onToggleSelect}
       />
     ),
-    [isItemOnList, onAddPantryItem]
+    [isItemOnList, selectedIds, onToggleSelect]
   );
 
   if (isLoading) {
@@ -168,6 +171,13 @@ export const PantryView = ({
     );
   }
 
+  // Check if all addable items in current filter are selected
+  const currentAddableCount = pantryFilter === "low" ? lowAddableCount : allAddableCount;
+  const currentFilterSelected = pantryListData.filter(
+    (item) => !isItemOnList(item.name) && selectedIds.has(item._id)
+  ).length;
+  const allCurrentSelected = currentAddableCount > 0 && currentFilterSelected === currentAddableCount;
+
   return (
     <>
       <GlassCapsuleSwitcher
@@ -180,7 +190,7 @@ export const PantryView = ({
               <Animated.View style={lowAddableCount > 0 ? capsulePulseStyle : undefined}>
                 <Pressable
                   style={styles.capsuleAddButton}
-                  onPress={() => onBulkAdd("low")}
+                  onPress={() => onSelectAll("low")}
                   disabled={lowAddableCount === 0 || bulkAddingFilter === "low"}
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
@@ -188,8 +198,8 @@ export const PantryView = ({
                     <ActivityIndicator size={18} color={pantryFilter === "low" ? colors.accent.warning : colors.text.tertiary} />
                   ) : (
                     <MaterialCommunityIcons
-                      name="plus-circle-outline"
-                      size={22}
+                      name={pantryFilter === "low" && allCurrentSelected ? "checkbox-marked-outline" : "checkbox-multiple-outline"}
+                      size={20}
                       color={
                         lowAddableCount === 0
                           ? colors.text.disabled
@@ -211,7 +221,7 @@ export const PantryView = ({
               <Animated.View style={allAddableCount > 0 ? capsulePulseStyle : undefined}>
                 <Pressable
                   style={styles.capsuleAddButton}
-                  onPress={() => onBulkAdd("all")}
+                  onPress={() => onSelectAll("all")}
                   disabled={allAddableCount === 0 || bulkAddingFilter === "all"}
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
@@ -219,8 +229,8 @@ export const PantryView = ({
                     <ActivityIndicator size={18} color={pantryFilter === "all" ? colors.accent.primary : colors.text.tertiary} />
                   ) : (
                     <MaterialCommunityIcons
-                      name="plus-circle-outline"
-                      size={22}
+                      name={pantryFilter === "all" && allCurrentSelected ? "checkbox-marked-outline" : "checkbox-multiple-outline"}
+                      size={20}
                       color={
                         allAddableCount === 0
                           ? colors.text.disabled
@@ -257,6 +267,7 @@ export const PantryView = ({
           data={pantryListData}
           renderItem={renderPantryItem}
           keyExtractor={(item, index) => `pantry-${item._id}-${index}`}
+          extraData={selectedIds}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"

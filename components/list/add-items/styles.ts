@@ -375,12 +375,23 @@ export const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Buttons in rows
-  addButton: {
-    width: 28,
-    height: 28,
+  // Selection circle (multi-select)
+  selectCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.text.disabled,
     justifyContent: "center",
     alignItems: "center",
+  },
+  selectCircleActive: {
+    borderColor: colors.accent.primary,
+    backgroundColor: colors.accent.primary,
+  },
+  rowSelected: {
+    borderColor: "rgba(0, 212, 170, 0.4)",
+    backgroundColor: "rgba(0, 212, 170, 0.06)",
   },
   // On-list badge
   onListBadge: {

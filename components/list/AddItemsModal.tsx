@@ -54,7 +54,6 @@ export interface AddItemsModalProps {
   listStoreName?: string;
   listNormalizedStoreId?: string;
   existingItems?: { name: string; size?: string }[];
-  listStatus?: "active" | "shopping";
 }
 
 interface SelectedItem {
@@ -102,7 +101,6 @@ export function AddItemsModal({
   listStoreName,
   listNormalizedStoreId,
   existingItems,
-  listStatus = "active",
 }: AddItemsModalProps) {
   const insets = useSafeAreaInsets();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -145,6 +143,9 @@ export function AddItemsModal({
   const [sessionAddCount, setSessionAddCount] = useState(0);
   const [isAdding, setIsAdding] = useState(false);
   const feedbackIdRef = useRef(0);
+
+  // ── Pantry multi-select ────────────────────────────────────────────────────
+  const [selectedPantryIds, setSelectedPantryIds] = useState<Set<Id<"pantryItems">>>(new Set());
 
   // Gentle pulse for capsule + icons
   const capsulePulse = useSharedValue(1);
@@ -239,7 +240,6 @@ export function AddItemsModal({
   const pantryItems = useQuery(api.pantryItems.getByUser);
   const createItem = useMutation(api.listItems.create);
   const addAndSeedPantry = useMutation(api.listItems.addAndSeedPantry);
-  const addItemMidShop = useMutation(api.listItems.addItemMidShop);
   const updateItem = useMutation(api.listItems.update);
 
   // ── Derived data ────────────────────────────────────────────────────────────
@@ -349,16 +349,7 @@ export function AddItemsModal({
       try {
         let result;
 
-        if (listStatus === "shopping") {
-          result = await addItemMidShop({
-            listId,
-            name: item.name,
-            actualPrice: item.estimatedPrice,
-            quantity: item.quantity,
-            storeId: item.storeId,
-            storeName: item.storeName,
-          });
-        } else if (!item.category && !item.pantryItemId) {
+        if (!item.category && !item.pantryItemId) {
           result = await addAndSeedPantry({
             listId,
             name: item.name,
@@ -431,7 +422,7 @@ export function AddItemsModal({
         setIsAdding(false);
       }
     },
-    [listId, listStatus, createItem, addAndSeedPantry, addItemMidShop, updateItem, alert, showAddedFeedback]
+    [listId, createItem, addAndSeedPantry, updateItem, alert, showAddedFeedback]
   );
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -521,6 +512,68 @@ export function AddItemsModal({
     ]);
   }, [lowAddableCount, allAddableCount, alert, executeBulkAdd]);
 
+  // ── Pantry multi-select handlers ──────────────────────────────────────────
+
+  const togglePantrySelection = useCallback((id: Id<"pantryItems">) => {
+    haptic("light");
+    setSelectedPantryIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAllPantry = useCallback((filter: PantryFilter) => {
+    const items = filter === "low"
+      ? [...outOfStock, ...runningLow]
+      : [...outOfStock, ...runningLow, ...fullyStocked];
+    const addable = items.filter((item) => !isItemOnList(item.name));
+    const allSelected = addable.length > 0 && addable.every((item) => selectedPantryIds.has(item._id));
+
+    haptic("light");
+    setSelectedPantryIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        for (const item of addable) next.delete(item._id);
+      } else {
+        for (const item of addable) next.add(item._id);
+      }
+      return next;
+    });
+  }, [outOfStock, runningLow, fullyStocked, isItemOnList, selectedPantryIds]);
+
+  const handleAddSelected = useCallback(async () => {
+    if (selectedPantryIds.size === 0) return;
+    const allPantry = [...outOfStock, ...runningLow, ...fullyStocked];
+    const itemsToAdd = allPantry.filter((item) => selectedPantryIds.has(item._id));
+    if (itemsToAdd.length === 0) return;
+
+    haptic("medium");
+    setIsAdding(true);
+    try {
+      for (const item of itemsToAdd) {
+        await addItemToList({
+          name: item.name,
+          category: item.category,
+          size: item.defaultSize,
+          unit: item.defaultUnit,
+          estimatedPrice: item.lastPrice,
+          quantity: 1,
+          source: "pantry",
+          pantryItemId: item._id,
+        });
+      }
+      haptic("success");
+      setSelectedPantryIds(new Set());
+    } catch (error) {
+      console.error("Add selected failed:", error);
+      haptic("error");
+    } finally {
+      setIsAdding(false);
+    }
+  }, [selectedPantryIds, outOfStock, runningLow, fullyStocked, addItemToList]);
+
   const handleAddManualItem = useCallback(async () => {
     const trimmed = itemName.trim();
     if (!trimmed) return;
@@ -591,6 +644,7 @@ export function AddItemsModal({
     setScannedCategory(undefined);
     setActiveView("search");
     setPantryFilter("low");
+    setSelectedPantryIds(new Set());
     clearSuggestions();
     productScanner.clearAll();
     onClose();
@@ -647,12 +701,13 @@ export function AddItemsModal({
             allAddableCount={allAddableCount}
             pantryFilter={pantryFilter}
             onFilterChange={handlePantryFilterSwitch}
-            onBulkAdd={addAllFilteredItems}
+            onSelectAll={toggleSelectAllPantry}
             bulkAddingFilter={bulkAddingFilter}
             capsulePulseStyle={capsulePulseStyle}
             pantryListData={pantryListData}
             isItemOnList={isItemOnList}
-            onAddPantryItem={(item) => addItemToList({ name: item.name, category: item.category, size: item.defaultSize, unit: item.defaultUnit, estimatedPrice: item.lastPrice, quantity: 1, source: "pantry", pantryItemId: item._id })}
+            selectedIds={selectedPantryIds}
+            onToggleSelect={togglePantrySelection}
           />
         ) : (
           <SearchView
@@ -677,7 +732,11 @@ export function AddItemsModal({
             {sessionAddCount} item{sessionAddCount !== 1 ? "s" : ""} added
           </Text>
         )}
-        {itemName.trim().length === 0 && !isAdding ? (
+        {activeView === "pantry" && selectedPantryIds.size > 0 ? (
+          <GlassButton variant="primary" size="lg" icon="playlist-plus" onPress={handleAddSelected} disabled={isAdding} loading={isAdding} style={styles.submitButton}>
+            {`Add ${selectedPantryIds.size} Selected`}
+          </GlassButton>
+        ) : itemName.trim().length === 0 && !isAdding ? (
           <GlassButton variant="secondary" size="lg" icon="format-list-checks" onPress={handleClose} style={styles.submitButton}>
             Go to List
           </GlassButton>
