@@ -176,9 +176,25 @@ export const setStore = mutation({
     const storeInfo = getStoreInfoSafe(args.normalizedStoreId);
     if (!storeInfo) throw new Error(`Store not found: ${args.normalizedStoreId}`);
 
+    // Track store history in storeSegments
+    const existingSegments = list.storeSegments ?? [];
+    const lastSegment = existingSegments[existingSegments.length - 1];
+    const newSegments =
+      lastSegment?.storeId === args.normalizedStoreId
+        ? existingSegments
+        : [
+            ...existingSegments,
+            {
+              storeId: args.normalizedStoreId,
+              storeName: storeInfo.displayName,
+              switchedAt: Date.now(),
+            },
+          ];
+
     await ctx.db.patch(args.id, {
       normalizedStoreId: args.normalizedStoreId,
       storeName: storeInfo.displayName,
+      storeSegments: newSegments,
       updatedAt: Date.now(),
     });
 

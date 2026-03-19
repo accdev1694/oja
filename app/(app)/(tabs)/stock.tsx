@@ -134,6 +134,7 @@ export default function PantryScreen() {
               isRefreshingPrices={isRefreshingPrices}
             />
           }
+          style={{ marginBottom: 4 }}
         />
 
         <View key={pageAnimationKey} style={styles.animationWrapper}>

@@ -66,7 +66,7 @@ export const stockStyles = StyleSheet.create({
   },
   viewModeTabs: {
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   attentionEmptyContainer: {
     flex: 1,
