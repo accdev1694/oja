@@ -143,6 +143,7 @@ export function AddItemsModal({
   const [sessionAddCount, setSessionAddCount] = useState(0);
   const [isAdding, setIsAdding] = useState(false);
   const feedbackIdRef = useRef(0);
+  const pendingAddsRef = useRef(new Set<string>());
 
   // ── Pantry multi-select ────────────────────────────────────────────────────
   const [selectedPantryIds, setSelectedPantryIds] = useState<Set<Id<"pantryItems">>>(new Set());
@@ -345,6 +346,11 @@ export function AddItemsModal({
 
   const addItemToList = useCallback(
     async (item: SelectedItem, force = false) => {
+      // Prevent rapid double-adds of the same item
+      const dedupKey = `${item.name.toLowerCase()}::${(item.size || "").toLowerCase()}`;
+      if (!force && pendingAddsRef.current.has(dedupKey)) return;
+      pendingAddsRef.current.add(dedupKey);
+
       setIsAdding(true);
       try {
         let result;
@@ -419,6 +425,7 @@ export function AddItemsModal({
         console.error("Failed to add item:", error);
         haptic("error");
       } finally {
+        pendingAddsRef.current.delete(dedupKey);
         setIsAdding(false);
       }
     },
@@ -454,7 +461,7 @@ export function AddItemsModal({
     (variantName: string) => {
       haptic("medium");
       const variant = variantOptions.find((v) => v.variantName === variantName);
-      const name = selectedSuggestion?.name ?? itemName.trim();
+      const name = selectedSuggestion?.name || itemName.trim();
       if (!name) return;
       resetInputFields();
       addItemToList({
@@ -647,6 +654,7 @@ export function AddItemsModal({
     setSelectedPantryIds(new Set());
     clearSuggestions();
     productScanner.clearAll();
+    pendingAddsRef.current.clear();
     onClose();
   }, [onClose, clearSuggestions, productScanner]);
 

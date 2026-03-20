@@ -120,9 +120,9 @@ export const SearchView = ({
                 nestedScrollEnabled={true}
                 contentContainerStyle={styles.altSuggestionsRow}
               >
-                {altSuggestions.map((s) => (
+                {altSuggestions.map((s, i) => (
                   <Pressable
-                    key={s.name}
+                    key={`${s.name}-${s.size || i}`}
                     style={styles.altSuggestionChip}
                     onPress={() => onSelectSuggestion(s)}
                   >

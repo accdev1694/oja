@@ -58,11 +58,19 @@ export const create = mutation({
     const rateLimit = await performRateLimitCheck(ctx, user._id, "list_items", 100);
     if (!rateLimit.allowed) throw new Error("Rate limit exceeded");
 
-    const name = toGroceryTitleCase(args.name);
-    const existingItem = await findDuplicateListItem(ctx, args.listId, name, args.size);
+    const earlyCleaned = cleanItemForStorage(toGroceryTitleCase(args.name), args.size, args.unit);
+    const name = earlyCleaned.name;
+    const existingItem = await findDuplicateListItem(ctx, args.listId, name, earlyCleaned.size);
     
     if (existingItem) {
-      if (!args.force) return { status: "duplicate", existingItemId: existingItem._id };
+      if (!args.force) return {
+        status: "duplicate",
+        existingItemId: existingItem._id,
+        existingName: existingItem.name,
+        existingQuantity: existingItem.quantity,
+        existingSize: existingItem.size,
+        isChecked: existingItem.isChecked,
+      };
       await ctx.db.patch(existingItem._id, { quantity: existingItem.quantity + args.quantity, updatedAt: Date.now() });
       await recalculateListTotal(ctx, args.listId);
       return { status: "bumped", itemId: existingItem._id };
@@ -420,7 +428,7 @@ export const addAndSeedPantry = mutation({
       unit: args.unit,
       estimatedPrice: args.estimatedPrice,
       pantryItemId: pantryId,
-      force: args.force ?? true,
+      force: args.force ?? false,
     });
   },
 });
