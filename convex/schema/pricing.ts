@@ -27,6 +27,7 @@ export const pricingTables = {
   })
     .index("by_item", ["normalizedName"])
     .index("by_item_store", ["normalizedName", "storeName"])
+    .index("by_item_store_region", ["normalizedName", "storeName", "region"])
     .index("by_store", ["storeName"])
     .index("by_updated", ["updatedAt"]),
 

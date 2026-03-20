@@ -54,8 +54,8 @@ export const upsertFromReceipt = mutation({
       const normalizedName = item.name.toLowerCase().trim();
       const existing = await ctx.db
         .query("currentPrices")
-        .withIndex("by_item_store", (q) =>
-          q.eq("normalizedName", normalizedName).eq("storeName", receipt.storeName)
+        .withIndex("by_item_store_region", (q) =>
+          q.eq("normalizedName", normalizedName).eq("storeName", receipt.storeName).eq("region", region)
         )
         .first();
 

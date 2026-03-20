@@ -88,10 +88,19 @@ export const refreshListPrices = mutation({
       }
 
       if (newPrice === undefined && storeName) {
-        const storePrice = await ctx.db
+        const userRegion = user.postcodePrefix || user.country || "UK";
+        const normalizedItemName = item.name.toLowerCase().trim();
+        // Prefer region-specific price, fall back to any region at this store
+        let storePrice = await ctx.db
           .query("currentPrices")
-          .withIndex("by_item_store", q => q.eq("normalizedName", item.name.toLowerCase().trim()).eq("storeName", storeName))
+          .withIndex("by_item_store_region", q => q.eq("normalizedName", normalizedItemName).eq("storeName", storeName).eq("region", userRegion))
           .first();
+        if (!storePrice) {
+          storePrice = await ctx.db
+            .query("currentPrices")
+            .withIndex("by_item_store", q => q.eq("normalizedName", normalizedItemName).eq("storeName", storeName))
+            .first();
+        }
         if (storePrice) {
           newPrice = storePrice.unitPrice;
           newSource = "crowdsourced";

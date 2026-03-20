@@ -166,6 +166,7 @@ export const savePriceHistoryFromReceipt = mutation({
 
     // Normalize store name once for all items
     const normalizedStoreId = normalizeStoreName(receipt.storeName);
+    const region = user.postcodePrefix || user.country || "UK";
 
     for (const item of receipt.items) {
       const priceHistoryId = await ctx.db.insert("priceHistory", {
@@ -183,6 +184,7 @@ export const savePriceHistoryFromReceipt = mutation({
         storeAddress: receipt.storeAddress,
         // Include normalized store ID if available
         ...(normalizedStoreId && { normalizedStoreId }),
+        region,
         purchaseDate: receipt.purchaseDate,
         createdAt: now,
       });

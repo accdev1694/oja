@@ -245,8 +245,8 @@ export async function enrichGlobalFromReceipt(
     // ── 2. Update Communal Prices (The "Price Engine") ───────────────────────
     const existingPrice = await ctx.db
       .query("currentPrices")
-      .withIndex("by_item_store", (q) =>
-        q.eq("normalizedName", normalizedBase).eq("storeName", receipt.storeName)
+      .withIndex("by_item_store_region", (q) =>
+        q.eq("normalizedName", normalizedBase).eq("storeName", receipt.storeName).eq("region", region)
       )
       .first();
 
