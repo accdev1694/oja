@@ -338,7 +338,7 @@ export const ShoppingListItem = memo(function ShoppingListItem({
                         onPress={(e) => {
                           e.stopPropagation();
                           haptic("light");
-                          onRemove(item._id, item.name);
+                          onRemove(item._id, displayName);
                         }}
                         style={styles.iconButton}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
