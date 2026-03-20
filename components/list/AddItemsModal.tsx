@@ -31,7 +31,6 @@ import { useItemSuggestions } from "@/hooks/useItemSuggestions";
 import type { ItemSuggestion } from "@/hooks/useItemSuggestions";
 import type { VariantOption } from "@/components/items/VariantPicker";
 import { useVariantPrefetch } from "@/hooks/useVariantPrefetch";
-import { formatItemDisplay } from "@/convex/lib/itemNameParser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isDuplicateItem } from "@/convex/lib/fuzzyMatch";
 
@@ -216,6 +215,7 @@ export function AddItemsModal({
     if (!variantResult?.sizes) return [];
     return variantResult.sizes.map((s: {
       size: string;
+      unit?: string;
       unitLabel: string;
       sizeNormalized?: string;
       price: number | null;
@@ -226,16 +226,31 @@ export function AddItemsModal({
       brand?: string;
       productName?: string;
       confidence?: number;
-    }) => ({
-      variantName: formatItemDisplay(selectedSuggestion?.name ?? "", s.size, s.unitLabel.replace("/", "")),
-      size: s.sizeNormalized || s.size,
-      unit: s.unitLabel.replace("/", ""),
-      price: s.price,
-      priceSource: s.source as "personal" | "crowdsourced" | "ai_estimate",
-      isUsual: s.isUsual ?? false,
-      displayLabel: s.displayLabel,
-    }));
-  }, [variantResult, selectedSuggestion]);
+    }) => {
+      const rawSize = s.sizeNormalized || s.size;
+      // Extract unit from size string as fallback when DB unit is missing
+      // e.g. "12pk" → "pk", "500ml" → "ml", "2pt" → "pt"
+      const trailingUnit = rawSize.match(/[a-z]+$/i)?.[0]?.toLowerCase() || "";
+      // Count-like suffixes that aren't valid storage units — normalize to "pk"
+      const COUNT_SUFFIXES = new Set(["eggs", "egg", "pieces", "pcs", "units", "items", "rolls", "roll", "sheets", "bags", "bag", "count", "pack", "packs"]);
+      const normalizedUnit = COUNT_SUFFIXES.has(trailingUnit) ? "pk" : trailingUnit;
+      // For bare numbers like "18", default to "pk" (count items like eggs, rolls)
+      const isBareNumber = /^\d+(?:\.\d+)?$/.test(rawSize);
+      const unit = (s.unit && !COUNT_SUFFIXES.has(s.unit.toLowerCase()) ? s.unit : "") || normalizedUnit || (isBareNumber ? "pk" : "");
+      // Build size string: strip count suffix and append valid unit
+      const numPart = rawSize.match(/^(\d+(?:\.\d+)?)/)?.[1] || rawSize;
+      const sizeStr = COUNT_SUFFIXES.has(trailingUnit) || isBareNumber ? `${numPart}pk` : rawSize;
+      return {
+        variantName: sizeStr,
+        size: sizeStr,
+        unit,
+        price: s.price,
+        priceSource: s.source as "personal" | "crowdsourced" | "ai_estimate",
+        isUsual: s.isUsual ?? false,
+        displayLabel: s.displayLabel,
+      };
+    });
+  }, [variantResult]);
 
   // ── Convex queries & mutations ────────────────────────────────────────────
   const pantryItems = useQuery(api.pantryItems.getByUser);

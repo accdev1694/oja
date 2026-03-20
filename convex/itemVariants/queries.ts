@@ -7,6 +7,33 @@ import {
 } from "../lib/sizeUtils";
 import { resolvePrice } from "../lib/priceResolver";
 
+// Count-like suffixes that all represent the same "X units" concept
+const COUNT_WORDS = new Set([
+  "", "pk", "pack", "packs", "x",
+  "eggs", "egg", "pieces", "pcs",
+  "units", "items", "rolls", "roll",
+  "sheets", "bags", "bag", "count",
+]);
+
+/**
+ * Generate a deduplication key for variant sizes.
+ * Normalizes count-like sizes (e.g., "12pk", "12 eggs", "12") to the same key
+ * so they collapse into a single entry instead of showing as duplicates.
+ */
+function getSizeDeduplicationKey(
+  /** @type {string} */ size: string,
+  /** @type {string} */ sizeNormalized: string,
+) {
+  const numMatch = size.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+  if (!numMatch) return sizeNormalized || size;
+
+  const num = numMatch[1];
+  const rest = numMatch[2].toLowerCase().trim();
+
+  if (COUNT_WORDS.has(rest)) return `count:${num}`;
+  return sizeNormalized || size;
+}
+
 /**
  * Get all variants for a base item (e.g., "milk" -> [1pt, 2pt, 4pt]).
  * Used by the variant picker in the list planning flow.
@@ -247,6 +274,7 @@ export const getSizesForStore = query({
         return {
           size: variant.size,
           sizeNormalized: normalizeSize(variant.size),
+          unit: variant.unit,
           price: resolved.price,
           pricePerUnit,
           unitLabel,
@@ -273,9 +301,10 @@ export const getSizesForStore = query({
     });
 
     // Deduplicate by normalized size -- keep the first (best) entry per size
-    const seenSizes = new Set<string>();
+    // Uses count-aware keys so "12pk", "12 eggs", "12" all collapse to one entry
+    const seenSizes = new Set();
     const dedupedSizes = sortedSizes.filter((s) => {
-      const key = s.sizeNormalized || s.size;
+      const key = getSizeDeduplicationKey(s.size, s.sizeNormalized);
       if (seenSizes.has(key)) return false;
       seenSizes.add(key);
       return true;
