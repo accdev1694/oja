@@ -58,12 +58,22 @@ export const ListFooter = ({
         <GlassButton
           variant="primary"
           size="md"
-          icon="check-all"
+          icon={totalCount > 0 && checkedCount === totalCount ? "party-popper" : "check-all"}
           onPress={onFinishTrip}
           loading={isFinishing}
-          style={{ flex: 1, shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 10 }}
+          style={{
+            flex: 1,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.5,
+            shadowRadius: 12,
+            elevation: 10,
+            ...(totalCount > 0 && checkedCount === totalCount && { backgroundColor: colors.accent.warm }),
+          }}
         >
-          {checkedCount === totalCount ? "Finish & Log" : `Finish (${checkedCount}/${totalCount})`}
+          {totalCount > 0 && checkedCount === totalCount
+            ? `All Done! (${checkedCount}/${totalCount})`
+            : `Finish (${checkedCount}/${totalCount})`}
         </GlassButton>
       </View>
     </LinearGradient>
