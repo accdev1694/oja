@@ -28,6 +28,7 @@ import { EditListNameModal } from "@/components/lists/EditListNameModal";
 import { HealthAnalysisModal } from "@/components/lists/HealthAnalysisModal";
 import { TripSummaryModal } from "@/components/list/modals/TripSummaryModal";
 import { EditBudgetModal } from "@/components/list/modals/EditBudgetModal";
+import { EditItemModal } from "@/components/list/modals/EditItemModal";
 import type { TripStats } from "@/hooks/useTripSummary";
 import { ScanReceiptNudgeModal } from "@/components/list/modals/ScanReceiptNudgeModal";
 import { ListActionRow } from "@/components/list/ListActionRow";
@@ -201,8 +202,20 @@ export default function ListDetailScreen() {
 
   const handleEditItem = useCallback((i: ListItem) => {
     setEditingItem(i);
-    setShowAddModal(true);
   }, []);
+
+  const handleSaveEditItem = useCallback(async (updates: {
+    id: Id<"listItems">;
+    name?: string;
+    quantity?: number;
+    estimatedPrice?: number;
+    size?: string;
+    unit?: string;
+    priceOverride?: boolean;
+    sizeOverride?: boolean;
+  }) => {
+    await updateItem(updates);
+  }, [updateItem]);
 
   const handlePriorityChange = useCallback((itemId: Id<"listItems">, priority: "must-have" | "should-have" | "nice-to-have") => {
     updateItem({ id: itemId, priority });
@@ -534,6 +547,12 @@ export default function ListDetailScreen() {
         listStoreName={list.storeName}
         listNormalizedStoreId={list.normalizedStoreId}
         existingItems={items}
+      />
+
+      <EditItemModal
+        item={editingItem}
+        onClose={() => setEditingItem(null)}
+        onSave={handleSaveEditItem}
       />
 
       <EditListNameModal
