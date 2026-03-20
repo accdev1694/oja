@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, internalQuery } from "../_generated/server";
+import { query } from "../_generated/server";
 import {
   normalizeSize,
   calculatePricePerUnit,
@@ -76,6 +76,15 @@ export const getWithPrices = query({
 
     if (variants.length === 0) return [];
 
+    // Resolve user region for crowdsourced price filtering
+    let userRegion = "UK";
+    if (args.userId) {
+      const user = await ctx.db.get(args.userId);
+      if (user) {
+        userRegion = user.postcodePrefix || user.country || "UK";
+      }
+    }
+
     // Layer 1: Personal priceHistory (if userId provided)
     let personalHistory: {
       normalizedName: string;
@@ -117,7 +126,7 @@ export const getWithPrices = query({
           }
         }
 
-        // Layer 2: Crowdsourced currentPrices
+        // Layer 2: Crowdsourced currentPrices (region-aware 4-tier priority)
         if (bestPrice === null) {
           const prices = await ctx.db
             .query("currentPrices")
@@ -130,28 +139,54 @@ export const getWithPrices = query({
               p.size === variant.size
           );
 
-          // If store specified, prefer that store's price
-          if (args.storeName) {
-            const storeMatch = variantPrices.find(
-              (p) => p.storeName === args.storeName
-            );
-            if (storeMatch) {
-              bestPrice = storeMatch.averagePrice ?? storeMatch.unitPrice;
-              bestStore = storeMatch.storeName;
-              reportCount = storeMatch.reportCount;
+          if (variantPrices.length > 0) {
+            const normalizedStore = args.storeName?.toLowerCase().trim();
+            let crowdMatch;
+
+            // Priority 1: Store + Region
+            if (normalizedStore && userRegion) {
+              crowdMatch = variantPrices.find(
+                (p) =>
+                  (p.storeName?.toLowerCase() === normalizedStore ||
+                    p.normalizedStoreId === normalizedStore) &&
+                  p.region === userRegion
+              );
+            }
+
+            // Priority 2: Store (any region) — pick highest reportCount
+            if (!crowdMatch && normalizedStore) {
+              const storeMatches = variantPrices.filter(
+                (p) =>
+                  p.storeName?.toLowerCase() === normalizedStore ||
+                  p.normalizedStoreId === normalizedStore
+              );
+              if (storeMatches.length > 0) {
+                crowdMatch = storeMatches.sort(
+                  (a, b) => b.reportCount - a.reportCount
+                )[0];
+              }
+            }
+
+            // Priority 3: Region (any store)
+            if (!crowdMatch && userRegion) {
+              crowdMatch = variantPrices.find(
+                (p) => p.region === userRegion
+              );
+            }
+
+            // Priority 4: Most-reported entry (most representative)
+            if (!crowdMatch) {
+              crowdMatch = [...variantPrices].sort(
+                (a, b) => b.reportCount - a.reportCount
+              )[0];
+            }
+
+            if (crowdMatch) {
+              bestPrice = crowdMatch.averagePrice ?? crowdMatch.unitPrice;
+              bestStore = crowdMatch.storeName;
+              reportCount = crowdMatch.reportCount;
               priceSource = "crowdsourced";
             }
-          }
-
-          // Fallback to cheapest across any store
-          if (bestPrice === null && variantPrices.length > 0) {
-            const sorted = [...variantPrices].sort(
-              (a, b) => (a.averagePrice ?? a.unitPrice) - (b.averagePrice ?? b.unitPrice)
-            );
-            bestPrice = sorted[0].averagePrice ?? sorted[0].unitPrice;
-            bestStore = sorted[0].storeName;
-            reportCount = sorted[0].reportCount;
-            priceSource = "crowdsourced";
           }
         }
 
@@ -326,65 +361,3 @@ export const getSizesForStore = query({
   },
 });
 
-/**
- * Get popular scan-verified items for onboarding seeding.
- * Returns items grouped by category, sorted by scanCount/userCount.
- * Only returns items with source !== "ai_seeded" (i.e., verified by real scans).
- */
-export const getPopularForSeeding = internalQuery({
-  args: {
-    categories: v.optional(v.array(v.string())),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit ?? 200;
-
-    // Get all variants that have been scan-verified
-    // We can't filter by source in the index, so we fetch and filter
-    const allVariants = await ctx.db
-      .query("itemVariants")
-      .collect();
-
-    // Filter to scan-verified items with meaningful data
-    const verified = allVariants.filter((variant) => {
-      if (variant.source === "ai_seeded") return false; // Skip pure AI seeds
-      if ((variant.scanCount ?? 0) < 1) return false; // Must have been scanned at least once
-      if (!variant.baseItem || !variant.size || !variant.unit) return false; // Must have complete data
-      return true;
-    });
-
-    // If categories provided, filter to matching categories
-    let filtered = verified;
-    if (args.categories && args.categories.length > 0) {
-      const catSet = new Set(args.categories.map((c) => c.toLowerCase()));
-      filtered = verified.filter((variant) => catSet.has(variant.category.toLowerCase()));
-    }
-
-    // Sort by community engagement: userCount desc, then scanCount desc
-    filtered.sort((a, b) => {
-      const userDiff = (b.userCount ?? 0) - (a.userCount ?? 0);
-      if (userDiff !== 0) return userDiff;
-      return (b.scanCount ?? 0) - (a.scanCount ?? 0);
-    });
-
-    // Deduplicate by baseItem (keep the most popular variant per item)
-    const seenBase = new Set<string>();
-    const deduped = filtered.filter((variant) => {
-      if (seenBase.has(variant.baseItem)) return false;
-      seenBase.add(variant.baseItem);
-      return true;
-    });
-
-    return deduped.slice(0, limit).map((variant) => ({
-      name: variant.productName ?? variant.variantName,
-      category: variant.category,
-      size: variant.size,
-      unit: variant.unit,
-      brand: variant.brand,
-      estimatedPrice: variant.estimatedPrice,
-      source: variant.source,
-      scanCount: variant.scanCount ?? 0,
-      userCount: variant.userCount ?? 0,
-    }));
-  },
-});

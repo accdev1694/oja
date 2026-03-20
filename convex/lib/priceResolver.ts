@@ -172,13 +172,28 @@ export async function resolvePrice(
         if (bestCrowdMatch !== undefined) crowdType = "store_region";
       }
 
-      // Priority 2: Store Match (any region)
+      // Priority 2: Store Match (any region) — weighted national average
       if (bestCrowdMatch === undefined && normalizedStore) {
-        bestCrowdMatch = variantPrices.find(
+        const storeMatches = variantPrices.filter(
           (p) => p.storeName?.toLowerCase() === normalizedStore ||
             p.normalizedStoreId === normalizedStore
         );
-        if (bestCrowdMatch !== undefined) crowdType = "store";
+        if (storeMatches.length > 0) {
+          // Compute weighted average across all regions for this store
+          const totalReports = storeMatches.reduce((sum, p) => sum + p.reportCount, 0);
+          const weightedPrice = totalReports > 0
+            ? storeMatches.reduce(
+                (sum, p) => sum + (p.averagePrice ?? p.unitPrice) * p.reportCount,
+                0
+              ) / totalReports
+            : storeMatches[0].averagePrice ?? storeMatches[0].unitPrice;
+
+          // Use the highest-reportCount entry as the "carrier" for metadata,
+          // but override its price with the weighted national average
+          const carrier = storeMatches.sort((a, b) => b.reportCount - a.reportCount)[0];
+          bestCrowdMatch = { ...carrier, averagePrice: weightedPrice, reportCount: totalReports };
+          crowdType = "store";
+        }
       }
 
       // Priority 3: Region Match (any store)
@@ -187,10 +202,10 @@ export async function resolvePrice(
         if (bestCrowdMatch !== undefined) crowdType = "region";
       }
 
-      // Priority 4: Global Match (cheapest)
+      // Priority 4: Global Match — most-reported entry (most representative)
       if (bestCrowdMatch === undefined) {
         bestCrowdMatch = [...variantPrices].sort(
-          (a, b) => (a.averagePrice ?? a.unitPrice) - (b.averagePrice ?? b.unitPrice)
+          (a, b) => b.reportCount - a.reportCount
         )[0];
         crowdType = "global";
       }

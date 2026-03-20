@@ -223,6 +223,7 @@ export async function enrichGlobalFromReceipt(
         // If we found a real price, update the estimate
         estimatedPrice: item.unitPrice,
         source: "receipt_discovered",
+        region,
       });
     } else {
       const targetBase = existingVariants.length > 0 ? existingVariants[0].baseItem : normalizedBase;
