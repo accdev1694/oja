@@ -262,6 +262,7 @@ export const coreTables = {
     // Mid-shop add tracking
     isImpulse: v.optional(v.boolean()), // Deprecated — kept for existing data
     addedMidShop: v.optional(v.boolean()), // Added during shopping
+    addedFromReceipt: v.optional(v.boolean()), // Added from receipt reconciliation (unplanned)
 
     // Multi-store: which store the item was actually purchased at
     purchasedAtStoreId: v.optional(v.string()),

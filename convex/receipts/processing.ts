@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { pushReceiptId } from "../lib/receiptHelpers";
+import { matchReceiptItems } from "../lib/matching";
+import { cleanItemForStorage } from "../lib/itemNameParser";
+import { toGroceryTitleCase } from "../lib/titleCase";
+import { recalculateListTotal } from "../listItems/helpers";
 
 export const linkToList = mutation({
   args: {
@@ -30,26 +34,106 @@ export const linkToList = mutation({
       updatedAt: Date.now(),
     });
 
-    if (receipt.items && receipt.items.length > 0) {
-      const listItems = await ctx.db.query("listItems").withIndex("by_list", (q) => q.eq("listId", args.listId)).collect();
-      for (const listItem of listItems) {
-        const listItemLower = listItem.name.toLowerCase().trim();
-        const match = receipt.items.find((ri) => {
-          const riLower = ri.name.toLowerCase().trim();
-          return riLower === listItemLower || riLower.includes(listItemLower) || listItemLower.includes(riLower);
-        });
-        if (match) {
-          await ctx.db.patch(listItem._id, {
-            actualPrice: match.unitPrice,
-            isChecked: true,
-            purchasedAtStoreId: receipt.normalizedStoreId ?? undefined,
-            purchasedAtStoreName: receipt.storeName ?? undefined,
-            updatedAt: Date.now(),
-          });
-        }
-      }
+    if (!receipt.items || receipt.items.length === 0) {
+      return { success: true, matchedCount: 0, addedUnplannedCount: 0 };
     }
-    return { success: true };
+
+    const listItems = await ctx.db
+      .query("listItems")
+      .withIndex("by_list", (q) => q.eq("listId", args.listId))
+      .collect();
+
+    const storeId = receipt.normalizedStoreId || "unknown";
+    const now = Date.now();
+
+    // Multi-signal matching between receipt items and list items
+    const receiptItemsForMatching = receipt.items.map((item) => ({
+      name: item.name,
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
+      category: item.category,
+    }));
+
+    const candidates = listItems.map((item) => ({
+      id: item._id,
+      type: "list_item" as "list_item",
+      name: item.name,
+      category: item.category,
+      estimatedPrice: item.estimatedPrice,
+    }));
+
+    const { matched, unmatched } = await matchReceiptItems(
+      ctx,
+      receiptItemsForMatching,
+      candidates,
+      storeId,
+    );
+
+    // Update matched items with receipt prices
+    for (const matchResult of matched) {
+      if (!matchResult.bestMatch) continue;
+      const receiptItem = matchResult.receiptItem;
+
+      await ctx.db.patch(matchResult.bestMatch.id as any, {
+        estimatedPrice: receiptItem.unitPrice,
+        actualPrice: receiptItem.unitPrice,
+        priceSource: "personal" as "personal",
+        priceConfidence: 0.9,
+        isChecked: true,
+        checkedAt: now,
+        checkedByUserId: user._id,
+        purchasedAtStoreId: receipt.normalizedStoreId ?? undefined,
+        purchasedAtStoreName: receipt.storeName ?? undefined,
+        updatedAt: now,
+      });
+    }
+
+    // Build lookup for original receipt items (which have size/unit)
+    const receiptItemsByName = new Map(
+      receipt.items.map((item) => [item.name, item])
+    );
+
+    // Add unplanned items (on receipt but not on list)
+    let addedCount = 0;
+    for (const unmatchedResult of unmatched) {
+      const ri = unmatchedResult.receiptItem;
+      const original = receiptItemsByName.get(ri.name);
+      const cleaned = cleanItemForStorage(
+        toGroceryTitleCase(ri.name),
+        original?.size,
+        original?.unit,
+      );
+
+      await ctx.db.insert("listItems", {
+        listId: args.listId,
+        userId: user._id,
+        name: cleaned.name,
+        category: ri.category,
+        quantity: ri.quantity,
+        size: cleaned.size,
+        unit: cleaned.unit,
+        estimatedPrice: ri.unitPrice,
+        actualPrice: ri.unitPrice,
+        priceSource: "personal" as "personal",
+        priceConfidence: 0.9,
+        priority: "should-have" as "should-have",
+        isChecked: true,
+        checkedAt: now,
+        checkedByUserId: user._id,
+        purchasedAtStoreId: receipt.normalizedStoreId ?? undefined,
+        purchasedAtStoreName: receipt.storeName ?? undefined,
+        autoAdded: false,
+        addedFromReceipt: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      addedCount++;
+    }
+
+    // Recalculate list total with newly added items
+    await recalculateListTotal(ctx, args.listId);
+
+    return { success: true, matchedCount: matched.length, addedUnplannedCount: addedCount };
   },
 });
 

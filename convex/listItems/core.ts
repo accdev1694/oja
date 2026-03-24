@@ -284,6 +284,18 @@ export const addBatchFromScan = mutation({
         bumped++;
       } else {
         const cleaned = cleanItemForStorage(item.name, item.size, item.unit);
+
+        // Zero-blank-price: fallback to emergency estimate when scan has no price
+        let finalPrice = item.estimatedPrice;
+        let priceSource = "ai" as "personal" | "crowdsourced" | "ai" | "manual";
+        let priceConfidence = 0.5;
+        if (finalPrice === undefined) {
+          const emergency = getEmergencyPriceEstimate(cleaned.name, item.category);
+          finalPrice = emergency.price;
+          priceSource = "ai";
+          priceConfidence = 0.3;
+        }
+
         await ctx.db.insert("listItems", {
           listId: args.listId,
           userId: user._id,
@@ -292,8 +304,9 @@ export const addBatchFromScan = mutation({
           quantity: item.quantity || 1,
           size: cleaned.size,
           unit: cleaned.unit,
-          estimatedPrice: item.estimatedPrice,
-          priceSource: "ai",
+          estimatedPrice: finalPrice,
+          priceSource,
+          priceConfidence,
           isChecked: false,
           autoAdded: false,
           priority: "should-have",

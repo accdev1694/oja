@@ -302,14 +302,20 @@ export const scanProduct = action({
 The photo shows a physical product (front, back, or side) or loose items.
 
 FIELDS:
-- name: (string) Concise product name (MAX 30 chars). e.g. "Semi-Skimmed Milk", "6pk Coke", "5 Bananas", "Chicken Breast".
+- name: (string) Brand + product type ONLY. MAX 25 chars. No size, no weight, no marketing copy. If over 25 chars, summarize to brand + core product. e.g. "Cantu Leave-In Conditioner", "Tesco Semi-Skimmed Milk", "Walkers Crisps", "Chicken Breast".
 - category: (string) One of: ${AI_CATEGORY_PROMPT}.
 - quantity: (number) Usually 1. Only use > 1 if you see multiple distinct packages of the exact same product.
-- size: (string or null) e.g., "500g", "2L", "4 pack", "2pt". 
+- size: (string or null) ONE measurement only. e.g. "500g", "2L", "4 pack", "2pt". null if not visible.
+- unit: (string or null) Unit from the size. e.g. "g", "L", "pack", "pt". null if size is null.
 - sizeSource: (string) One of "visible", "estimated", or "unknown".
 - brand: (string or null)
 - estimatedPrice: (number) Best estimate of UK retail price in GBP.
 - confidence: (number 0-100)
+
+RULES:
+- "name" must contain ONLY brand + product type. Never include size, weight, or flavour descriptions.
+- "size" must be ONE metric measurement. Prefer: ml, L, g, kg, pints, pack. If label shows both metric and imperial (e.g. "227g (8oz)"), use ONLY the metric value ("227g"). Never include both.
+- Total display will be "{size} {name}" so keep both concise.
 
 Return ONLY valid JSON.`;
 

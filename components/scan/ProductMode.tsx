@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/glass";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScannedProduct } from "@/hooks/useProductScanner";
+import { formatItemDisplay } from "@/convex/lib/itemNameParser";
 
 interface ProductModeProps {
   scannedProducts: ScannedProduct[];
@@ -89,7 +90,7 @@ export function ProductMode({
                       <MaterialCommunityIcons name="package-variant" size={20} color={colors.accent.primary} />
                     </View>
                     <View style={styles.productInfo}>
-                      <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.productName} numberOfLines={1}>{formatItemDisplay(item.name, item.size, item.unit)}</Text>
                       <Text style={styles.productCategory}>{item.category || "Uncategorized"}</Text>
                     </View>
                     <View style={styles.actions}>

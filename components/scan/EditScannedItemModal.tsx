@@ -12,6 +12,7 @@ import {
   borderRadius,
 } from "@/components/ui/glass";
 import type { ScannedProduct } from "@/hooks/useProductScanner";
+import { cleanItemForStorage } from "@/convex/lib/itemNameParser";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -70,12 +71,19 @@ export function EditScannedItemModal({ product, onClose, onConfirm }: EditScanne
     const qty = parseInt(editQuantity);
     const price = parseFloat(editPrice);
 
+    // Re-parse name/size/unit so edited size gets a valid unit
+    const cleaned = cleanItemForStorage(
+      editName.trim(),
+      editSize.trim() || undefined,
+      product.unit
+    );
+
     onConfirm({
-      name: editName.trim(),
+      name: cleaned.name,
       category: product.category,
       quantity: !isNaN(qty) && qty > 0 ? qty : 1,
-      size: editSize.trim() || undefined,
-      unit: product.unit,
+      size: cleaned.size,
+      unit: cleaned.unit,
       brand: editBrand.trim() || undefined,
       estimatedPrice: !isNaN(price) && price >= 0 ? price : undefined,
       confidence: product.confidence,

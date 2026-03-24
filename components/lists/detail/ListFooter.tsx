@@ -30,9 +30,10 @@ export const ListFooter = ({
     <LinearGradient
       colors={["rgba(13, 21, 40, 0)", "rgba(13, 21, 40, 0.6)", colors.background.primary]}
       locations={[0, 0.3, 0.55]}
+      pointerEvents="box-none"
       style={[styles.footer, { bottom: insetsBottom, paddingBottom: spacing.md }]}
     >
-      <View style={styles.tripControls}>
+      <View style={styles.tripControls} pointerEvents="auto">
         {totalCount > 0 && (
           <Pressable
             style={[styles.checkedToggleBtn, showCheckedItems && styles.checkedToggleBtnActive]}

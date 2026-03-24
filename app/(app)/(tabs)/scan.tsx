@@ -109,6 +109,7 @@ export default function ScanScreen() {
           category: p.category || "Other",
           quantity: p.quantity || 1,
           size: p.size,
+          unit: p.unit,
           brand: p.brand,
           estimatedPrice: p.estimatedPrice,
           confidence: p.confidence,
