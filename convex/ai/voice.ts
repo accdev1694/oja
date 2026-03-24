@@ -1,4 +1,5 @@
 import { action } from "../_generated/server";
+import type { ActionCtx } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { v } from "convex/values";
 import {
@@ -14,14 +15,68 @@ import {
   executeVoiceTool
 } from "../lib/voice";
 import type { VoiceAssistantResponse, ConversationMessage, PendingAction } from "../lib/voice/types";
-import { metricsFromGemini } from "../lib/aiTracking";
-import { calculateTtsCostUsd } from "../lib/aiTracking";
+import type { Doc } from "../_generated/dataModel";
+import { metricsFromGemini, calculateTtsCostUsd } from "../lib/aiTracking";
 
 /** Shape of the confirm-type result from executeVoiceTool */
 interface ConfirmResult {
   action: string;
   params: Record<string, unknown>;
   description: string;
+}
+
+/** Enriched shopping list returned by getActive (includes computed fields) */
+type EnrichedShoppingList = Doc<"shoppingLists"> & {
+  itemCount: number;
+  checkedCount: number;
+  totalEstimatedCost: number | undefined;
+  isInProgress: boolean;
+};
+
+/**
+ * Fetch real user context server-side for Tobi's system prompt.
+ * Runs 3 queries in parallel to minimize latency.
+ */
+async function getUserVoiceContext(ctx: ActionCtx): Promise<{
+  lowStockItems: string[];
+  activeListNames: string[];
+  subscriptionTier: string;
+  preferredStores: string[];
+}> {
+  try {
+    const [pantryItems, activeLists, subscription, storePrefs] = await Promise.all([
+      ctx.runQuery(api.pantryItems.getByUser, {}),
+      ctx.runQuery(api.shoppingLists.getActive, {}),
+      ctx.runQuery(api.subscriptions.getCurrentSubscription, {}).catch(() => null),
+      ctx.runQuery(api.stores.getUserPreferences, {}).catch(() => null),
+    ]);
+
+    // Low/out-of-stock pantry items (top 10 for prompt size)
+    const lowStock = pantryItems
+      .filter((i: Doc<"pantryItems">) => i.stockLevel === "low" || i.stockLevel === "out")
+      .slice(0, 10)
+      .map((i: Doc<"pantryItems">) => `${i.name} (${i.stockLevel})`);
+
+    // Active list names with budget info
+    const listNames = (activeLists as EnrichedShoppingList[]).map((l) => {
+      const budget = l.budget ? `£${l.budget} budget` : "no budget";
+      const spent = l.totalEstimatedCost ? `, £${Math.round(l.totalEstimatedCost)} spent` : "";
+      return `${l.name} (${budget}${spent}, ${l.itemCount} items)`;
+    });
+
+    // Subscription tier
+    const tier = subscription?.plan ?? "free";
+
+    // Preferred stores (capitalize IDs for display: "tesco" → "Tesco")
+    const stores = (storePrefs?.favorites ?? []).map(
+      (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+    );
+
+    return { lowStockItems: lowStock, activeListNames: listNames, subscriptionTier: tier, preferredStores: stores };
+  } catch (error) {
+    console.warn("[getUserVoiceContext] Failed to fetch context, using defaults:", error);
+    return { lowStockItems: [], activeListNames: [], subscriptionTier: "unknown", preferredStores: [] };
+  }
 }
 
 export const parseVoiceCommand = action({
@@ -101,7 +156,34 @@ export const voiceAssistant = action({
       throw e;
     }
 
-    const systemPrompt = buildSystemPrompt({ ...args, lowStockItems: [], activeListNames: [] });
+    // Fetch real user context server-side (pantry, lists, subscription, stores)
+    const userContext = await getUserVoiceContext(ctx);
+
+    // Resolve active list budget/spent server-side if not provided by frontend
+    let activeListBudget = args.activeListBudget;
+    let activeListSpent = args.activeListSpent;
+    if (args.activeListId && activeListBudget === undefined) {
+      try {
+        const activeLists = await ctx.runQuery(api.shoppingLists.getActive, {});
+        const activeList = (activeLists as EnrichedShoppingList[]).find(
+          (l) => l._id === args.activeListId
+        );
+        if (activeList) {
+          activeListBudget = activeList.budget;
+          activeListSpent = activeList.totalEstimatedCost ?? 0;
+        }
+      } catch { /* fallback: budget stays undefined */ }
+    }
+
+    const systemPrompt = buildSystemPrompt({
+      ...args,
+      activeListBudget,
+      activeListSpent,
+      lowStockItems: userContext.lowStockItems,
+      activeListNames: userContext.activeListNames,
+      subscriptionTier: userContext.subscriptionTier,
+      preferredStores: userContext.preferredStores,
+    });
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash-lite",
       systemInstruction: systemPrompt,

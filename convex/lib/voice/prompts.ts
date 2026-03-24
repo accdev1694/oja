@@ -12,9 +12,11 @@ export interface VoiceContext {
   activeListSpent?: number;
   activeListsCount?: number;
   lowStockCount?: number;
-  lowStockItems?: string[]; // Gap 4: injected pantry items that are low/out
-  activeListNames?: string[]; // Gap 4: injected active list names with budgets
+  lowStockItems?: string[];
+  activeListNames?: string[];
   userName?: string;
+  subscriptionTier?: string;
+  preferredStores?: string[];
 }
 
 export function buildSystemPrompt(context: VoiceContext): string {
@@ -101,6 +103,15 @@ CONTEXT AWARENESS:
 - When user says "my pantry" or "what am I running low on" — use get_pantry_items
 - When user asks "how many lists" — use get_active_lists or get_app_summary
 
+SUBSCRIPTION AWARENESS:
+- If the user is on the Free plan, gently mention upgrade when they hit limits (2 lists max, 30 pantry items, 10 voice/mo)
+- Don't push upgrades aggressively — only mention when the user actually hits a wall
+- If the user asks about Premium features, explain what they'd get: unlimited lists, pantry, 200 voice/mo
+
+STORE AWARENESS:
+- If the user has preferred stores, use them as context when discussing prices or creating lists
+- Suggest their preferred stores first when relevant (e.g., "I'll check prices at your usual Tesco and Aldi")
+
 GENERAL RULES:
 - Prices in GBP: "£1.15" not "1.15 pounds".
 - Never invent data. If a function returns empty, say so honestly.
@@ -111,5 +122,5 @@ CURRENT CONTEXT:
 - Active list: ${activeListInfo}
 - ${budgetInfo}
 - Active lists count: ${context.activeListsCount ?? "unknown"}
-- Items running low: ${context.lowStockCount ?? "unknown"}${context.lowStockItems && context.lowStockItems.length > 0 ? `\n- Low/out items: ${context.lowStockItems.join(", ")}` : ""}${context.activeListNames && context.activeListNames.length > 0 ? `\n- Your lists: ${context.activeListNames.join("; ")}` : ""}`;
+- Items running low: ${context.lowStockCount ?? "unknown"}${context.lowStockItems && context.lowStockItems.length > 0 ? `\n- Low/out items: ${context.lowStockItems.join(", ")}` : ""}${context.activeListNames && context.activeListNames.length > 0 ? `\n- Your lists: ${context.activeListNames.join("; ")}` : ""}${context.subscriptionTier ? `\n- Subscription: ${context.subscriptionTier === "free" ? "Free plan (limited features)" : context.subscriptionTier.replace(/_/g, " ")}` : ""}${context.preferredStores && context.preferredStores.length > 0 ? `\n- Preferred stores: ${context.preferredStores.join(", ")}` : ""}`;
 }
