@@ -82,7 +82,9 @@ Header subtitle shows stores the user shopped at. **Confirmed stores** = items c
 
 ### Voice Assistant (Tobi)
 
-Modularized in `convex/lib/voice/` (13 files). STT: `expo-speech-recognition`. TTS: Google Cloud Neural2 → expo-speech fallback. AI: Gemini 2.0 Flash. Hook: `hooks/useVoiceAssistant.ts`. Requires dev build.
+Modularized in `convex/lib/voice/` (13 files). STT: `expo-speech-recognition`. TTS: Azure Neural → expo-speech fallback. AI: Gemini 2.5 Flash Lite. Hook: `hooks/useVoiceAssistant.ts`. Requires dev build.
+
+**Context injection:** `getUserVoiceContext()` in `convex/ai/voice.ts` runs 4 parallel queries to populate the system prompt with real user data: low/out-of-stock pantry items, active lists with budgets, subscription tier, preferred stores. Budget for active list is auto-resolved server-side.
 
 ### Key Utilities
 
@@ -140,7 +142,7 @@ Never add providers outside ClerkProvider that import native modules. `InitialLa
 
 ## Testing
 
-**Jest (45 files, 1170 tests):** Admin, insights, partners, subscriptions, sizes, components, lib utilities, schema validation. Critical test files: `itemNameParser` (55 tests), `fuzzyMatch` (31 tests), `priceResolver` (12 tests), `listItems` (5 tests).
+**Jest (46 files, 1243 tests):** Admin, insights, partners, subscriptions, sizes, components, voice, lib utilities, schema validation. Critical test files: `itemNameParser` (55 tests), `voiceContext` (43 tests), `fuzzyMatch` (31 tests), `priceResolver` (12 tests), `listItems` (5 tests).
 
 **Playwright E2E (18 specs):** Full user journeys via Expo Web. Serial execution with shared Clerk auth. Page Object Model.
 
