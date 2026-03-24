@@ -20,11 +20,74 @@ const VAGUE_SIZES = ["per item", "item", "each", "unit", "piece"];
 const VALID_UNITS = ["ml", "l", "g", "kg", "pt", "pint", "pints", "pack", "pk", "x", "oz"];
 
 const SIZE_PATTERN = /^(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz)s?)\s+(.+)$/i;
+const SIZE_END_PATTERN = /^(.+?)\s+(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz)s?)$/i;
 
 export interface ParsedItem {
   name: string;
   size?: string;
   unit?: string;
+}
+
+// Max characters for the final display string "{size} {name}"
+const MAX_DISPLAY_CHARS = 40;
+
+// Pattern to find a metric measurement anywhere in a string
+const METRIC_EXTRACT = /(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz))/i;
+
+/**
+ * Clean duplicate/imperial measurements from a size string.
+ * Handles both metric-first and imperial-first patterns:
+ * "227g (8oz)" → "227g", "347ml/12 fl oz" → "347ml",
+ * "8 FL OZ / 237 mL" → "237ml", "500g / 1.1lb" → "500g"
+ */
+function cleanDuplicateUnits(size: string) {
+  let cleaned = size.trim();
+
+  // Strip parenthetical duplicates: "227g (8oz)" → "227g"
+  cleaned = cleaned.replace(/\s*\([^)]*\)\s*$/, "").trim();
+
+  // If the string contains a slash or pipe separator, find the metric measurement
+  if (/[/|]/.test(cleaned)) {
+    // Try metric-first: "347ml/12 fl oz" → "347ml"
+    const metricFirst = cleaned.match(/^(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz))\s*[/|]/i);
+    if (metricFirst) {
+      return metricFirst[1].trim();
+    }
+    // Try metric anywhere (handles imperial-first): "8 FL OZ / 237 mL" → "237ml"
+    const metricAnywhere = cleaned.match(METRIC_EXTRACT);
+    if (metricAnywhere) {
+      return metricAnywhere[1].trim().toLowerCase();
+    }
+  }
+
+  return cleaned;
+}
+
+/**
+ * Strip dual-unit measurement prefixes from a name string.
+ * "8 FL OZ / 237 mL Leave-in Conditioner" → { cleaned: "Leave-in Conditioner", size: "237ml" }
+ * "237ml Cantu Leave-in Conditioner" is handled by SIZE_PATTERN already.
+ * This catches imperial/dual-unit prefixes that SIZE_PATTERN misses.
+ */
+function stripDualUnitFromName(name: string) {
+  // Pattern: optional number+imperial, separator, number+metric, then the real name
+  // e.g. "8 FL OZ / 237 mL Leave-in Conditioning Treatment"
+  const dualUnitPrefix = name.match(
+    /^\d+(?:\.\d+)?\s*(?:fl\.?\s*oz|oz|lb|lbs?)\s*[/|]\s*(\d+(?:\.\d+)?\s*(?:ml|l|g|kg))\s+(.+)$/i
+  );
+  if (dualUnitPrefix) {
+    return { cleaned: dualUnitPrefix[2].trim(), size: dualUnitPrefix[1].trim().toLowerCase() };
+  }
+
+  // Reverse: metric first, then imperial: "237 mL / 8 FL OZ Leave-in..."
+  const dualUnitPrefixReverse = name.match(
+    /^(\d+(?:\.\d+)?\s*(?:ml|l|g|kg))\s*[/|]\s*\d+(?:\.\d+)?\s*(?:fl\.?\s*oz|oz|lb|lbs?)\s+(.+)$/i
+  );
+  if (dualUnitPrefixReverse) {
+    return { cleaned: dualUnitPrefixReverse[2].trim(), size: dualUnitPrefixReverse[1].trim().toLowerCase() };
+  }
+
+  return null;
 }
 
 /**
@@ -104,13 +167,52 @@ export function parseItemNameAndSize(
   let extractedSize = existingSize?.trim() || undefined;
   let extractedUnit = existingUnit?.trim() || undefined;
 
-  // Try to extract size from beginning of name if not already provided
-  const match = cleanName.match(SIZE_PATTERN);
+  // Strip duplicate/imperial units from size: "227g (8oz)" → "227g"
+  if (extractedSize) {
+    extractedSize = cleanDuplicateUnits(extractedSize);
+  }
 
-  if (match && !extractedSize) {
-    const [_, sizeFromName, nameWithoutSize] = match;
-    cleanName = nameWithoutSize.trim();
-    extractedSize = sizeFromName.trim();
+  // Try to extract size from name if not already provided
+  if (!extractedSize) {
+    // Try beginning first: "500ml Milk"
+    const startMatch = cleanName.match(SIZE_PATTERN);
+    if (startMatch) {
+      const [_, sizeFromName, nameWithoutSize] = startMatch;
+      cleanName = nameWithoutSize.trim();
+      extractedSize = sizeFromName.trim();
+    } else {
+      // Try dual-unit prefix: "8 FL OZ / 237 mL Leave-in Conditioner"
+      const dualUnit = stripDualUnitFromName(cleanName);
+      if (dualUnit) {
+        cleanName = dualUnit.cleaned;
+        extractedSize = dualUnit.size;
+      } else {
+        // Fallback: try end of name: "Milk 500ml"
+        const endMatch = cleanName.match(SIZE_END_PATTERN);
+        if (endMatch) {
+          const [_, nameWithoutSize, sizeFromName] = endMatch;
+          cleanName = nameWithoutSize.trim();
+          extractedSize = sizeFromName.trim();
+        }
+      }
+    }
+  } else {
+    // Size already provided — strip it from the name if AI embedded it
+    const startMatch = cleanName.match(SIZE_PATTERN);
+    if (startMatch) {
+      cleanName = startMatch[2].trim();
+    } else {
+      // Try dual-unit prefix in name: "8 FL OZ / 237 mL Leave-in Conditioner"
+      const dualUnit = stripDualUnitFromName(cleanName);
+      if (dualUnit) {
+        cleanName = dualUnit.cleaned;
+      } else {
+        const endMatch = cleanName.match(SIZE_END_PATTERN);
+        if (endMatch) {
+          cleanName = endMatch[1].trim();
+        }
+      }
+    }
   }
 
   // CRITICAL: If we have size but no unit, try to extract unit from size
@@ -150,17 +252,30 @@ export function formatItemDisplay(
   size?: string | null,
   unit?: string | null
 ) {
+  // Clean size of dual units before validation: "8 FL OZ / 237 mL" → "237ml"
+  let cleanedSize = size ? cleanDuplicateUnits(size) : size;
+  let cleanedUnit = unit;
+  if (cleanedSize && !cleanedUnit) {
+    cleanedUnit = extractUnitFromSize(cleanedSize) || null;
+  }
+
   // Validate and filter out vague sizes
-  if (!isValidSize(size, unit)) {
+  if (!isValidSize(cleanedSize, cleanedUnit)) {
+    // Even without valid size, strip dual-unit prefix from name for display
+    const stripped = stripDualUnitFromName(name);
+    if (stripped) return stripped.cleaned;
     return name;
   }
 
-  const normalizedSize = size!.trim();
+  const normalizedSize = cleanedSize!.trim();
   const sizeLower = normalizedSize.toLowerCase();
 
-  // Deduplicate: If the name already contains the size, remove it from the name
-  // to prevent things like "500ml 500ml Milk"
+  // Strip dual-unit prefixes from name (old DB data): "8 FL OZ / 237 mL Product" → "Product"
   let cleanName = name;
+  const dualStrip = stripDualUnitFromName(cleanName);
+  if (dualStrip) {
+    cleanName = dualStrip.cleaned;
+  }
 
   // Extract the numeric part and unit separately for more robust matching
   const sizeMatch = sizeLower.match(/^(\d+(?:\.\d+)?)\s*([a-z]+)?$/i);
@@ -206,7 +321,16 @@ export function formatItemDisplay(
   // If we ended up with an empty name after deduplication, use original
   if (!cleanName) return name;
 
-  return `${normalizedSize} ${cleanName}`;
+  // Hard cap: truncate name (never size) to fit MAX_DISPLAY_CHARS
+  const full = `${normalizedSize} ${cleanName}`;
+  if (full.length > MAX_DISPLAY_CHARS) {
+    const maxNameLen = MAX_DISPLAY_CHARS - normalizedSize.length - 1; // 1 for space
+    if (maxNameLen > 3) {
+      return `${normalizedSize} ${cleanName.slice(0, maxNameLen - 1).trimEnd()}\u2026`;
+    }
+  }
+
+  return full;
 }
 
 /**
