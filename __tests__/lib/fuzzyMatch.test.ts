@@ -148,4 +148,87 @@ describe("findFuzzyMatches", () => {
       );
     }
   });
+
+  it("returns empty array for empty candidates", () => {
+    expect(findFuzzyMatches("milk", [])).toEqual([]);
+  });
+
+  it("boosts substring matches to at least 85 similarity", () => {
+    // "bread" contains "rea" as substring
+    const matches = findFuzzyMatches("rea", ["bread", "xyz"], {
+      minSimilarity: 50,
+    });
+    const breadMatch = matches.find((m) => m.name === "bread");
+    expect(breadMatch).toBeDefined();
+    expect(breadMatch!.similarity).toBeGreaterThanOrEqual(85);
+  });
+
+  it("applies reduced threshold for short words (< 4 chars)", () => {
+    // "jam" is 3 chars normalized, threshold should drop from 70 to 60
+    const matches = findFuzzyMatches("jam", ["ham", "jam", "yam"], {
+      minSimilarity: 70,
+    });
+    // "ham" has 1 edit from "jam" (66.7% similarity) — should pass with reduced threshold
+    const hamMatch = matches.find((m) => m.name === "ham");
+    expect(hamMatch).toBeDefined();
+  });
+});
+
+describe("normalizeItemName - additional edge cases", () => {
+  it("handles 'an' prefix", () => {
+    expect(normalizeItemName("an apple")).toBe("apple");
+  });
+
+  it("handles whitespace-only input", () => {
+    expect(normalizeItemName("   ")).toBe("");
+  });
+
+  it("handles unicode/accented characters", () => {
+    const result = normalizeItemName("Crème Fraîche");
+    expect(result).toBe("crème fraîche");
+  });
+
+  it("does not strip prefixes that are part of the word", () => {
+    // "therapy" starts with "the" but "the " (with space) shouldn't match
+    expect(normalizeItemName("therapy")).toBe("therapy");
+  });
+
+  it("strips all matching prefixes sequentially", () => {
+    // The loop checks each prefix without breaking, so both "a " and "the " get stripped
+    const result = normalizeItemName("a the milk");
+    expect(result).toBe("milk");
+  });
+});
+
+describe("calculateSimilarity - additional edge cases", () => {
+  it("returns 100 for two empty strings", () => {
+    expect(calculateSimilarity("", "")).toBe(100);
+  });
+
+  it("returns 0 for completely different single chars", () => {
+    const sim = calculateSimilarity("a", "z");
+    expect(sim).toBe(0);
+  });
+
+  it("handles very long identical strings", () => {
+    const long = "a".repeat(500);
+    expect(calculateSimilarity(long, long)).toBe(100);
+  });
+
+  it("handles one empty and one non-empty string", () => {
+    const sim = calculateSimilarity("", "milk");
+    expect(sim).toBe(0);
+  });
+});
+
+describe("levenshteinDistance - additional edge cases", () => {
+  it("handles single character strings", () => {
+    expect(levenshteinDistance("a", "b")).toBe(1);
+    expect(levenshteinDistance("a", "a")).toBe(0);
+  });
+
+  it("returns length of other string when one is empty", () => {
+    expect(levenshteinDistance("", "hello")).toBe(5);
+    expect(levenshteinDistance("hello", "")).toBe(5);
+  });
 });
