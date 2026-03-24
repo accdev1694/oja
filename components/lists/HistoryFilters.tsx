@@ -21,8 +21,16 @@ const HistoryFilters = React.memo(function HistoryFilters({
   onSearchChange,
   onStoreChange,
   onDateChange,
-}: any) {
-  const searchTimeout = useRef<any>(null);
+}: {
+  searchQuery: string;
+  storeFilter: string | null;
+  dateFilter: string | null;
+  stores: string[];
+  onSearchChange: (text: string) => void;
+  onStoreChange: (value: string | null) => void;
+  onDateChange: (value: string | null) => void;
+}) {
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
@@ -30,7 +38,7 @@ const HistoryFilters = React.memo(function HistoryFilters({
     };
   }, []);
 
-  const handleSearchChange = useCallback((text: any) => {
+  const handleSearchChange = useCallback((text: string) => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => {
       onSearchChange(text);
@@ -38,7 +46,7 @@ const HistoryFilters = React.memo(function HistoryFilters({
   }, [onSearchChange]);
 
   const storeOptions = useMemo(() => {
-    const opts = [{ value: null, label: "All Stores", icon: "store" }];
+    const opts: { value: string | null; label: string; icon: string }[] = [{ value: null, label: "All Stores", icon: "store" }];
     for (const store of stores) {
       opts.push({ value: store, label: store, icon: "store" });
     }

@@ -7,6 +7,7 @@ import { useGlassAlert } from "@/components/ui/glass";
 import { useShoppingList } from "@/hooks";
 import { useNotifications } from "@/hooks";
 import { defaultListName } from "@/lib/list/helpers";
+import { Id } from "@/convex/_generated/dataModel";
 
 export function useListsScreen() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export function useListsScreen() {
   }
   const { unreadCount } = useNotifications();
 
-  const [tabMode, setTabMode] = useState("active");
+  const [tabMode, setTabMode] = useState<"active" | "history">("active");
   const [isCreating, setIsCreating] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [animationKey, setAnimationKey] = useState(0);
@@ -45,18 +46,18 @@ export function useListsScreen() {
 
   // Template Modal State
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<Id<"shoppingLists"> | null>(null);
   const [selectedTemplateName, setSelectedTemplateName] = useState("");
 
   // Edit List Name State
   const [showEditNameModal, setShowEditNameModal] = useState(false);
-  const [editingListId, setEditingListId] = useState(null);
+  const [editingListId, setEditingListId] = useState<Id<"shoppingLists"> | null>(null);
   const [editingListName, setEditingListName] = useState("");
 
   // History Filter State
   const [historySearchQuery, setHistorySearchQuery] = useState("");
-  const [historyStoreFilter, setHistoryStoreFilter] = useState(null);
-  const [historyDateFilter, setHistoryDateFilter] = useState(null);
+  const [historyStoreFilter, setHistoryStoreFilter] = useState<string | null>(null);
+  const [historyDateFilter, setHistoryDateFilter] = useState<string | null>(null);
 
   // Trigger animations every time this tab gains focus
   useFocusEffect(
@@ -85,20 +86,20 @@ export function useListsScreen() {
     );
   }, [alert, router]);
 
-  const isListLimitError = useCallback((error: any) => {
+  const isListLimitError = useCallback((error: unknown) => {
     const msg = error instanceof Error ? error.message : String(error);
     return msg.includes("limit") || msg.includes("Upgrade") || msg.includes("Premium");
   }, []);
 
-  const handleListPress = useCallback((id: any) => {
+  const handleListPress = useCallback((id: Id<"shoppingLists">) => {
     router.push(`/list/${id}`);
   }, [router]);
 
-  const handleDeletePress = useCallback((id: any, name: string) => {
+  const handleDeletePress = useCallback((id: Id<"shoppingLists">, name: string) => {
     deleteList(id, name);
   }, [deleteList]);
 
-  const handleEditName = useCallback((id: any, currentName: string) => {
+  const handleEditName = useCallback((id: Id<"shoppingLists">, currentName: string) => {
     setEditingListId(id);
     setEditingListName(currentName);
     setShowEditNameModal(true);
@@ -110,15 +111,15 @@ export function useListsScreen() {
     if (success) setShowEditNameModal(false);
   }, [updateListName, editingListId]);
 
-  const handleHistoryPress = useCallback((id: any) => {
+  const handleHistoryPress = useCallback((id: Id<"shoppingLists">) => {
     router.push(`/trip-summary?id=${id}`);
   }, [router]);
 
-  const handleSharedPress = useCallback((id: any) => {
+  const handleSharedPress = useCallback((id: Id<"shoppingLists">) => {
     router.push(`/list/${id}`);
   }, [router]);
 
-  const handleUseAsTemplate = useCallback((listId: any, listName: string) => {
+  const handleUseAsTemplate = useCallback((listId: Id<"shoppingLists">, listName: string) => {
     setSelectedTemplateId(listId);
     setSelectedTemplateName(listName);
     setShowTemplateModal(true);
@@ -126,7 +127,7 @@ export function useListsScreen() {
 
   // Handles both single template and combine flow
   // When additionalListIds is provided, routes to createFromMultiple
-  const handleConfirmTemplate = useCallback(async (newName: string, budget: any, additionalListIds: any) => {
+  const handleConfirmTemplate = useCallback(async (newName: string, budget: number | undefined, additionalListIds: Id<"shoppingLists">[] | undefined) => {
     if (!selectedTemplateId) return;
     try {
       let result;
@@ -185,7 +186,7 @@ export function useListsScreen() {
     setShowTemplatePickerModal(true);
   }, []);
 
-  const handlePickTemplate = useCallback((listId: any, listName: string) => {
+  const handlePickTemplate = useCallback((listId: Id<"shoppingLists">, listName: string) => {
     setShowTemplatePickerModal(false);
     setSelectedTemplateId(listId);
     setSelectedTemplateName(listName);
@@ -206,7 +207,7 @@ export function useListsScreen() {
   // Extract unique store names from full (unfiltered) history
   const historyStores = useMemo(() => {
     if (!history) return [];
-    const storeSet = new Set();
+    const storeSet = new Set<string>();
     for (const list of history) {
       if (list.storeSegments && list.storeSegments.length > 0) {
         for (const seg of list.storeSegments) {
@@ -250,7 +251,7 @@ export function useListsScreen() {
     // Date filter
     if (historyDateFilter) {
       const now = Date.now();
-      const cutoffs = { month: 30, "3months": 90, year: 365 };
+      const cutoffs: Record<string, number> = { month: 30, "3months": 90, year: 365 };
       const days = cutoffs[historyDateFilter];
       if (days) {
         const cutoff = now - days * 24 * 60 * 60 * 1000;

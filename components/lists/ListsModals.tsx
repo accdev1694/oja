@@ -3,6 +3,7 @@ import { CreateListOptionsModal } from "@/components/lists/CreateListOptionsModa
 import { TemplatePickerModal } from "@/components/lists/TemplatePickerModal";
 import { CreateFromTemplateModal } from "@/components/lists/CreateFromTemplateModal";
 import { EditListNameModal } from "@/components/lists/EditListNameModal";
+import { Doc, Id } from "@/convex/_generated/dataModel";
 
 const ListsModals = React.memo(function ListsModals({
   showCreateOptionsModal,
@@ -23,7 +24,26 @@ const ListsModals = React.memo(function ListsModals({
   onConfirmTemplate,
   onCloseEditName,
   onSaveListName,
-}: any) {
+}: {
+  showCreateOptionsModal: boolean;
+  showTemplatePickerModal: boolean;
+  showTemplateModal: boolean;
+  showEditNameModal: boolean;
+  selectedTemplateId: Id<"shoppingLists"> | null;
+  selectedTemplateName: string;
+  editingListName: string;
+  historyLists: Doc<"shoppingLists">[] | undefined;
+  hasHistory: boolean;
+  onCloseCreateOptions: () => void;
+  onCreateFromScratch: () => void;
+  onShowTemplatePicker: () => void;
+  onCloseTemplatePicker: () => void;
+  onPickTemplate: (id: Id<"shoppingLists">, name: string) => void;
+  onCloseTemplate: () => void;
+  onConfirmTemplate: (name: string, budget: number | undefined, additionalListIds: Id<"shoppingLists">[] | undefined) => void;
+  onCloseEditName: () => void;
+  onSaveListName: (name: string) => Promise<void>;
+}) {
   return (
     <>
       <CreateListOptionsModal
@@ -38,7 +58,7 @@ const ListsModals = React.memo(function ListsModals({
         visible={showTemplatePickerModal}
         onClose={onCloseTemplatePicker}
         onSelectTemplate={onPickTemplate}
-        historyLists={historyLists}
+        historyLists={historyLists ?? []}
       />
 
       <CreateFromTemplateModal

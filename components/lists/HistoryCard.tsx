@@ -16,6 +16,7 @@ import {
   borderRadius,
   animations,
 } from "@/components/ui/glass";
+import { Doc, Id } from "@/convex/_generated/dataModel";
 
 const formatShortDate = (ts: number) => {
   const d = new Date(ts);
@@ -36,7 +37,12 @@ export const HistoryCard = React.memo(function HistoryCard({
   onPress,
   formatDateTime,
   onUseAsTemplate,
-}: any) {
+}: {
+  list: Doc<"shoppingLists"> & { itemCount?: number; checkedCount?: number };
+  onPress: (id: Id<"shoppingLists">) => void;
+  formatDateTime: (ts: number) => string;
+  onUseAsTemplate?: (id: Id<"shoppingLists">, name: string) => void;
+}) {
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -207,7 +213,7 @@ export const HistoryCard = React.memo(function HistoryCard({
       </Animated.View>
     </Swipeable>
   );
-}, (prev: any, next: any) => {
+}, (prev, next) => {
   return (
     prev.list._id === next.list._id &&
     prev.list.actualTotal === next.list.actualTotal &&

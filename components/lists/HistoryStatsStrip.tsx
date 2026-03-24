@@ -8,10 +8,13 @@ import {
   typography,
   spacing,
 } from "@/components/ui/glass";
+import { Doc } from "@/convex/_generated/dataModel";
 
 const HistoryStatsStrip = React.memo(function HistoryStatsStrip({
   history,
-}: any) {
+}: {
+  history: Doc<"shoppingLists">[];
+}) {
   const stats = useMemo(() => {
     let totalSpent = 0;
     let savingsSum = 0;

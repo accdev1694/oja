@@ -164,7 +164,7 @@ Never add providers outside ClerkProvider that import native modules. `InitialLa
 6. **Zero-Blank Prices** — every item shows a price (3-layer cascade)
 7. **Validated icons only** — use `iconMatcher.ts` for MaterialCommunityIcons
 8. **NEVER kill node.exe** — use `npx kill-port <port>` instead
-9. **No TypeScript annotations in NEW code** — no `interface`, `type`, `: string`, `: any`. Existing typed code may remain.
+9. **No `any` type — EVER** — `any` is banned by ESLint (`error`). Always use the actual expected type: `Id<"shoppingLists">`, `Doc<"tableName">`, `unknown`, concrete types. For component props, use inline object types `}: { prop: Type }`. For callbacks, type every parameter. Use `unknown` + type narrowing instead of `any` when the type is truly dynamic. Import `Id` and `Doc` from `@/convex/_generated/dataModel` for Convex types.
 10. **Max 400 lines per file** — extract into separate files if approaching limit
 11. **Parallel sub-agents** — deploy multiple in parallel where possible
 12. **Never fix without approval** — present analysis and proposed solution first

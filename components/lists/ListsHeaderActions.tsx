@@ -14,7 +14,13 @@ const ListsHeaderActions = React.memo(function ListsHeaderActions({
   unreadCount,
   onCreateListFlow,
   onShowNotifications,
-}: any) {
+}: {
+  tabMode: "active" | "history";
+  isCreating: boolean;
+  unreadCount: number;
+  onCreateListFlow: () => void;
+  onShowNotifications: () => void;
+}) {
   return (
     <View style={styles.headerActions}>
       {tabMode === "active" && (

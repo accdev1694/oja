@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, ReactElement } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -11,6 +11,7 @@ import {
   spacing,
 } from "@/components/ui/glass";
 import { HistoryCard } from "@/components/lists/HistoryCard";
+import { Doc, Id } from "@/convex/_generated/dataModel";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -26,7 +27,16 @@ const HistoryListsContent = React.memo(function HistoryListsContent({
   headerContent,
   hasActiveFilters,
   onClearFilters,
-}: any) {
+}: {
+  displayList: (Doc<"shoppingLists"> & { itemCount?: number; checkedCount?: number })[];
+  animationKey: number;
+  onHistoryPress: (id: Id<"shoppingLists">) => void;
+  onUseAsTemplate: (id: Id<"shoppingLists">, name: string) => void;
+  formatDateTime: (ts: number) => string;
+  headerContent?: ReactElement | null;
+  hasActiveFilters: boolean;
+  onClearFilters?: () => void;
+}) {
   // Build flat data with month headers interleaved
   const flatData = useMemo(() => {
     if (displayList.length === 0) return [];
@@ -41,7 +51,7 @@ const HistoryListsContent = React.memo(function HistoryListsContent({
 
       if (monthYear !== currentMonth) {
         currentMonth = monthYear;
-        result.push({ _id: `month-${monthYear}`, isMonthHeader: true, month: monthYear });
+        result.push({ _id: `month-${monthYear}`, isMonthHeader: true as const, month: monthYear });
       }
       result.push(list);
     }
@@ -49,16 +59,18 @@ const HistoryListsContent = React.memo(function HistoryListsContent({
     return result;
   }, [displayList]);
 
+  type HistoryFlatItem = (Doc<"shoppingLists"> & { itemCount?: number; checkedCount?: number }) | { _id: string; isMonthHeader: true; month: string };
+
   const renderItem = useCallback(
-    ({ item }: any) => {
-      if (item.isMonthHeader) {
+    ({ item }: { item: HistoryFlatItem }) => {
+      if ("isMonthHeader" in item && item.isMonthHeader) {
         return <Text style={styles.monthHeader}>{item.month}</Text>;
       }
 
       return (
         <Animated.View style={styles.itemWrapper} entering={FadeInDown.duration(300).delay(50)}>
           <HistoryCard
-            list={item}
+            list={item as Doc<"shoppingLists"> & { itemCount?: number; checkedCount?: number }}
             onPress={onHistoryPress}
             formatDateTime={formatDateTime}
             onUseAsTemplate={onUseAsTemplate}
@@ -69,10 +81,10 @@ const HistoryListsContent = React.memo(function HistoryListsContent({
     [onHistoryPress, formatDateTime, onUseAsTemplate]
   );
 
-  const keyExtractor = useCallback((item: any) => item._id, []);
+  const keyExtractor = useCallback((item: HistoryFlatItem) => item._id, []);
 
   const getItemType = useCallback(
-    (item: any) => (item.isMonthHeader ? "monthHeader" : "card"),
+    (item: HistoryFlatItem) => ("isMonthHeader" in item ? "monthHeader" : "card"),
     []
   );
 

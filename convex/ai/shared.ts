@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import { metricsFromGemini, metricsFromOpenAI, PROVIDER_LIMITS } from "../lib/aiTracking";
 import type { AICallMetrics } from "../lib/aiTracking";
+import type { ActionCtx } from "../_generated/server";
 
 export type { AICallMetrics };
 
@@ -186,10 +187,9 @@ export async function smartGenerateInstrumented(prompt: string, operationName: s
  * Reads today's RPD from the internal query and throws if quota is exhausted.
  * This is a server-side enforcement — Gemini never gets called if we're at limit.
  *
- * Accepts any object with a runQuery method (Convex GenericActionCtx).
+ * Accepts a Convex ActionCtx with a runQuery method.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function enforceGeminiQuota(ctx: any): Promise<void> {
+export async function enforceGeminiQuota(ctx: ActionCtx): Promise<void> {
   const { internal } = await import("../_generated/api");
   const rpd = await ctx.runQuery(internal.aiUsage.getGeminiRPDToday, {});
   if (rpd.blocked) {

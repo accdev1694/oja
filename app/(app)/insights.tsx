@@ -44,7 +44,7 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 
 export default function InsightsScreen() {
   const router = useRouter();
-  const confettiRef = useRef<any>(null);
+  const confettiRef = useRef<ConfettiCannon>(null);
   const prevAchievementCount = useRef<number | null>(null);
   const { toast, dismiss, onAchievementUnlock } = useDelightToast();
   const { firstName, user } = useCurrentUser();

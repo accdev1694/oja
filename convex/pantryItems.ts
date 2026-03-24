@@ -5,6 +5,3 @@
  */
 
 export * from "./pantry/index";
-
-// Re-export for backward compatibility
-export { getItemTier } from "./pantry/helpers";

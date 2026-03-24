@@ -12,9 +12,19 @@ describe("Stripe Webhook Processing", () => {
 
   type SubscriptionStatus = "active" | "cancelled" | "expired" | "trial" | "past_due";
 
+  interface StripeSessionData {
+    customer?: string;
+    subscription?: string;
+    metadata?: Record<string, string>;
+    status?: string;
+    current_period_start?: number;
+    current_period_end?: number;
+    [key: string]: string | number | Record<string, string> | undefined;
+  }
+
   interface WebhookEvent {
     type: StripeEventType;
-    data: Record<string, any>;
+    data: StripeSessionData;
   }
 
   interface Subscription {
@@ -67,11 +77,11 @@ describe("Stripe Webhook Processing", () => {
     event: WebhookEvent,
     sub: Subscription
   ): Partial<Subscription> {
-    const stripeStatus = event.data.status;
+    const stripeStatus = event.data.status ?? "";
     return {
       status: mapStripeStatus(stripeStatus),
-      currentPeriodStart: event.data.current_period_start * 1000,
-      currentPeriodEnd: event.data.current_period_end * 1000,
+      currentPeriodStart: (event.data.current_period_start ?? 0) * 1000,
+      currentPeriodEnd: (event.data.current_period_end ?? 0) * 1000,
     };
   }
 

@@ -106,7 +106,7 @@ export const StockListHeader = React.memo(function StockListHeader({
           />
           <Text style={styles.attentionEmptyTitle}>All stocked up!</Text>
           <Text style={styles.attentionEmptySubtitle}>
-            Nothing needs restocking right now. Tap "All Items" to browse your full stock.
+            Nothing needs restocking right now. Tap &quot;All Items&quot; to browse your full stock.
           </Text>
         </View>
       );

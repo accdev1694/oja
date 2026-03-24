@@ -10,6 +10,7 @@ module.exports = defineConfig([
   {
     files: ["**/*.ts", "**/*.tsx"],
     rules: {
+      // Ban explicit `any` — forces proper types (Id<>, Doc<>, unknown, etc.)
       "@typescript-eslint/no-explicit-any": "error",
     },
   },

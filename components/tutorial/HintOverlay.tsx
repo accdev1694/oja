@@ -142,7 +142,7 @@ export function HintOverlay({
 
             {/* Don't show hints again link */}
             <Pressable onPress={handleDisableHints} style={styles.skipLink}>
-              <Text style={styles.skipText}>Don't show hints</Text>
+              <Text style={styles.skipText}>Don&apos;t show hints</Text>
             </Pressable>
           </View>
         </GlassCard>

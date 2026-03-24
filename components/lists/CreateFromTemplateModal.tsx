@@ -17,6 +17,7 @@ import {
 import { formatPrice } from "@/lib/currency/currencyUtils";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { defaultListName } from "@/lib/list/helpers";
+import { Doc, Id } from "@/convex/_generated/dataModel";
 
 export function CreateFromTemplateModal({
   visible,
@@ -25,11 +26,18 @@ export function CreateFromTemplateModal({
   onClose,
   onConfirm,
   historyLists,
-}: any) {
+}: {
+  visible: boolean;
+  sourceListId: Id<"shoppingLists"> | null;
+  sourceListName: string;
+  onClose: () => void;
+  onConfirm: (name: string, budget: number | undefined, additionalListIds: Id<"shoppingLists">[] | undefined) => void;
+  historyLists: Doc<"shoppingLists">[] | undefined;
+}) {
   const [newName, setNewName] = useState(defaultListName());
   const [isCreating, setIsCreating] = useState(false);
   const [showCombinePicker, setShowCombinePicker] = useState(false);
-  const [additionalListIds, setAdditionalListIds] = useState(new Set());
+  const [additionalListIds, setAdditionalListIds] = useState<Set<Id<"shoppingLists">>>(new Set());
   const { user } = useCurrentUser();
   const currency = user?.currency || "GBP";
 
@@ -41,7 +49,7 @@ export function CreateFromTemplateModal({
   // Other history lists (excluding the source)
   const otherLists = useMemo(() => {
     if (!historyLists || !sourceListId) return [];
-    return historyLists.filter((l: any) => l._id !== sourceListId);
+    return historyLists.filter((l: Doc<"shoppingLists">) => l._id !== sourceListId);
   }, [historyLists, sourceListId]);
 
   // Reset state when modal opens
@@ -53,7 +61,7 @@ export function CreateFromTemplateModal({
     }
   }, [visible]);
 
-  const toggleAdditionalList = (listId: any) => {
+  const toggleAdditionalList = (listId: Id<"shoppingLists">) => {
     Haptics.selectionAsync();
     setAdditionalListIds((prev) => {
       const next = new Set(prev);
@@ -167,7 +175,7 @@ export function CreateFromTemplateModal({
 
             {showCombinePicker && (
               <View style={styles.combineList}>
-                {otherLists.slice(0, 10).map((list: any) => (
+                {otherLists.slice(0, 10).map((list: Doc<"shoppingLists">) => (
                   <Pressable
                     key={list._id}
                     style={styles.combineItem}

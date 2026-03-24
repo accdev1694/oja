@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { Id } from "../_generated/dataModel";
 import { mutation, query } from "../_generated/server";
 import { pushReceiptId } from "../lib/receiptHelpers";
 import { matchReceiptItems } from "../lib/matching";
@@ -74,7 +75,7 @@ export const linkToList = mutation({
       if (!matchResult.bestMatch) continue;
       const receiptItem = matchResult.receiptItem;
 
-      await ctx.db.patch(matchResult.bestMatch.id as any, {
+      await ctx.db.patch(matchResult.bestMatch.id as Id<"listItems">, {
         estimatedPrice: receiptItem.unitPrice,
         actualPrice: receiptItem.unitPrice,
         priceSource: "personal" as "personal",

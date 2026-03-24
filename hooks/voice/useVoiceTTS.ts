@@ -8,6 +8,7 @@
 import { useCallback, useRef } from "react";
 import * as Speech from "expo-speech";
 import { useAction } from "convex/react";
+import { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 
 // ── Safe dynamic import of expo-av ─────────────────────────────────────
@@ -46,7 +47,7 @@ export function useVoiceTTS(userId?: string) {
       // Only try neural TTS if expo-av is available
       if (AUDIO_AVAILABLE && AudioModule !== null) {
         try {
-          const result = await textToSpeech({ text: ttsText, voiceGender: "MALE", userId: userId as any });
+          const result = await textToSpeech({ text: ttsText, voiceGender: "MALE", userId: userId as Id<"users"> });
 
           if (result.audioBase64) {
             const audioModuleRecord = AudioModule as Record<string, unknown>;
