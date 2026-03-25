@@ -206,6 +206,188 @@ describe("buildSystemPrompt", () => {
     });
   });
 
+  describe("dietary restrictions", () => {
+    it("renders dietary restrictions in context when provided", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        dietaryRestrictions: ["vegan", "gluten-free"],
+      });
+      expect(prompt).toContain("Dietary restrictions: vegan, gluten-free");
+    });
+
+    it("includes dietary awareness instructions when restrictions exist", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        dietaryRestrictions: ["halal"],
+      });
+      expect(prompt).toContain("DIETARY & CUISINE AWARENESS:");
+      expect(prompt).toContain("This user follows: halal");
+      expect(prompt).toContain("Never suggest items that violate these restrictions");
+    });
+
+    it("omits dietary restrictions from context when empty", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        dietaryRestrictions: [],
+      });
+      expect(prompt).not.toContain("Dietary restrictions:");
+      expect(prompt).not.toContain("This user follows:");
+    });
+
+    it("omits dietary restrictions from context when undefined", () => {
+      const prompt = buildSystemPrompt(baseContext);
+      expect(prompt).not.toContain("Dietary restrictions:");
+    });
+  });
+
+  describe("cuisine preferences", () => {
+    it("renders cuisine preferences in context when provided", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        cuisinePreferences: ["Nigerian", "Caribbean", "Italian"],
+      });
+      expect(prompt).toContain("Cuisine preferences: Nigerian, Caribbean, Italian");
+    });
+
+    it("includes cuisine awareness instructions when preferences exist", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        cuisinePreferences: ["Nigerian", "West African"],
+      });
+      expect(prompt).toContain("This user enjoys Nigerian, West African cuisine");
+      expect(prompt).toContain("don't overdo it");
+    });
+
+    it("omits cuisine preferences from context when empty", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        cuisinePreferences: [],
+      });
+      expect(prompt).not.toContain("Cuisine preferences:");
+      expect(prompt).not.toContain("This user enjoys");
+    });
+
+    it("omits cuisine preferences from context when undefined", () => {
+      const prompt = buildSystemPrompt(baseContext);
+      expect(prompt).not.toContain("Cuisine preferences:");
+    });
+
+    it("renders both dietary and cuisine together", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        dietaryRestrictions: ["vegan"],
+        cuisinePreferences: ["Japanese"],
+      });
+      expect(prompt).toContain("Dietary restrictions: vegan");
+      expect(prompt).toContain("Cuisine preferences: Japanese");
+      expect(prompt).toContain("This user follows: vegan");
+      expect(prompt).toContain("This user enjoys Japanese cuisine");
+    });
+  });
+
+  describe("default budget", () => {
+    it("renders default budget preference when provided", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        defaultBudget: 60,
+      });
+      expect(prompt).toContain("Default budget preference: £60");
+    });
+
+    it("omits default budget when undefined", () => {
+      const prompt = buildSystemPrompt(baseContext);
+      expect(prompt).not.toContain("Default budget preference:");
+    });
+  });
+
+  describe("experience awareness", () => {
+    it("identifies new users with low session count", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        sessionCount: 1,
+      });
+      expect(prompt).toContain("EXPERIENCE AWARENESS:");
+      expect(prompt).toContain("This is a new user");
+      expect(prompt).toContain("more explanatory and welcoming");
+    });
+
+    it("identifies new users at threshold boundary (3 sessions)", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        sessionCount: 3,
+      });
+      expect(prompt).toContain("This is a new user");
+    });
+
+    it("identifies experienced users with high session count", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        sessionCount: 75,
+      });
+      expect(prompt).toContain("This is an experienced user");
+      expect(prompt).toContain("keep responses brief");
+    });
+
+    it("identifies experienced users at threshold boundary (51 sessions)", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        sessionCount: 51,
+      });
+      expect(prompt).toContain("This is an experienced user");
+    });
+
+    it("uses adaptive phrasing for mid-range session count", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        sessionCount: 25,
+      });
+      expect(prompt).toContain("Adapt your detail level");
+      expect(prompt).not.toContain("This is a new user");
+      expect(prompt).not.toContain("This is an experienced user");
+    });
+
+    it("uses adaptive phrasing when session count is undefined", () => {
+      const prompt = buildSystemPrompt(baseContext);
+      expect(prompt).toContain("Adapt your detail level");
+    });
+
+    it("includes welcome-back message for inactive users (>7 days)", () => {
+      const eightDaysAgo = Date.now() - 8 * 24 * 60 * 60 * 1000;
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        lastActiveAt: eightDaysAgo,
+      });
+      expect(prompt).toContain("hasn't been active for");
+      expect(prompt).toContain("Welcome them back warmly");
+    });
+
+    it("omits welcome-back for recently active users (<= 7 days)", () => {
+      const twoDaysAgo = Date.now() - 2 * 24 * 60 * 60 * 1000;
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        lastActiveAt: twoDaysAgo,
+      });
+      expect(prompt).not.toContain("hasn't been active for");
+      expect(prompt).not.toContain("Welcome them back");
+    });
+
+    it("omits welcome-back when lastActiveAt is undefined", () => {
+      const prompt = buildSystemPrompt(baseContext);
+      expect(prompt).not.toContain("hasn't been active for");
+    });
+
+    it("combines new user + welcome-back for returning beginner", () => {
+      const tenDaysAgo = Date.now() - 10 * 24 * 60 * 60 * 1000;
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        sessionCount: 2,
+        lastActiveAt: tenDaysAgo,
+      });
+      expect(prompt).toContain("This is a new user");
+      expect(prompt).toContain("hasn't been active for");
+    });
+  });
+
   describe("prompt sections", () => {
     it("includes SUBSCRIPTION AWARENESS section", () => {
       const prompt = buildSystemPrompt(baseContext);
