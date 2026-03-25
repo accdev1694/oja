@@ -181,12 +181,21 @@ describe("buildSystemPrompt", () => {
   });
 
   describe("user name", () => {
-    it("includes user name instruction when provided", () => {
+    it("includes confirmed user name instruction when nameManuallySet", () => {
+      const prompt = buildSystemPrompt({
+        ...baseContext,
+        userName: "Sarah",
+        nameManuallySet: true,
+      });
+      expect(prompt).toContain("The user's name is Sarah");
+    });
+
+    it("uses tentative phrasing when name exists but not manually set", () => {
       const prompt = buildSystemPrompt({
         ...baseContext,
         userName: "Sarah",
       });
-      expect(prompt).toContain("The user's name is Sarah");
+      expect(prompt).toContain('The user signed up as "Sarah"');
     });
 
     it("asks for name when not provided", () => {
@@ -246,6 +255,7 @@ describe("buildSystemPrompt", () => {
           "Quick Grab (no budget, 3 items)",
         ],
         userName: "James",
+        nameManuallySet: true,
         subscriptionTier: "premium_monthly",
         preferredStores: ["Tesco", "Sainsburys"],
       });

@@ -17,6 +17,12 @@ export interface VoiceContext {
   userName?: string;
   subscriptionTier?: string;
   preferredStores?: string[];
+  cuisinePreferences?: string[];
+  dietaryRestrictions?: string[];
+  defaultBudget?: number;
+  lastActiveAt?: number;
+  sessionCount?: number;
+  nameManuallySet?: boolean;
 }
 
 export function buildSystemPrompt(context: VoiceContext): string {
@@ -35,7 +41,7 @@ PERSONALITY:
 - Warm, supportive, encouraging — like a helpful British-Nigerian friend who's great at budgeting
 - Use British English (£, "brilliant", "lovely", "mate")
 - Keep responses concise (2-3 sentences max — this is spoken aloud)
-- ${context.userName ? `The user's name is ${context.userName}. Use it occasionally to be friendly.` : "You don't know this user's name yet. During your FIRST conversation, naturally ask what they'd like to be called (e.g. \"By the way, I'm Tobi — what should I call you?\"). Don't force it — weave it in naturally. If they tell you, remember it for the rest of the conversation."}
+- ${context.userName && context.nameManuallySet ? `The user's name is ${context.userName}. Use it occasionally to be friendly.` : context.userName ? `The user signed up as "${context.userName}" but hasn't confirmed their preferred name. Use it tentatively, and during your first conversation you might say "I have you down as ${context.userName} — is that what you'd like me to call you?"` : "You don't know this user's name yet. During your FIRST conversation, naturally ask what they'd like to be called (e.g. \"By the way, I'm Tobi — what should I call you?\"). Don't force it — weave it in naturally. If they tell you, remember it for the rest of the conversation."}
 - Celebrate wins ("Nice one! You've saved £23 this week!")
 - Be empathetic about overspending ("No worries, happens to everyone")
 
@@ -112,6 +118,12 @@ STORE AWARENESS:
 - If the user has preferred stores, use them as context when discussing prices or creating lists
 - Suggest their preferred stores first when relevant (e.g., "I'll check prices at your usual Tesco and Aldi")
 
+DIETARY & CUISINE AWARENESS:
+- If the user has dietary restrictions, always keep them in mind when suggesting items or alternatives${context.dietaryRestrictions && context.dietaryRestrictions.length > 0 ? `\n- This user follows: ${context.dietaryRestrictions.join(", ")}. Never suggest items that violate these restrictions. If they add something that conflicts, gently flag it ("Just a heads up — that contains gluten, and you mentioned you're gluten-free").` : ""}${context.cuisinePreferences && context.cuisinePreferences.length > 0 ? `\n- This user enjoys ${context.cuisinePreferences.join(", ")} cuisine. Use this to make relevant suggestions (e.g., "Since you love Nigerian food, want me to add some plantains?") — but don't overdo it.` : ""}
+
+EXPERIENCE AWARENESS:
+${context.sessionCount !== undefined && context.sessionCount <= 3 ? "- This is a new user — be a bit more explanatory and welcoming. Offer brief tips about what you can do." : context.sessionCount !== undefined && context.sessionCount > 50 ? "- This is an experienced user — keep responses brief and skip basic explanations." : "- Adapt your detail level to what the user seems to need."}${context.lastActiveAt ? (() => { const daysSince = Math.floor((Date.now() - context.lastActiveAt!) / (1000 * 60 * 60 * 24)); return daysSince > 7 ? `\n- The user hasn't been active for ${daysSince} days. Welcome them back warmly ("Great to have you back!").` : ""; })() : ""}
+
 GENERAL RULES:
 - Prices in GBP: "£1.15" not "1.15 pounds".
 - Never invent data. If a function returns empty, say so honestly.
@@ -120,7 +132,7 @@ GENERAL RULES:
 CURRENT CONTEXT:
 - Screen: ${context.currentScreen}
 - Active list: ${activeListInfo}
-- ${budgetInfo}
+- ${budgetInfo}${context.defaultBudget ? `\n- Default budget preference: £${context.defaultBudget}` : ""}
 - Active lists count: ${context.activeListsCount ?? "unknown"}
-- Items running low: ${context.lowStockCount ?? "unknown"}${context.lowStockItems && context.lowStockItems.length > 0 ? `\n- Low/out items: ${context.lowStockItems.join(", ")}` : ""}${context.activeListNames && context.activeListNames.length > 0 ? `\n- Your lists: ${context.activeListNames.join("; ")}` : ""}${context.subscriptionTier ? `\n- Subscription: ${context.subscriptionTier === "free" ? "Free plan (limited features)" : context.subscriptionTier.replace(/_/g, " ")}` : ""}${context.preferredStores && context.preferredStores.length > 0 ? `\n- Preferred stores: ${context.preferredStores.join(", ")}` : ""}`;
+- Items running low: ${context.lowStockCount ?? "unknown"}${context.lowStockItems && context.lowStockItems.length > 0 ? `\n- Low/out items: ${context.lowStockItems.join(", ")}` : ""}${context.activeListNames && context.activeListNames.length > 0 ? `\n- Your lists: ${context.activeListNames.join("; ")}` : ""}${context.subscriptionTier ? `\n- Subscription: ${context.subscriptionTier === "free" ? "Free plan (limited features)" : context.subscriptionTier.replace(/_/g, " ")}` : ""}${context.preferredStores && context.preferredStores.length > 0 ? `\n- Preferred stores: ${context.preferredStores.join(", ")}` : ""}${context.dietaryRestrictions && context.dietaryRestrictions.length > 0 ? `\n- Dietary restrictions: ${context.dietaryRestrictions.join(", ")}` : ""}${context.cuisinePreferences && context.cuisinePreferences.length > 0 ? `\n- Cuisine preferences: ${context.cuisinePreferences.join(", ")}` : ""}`;
 }

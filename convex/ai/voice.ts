@@ -33,22 +33,32 @@ type EnrichedShoppingList = Doc<"shoppingLists"> & {
   isInProgress: boolean;
 };
 
-/**
- * Fetch real user context server-side for Tobi's system prompt.
- * Runs 3 queries in parallel to minimize latency.
- */
-async function getUserVoiceContext(ctx: ActionCtx): Promise<{
+/** Shape returned by getUserVoiceContext with enriched user profile data */
+interface UserVoiceContext {
   lowStockItems: string[];
   activeListNames: string[];
   subscriptionTier: string;
   preferredStores: string[];
-}> {
+  cuisinePreferences: string[];
+  dietaryRestrictions: string[];
+  defaultBudget: number | undefined;
+  lastActiveAt: number | undefined;
+  sessionCount: number | undefined;
+  nameManuallySet: boolean;
+}
+
+/**
+ * Fetch real user context server-side for Tobi's system prompt.
+ * Runs 5 queries in parallel to minimize latency.
+ */
+async function getUserVoiceContext(ctx: ActionCtx): Promise<UserVoiceContext> {
   try {
-    const [pantryItems, activeLists, subscription, storePrefs] = await Promise.all([
+    const [pantryItems, activeLists, subscription, storePrefs, userProfile] = await Promise.all([
       ctx.runQuery(api.pantryItems.getByUser, {}),
       ctx.runQuery(api.shoppingLists.getActive, {}),
       ctx.runQuery(api.subscriptions.getCurrentSubscription, {}).catch(() => null),
       ctx.runQuery(api.stores.getUserPreferences, {}).catch(() => null),
+      ctx.runQuery(api.users.getCurrent, {}).catch(() => null),
     ]);
 
     // Low/out-of-stock pantry items (top 10 for prompt size)
@@ -72,10 +82,40 @@ async function getUserVoiceContext(ctx: ActionCtx): Promise<{
       (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
     );
 
-    return { lowStockItems: lowStock, activeListNames: listNames, subscriptionTier: tier, preferredStores: stores };
+    // User profile enrichment
+    const cuisinePreferences = userProfile?.cuisinePreferences ?? [];
+    const dietaryRestrictions = userProfile?.dietaryRestrictions ?? [];
+    const defaultBudget = userProfile?.defaultBudget;
+    const lastActiveAt = userProfile?.lastActiveAt;
+    const sessionCount = userProfile?.sessionCount;
+    const nameManuallySet = userProfile?.nameManuallySet ?? false;
+
+    return {
+      lowStockItems: lowStock,
+      activeListNames: listNames,
+      subscriptionTier: tier,
+      preferredStores: stores,
+      cuisinePreferences,
+      dietaryRestrictions,
+      defaultBudget,
+      lastActiveAt,
+      sessionCount,
+      nameManuallySet,
+    };
   } catch (error) {
     console.warn("[getUserVoiceContext] Failed to fetch context, using defaults:", error);
-    return { lowStockItems: [], activeListNames: [], subscriptionTier: "unknown", preferredStores: [] };
+    return {
+      lowStockItems: [],
+      activeListNames: [],
+      subscriptionTier: "unknown",
+      preferredStores: [],
+      cuisinePreferences: [],
+      dietaryRestrictions: [],
+      defaultBudget: undefined,
+      lastActiveAt: undefined,
+      sessionCount: undefined,
+      nameManuallySet: false,
+    };
   }
 }
 
@@ -183,6 +223,12 @@ export const voiceAssistant = action({
       activeListNames: userContext.activeListNames,
       subscriptionTier: userContext.subscriptionTier,
       preferredStores: userContext.preferredStores,
+      cuisinePreferences: userContext.cuisinePreferences,
+      dietaryRestrictions: userContext.dietaryRestrictions,
+      defaultBudget: userContext.defaultBudget,
+      lastActiveAt: userContext.lastActiveAt,
+      sessionCount: userContext.sessionCount,
+      nameManuallySet: userContext.nameManuallySet,
     });
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash-lite",
