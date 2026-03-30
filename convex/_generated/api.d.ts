@@ -74,6 +74,7 @@ import type * as lib_analytics from "../lib/analytics.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_categoryNormalizer from "../lib/categoryNormalizer.js";
 import type * as lib_communityHelpers from "../lib/communityHelpers.js";
+import type * as lib_emailNormalizer from "../lib/emailNormalizer.js";
 import type * as lib_featureGating from "../lib/featureGating.js";
 import type * as lib_fuzzyMatch from "../lib/fuzzyMatch.js";
 import type * as lib_globalEnrichment from "../lib/globalEnrichment.js";
@@ -282,6 +283,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/categoryNormalizer": typeof lib_categoryNormalizer;
   "lib/communityHelpers": typeof lib_communityHelpers;
+  "lib/emailNormalizer": typeof lib_emailNormalizer;
   "lib/featureGating": typeof lib_featureGating;
   "lib/fuzzyMatch": typeof lib_fuzzyMatch;
   "lib/globalEnrichment": typeof lib_globalEnrichment;

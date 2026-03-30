@@ -10,6 +10,7 @@ import {
   getNextTierInfo,
 } from "./lib/featureGating";
 import { trackFunnelEvent } from "./lib/analytics";
+import { normalizeEmailForTombstone } from "./lib/emailNormalizer";
 
 async function requireUser(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -137,6 +138,18 @@ export const startFreeTrial = mutation({
       .first();
 
     if (existing) throw new Error("Already has a subscription");
+
+    // Trial abuse prevention: block returning users who deleted a previous account
+    if (user.email) {
+      const normalized = normalizeEmailForTombstone(user.email);
+      const previousAccount = await ctx.db
+        .query("deletedAccounts")
+        .withIndex("by_email", (q) => q.eq("email", normalized))
+        .first();
+      if (previousAccount) {
+        throw new Error("Trial already used. Please subscribe to continue with Premium.");
+      }
+    }
 
     const trialEndsAt = now + 7 * 24 * 60 * 60 * 1000;
 
