@@ -102,10 +102,12 @@ export default function ProfileScreen() {
     else router.push("/(app)/support");
   };
 
-  const handleSignOut = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await signOut();
-    router.replace("/(auth)/sign-in");
+  const handleSignOut = () => {
+    confirmAction("Sign Out", "Are you sure you want to sign out?", async () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await signOut();
+      router.replace("/(auth)/sign-in");
+    });
   };
 
   const confirmAction = (title: string, message: string, onConfirm: () => void | Promise<void>) => {
@@ -159,17 +161,42 @@ export default function ProfileScreen() {
     confirmAction("Delete Account", "This permanently deletes EVERYTHING \u2014 Convex data AND your Clerk login. You'll need to sign up with a fresh email. Are you sure?", async () => {
       setIsDeleting(true);
       try {
-        try { await cancelAllSubs(); } catch (stripeErr) { console.error("Stripe cancellation failed:", stripeErr); }
-        await deleteMyAccount();
+        // Step 1: Cancel Stripe subscriptions and verify
+        let stripeWarning = false;
+        try {
+          const stripeResult = await cancelAllSubs();
+          if (!stripeResult.success) {
+            stripeWarning = true;
+            console.warn("Stripe cancellation returned unsuccessful");
+          }
+        } catch (stripeErr) {
+          stripeWarning = true;
+          console.error("Stripe cancellation failed:", stripeErr);
+        }
+
+        // Step 2: Delete Convex data (returns clerkId for Clerk cleanup)
+        const { clerkId, email } = await deleteMyAccount();
+
+        // Step 3: Delete Clerk account with retry
+        let clerkDeleted = true;
         if (user) {
           try { await user.delete(); } catch (clerkErr) {
             console.error("Clerk account deletion failed:", clerkErr);
             try { await user.delete(); } catch (retryErr) {
               console.error("Clerk deletion retry failed:", retryErr);
-              alert("Partial Deletion", "Your app data was deleted but the login account could not be removed. Please contact support.");
+              clerkDeleted = false;
             }
           }
         }
+
+        // Step 4: Warn about any partial failures before redirecting
+        if (!clerkDeleted || stripeWarning) {
+          const issues: string[] = [];
+          if (!clerkDeleted) issues.push(`Your login account (${email || "unknown"}) could not be removed from our auth provider. Clerk ID: ${clerkId || "unknown"}.`);
+          if (stripeWarning) issues.push("Some subscriptions may not have been cancelled. Check your payment method for recurring charges.");
+          alert("Partial Deletion", `Your app data was deleted, but:\n\n${issues.join("\n\n")}\n\nPlease contact support with this information.`);
+        }
+
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         try { await signOut(); } catch {}
         router.replace("/(auth)/sign-in");
@@ -177,7 +204,6 @@ export default function ProfileScreen() {
         console.error("Delete failed:", e);
         try { await signOut(); } catch {}
         router.replace("/(auth)/sign-in");
-        setIsDeleting(false);
       }
     });
   };
