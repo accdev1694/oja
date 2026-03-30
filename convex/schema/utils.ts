@@ -63,6 +63,17 @@ export const utilityTables = {
     error: v.optional(v.string()),
   }).index("by_report", ["reportId"]),
 
+  // Trial abuse prevention: tombstone records for deleted accounts.
+  // When a user deletes their account, we record their email so re-signups
+  // can't exploit the free trial again.
+  deletedAccounts: defineTable({
+    email: v.string(),            // Normalized email at time of deletion
+    clerkId: v.optional(v.string()), // Clerk ID (for support investigations)
+    trialUsed: v.boolean(),       // Whether this account had a trial
+    deletedAt: v.number(),
+  })
+    .index("by_email", ["email"]),
+
   userTags: defineTable({
     userId: v.id("users"),
     tag: v.string(),
