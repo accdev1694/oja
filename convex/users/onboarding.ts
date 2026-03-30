@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, internalMutation } from "../_generated/server";
 import { trackFunnelEvent, trackActivity } from "../lib/analytics";
+import { normalizeEmailForTombstone } from "../lib/emailNormalizer";
 
 /**
  * Record a health analysis score for historical tracking
@@ -136,13 +137,24 @@ export const completeOnboarding = mutation({
     // Track activity
     await trackActivity(ctx, user._id, "onboarding_complete");
 
-    // Auto-start 7-day premium trial for new users
+    // Auto-start 7-day premium trial — but only for genuinely new users.
+    // Returning users (who deleted their account) are detected via the
+    // deletedAccounts tombstone table and placed on free tier instead.
     const existingSub = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
 
-    if (!existingSub) {
+    // Check if this email was previously used (trial abuse prevention).
+    // Uses normalized email to catch Gmail alias bypasses (user+2@gmail.com).
+    const previousAccount = user.email
+      ? await ctx.db
+          .query("deletedAccounts")
+          .withIndex("by_email", (q) => q.eq("email", normalizeEmailForTombstone(user.email!)))
+          .first()
+      : null;
+
+    if (!existingSub && !previousAccount) {
       // Get dynamic pricing to find the default plan
       const defaultPlan = await ctx.db
         .query("pricingConfig")

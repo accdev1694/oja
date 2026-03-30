@@ -4,6 +4,7 @@ import { internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import { trackActivity } from "../lib/analytics";
 import { requireAdmin, requireCurrentUser } from "../lib/auth";
+import { normalizeEmailForTombstone } from "../lib/emailNormalizer";
 
 /**
  * DEVELOPMENT ONLY: Reset a specific user for re-onboarding
@@ -468,6 +469,20 @@ export const internalDeleteUser = internalMutation({
     await purgeByUser("experimentEvents", "by_user");
     await purgeByUser("aiUsage", "by_user");
     await purgeByUser("userTags", "by_user");
+
+    // ── Trial abuse prevention: record tombstone BEFORE deleting user doc ──
+    // Lets completeOnboarding and startFreeTrial detect returning users.
+    // Uses normalized email (strips Gmail aliases/dots) to prevent easy bypasses.
+    // Falls back to clerkId-only tombstone if email is missing (social auth edge case).
+    const tombstoneEmail = user.email
+      ? normalizeEmailForTombstone(user.email)
+      : `__no_email__${user.clerkId}`;
+    await ctx.db.insert("deletedAccounts", {
+      email: tombstoneEmail,
+      clerkId: user.clerkId,
+      trialUsed: true, // Conservative: any account that completed onboarding had a trial
+      deletedAt: Date.now(),
+    });
 
     // ── Finally, delete the user doc ─────────────────────────────────────────
     await ctx.db.delete(user._id);
