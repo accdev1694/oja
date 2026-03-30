@@ -29,6 +29,7 @@ export {
   resetMyAccount,
   deleteMyAccount,
   internalDeleteUser,
+  cleanupUserStorage,
 } from "./users/accountManagement";
 
 // Clerk webhook handlers
