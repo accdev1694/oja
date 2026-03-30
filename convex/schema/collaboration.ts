@@ -28,7 +28,8 @@ export const collaborationTables = {
     isActive: v.boolean(),
   })
     .index("by_code", ["code"])
-    .index("by_list", ["listId"]),
+    .index("by_list", ["listId"])
+    .index("by_createdBy", ["createdBy"]),
 
   // List-level chat messages (Epic 4 - Partner Mode)
   listMessages: defineTable({

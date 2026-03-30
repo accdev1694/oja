@@ -40,7 +40,8 @@ export const experimentTables = {
     timestamp: v.number(),
   })
     .index("by_experiment_variant", ["experimentId", "variantName"])
-    .index("by_experiment", ["experimentId"]),
+    .index("by_experiment", ["experimentId"])
+    .index("by_user", ["userId"]),
 
   // 4.3 Automated Workflows
   automationWorkflows: defineTable({

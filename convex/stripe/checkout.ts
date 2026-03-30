@@ -124,18 +124,18 @@ export const cancelAllUserSubscriptions = action({
       return { success: true, count: 0 };
     }
 
-    // List all active/trialling subscriptions for this customer
-    const stripeSubs = await stripe.subscriptions.list({
-      customer: subscription.stripeCustomerId,
-      status: "active",
-    });
-
-    const trialSubs = await stripe.subscriptions.list({
-      customer: subscription.stripeCustomerId,
-      status: "trialing",
-    });
-
-    const allSubs = [...stripeSubs.data, ...trialSubs.data];
+    // List all cancellable subscriptions for this customer
+    // Must include past_due and unpaid — otherwise Stripe retries the payment
+    // method after account deletion, leading to unexpected charges.
+    const statuses = ["active", "trialing", "past_due", "unpaid"] as const;
+    const allSubs = [];
+    for (const status of statuses) {
+      const subs = await stripe.subscriptions.list({
+        customer: subscription.stripeCustomerId,
+        status,
+      });
+      allSubs.push(...subs.data);
+    }
 
     for (const sub of allSubs) {
       await stripe.subscriptions.cancel(sub.id);
