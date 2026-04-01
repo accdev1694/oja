@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -17,12 +17,6 @@ import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { isGenericName } from "@/lib/names";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ComponentProps } from "react";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
 
 import {
   GlassScreen,
@@ -31,38 +25,12 @@ import {
   colors,
   typography,
   spacing,
-  borderRadius,
-  animations,
 } from "@/components/ui/glass";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-
-// Cuisine options with emojis
-const CUISINES = [
-  { id: "british", name: "British", emoji: "\u{1F1EC}\u{1F1E7}" },
-  { id: "nigerian", name: "Nigerian", emoji: "\u{1F1F3}\u{1F1EC}" },
-  { id: "indian", name: "Indian", emoji: "\u{1F1EE}\u{1F1F3}" },
-  { id: "chinese", name: "Chinese", emoji: "\u{1F1E8}\u{1F1F3}" },
-  { id: "italian", name: "Italian", emoji: "\u{1F1EE}\u{1F1F9}" },
-  { id: "pakistani", name: "Pakistani", emoji: "\u{1F1F5}\u{1F1F0}" },
-  { id: "caribbean", name: "Caribbean", emoji: "\u{1F1EF}\u{1F1F2}" },
-  { id: "mexican", name: "Mexican", emoji: "\u{1F1F2}\u{1F1FD}" },
-  { id: "middle-eastern", name: "Middle Eastern", emoji: "\u{1F1E6}\u{1F1EA}" },
-  { id: "japanese", name: "Japanese", emoji: "\u{1F1EF}\u{1F1F5}" },
-  { id: "korean", name: "Korean", emoji: "\u{1F1F0}\u{1F1F7}" },
-  { id: "thai", name: "Thai", emoji: "\u{1F1F9}\u{1F1ED}" },
-  { id: "vietnamese", name: "Vietnamese", emoji: "\u{1F1FB}\u{1F1F3}" },
-  { id: "ethiopian", name: "Ethiopian", emoji: "\u{1F1EA}\u{1F1F9}" },
-];
-
-const DIETARY_RESTRICTIONS = [
-  { id: "vegan", name: "Vegan", icon: "leaf" },
-  { id: "vegetarian", name: "Vegetarian", icon: "carrot" },
-  { id: "gluten-free", name: "Gluten-Free", icon: "wheat-off" },
-  { id: "dairy-free", name: "Dairy-Free", icon: "cow-off" },
-  { id: "halal", name: "Halal", icon: "star-crescent" },
-  { id: "keto", name: "Keto", icon: "fire" },
-  { id: "paleo", name: "Paleo", icon: "bone" },
-];
+import { CUISINES, DIETARY_RESTRICTIONS } from "./cuisineData";
+import { CuisineButton } from "./components/CuisineButton";
+import { DietaryButton } from "./components/DietaryButton";
+import { OtherCuisineTile, OtherCuisineInput } from "./components/OtherCuisineField";
 
 export default function CuisineSelectionScreen() {
   const router = useRouter();
@@ -81,6 +49,17 @@ export default function CuisineSelectionScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [postcodePrefix, setPostcodePrefix] = useState("");
   const [isEditingPostcode, setIsEditingPostcode] = useState(false);
+  const [otherSelected, setOtherSelected] = useState(false);
+  const [otherText, setOtherText] = useState("");
+
+  // Combine predefined selections with free-text "Other" value
+  const effectiveCuisines = useMemo(() => {
+    const cuisines = [...selectedCuisines];
+    if (otherSelected && otherText.trim()) {
+      cuisines.push(otherText.trim());
+    }
+    return cuisines;
+  }, [selectedCuisines, otherSelected, otherText]);
 
   useEffect(() => {
     initializeUser();
@@ -107,7 +86,6 @@ export default function CuisineSelectionScreen() {
 
   function toggleCuisine(cuisineId: string) {
     safeHaptics.light();
-
     setSelectedCuisines((prev) => {
       if (prev.includes(cuisineId)) {
         return prev.filter((id) => id !== cuisineId);
@@ -118,7 +96,6 @@ export default function CuisineSelectionScreen() {
 
   function toggleDietary(dietaryId: string) {
     safeHaptics.light();
-
     setSelectedDietary((prev) => {
       if (prev.includes(dietaryId)) {
         return prev.filter((id) => id !== dietaryId);
@@ -127,8 +104,13 @@ export default function CuisineSelectionScreen() {
     });
   }
 
+  function toggleOther() {
+    safeHaptics.light();
+    setOtherSelected((prev) => !prev);
+  }
+
   async function handleContinue() {
-    if (selectedCuisines.length === 0) {
+    if (effectiveCuisines.length === 0) {
       safeHaptics.warning();
       return;
     }
@@ -136,7 +118,6 @@ export default function CuisineSelectionScreen() {
     setIsSaving(true);
 
     try {
-      // Prefer existing Convex name (set on welcome screen), then Clerk, then email prefix
       const convexName = convexUser?.name && !isGenericName(convexUser.name) ? convexUser.name : undefined;
       const fallbackName = clerkUser?.primaryEmailAddress?.emailAddress?.split("@")[0] || "Shopper";
       const displayName = convexName || clerkUser?.firstName || clerkUser?.fullName || fallbackName;
@@ -144,7 +125,7 @@ export default function CuisineSelectionScreen() {
       await setOnboardingData({
         name: displayName,
         country,
-        cuisinePreferences: selectedCuisines,
+        cuisinePreferences: effectiveCuisines,
         dietaryRestrictions: selectedDietary,
         postcodePrefix: postcodePrefix || undefined,
       });
@@ -154,7 +135,7 @@ export default function CuisineSelectionScreen() {
         pathname: "/onboarding/store-selection",
         params: {
           country,
-          cuisines: selectedCuisines.join(","),
+          cuisines: effectiveCuisines.join(","),
         },
       });
     } catch (error) {
@@ -165,7 +146,6 @@ export default function CuisineSelectionScreen() {
     }
   }
 
-  // Loading state
   if (isDetecting) {
     return (
       <GlassScreen>
@@ -184,7 +164,7 @@ export default function CuisineSelectionScreen() {
     );
   }
 
-  const PINNED_BUTTON_HEIGHT = 64 + spacing.md * 2; // button + vertical padding
+  const PINNED_BUTTON_HEIGHT = 64 + spacing.md * 2;
 
   return (
     <GlassScreen>
@@ -264,7 +244,7 @@ export default function CuisineSelectionScreen() {
           </Text>
         </View>
 
-        {/* Cuisine Grid */}
+        {/* Cuisine Grid (3-column) */}
         <View style={styles.cuisineGrid}>
           {CUISINES.map((cuisine) => (
             <CuisineButton
@@ -274,7 +254,13 @@ export default function CuisineSelectionScreen() {
               onToggle={() => toggleCuisine(cuisine.id)}
             />
           ))}
+          <OtherCuisineTile isSelected={otherSelected} onToggle={toggleOther} />
         </View>
+
+        {/* Other cuisine text input (shown when Other is selected) */}
+        {otherSelected && (
+          <OtherCuisineInput text={otherText} onChangeText={setOtherText} />
+        )}
 
         {/* Dietary Restrictions */}
         <View style={styles.sectionHeader}>
@@ -304,117 +290,12 @@ export default function CuisineSelectionScreen() {
           icon="arrow-right"
           onPress={handleContinue}
           loading={isSaving}
-          disabled={selectedCuisines.length === 0 || isSaving}
+          disabled={effectiveCuisines.length === 0 || isSaving}
         >
-          {`Continue (${selectedCuisines.length} selected)`}
+          {`Continue (${effectiveCuisines.length} selected)`}
         </GlassButton>
       </View>
     </GlassScreen>
-  );
-}
-
-// =============================================================================
-// SUB-COMPONENTS
-// =============================================================================
-
-interface CuisineButtonProps {
-  cuisine: { id: string; name: string; emoji: string };
-  isSelected: boolean;
-  onToggle: () => void;
-}
-
-function CuisineButton({ cuisine, isSelected, onToggle }: CuisineButtonProps) {
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.95, animations.spring.stiff);
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, animations.spring.gentle);
-  };
-
-  return (
-    <Animated.View style={[styles.cuisineButtonWrapper, animatedStyle]}>
-      <Pressable
-        onPress={onToggle}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-      >
-        <GlassCard
-          variant={isSelected ? "bordered" : "standard"}
-          accentColor={isSelected ? colors.accent.primary : undefined}
-          style={[styles.cuisineButton, isSelected && styles.cuisineButtonSelected]}
-        >
-          <Text style={styles.cuisineEmoji}>{cuisine.emoji}</Text>
-          <Text
-            style={[
-              styles.cuisineName,
-              isSelected && styles.cuisineNameSelected,
-            ]}
-          >
-            {cuisine.name}
-          </Text>
-          {isSelected && (
-            <View style={styles.checkmark}>
-              <MaterialCommunityIcons
-                name="check"
-                size={14}
-                color={colors.text.primary}
-              />
-            </View>
-          )}
-        </GlassCard>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-interface DietaryButtonProps {
-  diet: { id: string; name: string; icon: string };
-  isSelected: boolean;
-  onToggle: () => void;
-}
-
-function DietaryButton({ diet, isSelected, onToggle }: DietaryButtonProps) {
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <Animated.View style={[styles.dietaryButtonWrapper, animatedStyle]}>
-      <Pressable
-        onPress={onToggle}
-        onPressIn={() => (scale.value = withSpring(0.95))}
-        onPressOut={() => (scale.value = withSpring(1))}
-      >
-        <GlassCard
-          variant={isSelected ? "bordered" : "standard"}
-          accentColor={isSelected ? colors.accent.success : undefined}
-          style={[styles.dietaryButton, isSelected && styles.dietaryButtonSelected]}
-        >
-          <MaterialCommunityIcons
-            name={diet.icon as ComponentProps<typeof MaterialCommunityIcons>["name"]}
-            size={24}
-            color={isSelected ? colors.accent.success : colors.text.secondary}
-          />
-          <Text
-            style={[
-              styles.dietaryName,
-              isSelected && styles.dietaryNameSelected,
-            ]}
-          >
-            {diet.name}
-          </Text>
-        </GlassCard>
-      </Pressable>
-    </Animated.View>
   );
 }
 
@@ -537,63 +418,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm,
     marginBottom: spacing.xl,
-  },
-  cuisineButtonWrapper: {
-    width: "48%",
-    flexGrow: 1,
-  },
-  dietaryButtonWrapper: {
-    width: "31%",
-    flexGrow: 1,
-  },
-  cuisineButton: {
-    alignItems: "center",
-    paddingVertical: spacing.md,
-    position: "relative",
-  },
-  dietaryButton: {
-    alignItems: "center",
-    paddingVertical: spacing.sm,
-    gap: spacing.xs,
-  },
-  cuisineButtonSelected: {
-    backgroundColor: `${colors.accent.primary}10`,
-  },
-  dietaryButtonSelected: {
-    backgroundColor: `${colors.accent.success}10`,
-  },
-  cuisineEmoji: {
-    fontSize: 32,
-    marginBottom: spacing.xs,
-  },
-  cuisineName: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  dietaryName: {
-    ...typography.labelSmall,
-    color: colors.text.primary,
-    textAlign: "center",
-  },
-  cuisineNameSelected: {
-    color: colors.accent.primary,
-  },
-  dietaryNameSelected: {
-    color: colors.accent.success,
-    fontWeight: "700",
-  },
-  checkmark: {
-    position: "absolute",
-    top: spacing.sm,
-    right: spacing.sm,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.accent.primary,
-    alignItems: "center",
-    justifyContent: "center",
   },
   pinnedButtonContainer: {
     position: "absolute",

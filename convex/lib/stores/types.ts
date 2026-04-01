@@ -74,7 +74,16 @@ export type CuisineId =
   | "korean"
   | "thai"
   | "vietnamese"
-  | "ethiopian";
+  | "ethiopian"
+  | "bangladeshi"
+  | "west-african"
+  | "east-african"
+  | "southern-african"
+  | "filipino"
+  | "turkish"
+  | "french"
+  | "greek"
+  | "polish";
 
 /**
  * Complete store information including display metadata and aliases.

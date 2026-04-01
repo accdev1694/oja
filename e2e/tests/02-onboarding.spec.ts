@@ -127,9 +127,9 @@ test.describe("Suite 2: Onboarding", () => {
     expect(isCuisine || isAdmin).toBeTruthy();
   });
 
-  // ── TC-ONBD-003: Cuisine selection (14 cuisines) ─────────────
+  // ── TC-ONBD-003: Cuisine selection (23 cuisines + Other) ─────
 
-  test("TC-ONBD-003: cuisine selection screen shows all 14 cuisines", async ({
+  test("TC-ONBD-003: cuisine selection screen shows all 23 cuisines and Other tile", async ({
     page,
   }) => {
     const canAccess = await onboarding.gotoAndCheckWelcome();
@@ -141,11 +141,13 @@ test.describe("Suite 2: Onboarding", () => {
     await onboarding.tapGetStarted();
     await onboarding.waitForCuisineScreen();
 
-    // Verify all 14 cuisines are displayed
+    // Verify all 23 cuisines are displayed
     const allCuisines = [
       "British", "Nigerian", "Indian", "Chinese", "Italian",
-      "Pakistani", "Caribbean", "Mexican", "Middle Eastern",
-      "Japanese", "Korean", "Thai", "Vietnamese", "Ethiopian",
+      "Pakistani", "Bangladeshi", "Caribbean", "West African",
+      "East African", "Ethiopian", "S. African", "Middle Eastern",
+      "Turkish", "Greek", "French", "Polish", "Mexican",
+      "Japanese", "Korean", "Thai", "Vietnamese", "Filipino",
     ];
 
     let visibleCount = 0;
@@ -155,7 +157,11 @@ test.describe("Suite 2: Onboarding", () => {
         visibleCount++;
       }
     }
-    expect(visibleCount).toBe(14);
+    expect(visibleCount).toBe(23);
+
+    // Verify "Other" tile is also visible
+    const otherTile = page.getByText("Other", { exact: true });
+    await expect(otherTile).toBeVisible();
   });
 
   test("TC-ONBD-003: cuisine selection toggle works", async ({ page }) => {
@@ -225,7 +231,7 @@ test.describe("Suite 2: Onboarding", () => {
 
   // ── TC-ONBD-005: Dietary restrictions (optional) ─────────────
 
-  test("TC-ONBD-005: dietary preferences section shows 7 options", async ({
+  test("TC-ONBD-005: dietary preferences section shows 9 options", async ({
     page,
   }) => {
     const canAccess = await onboarding.gotoAndCheckWelcome();
@@ -243,10 +249,10 @@ test.describe("Suite 2: Onboarding", () => {
     await expect(dietaryHeader).toBeVisible();
     await expect(onboarding.dietaryDescription).toBeVisible();
 
-    // Verify all 7 dietary options
+    // Verify all 9 dietary options
     const dietaryOptions = [
       "Vegan", "Vegetarian", "Gluten-Free", "Dairy-Free",
-      "Halal", "Keto", "Paleo",
+      "Halal", "Kosher", "Pescatarian", "Keto", "Paleo",
     ];
 
     let visibleCount = 0;
@@ -256,7 +262,7 @@ test.describe("Suite 2: Onboarding", () => {
         visibleCount++;
       }
     }
-    expect(visibleCount).toBe(7);
+    expect(visibleCount).toBe(9);
   });
 
   test("TC-ONBD-005: dietary preferences are optional", async ({ page }) => {
