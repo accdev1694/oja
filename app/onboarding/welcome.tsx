@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Image } from "react-native";
+import { View, Text, StyleSheet, Image, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -59,7 +59,12 @@ export default function WelcomeScreen() {
   return (
     <GlassScreen>
       <View style={[styles.container, { paddingTop: insets.top + spacing.xl }]}>
-        <View style={styles.content}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Logo */}
           <Image
             source={require("@/assets/logo.png")}
@@ -109,7 +114,7 @@ export default function WelcomeScreen() {
               description="Level up from Bronze to Platinum to earn points even faster"
             />
           </View>
-        </View>
+        </ScrollView>
 
         {/* Bottom Button */}
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
@@ -168,10 +173,14 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.lg,
   },
-  content: {
+  scroll: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingBottom: spacing.md,
   },
   logo: {
     width: 160,
