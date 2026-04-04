@@ -18,27 +18,35 @@ Create a conventional commit with pre-commit validation.
    git log --oneline -5
    ```
 
-2. **Stage changes** — if nothing is staged, stage all tracked changes:
+2. **Group changes into logical batches:**
+   - If all changes relate to one concern → single commit
+   - If changes span multiple concerns (e.g., feature + refactor + tests) → split into separate commits by topic
+   - Group by: area (pantry, lists, voice), type (feat vs fix vs refactor), or dependency (schema before code)
+   - Each batch should be a self-contained, coherent change
+
+3. **For each batch**, repeat steps 3–6:
+
+4. **Stage changes** for this batch:
    ```
-   git add -u
+   git add <specific files for this batch>
    ```
    If `$ARGUMENTS` specifies files, stage only those.
    NEVER stage `.env*`, `credentials*`, `service-account*`, or `google-services.json`.
 
-3. **Pre-commit checks** — run in parallel:
+5. **Pre-commit checks** (run once before first commit) — in parallel:
    ```
    npx tsc --noEmit
    npx eslint . --ext .ts,.tsx --quiet
    ```
    If either fails, report errors and STOP. Do not commit with type errors or lint failures.
 
-4. **Analyze changes** for commit message:
+6. **Analyze changes** for commit message:
    - Read the diff: `git diff --cached`
    - Determine the type: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`, `style`
    - Summarize the WHY not the WHAT
    - If `$ARGUMENTS` contains a message hint, incorporate it
 
-5. **Create commit** using heredoc format:
+7. **Create commit** using heredoc format:
    ```
    git commit -m "$(cat <<'EOF'
    type(scope): concise description
@@ -50,9 +58,15 @@ Create a conventional commit with pre-commit validation.
    )"
    ```
 
-6. **Post-commit verification:**
+8. **Push to GitHub** after all commits are created:
    ```
-   git log --oneline -1
+   git push
+   ```
+   If the push fails due to remote changes, run `git pull --rebase` first, then retry.
+
+9. **Post-push verification:**
+   ```
+   git log --oneline -<N>   # show all new commits
    git status --short
    ```
 
