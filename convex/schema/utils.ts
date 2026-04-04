@@ -70,6 +70,8 @@ export const utilityTables = {
     email: v.string(),            // Normalized email at time of deletion
     clerkId: v.optional(v.string()), // Clerk ID (for support investigations)
     trialUsed: v.boolean(),       // Whether this account had a trial
+    trialStartedAt: v.optional(v.number()), // Original trial start timestamp
+    trialEndsAt: v.optional(v.number()),    // Original trial end timestamp (clock keeps ticking after deletion)
     deletedAt: v.number(),
   })
     .index("by_email", ["email"]),

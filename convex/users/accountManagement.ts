@@ -450,6 +450,11 @@ export const internalDeleteUser = internalMutation({
     await purgeByUser("referralCodes", "by_user");
 
     // ── Subscriptions & billing ──────────────────────────────────────────────
+    // Capture trial timing BEFORE purging (needed for tombstone below)
+    const existingSub = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
     await purgeByUser("subscriptions", "by_user");
     await purgeByUser("scanCredits", "by_user");        // Legacy
     await purgeByUser("scanCreditTransactions", "by_user"); // Legacy
@@ -474,13 +479,18 @@ export const internalDeleteUser = internalMutation({
     // Lets completeOnboarding and startFreeTrial detect returning users.
     // Uses normalized email (strips Gmail aliases/dots) to prevent easy bypasses.
     // Falls back to clerkId-only tombstone if email is missing (social auth edge case).
+    //
+    // Trial timing was captured in existingSub above (before subscription purge).
+    // Store it so returning users resume their remaining trial time.
     const tombstoneEmail = user.email
       ? normalizeEmailForTombstone(user.email)
       : `__no_email__${user.clerkId}`;
     await ctx.db.insert("deletedAccounts", {
       email: tombstoneEmail,
       clerkId: user.clerkId,
-      trialUsed: true, // Conservative: any account that completed onboarding had a trial
+      trialUsed: true,
+      trialStartedAt: existingSub?.currentPeriodStart,
+      trialEndsAt: existingSub?.trialEndsAt,
       deletedAt: Date.now(),
     });
 

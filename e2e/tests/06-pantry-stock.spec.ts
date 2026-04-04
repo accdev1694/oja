@@ -226,7 +226,7 @@ test.describe("Suite 5: Pantry/Stock Management", () => {
       .getByText("of", { exact: false })
       .first()
       .textContent()
-      .catch(() => "");
+      .catch(() => "") ?? "";
     const hasDairyCategory = await page
       .getByText("Dairy", { exact: false })
       .first()
@@ -294,7 +294,7 @@ test.describe("Suite 5: Pantry/Stock Management", () => {
       .getByText("of", { exact: false })
       .first()
       .textContent()
-      .catch(() => "");
+      .catch(() => "") ?? "";
 
     // Check that search found at least 1 result
     const hasResults = headerText.includes("of") && !headerText.includes("0 of");
@@ -389,7 +389,7 @@ test.describe("Suite 5: Pantry/Stock Management", () => {
       .getByText("of", { exact: false })
       .first()
       .textContent()
-      .catch(() => "");
+      .catch(() => "") ?? "";
     const hasResults = headerText.includes("of") && !headerText.includes("0 of");
 
     if (!hasResults) {

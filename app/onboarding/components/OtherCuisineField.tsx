@@ -33,6 +33,7 @@ export function OtherCuisineTile({ isSelected, onToggle }: Pick<OtherCuisineFiel
         onPress={onToggle}
         onPressIn={() => (scale.value = withSpring(0.95))}
         onPressOut={() => (scale.value = withSpring(1))}
+        style={styles.pressable}
       >
         <GlassCard
           variant={isSelected ? "bordered" : "standard"}
@@ -43,6 +44,7 @@ export function OtherCuisineTile({ isSelected, onToggle }: Pick<OtherCuisineFiel
             name="plus"
             size={28}
             color={isSelected ? colors.accent.primary : colors.text.tertiary}
+            style={styles.icon}
           />
           <Text style={[styles.name, isSelected && styles.nameSelected]}>
             Other
@@ -85,9 +87,17 @@ const styles = StyleSheet.create({
     width: "31%",
     flexGrow: 1,
   },
+  pressable: {
+    flex: 1,
+  },
   card: {
+    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacing.md,
+  },
+  icon: {
+    marginBottom: spacing.xs,
   },
   cardSelected: {
     backgroundColor: `${colors.accent.primary}10`,

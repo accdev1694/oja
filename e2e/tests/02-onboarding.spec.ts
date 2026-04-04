@@ -127,9 +127,9 @@ test.describe("Suite 2: Onboarding", () => {
     expect(isCuisine || isAdmin).toBeTruthy();
   });
 
-  // ── TC-ONBD-003: Cuisine selection (23 cuisines + Other) ─────
+  // ── TC-ONBD-003: Cuisine selection (17 cuisines + Other) ─────
 
-  test("TC-ONBD-003: cuisine selection screen shows all 23 cuisines and Other tile", async ({
+  test("TC-ONBD-003: cuisine selection screen shows all 17 cuisines and Other tile", async ({
     page,
   }) => {
     const canAccess = await onboarding.gotoAndCheckWelcome();
@@ -141,13 +141,13 @@ test.describe("Suite 2: Onboarding", () => {
     await onboarding.tapGetStarted();
     await onboarding.waitForCuisineScreen();
 
-    // Verify all 23 cuisines are displayed
+    // Verify all 17 region-based cuisines are displayed
     const allCuisines = [
-      "British", "Nigerian", "Indian", "Chinese", "Italian",
-      "Pakistani", "Bangladeshi", "Caribbean", "West African",
-      "East African", "Ethiopian", "S. African", "Middle Eastern",
-      "Turkish", "Greek", "French", "Polish", "Mexican",
-      "Japanese", "Korean", "Thai", "Vietnamese", "Filipino",
+      "British", "West African", "East African", "S. African",
+      "N. African", "Caribbean", "South Asian", "Chinese",
+      "Japanese", "Korean", "SE Asian", "Middle Eastern",
+      "Turkish", "Mediterranean", "E. European", "French",
+      "Latin American",
     ];
 
     let visibleCount = 0;
@@ -157,7 +157,7 @@ test.describe("Suite 2: Onboarding", () => {
         visibleCount++;
       }
     }
-    expect(visibleCount).toBe(23);
+    expect(visibleCount).toBe(17);
 
     // Verify "Other" tile is also visible
     const otherTile = page.getByText("Other", { exact: true });
@@ -174,8 +174,8 @@ test.describe("Suite 2: Onboarding", () => {
     await onboarding.tapGetStarted();
     await onboarding.waitForCuisineScreen();
 
-    // Select Nigerian
-    await onboarding.selectCuisines(["Nigerian"]);
+    // Select West African
+    await onboarding.selectCuisines(["West African"]);
 
     // Continue button should show count
     const continueText = await onboarding.continueButton
@@ -190,8 +190,8 @@ test.describe("Suite 2: Onboarding", () => {
       .catch(() => "");
     expect(continueText2).toContain("2");
 
-    // Deselect Nigerian
-    await page.getByText("Nigerian", { exact: true }).click();
+    // Deselect West African
+    await page.getByText("West African", { exact: true }).click();
     await page.waitForTimeout(500);
     const continueText3 = await onboarding.continueButton
       .textContent()
@@ -379,7 +379,7 @@ test.describe("Suite 2: Onboarding", () => {
     // Navigate through welcome → cuisine → store
     await onboarding.tapGetStarted();
     await onboarding.waitForCuisineScreen();
-    await onboarding.selectCuisines(["British", "Nigerian"]);
+    await onboarding.selectCuisines(["British", "West African"]);
     await onboarding.tapContinue();
 
     // Wait for store selection screen
@@ -481,7 +481,7 @@ test.describe("Suite 2: Onboarding", () => {
     // Full flow: welcome → cuisine → store (skip) → seeding
     await onboarding.tapGetStarted();
     await onboarding.waitForCuisineScreen();
-    await onboarding.selectCuisines(["British", "Nigerian"]);
+    await onboarding.selectCuisines(["British", "West African"]);
     await onboarding.tapContinue();
 
     // Skip store selection to reach seeding faster
@@ -550,7 +550,7 @@ test.describe("Suite 2: Onboarding", () => {
     // Full flow to reach review
     await onboarding.tapGetStarted();
     await onboarding.waitForCuisineScreen();
-    await onboarding.selectCuisines(["British", "Nigerian"]);
+    await onboarding.selectCuisines(["British", "West African"]);
     await onboarding.tapContinue();
     await onboarding.expectStoreSelectionScreen();
     await onboarding.skipStoreSelection();

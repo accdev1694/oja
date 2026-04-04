@@ -700,8 +700,19 @@ test.describe("Suite 4: List Items", () => {
     // Strategy: Access ConvexReactClient from React fiber tree, then bulk-add
     // 100 items via listItems.create mutation and verify #101 hits rate limit.
     // Rate limit: 100 items per 1-minute window (convex/lib/rateLimit.ts).
-    const bulkResult = await page.evaluate(
-      async (params: { listId: string }) => {
+    type BulkError = { success: false; error: string };
+    type BulkSuccess = {
+      success: true;
+      addedCount: number;
+      errors: string[];
+      totalErrors: number;
+      rateLimitHit: boolean;
+      rateLimitError: string;
+    };
+    type BulkResult = BulkError | BulkSuccess;
+
+    const bulkResult: BulkResult = await page.evaluate(
+      async (params: { listId: string }): Promise<BulkResult> => {
         // Find first DOM element with React fiber key
         const allEls = document.querySelectorAll("*");
         let fiberKey: string | null = null;
@@ -725,12 +736,14 @@ test.describe("Suite 4: List Items", () => {
         const fiber = (fiberEl as unknown as Record<string, FNode>)[fiberKey];
         const visited = new Set<FNode>();
         const queue: FNode[] = [fiber];
-        let client: {
+
+        type ConvexClient = {
           mutation: (
             ref: string,
             args: Record<string, unknown>
           ) => Promise<unknown>;
-        } | null = null;
+        };
+        let client: ConvexClient | null = null;
 
         while (queue.length > 0) {
           const node = queue.shift() as FNode;
@@ -743,7 +756,7 @@ test.describe("Suite 4: List Items", () => {
             props?.client &&
             typeof (props.client as FNode).mutation === "function"
           ) {
-            client = props.client as typeof client;
+            client = props.client as unknown as ConvexClient;
             break;
           }
           if (node.child) queue.push(node.child as FNode);

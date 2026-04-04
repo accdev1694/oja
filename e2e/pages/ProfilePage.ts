@@ -113,11 +113,23 @@ export class ProfilePage {
   get tripsCount() {
     return this.page.getByText("trips", { exact: true });
   }
+  /** Alias used by 10-profile tests */
+  get completedTrips() {
+    return this.tripsCount;
+  }
   get itemsCount() {
     return this.page.getByText("items", { exact: true });
   }
+  /** Alias used by 10-profile tests */
+  get pantryItemsCount() {
+    return this.itemsCount;
+  }
   get receiptsCount() {
     return this.page.getByText("receipts", { exact: true });
+  }
+  /** Alias used by 10-profile tests */
+  get receiptsScanned() {
+    return this.receiptsCount;
   }
   get scansCount() {
     return this.page.getByText("scans", { exact: true });
@@ -129,6 +141,10 @@ export class ProfilePage {
   }
   get insightsLink() {
     return this.page.getByText("Insights", { exact: true }).first();
+  }
+  /** Card-level alias for the Insights navigation row (used by 10-profile tests) */
+  get insightsCard() {
+    return this.insightsLink;
   }
   get helpSupportLink() {
     return this.page.getByText("Help & Support", { exact: true });
@@ -142,6 +158,10 @@ export class ProfilePage {
       .or(this.page.getByText("Free Plan", { exact: false }))
       .or(this.page.getByText("Premium", { exact: true }))
       .first();
+  }
+  /** Card-level alias for the subscription navigation row (used by 10/11 tests) */
+  get premiumCard() {
+    return this.subscriptionLink;
   }
   get stockAlertsLink() {
     return this.page.getByText("Stock Alerts", { exact: true });

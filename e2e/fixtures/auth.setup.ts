@@ -341,8 +341,8 @@ setup("authenticate", async ({ page }) => {
     if (await cuisineHeader.isVisible({ timeout: 30_000 }).catch(() => false)) {
       console.log("Selecting cuisines...");
 
-      // Select British and Nigerian
-      for (const cuisine of ["British", "Nigerian"]) {
+      // Select British and West African
+      for (const cuisine of ["British", "West African"]) {
         const chip = page.getByText(cuisine, { exact: true });
         if (await chip.isVisible().catch(() => false)) {
           await chip.click();

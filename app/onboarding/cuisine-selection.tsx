@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -51,6 +51,8 @@ export default function CuisineSelectionScreen() {
   const [isEditingPostcode, setIsEditingPostcode] = useState(false);
   const [otherSelected, setOtherSelected] = useState(false);
   const [otherText, setOtherText] = useState("");
+  const scrollViewRef = useRef<ScrollView>(null);
+  const otherInputY = useRef(0);
 
   // Combine predefined selections with free-text "Other" value
   const effectiveCuisines = useMemo(() => {
@@ -106,8 +108,20 @@ export default function CuisineSelectionScreen() {
 
   function toggleOther() {
     safeHaptics.light();
-    setOtherSelected((prev) => !prev);
+    setOtherSelected((prev) => {
+      if (!prev) {
+        // Selecting "Other" — scroll to the input after it renders
+        setTimeout(() => {
+          scrollViewRef.current?.scrollTo({ y: otherInputY.current, animated: true });
+        }, 150);
+      }
+      return !prev;
+    });
   }
+
+  const handleOtherInputLayout = useCallback((y: number) => {
+    otherInputY.current = y;
+  }, []);
 
   async function handleContinue() {
     if (effectiveCuisines.length === 0) {
@@ -169,6 +183,7 @@ export default function CuisineSelectionScreen() {
   return (
     <GlassScreen>
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={[
           styles.content,
@@ -259,7 +274,9 @@ export default function CuisineSelectionScreen() {
 
         {/* Other cuisine text input (shown when Other is selected) */}
         {otherSelected && (
-          <OtherCuisineInput text={otherText} onChangeText={setOtherText} />
+          <View onLayout={(e) => handleOtherInputLayout(e.nativeEvent.layout.y)}>
+            <OtherCuisineInput text={otherText} onChangeText={setOtherText} />
+          </View>
         )}
 
         {/* Dietary Restrictions */}

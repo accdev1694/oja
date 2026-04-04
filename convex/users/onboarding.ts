@@ -155,7 +155,7 @@ export const completeOnboarding = mutation({
       : null;
 
     if (!existingSub && !previousAccount) {
-      // Get dynamic pricing to find the default plan
+      // Brand-new user: grant a fresh 7-day trial
       const defaultPlan = await ctx.db
         .query("pricingConfig")
         .withIndex("by_plan", (q) => q.eq("planId", "premium_monthly"))
@@ -178,7 +178,6 @@ export const completeOnboarding = mutation({
         updatedAt: now,
       });
 
-      // Calculate trial days for dynamic message
       const trialDays = Math.ceil((trialEndsAt - now) / (24 * 60 * 60 * 1000));
 
       await ctx.db.insert("notifications", {
@@ -189,6 +188,38 @@ export const completeOnboarding = mutation({
         read: false,
         createdAt: now,
       });
+    } else if (!existingSub && previousAccount) {
+      // Returning user: resume trial with original dates (clock kept ticking).
+      // If the original trial end date is still in the future, restore it.
+      // Otherwise the trial has expired — user lands on free tier (no sub created).
+      const originalTrialEnd = previousAccount.trialEndsAt;
+      if (originalTrialEnd && originalTrialEnd > now) {
+        const originalStart = previousAccount.trialStartedAt ?? now;
+
+        await ctx.db.insert("subscriptions", {
+          userId: user._id,
+          plan: "premium_monthly",
+          status: "trial",
+          trialEndsAt: originalTrialEnd,
+          currentPeriodStart: originalStart,
+          currentPeriodEnd: originalTrialEnd,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        const remainingDays = Math.ceil((originalTrialEnd - now) / (24 * 60 * 60 * 1000));
+
+        await ctx.db.insert("notifications", {
+          userId: user._id,
+          type: "trial_started",
+          title: "Welcome back to Oja!",
+          body: `Your trial continues — ${remainingDays} day${remainingDays === 1 ? "" : "s"} of Premium remaining.`,
+          read: false,
+          createdAt: now,
+        });
+      }
+      // If originalTrialEnd is missing or in the past, no subscription is created.
+      // The user lands on free tier and can subscribe to get Premium.
     }
 
     return true;

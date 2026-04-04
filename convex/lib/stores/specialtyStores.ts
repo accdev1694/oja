@@ -19,7 +19,7 @@ export const SPECIALTY_STORES: readonly StoreInfo[] = [
     color: "#CC0000",
     type: "specialty",
     marketShare: 0.1,
-    cuisines: ["chinese", "japanese", "korean", "thai", "vietnamese"],
+    cuisines: ["chinese", "japanese", "korean", "southeast-asian"],
     aliases: [
       "wing yip",
       "wing yip superstore",
@@ -37,7 +37,7 @@ export const SPECIALTY_STORES: readonly StoreInfo[] = [
     color: "#D4262C",
     type: "specialty",
     marketShare: 0.1,
-    cuisines: ["chinese", "japanese", "korean", "thai", "vietnamese"],
+    cuisines: ["chinese", "japanese", "korean", "southeast-asian"],
     aliases: [
       "loon fung",
       "loon fung supermarket",
@@ -51,7 +51,7 @@ export const SPECIALTY_STORES: readonly StoreInfo[] = [
     color: "#E31937",
     type: "specialty",
     marketShare: 0.1,
-    cuisines: ["chinese", "japanese", "korean", "thai", "vietnamese"],
+    cuisines: ["chinese", "japanese", "korean", "southeast-asian"],
     aliases: [
       "seewoo",
       "see woo",
@@ -67,7 +67,7 @@ export const SPECIALTY_STORES: readonly StoreInfo[] = [
     color: "#B22222",
     type: "specialty",
     marketShare: 0.1,
-    cuisines: ["chinese", "japanese", "korean", "thai", "vietnamese"],
+    cuisines: ["chinese", "japanese", "korean", "southeast-asian"],
     aliases: [
       "hoo hing",
       "hoohing",
@@ -82,7 +82,7 @@ export const SPECIALTY_STORES: readonly StoreInfo[] = [
     color: "#FF6B35",
     type: "specialty",
     marketShare: 0.1,
-    cuisines: ["chinese", "japanese", "korean", "thai", "vietnamese", "filipino"],
+    cuisines: ["chinese", "japanese", "korean", "southeast-asian"],
     aliases: [
       "asian supermarket",
       "oriental supermarket",
@@ -101,7 +101,7 @@ export const SPECIALTY_STORES: readonly StoreInfo[] = [
     color: "#009639",
     type: "specialty",
     marketShare: 0.1,
-    cuisines: ["nigerian", "west-african", "east-african", "southern-african", "ethiopian", "caribbean"],
+    cuisines: ["west-african", "east-african", "southern-african", "north-african", "caribbean"],
     aliases: [
       "african grocery",
       "african food store",
@@ -124,7 +124,7 @@ export const SPECIALTY_STORES: readonly StoreInfo[] = [
     color: "#FF9933",
     type: "specialty",
     marketShare: 0.1,
-    cuisines: ["indian", "pakistani", "bangladeshi"],
+    cuisines: ["south-asian"],
     aliases: [
       "south asian grocery",
       "indian grocery",
@@ -146,7 +146,7 @@ export const SPECIALTY_STORES: readonly StoreInfo[] = [
     color: "#006847",
     type: "specialty",
     marketShare: 0.1,
-    cuisines: ["middle-eastern", "turkish", "greek"],
+    cuisines: ["middle-eastern", "turkish", "north-african"],
     aliases: [
       "middle eastern grocery",
       "middle eastern store",
@@ -168,7 +168,7 @@ export const SPECIALTY_STORES: readonly StoreInfo[] = [
     color: "#CE1126",
     type: "specialty",
     marketShare: 0.1,
-    cuisines: ["mexican"],
+    cuisines: ["latin-american"],
     aliases: [
       "latin grocery",
       "latin american grocery",

@@ -3,6 +3,7 @@ import {
   navigateToTab,
   waitForConvex,
   clickPressable,
+  uploadAndParseReceipt,
 } from "../fixtures/base";
 
 /**
@@ -266,5 +267,30 @@ export class ScanPage {
       .locator("text=/undefined|NaN|null price/i")
       .count();
     expect(blanks).toBe(0);
+  }
+
+  // ── High-Level Workflows ─────────────────────────────────
+
+  /**
+   * Upload and parse a receipt image.
+   * Clicks the scan button, triggers the file chooser, waits for parsing.
+   */
+  async scanReceipt(receiptPath: string) {
+    await this.clickScanButton();
+    await this.page.waitForTimeout(500);
+    await uploadAndParseReceipt(this.page, receiptPath);
+  }
+
+  /** Click the Save Receipt button on the confirm screen and wait for navigation */
+  async saveReceipt() {
+    const btn = this.saveReceiptButton;
+    const box = await btn.boundingBox().catch(() => null);
+    if (box) {
+      await this.page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    } else {
+      await btn.click({ force: true });
+    }
+    await this.page.waitForTimeout(2000);
+    await waitForConvex(this.page);
   }
 }

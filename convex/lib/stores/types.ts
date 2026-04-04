@@ -59,31 +59,29 @@ export type StoreType =
 
 /**
  * Cuisine identifiers matching the onboarding cuisine-selection screen.
+ *
+ * Region-based taxonomy: grouped by shared pantry staples where possible,
+ * country-level only where ingredients are meaningfully distinct AND the
+ * UK diaspora community is large enough to warrant it.
  */
 export type CuisineId =
   | "british"
-  | "nigerian"
-  | "indian"
-  | "chinese"
-  | "italian"
-  | "pakistani"
-  | "caribbean"
-  | "mexican"
-  | "middle-eastern"
-  | "japanese"
-  | "korean"
-  | "thai"
-  | "vietnamese"
-  | "ethiopian"
-  | "bangladeshi"
   | "west-african"
   | "east-african"
   | "southern-african"
-  | "filipino"
+  | "north-african"
+  | "caribbean"
+  | "south-asian"
+  | "chinese"
+  | "japanese"
+  | "korean"
+  | "southeast-asian"
+  | "middle-eastern"
   | "turkish"
+  | "mediterranean"
+  | "eastern-european"
   | "french"
-  | "greek"
-  | "polish";
+  | "latin-american";
 
 /**
  * Complete store information including display metadata and aliases.
