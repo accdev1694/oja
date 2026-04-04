@@ -1,0 +1,100 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.js\"",
+            "statusMessage": "Checking file access..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-dangerous-commands.js\"",
+            "statusMessage": "Checking command safety..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-any-types.js\"",
+            "statusMessage": "Checking for banned 'any' types..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-changed-file.js\"",
+            "statusMessage": "Running ESLint on changed file..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-file-length.js\"",
+            "statusMessage": "Checking file length limit..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-item-parser.js\"",
+            "statusMessage": "Checking itemNameParser usage..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-convex-indexes.js\"",
+            "statusMessage": "Checking Convex query indexes..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "async": true,
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/typecheck-on-edit.js\"",
+            "statusMessage": "Running TypeScript check (background)..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Review this session. If TypeScript/TSX files were modified via Edit or Write tools, check: (1) Were tests mentioned or run at any point? (2) Was typecheck run? If code was changed but NEITHER tests nor typecheck were run, respond with {\"ok\": false, \"reason\": \"Code was modified but tests/typecheck were not run. Rule #15: run npm run typecheck and npm test before marking complete.\"}. If only documentation, config, or markdown files were changed, respond with {\"ok\": true}. If tests or typecheck were run (even if they had errors that were subsequently fixed), respond with {\"ok\": true}.",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
