@@ -10,6 +10,7 @@ interface AddedFeedbackItem {
   id: number;
   name: string;
   size?: string;
+  unit?: string;
   price?: number;
 }
 
@@ -35,7 +36,7 @@ export const FeedbackPills = ({ addedThisSession }: FeedbackPillsProps) => {
             color={colors.accent.primary}
           />
           <Text style={styles.feedbackText} numberOfLines={1}>
-            {formatItemDisplay(item.name, item.size)}
+            {formatItemDisplay(item.name, item.size, item.unit)}
             {item.price != null ? ` \u00B7 \u00A3${item.price.toFixed(2)}` : ""}
             {" added"}
           </Text>

@@ -65,8 +65,8 @@
 - `scan.tsx` MUST pass `unit` alongside `name` and `size` to the backend — never drop it
 - All scanned items MUST pass through `cleanItemForStorage()` before DB insertion (`addBatchFromScan`) and before returning from the edit modal (`EditScannedItemModal`)
 - Size without a valid unit is **rejected entirely** — both become `undefined`
-- Valid UK units only: `ml`, `l`, `g`, `kg`, `pt`, `pint`, `pack`, `pk`, `x`, `oz`
-- Vague sizes (`"per item"`, `"each"`, `"unit"`, `"piece"`) are filtered out
+- Valid UK units only: `ml`, `l`, `g`, `kg`, `pt`, `pint`, `pints`, `pack`, `pk`, `x`, `oz`
+- Vague sizes (`"per item"`, `"item"`, `"each"`, `"unit"`, `"piece"`) are filtered out
 - Display format is always `"{size} {name}"` — never `"{name} {size}"`
 - `ProductMode.tsx` MUST use `formatItemDisplay()` so the scan preview matches the list display
 
@@ -91,7 +91,7 @@
 - `components/list/ShoppingListItem.tsx` - Shopping list item display
 - `components/scan/ProductMode.tsx` - Scan preview display
 - `components/scan/EditScannedItemModal.tsx` - Edit modal pre-save cleaning
-- `__tests__/lib/itemNameParser.test.ts` - Unit tests (23 cases)
+- `__tests__/lib/itemNameParser.test.ts` - Unit tests (47+ cases)
 
 **Expected Behavior:**
 
@@ -113,9 +113,11 @@
 - `stripDualUnitFromName()` catches dual-unit prefixes the AI embeds in the name field (e.g. `"8 FL OZ / 237 mL Leave-in Conditioner"` → name: `"Leave-in Conditioner"`, size: `"237ml"`)
 - Size extraction priority: start of name (`SIZE_PATTERN`) → dual-unit prefix (`stripDualUnitFromName`) → end of name (`SIZE_END_PATTERN`)
 - Valid UK units only: `ml`, `l`, `g`, `kg`, `pt`, `pint`, `pints`, `pack`, `pk`, `x`, `oz`
-- Vague sizes (`"per item"`, `"each"`, `"unit"`, `"piece"`) are filtered out and treated as no-size
+- Vague sizes (`"per item"`, `"item"`, `"each"`, `"unit"`, `"piece"`) are filtered out and treated as no-size
 - `formatItemDisplay()` also cleans size and name at display time as a safety net for old DB data that wasn't cleaned at storage time
-- Size without unit is **UNACCEPTABLE** — `cleanItemForStorage()` throws if this invariant is violated
+- Size without unit is **UNACCEPTABLE** — `cleanItemForStorage()` silently rejects by returning `{ size: undefined, unit: undefined }` (does NOT throw)
+- Stored sizes are always **lowercase** (`"500ML"` → `"500ml"`) for consistent dedup and matching
+- Zero or negative sizes (e.g. `"0ml"`, `"-5kg"`) are rejected by `isValidSize()`
 
 **Validation:**
 

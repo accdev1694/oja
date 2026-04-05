@@ -14,10 +14,10 @@
  * - Always display: "500ml Milk" ✅ not "Milk 500ml" ❌
  */
 
-const VAGUE_SIZES = ["per item", "item", "each", "unit", "piece"];
+const VAGUE_SIZES = ["per item", "item", "each", "unit", "piece"] as const;
 
 // Common UK grocery units
-const VALID_UNITS = ["ml", "l", "g", "kg", "pt", "pint", "pints", "pack", "pk", "x", "oz"];
+const VALID_UNITS = ["ml", "l", "g", "kg", "pt", "pint", "pints", "pack", "pk", "x", "oz"] as const;
 
 const SIZE_PATTERN = /^(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz)s?)\s+(.+)$/i;
 const SIZE_END_PATTERN = /^(.+?)\s+(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz)s?)$/i;
@@ -40,7 +40,7 @@ const METRIC_EXTRACT = /(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz
  * "227g (8oz)" → "227g", "347ml/12 fl oz" → "347ml",
  * "8 FL OZ / 237 mL" → "237ml", "500g / 1.1lb" → "500g"
  */
-function cleanDuplicateUnits(size: string) {
+function cleanDuplicateUnits(size: string): string {
   let cleaned = size.trim();
 
   // Strip parenthetical duplicates: "227g (8oz)" → "227g"
@@ -51,7 +51,7 @@ function cleanDuplicateUnits(size: string) {
     // Try metric-first: "347ml/12 fl oz" → "347ml"
     const metricFirst = cleaned.match(/^(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz))\s*[/|]/i);
     if (metricFirst) {
-      return metricFirst[1].trim();
+      return metricFirst[1].trim().toLowerCase();
     }
     // Try metric anywhere (handles imperial-first): "8 FL OZ / 237 mL" → "237ml"
     const metricAnywhere = cleaned.match(METRIC_EXTRACT);
@@ -69,7 +69,7 @@ function cleanDuplicateUnits(size: string) {
  * "237ml Cantu Leave-in Conditioner" is handled by SIZE_PATTERN already.
  * This catches imperial/dual-unit prefixes that SIZE_PATTERN misses.
  */
-function stripDualUnitFromName(name: string) {
+function stripDualUnitFromName(name: string): { cleaned: string; size: string } | null {
   // Pattern: optional number+imperial, separator, number+metric, then the real name
   // e.g. "8 FL OZ / 237 mL Leave-in Conditioning Treatment"
   const dualUnitPrefix = name.match(
@@ -93,7 +93,7 @@ function stripDualUnitFromName(name: string) {
 /**
  * Extract unit from a size string (e.g., "500ml" → "ml", "2 kg" → "kg")
  */
-function extractUnitFromSize(size: string) {
+function extractUnitFromSize(size: string): string | undefined {
   const trimmed = size.trim();
 
   // Try to match unit at the end (with or without space)
@@ -102,7 +102,7 @@ function extractUnitFromSize(size: string) {
   if (unitMatch) {
     const extractedUnit = unitMatch[1].toLowerCase();
     // Validate it's a known unit
-    if (VALID_UNITS.includes(extractedUnit)) {
+    if ((VALID_UNITS as readonly string[]).includes(extractedUnit)) {
       return extractedUnit;
     }
   }
@@ -116,7 +116,7 @@ function extractUnitFromSize(size: string) {
  *
  * CRITICAL: Size without unit is UNACCEPTABLE and will be rejected.
  */
-export function isValidSize(size?: string | null, unit?: string | null) {
+export function isValidSize(size?: string | null, unit?: string | null): boolean {
   // CRITICAL: Both size AND unit are required
   if (!size || !unit) return false;
 
@@ -124,14 +124,18 @@ export function isValidSize(size?: string | null, unit?: string | null) {
   const normalizedUnit = unit.toLowerCase().trim();
 
   // Reject vague sizes
-  if (VAGUE_SIZES.includes(normalizedSize)) return false;
+  if ((VAGUE_SIZES as readonly string[]).includes(normalizedSize)) return false;
 
   // Reject if unit is not valid
-  if (!VALID_UNITS.includes(normalizedUnit)) return false;
+  if (!(VALID_UNITS as readonly string[]).includes(normalizedUnit)) return false;
 
   // Must contain a number
   const hasNumber = /\d/.test(size);
   if (!hasNumber) return false;
+
+  // Reject zero or negative sizes
+  const numericValue = parseFloat(normalizedSize);
+  if (!isNaN(numericValue) && numericValue <= 0) return false;
 
   // Unit must exist in the size string OR be provided separately
   // If unit is provided separately, verify it matches what's in the size
@@ -162,7 +166,7 @@ export function parseItemNameAndSize(
   itemName: string,
   existingSize?: string | null,
   existingUnit?: string | null
-) {
+): ParsedItem {
   let cleanName = itemName.trim();
   let extractedSize = existingSize?.trim() || undefined;
   let extractedUnit = existingUnit?.trim() || undefined;
@@ -177,9 +181,18 @@ export function parseItemNameAndSize(
     // Try beginning first: "500ml Milk"
     const startMatch = cleanName.match(SIZE_PATTERN);
     if (startMatch) {
-      const [_, sizeFromName, nameWithoutSize] = startMatch;
+      const [, sizeFromName, nameWithoutSize] = startMatch;
       cleanName = nameWithoutSize.trim();
       extractedSize = sizeFromName.trim();
+      // Clean residual imperial/dual-unit prefix from name after SIZE_PATTERN extraction
+      // e.g., "237 mL / 8 FL OZ Leave-in Conditioner" → size "237 mL", name "/ 8 FL OZ Leave-in Conditioner"
+      // Strip the separator + imperial measurement leaving just the product name
+      const residualImperial = cleanName.match(
+        /^[/|]\s*\d+(?:\.\d+)?\s*(?:fl\.?\s*oz|oz|lb|lbs?|pt|pints?)\s+(.+)$/i
+      );
+      if (residualImperial) {
+        cleanName = residualImperial[1].trim();
+      }
     } else {
       // Try dual-unit prefix: "8 FL OZ / 237 mL Leave-in Conditioner"
       const dualUnit = stripDualUnitFromName(cleanName);
@@ -190,7 +203,7 @@ export function parseItemNameAndSize(
         // Fallback: try end of name: "Milk 500ml"
         const endMatch = cleanName.match(SIZE_END_PATTERN);
         if (endMatch) {
-          const [_, nameWithoutSize, sizeFromName] = endMatch;
+          const [, nameWithoutSize, sizeFromName] = endMatch;
           cleanName = nameWithoutSize.trim();
           extractedSize = sizeFromName.trim();
         }
@@ -251,7 +264,7 @@ export function formatItemDisplay(
   name: string,
   size?: string | null,
   unit?: string | null
-) {
+): string {
   // Clean size of dual units before validation: "8 FL OZ / 237 mL" → "237ml"
   let cleanedSize = size ? cleanDuplicateUnits(size) : size;
   let cleanedUnit = unit;
@@ -280,38 +293,38 @@ export function formatItemDisplay(
   // Extract the numeric part and unit separately for more robust matching
   const sizeMatch = sizeLower.match(/^(\d+(?:\.\d+)?)\s*([a-z]+)?$/i);
   if (sizeMatch) {
-    const [_, sizeNum, sizeUnit] = sizeMatch;
+    const [, sizeNum, sizeUnit] = sizeMatch;
 
-    const patterns: RegExp[] = [];
+    // Early exit: skip regex dedup if name doesn't contain the size number
+    if (cleanName.includes(sizeNum)) {
+      const patterns: RegExp[] = [];
 
-    // Pattern 1: Parenthetical sizes (e.g., "(6x124g)") - PRIORITY
-    patterns.push(new RegExp(`\\([^)]*${sizeNum}[^)]*\\)`, "gi"));
+      // Pattern 1: Parenthetical sizes (e.g., "(6x124g)") - PRIORITY
+      patterns.push(new RegExp(`\\([^)]*${sizeNum}[^)]*\\)`, "gi"));
 
-    // Pattern 2: Exact size with optional spaces
-    const escapedSize = sizeLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
-    patterns.push(new RegExp(`\\b${escapedSize}\\b`, "gi"));
+      // Pattern 2: Exact size with optional spaces
+      const escapedSize = sizeLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
+      patterns.push(new RegExp(`\\b${escapedSize}\\b`, "gi"));
 
-    // Pattern 3: Number + optional trailing letters (catches typos like "650ge")
-    if (sizeUnit) {
-      patterns.push(new RegExp(`\\b${sizeNum}\\s*${sizeUnit}[a-z]*\\b`, "gi"));
+      // Pattern 3: Number + optional trailing letters (catches typos like "650ge")
+      if (sizeUnit) {
+        patterns.push(new RegExp(`\\b${sizeNum}\\s*${sizeUnit}[a-z]*\\b`, "gi"));
+      }
+
+      // Pattern 4: Number + "pk" or "pack" variations only (not arbitrary p-words)
+      patterns.push(new RegExp(`\\b${sizeNum}\\s*(?:pk|pack)s?\\b`, "gi"));
+
+      // Apply all patterns to remove duplicates
+      for (const pattern of patterns) {
+        cleanName = cleanName.replace(pattern, "").trim();
+      }
+
+      // Clean up multiple spaces and extra separators
+      cleanName = cleanName
+        .replace(/\s+/g, " ")
+        .replace(/^[\s,.-]+|[\s,.-]+$/g, "")
+        .trim();
     }
-
-    // Pattern 4: Number + "pk" or "pack" variations
-    patterns.push(new RegExp(`\\b${sizeNum}\\s*p[a-z]*\\b`, "gi"));
-
-    // Pattern 5: Number alone at word boundaries
-    patterns.push(new RegExp(`\\b${sizeNum}\\b`, "g"));
-
-    // Apply all patterns to remove duplicates
-    for (const pattern of patterns) {
-      cleanName = cleanName.replace(pattern, "").trim();
-    }
-
-    // Clean up multiple spaces and extra separators
-    cleanName = cleanName
-      .replace(/\s+/g, " ")
-      .replace(/^[\s,.-]+|[\s,.-]+$/g, "")
-      .trim();
   } else {
     // If size doesn't match expected pattern, just do a simple replacement
     const escapedSize = sizeLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -328,6 +341,11 @@ export function formatItemDisplay(
     if (maxNameLen > 3) {
       return `${normalizedSize} ${cleanName.slice(0, maxNameLen - 1).trimEnd()}\u2026`;
     }
+    // Size alone exceeds or nearly exceeds cap — return size only, truncated if needed
+    if (normalizedSize.length > MAX_DISPLAY_CHARS) {
+      return `${normalizedSize.slice(0, MAX_DISPLAY_CHARS - 1)}\u2026`;
+    }
+    return normalizedSize;
   }
 
   return full;
@@ -348,11 +366,20 @@ export function cleanItemForStorage(
   itemName: string,
   size?: string | null,
   unit?: string | null
-) {
+): ParsedItem {
   const parsed = parseItemNameAndSize(itemName, size, unit);
 
   // CRITICAL: Size without unit is UNACCEPTABLE - reject completely
   if (parsed.size && !parsed.unit) {
+    return {
+      name: parsed.name,
+      size: undefined,
+      unit: undefined,
+    };
+  }
+
+  // Enforce invariant: unit without size is meaningless — clear both
+  if (!parsed.size && parsed.unit) {
     return {
       name: parsed.name,
       size: undefined,
@@ -369,11 +396,13 @@ export function cleanItemForStorage(
     };
   }
 
-  // DOUBLE CHECK: Ensure we NEVER return size without unit
-  if (parsed.size && !parsed.unit) {
-    throw new Error(
-      `CRITICAL ERROR: Attempted to store item with size but no unit. Item: "${parsed.name}", Size: "${parsed.size}". This is unacceptable.`
-    );
+  // Normalize size casing for consistency (e.g., "500ML" → "500ml")
+  if (parsed.size) {
+    return {
+      name: parsed.name,
+      size: parsed.size.toLowerCase(),
+      unit: parsed.unit,
+    };
   }
 
   return parsed;

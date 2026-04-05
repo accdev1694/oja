@@ -346,9 +346,9 @@ export function AddItemsModal({
   // ── Show feedback pill ────────────────────────────────────────────────────
 
   const showAddedFeedback = useCallback(
-    (name: string, size?: string, price?: number) => {
+    (name: string, size?: string, unit?: string, price?: number) => {
       const id = ++feedbackIdRef.current;
-      setAddedThisSession((prev) => [{ id, name, size, price }, ...prev]);
+      setAddedThisSession((prev) => [{ id, name, size, unit, price }, ...prev]);
       setSessionAddCount((prev) => prev + 1);
       setTimeout(() => {
         setAddedThisSession((prev) => prev.filter((f) => f.id !== id));
@@ -417,7 +417,7 @@ export function AddItemsModal({
                     try {
                       await updateItem({ id: existingItemId, quantity: newQty });
                       haptic("success");
-                      showAddedFeedback(existingName, existingSize, item.estimatedPrice);
+                      showAddedFeedback(existingName, existingSize, item.unit, item.estimatedPrice);
                     } catch (err) {
                       console.error("Failed to increment:", err);
                       alert("Error", "Failed to update quantity");
@@ -435,7 +435,7 @@ export function AddItemsModal({
         }
 
         haptic("success");
-        showAddedFeedback(item.name, item.size, item.estimatedPrice);
+        showAddedFeedback(item.name, item.size, item.unit, item.estimatedPrice);
       } catch (error) {
         console.error("Failed to add item:", error);
         haptic("error");
@@ -744,7 +744,7 @@ export function AddItemsModal({
             onVariantSelect={handleVariantSelect}
             altSuggestions={altSuggestions}
             listId={listId}
-            onItemAddedFeedback={() => showAddedFeedback("Item", undefined, undefined)}
+            onItemAddedFeedback={() => showAddedFeedback("Item", undefined, undefined, undefined)}
           />
         )}
       </View>
