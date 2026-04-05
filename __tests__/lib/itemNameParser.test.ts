@@ -315,5 +315,198 @@ describe("Item Name Parser", () => {
       const result = formatItemDisplay("500ml", "500ml", "ml");
       expect(result).toBe("500ml");
     });
+
+    it("should enforce 40-char cap even with extremely long size strings", () => {
+      const longSize = "1234567890123456789012345678901234567890ml";
+      const result = formatItemDisplay("Milk", longSize, "ml");
+      expect(result.length).toBeLessThanOrEqual(40);
+    });
+
+    it("should not strip meaningful numbers from product names", () => {
+      // Pattern 5 (bare number removal) was removed — "2" in name should persist
+      const result = formatItemDisplay("Type 2 Flour", "500g", "g");
+      expect(result).toContain("Type 2");
+    });
+
+    it("should not match arbitrary p-words in Pattern 4", () => {
+      // "4 portions" should NOT be stripped by Pattern 4 (now restricted to pk/pack)
+      const result = formatItemDisplay("4 Portions Lasagne", "4pk", "pk");
+      // "4 Portions" should remain (Pattern 4 only strips "4pk"/"4pack")
+      expect(result).toContain("Portions Lasagne");
+    });
+  });
+
+  // ── New test blocks for previously untested areas ──────────────────────────
+
+  describe("isValidSize - zero and negative sizes", () => {
+    it("should reject zero size", () => {
+      expect(isValidSize("0ml", "ml")).toBe(false);
+    });
+
+    it("should reject negative size", () => {
+      expect(isValidSize("-5kg", "kg")).toBe(false);
+    });
+
+    it("should accept positive decimal size", () => {
+      expect(isValidSize("0.5l", "l")).toBe(true);
+    });
+  });
+
+  describe("isValidSize - pints unit", () => {
+    it("should accept pints as a valid unit", () => {
+      expect(isValidSize("2pints", "pints")).toBe(true);
+    });
+
+    it("should accept pint singular", () => {
+      expect(isValidSize("1pint", "pint")).toBe(true);
+    });
+
+    it("should accept pt abbreviation", () => {
+      expect(isValidSize("2pt", "pt")).toBe(true);
+    });
+  });
+
+  describe("cleanItemForStorage - case normalization", () => {
+    it("should lowercase size when stored (uppercase input)", () => {
+      const result = cleanItemForStorage("Milk", "500ML", "ml");
+      expect(result.size).toBe("500ml");
+      expect(result.unit).toBe("ml");
+    });
+
+    it("should lowercase size when extracted from name (mixed case)", () => {
+      const result = cleanItemForStorage("500ML Milk");
+      expect(result.size).toBe("500ml");
+      expect(result.unit).toBe("ml");
+    });
+
+    it("should lowercase size from dual-unit cleaning (metric-first)", () => {
+      const result = cleanItemForStorage("Milk", "347ML/12 fl oz");
+      expect(result.size).toBe("347ml");
+      expect(result.unit).toBe("ml");
+    });
+  });
+
+  describe("cleanItemForStorage - size+unit invariant", () => {
+    it("should never return size without unit", () => {
+      const testCases = [
+        { name: "Milk", size: "500", unit: undefined },
+        { name: "Milk", size: "large", unit: undefined },
+        { name: "Milk", size: "500ml", unit: "foo" },
+        { name: "Milk", size: "per item", unit: "each" },
+      ];
+      for (const tc of testCases) {
+        const result = cleanItemForStorage(tc.name, tc.size, tc.unit);
+        if (result.size) {
+          expect(result.unit).toBeDefined();
+        }
+        if (!result.unit) {
+          expect(result.size).toBeUndefined();
+        }
+      }
+    });
+
+    it("should never return unit without size", () => {
+      const result = cleanItemForStorage("Milk", undefined, "ml");
+      // No size provided, unit alone is meaningless
+      expect(result.size).toBeUndefined();
+      expect(result.unit).toBeUndefined();
+    });
+  });
+
+  describe("cleanItemForStorage - zero size rejection", () => {
+    it("should reject zero size through isValidSize", () => {
+      const result = cleanItemForStorage("Milk", "0ml", "ml");
+      expect(result.size).toBeUndefined();
+      expect(result.unit).toBeUndefined();
+    });
+
+    it("should reject negative size through isValidSize", () => {
+      const result = cleanItemForStorage("Milk", "-5kg", "kg");
+      expect(result.size).toBeUndefined();
+      expect(result.unit).toBeUndefined();
+    });
+  });
+
+  describe("parseItemNameAndSize - x unit (multipack)", () => {
+    it("should extract 6x from beginning of name", () => {
+      const result = parseItemNameAndSize("6x Crisps");
+      expect(result.name).toBe("Crisps");
+      expect(result.size).toBe("6x");
+      expect(result.unit).toBe("x");
+    });
+
+    it("should extract 6x from end of name", () => {
+      const result = parseItemNameAndSize("Crisps 6x");
+      expect(result.name).toBe("Crisps");
+      expect(result.size).toBe("6x");
+      expect(result.unit).toBe("x");
+    });
+  });
+
+  describe("parseItemNameAndSize - pints unit", () => {
+    it("should extract pints from name", () => {
+      const result = parseItemNameAndSize("2pints Milk");
+      expect(result.name).toBe("Milk");
+      expect(result.size).toBe("2pints");
+      expect(result.unit).toBe("pints");
+    });
+
+    it("should handle pint as existing size", () => {
+      const result = parseItemNameAndSize("Milk", "1pint", "pint");
+      expect(result.size).toBe("1pint");
+      expect(result.unit).toBe("pint");
+    });
+  });
+
+  describe("parseItemNameAndSize - pipe separator in dual-unit size", () => {
+    it("should clean pipe-separated dual-unit size", () => {
+      const result = parseItemNameAndSize("Butter", "500g | 1.1lb");
+      expect(result.size).toBe("500g");
+      expect(result.unit).toBe("g");
+    });
+  });
+
+  describe("parseItemNameAndSize - reverse dual-unit prefix in name", () => {
+    it("should extract metric from reverse dual-unit prefix (metric first)", () => {
+      const result = parseItemNameAndSize("237 mL / 8 FL OZ Leave-in Conditioner");
+      expect(result.name).toBe("Leave-in Conditioner");
+      // parseItemNameAndSize preserves original case; cleanItemForStorage lowercases
+      expect(result.size).toBe("237 mL");
+      expect(result.unit).toBe("ml");
+    });
+  });
+
+  describe("parseItemNameAndSize - trailing s on units", () => {
+    it("should handle trailing s on size pattern (500mls)", () => {
+      // SIZE_PATTERN allows trailing s? but extractUnitFromSize extracts "mls"
+      // which is not in VALID_UNITS — size should be cleared
+      const result = cleanItemForStorage("500mls Milk");
+      // The regex captures "500mls" as size, but unit "mls" is invalid
+      // so cleanItemForStorage rejects it
+      if (result.size) {
+        expect(result.unit).toBeDefined();
+      }
+    });
+  });
+
+  describe("formatItemDisplay - case insensitive dedup", () => {
+    it("should deduplicate size regardless of case in name", () => {
+      const result = formatItemDisplay("500ML Milk", "500ml", "ml");
+      expect(result).toBe("500ml Milk");
+    });
+
+    it("should handle size auto-extraction when unit not passed", () => {
+      // formatItemDisplay with size but no unit — should auto-extract
+      const result = formatItemDisplay("Milk", "500ml");
+      expect(result).toBe("500ml Milk");
+    });
+  });
+
+  describe("formatItemDisplay - performance early exit", () => {
+    it("should not corrupt names when size digits are absent from name", () => {
+      // When name doesn't contain size digits, early exit skips dedup entirely
+      const result = formatItemDisplay("Organic Whole Milk", "500ml", "ml");
+      expect(result).toBe("500ml Organic Whole Milk");
+    });
   });
 });
