@@ -1,36 +1,8 @@
 {
   "mcpServers": {
-    "playwright": {
-      "type": "stdio",
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@playwright/mcp@latest"],
-      "env": {}
-    },
-    "github": {
-      "type": "stdio",
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
-      }
-    },
-    "context7": {
-      "type": "stdio",
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@upstash/context7-mcp"],
-      "env": {}
-    },
     "vercel": {
       "type": "http",
       "url": "https://mcp.vercel.com"
-    },
-    "expo": {
-      "type": "stdio",
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "expo-mcp-server"],
-      "env": {
-        "EXPO_TOKEN": "${EXPO_TOKEN}"
-      }
     },
     "convex": {
       "type": "stdio",
@@ -38,27 +10,9 @@
       "args": ["/c", "npx", "-y", "convex@latest", "mcp", "start"],
       "env": {}
     },
-    "stripe": {
-      "type": "stdio",
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@stripe/mcp@latest"],
-      "env": {
-        "STRIPE_SECRET_KEY": "${STRIPE_SECRET_KEY}"
-      }
-    },
     "clerk": {
       "type": "http",
       "url": "https://mcp.clerk.com/mcp"
-    },
-    "sentry": {
-      "type": "http",
-      "url": "https://mcp.sentry.dev/mcp"
-    },
-    "memory": {
-      "type": "stdio",
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-memory"],
-      "env": {}
     },
     "firecrawl": {
       "type": "stdio",

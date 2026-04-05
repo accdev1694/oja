@@ -208,16 +208,9 @@
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
-    "playwright",
-    "github",
-    "context7",
     "vercel",
-    "expo",
     "convex",
-    "stripe",
     "clerk",
-    "sentry",
-    "memory",
     "firecrawl",
     "react-native-expo"
   ]

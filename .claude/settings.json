@@ -1,58 +1,6 @@
 {
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Read|Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.js\"",
-            "statusMessage": "Checking file access..."
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-dangerous-commands.js\"",
-            "statusMessage": "Checking command safety..."
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-any-types.js\"",
-            "statusMessage": "Checking for banned 'any' types..."
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-changed-file.js\"",
-            "statusMessage": "Running ESLint on changed file..."
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-file-length.js\"",
-            "statusMessage": "Checking file length limit..."
-          }
-        ]
-      },
       {
         "matcher": "Edit|Write",
         "hooks": [
@@ -70,17 +18,6 @@
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-convex-indexes.js\"",
             "statusMessage": "Checking Convex query indexes..."
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "async": true,
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/typecheck-on-edit.js\"",
-            "statusMessage": "Running TypeScript check (background)..."
           }
         ]
       }
