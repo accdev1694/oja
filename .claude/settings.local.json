@@ -203,7 +203,8 @@
       "Bash(else echo \"File does not exist yet\")",
       "Bash(timeout 30 bash:*)",
       "Bash(node:*)",
-      "WebFetch(domain:docs.stripe.com)"
+      "WebFetch(domain:docs.stripe.com)",
+      "Skill(validate-feature)"
     ]
   },
   "enableAllProjectMcpServers": true,
