@@ -28,9 +28,9 @@ export function computeWeightedAverage(
   daysSincePurchase: number
 ): number {
   const newWeight = Math.max(0, 1 - daysSincePurchase / 30);
-  // Existing average represents accumulated history; give it a base weight
-  // that decays as the data ages, but at least 0.3 to prevent wild swings
-  const existingWeight = Math.max(0.3, 1 - (existingCount > 1 ? 0.1 : 0));
+  // Existing average weight decays with report count — more reports = more inertia,
+  // but capped to allow fresh data to influence (prevents stale averages)
+  const existingWeight = Math.min(0.8, 0.3 + Math.log2(Math.max(1, existingCount)) * 0.15);
   const totalWeight = existingWeight + newWeight;
   if (totalWeight === 0) return newPrice;
   return (existingAverage * existingWeight + newPrice * newWeight) / totalWeight;

@@ -50,6 +50,7 @@ export const refreshListPrices = mutation({
     let updated = 0;
     const storeName = list.storeName;
     const normalizedStoreId = list.normalizedStoreId;
+    const userRegion = user.postcodePrefix || user.country || "UK";
 
     for (const item of items) {
       if (item.isChecked || item.priceOverride) continue;
@@ -88,7 +89,6 @@ export const refreshListPrices = mutation({
       }
 
       if (newPrice === undefined && storeName) {
-        const userRegion = user.postcodePrefix || user.country || "UK";
         const normalizedItemName = item.name.toLowerCase().trim();
         // Prefer region-specific price, fall back to any region at this store
         let storePrice = await ctx.db

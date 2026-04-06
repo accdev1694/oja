@@ -71,14 +71,14 @@ export function matchPriceBracket(
 
   // Find all variants within tolerance range
   const candidates = variants.filter((v) => {
-    if (v.estimatedPrice == null) return false;
+    if (v.estimatedPrice == null || v.estimatedPrice <= 0) return false;
     const diff = Math.abs(receiptPrice - v.estimatedPrice) / v.estimatedPrice;
     return diff <= tolerance;
   });
 
   // Check for exact match first (within 1%)
   const exactMatch = candidates.find((v) => {
-    if (v.estimatedPrice == null) return false;
+    if (v.estimatedPrice == null || v.estimatedPrice <= 0) return false;
     const diff = Math.abs(receiptPrice - v.estimatedPrice) / v.estimatedPrice;
     return diff <= 0.01;
   });
@@ -148,5 +148,6 @@ export function calculatePriceDiff(
   receiptPrice: number,
   variantPrice: number
 ): number {
+  if (variantPrice <= 0) return Infinity;
   return Math.abs(receiptPrice - variantPrice) / variantPrice;
 }

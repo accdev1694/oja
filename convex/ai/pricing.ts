@@ -1,5 +1,6 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import {
   smartGenerateInstrumented,
@@ -183,15 +184,22 @@ Return ONLY valid JSON: {"name": "...", "normalizedName": "...", "category": "..
 
       const result = JSON.parse(stripCodeBlocks(response));
 
-      await ctx.runMutation(api.currentPrices.upsertAIEstimate, {
-        normalizedName: result.normalizedName || normalizedName,
-        itemName: toGroceryTitleCase(result.name || args.itemName),
-        unitPrice: result.estimatedPrice,
-        userId: args.userId,
-        size: result.defaultSize || undefined,
-        unit: result.defaultUnit || undefined,
-        confidence: isAnchored ? 0.3 : undefined,
-      });
+      // Validate AI-returned price is positive before persisting
+      const aiPrice = typeof result.estimatedPrice === "number" && result.estimatedPrice > 0
+        ? result.estimatedPrice
+        : null;
+
+      if (aiPrice !== null) {
+        await ctx.runMutation(internal.currentPrices.upsertAIEstimate, {
+          normalizedName: normalizedName,
+          itemName: toGroceryTitleCase(result.name || args.itemName),
+          unitPrice: aiPrice,
+          userId: args.userId,
+          size: result.defaultSize || undefined,
+          unit: result.defaultUnit || undefined,
+          confidence: isAnchored ? 0.3 : undefined,
+        });
+      }
 
       if (result.hasVariants && result.variants?.length > 0) {
         await ctx.runMutation(api.itemVariants.bulkUpsert, {
@@ -208,7 +216,7 @@ Return ONLY valid JSON: {"name": "...", "normalizedName": "...", "category": "..
       }
 
       return {
-        estimatedPrice: result.estimatedPrice,
+        estimatedPrice: aiPrice ?? result.estimatedPrice,
         category: normalizeCategory(result.category),
         hasVariants: result.hasVariants,
         defaultSize: result.defaultSize,

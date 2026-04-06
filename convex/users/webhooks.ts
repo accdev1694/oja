@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { action, internalMutation } from "../_generated/server";
-import { api, internal } from "../_generated/api";
+import { internalAction, internalMutation } from "../_generated/server";
+import { internal } from "../_generated/api";
 
 /** Minimal shape of Clerk webhook user data. */
 interface ClerkUserData {
@@ -11,10 +11,10 @@ interface ClerkUserData {
 }
 
 /**
- * Clerk Webhook Handler
+ * Clerk Webhook Handler (internal action — called only from HTTP route with Svix verification)
  * Processes user.deleted and user.updated events from Clerk.
  */
-export const handleClerkWebhook = action({
+export const handleClerkWebhook = internalAction({
   args: {
     type: v.string(),
     data: v.string(),
@@ -25,7 +25,7 @@ export const handleClerkWebhook = action({
 
     if (type === "user.deleted") {
       const clerkId = data.id;
-      const user = await ctx.runQuery(api.users.getByClerkId, { clerkId });
+      const user = await ctx.runQuery(internal.users.internalGetByClerkId, { clerkId });
       if (user) {
         await ctx.runMutation(internal.users.internalDeleteUser, { userId: user._id });
         console.log(`[Clerk Webhook] Deleted user ${clerkId} (${user.email})`);
@@ -34,9 +34,8 @@ export const handleClerkWebhook = action({
       const clerkId = data.id;
       const email = data.email_addresses?.[0]?.email_address;
       const clerkName = `${data.first_name || ""} ${data.last_name || ""}`.trim();
-      const user = await ctx.runQuery(api.users.getByClerkId, { clerkId });
+      const user = await ctx.runQuery(internal.users.internalGetByClerkId, { clerkId });
       if (user) {
-        // Only overwrite name if the user hasn't manually set one in-app
         const nameToUse = user.nameManuallySet
           ? user.name
           : (clerkName || user.name || "");

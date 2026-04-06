@@ -61,6 +61,7 @@ export const pricingTables = {
     .index("by_user", ["userId"])
     .index("by_user_item", ["userId", "normalizedName"])
     .index("by_user_item_date", ["userId", "normalizedName", "purchaseDate"])
+    .index("by_user_item_store", ["userId", "normalizedName", "storeName"])
     .index("by_receipt", ["receiptId"])
     .index("by_store", ["storeName"]),
 

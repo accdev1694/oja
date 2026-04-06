@@ -158,10 +158,12 @@ export const cleanupExpiredSessions = internalMutation({
 export const getActiveImpersonationToken = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const token = await ctx.db
       .query("impersonationTokens")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .filter((q) => 
+      .filter((q) =>
         q.and(
           q.neq(q.field("usedAt"), undefined),
           q.gt(q.field("expiresAt"), Date.now())
@@ -172,7 +174,7 @@ export const getActiveImpersonationToken = query({
     if (!token) return null;
 
     const admin = await ctx.db.get(token.createdBy);
-    
+
     return {
       tokenValue: token.tokenValue,
       createdBy: token.createdBy,
@@ -185,6 +187,8 @@ export const getActiveImpersonationToken = query({
 export const stopImpersonation = mutation({
   args: { tokenValue: v.string() },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const token = await ctx.db
       .query("impersonationTokens")
       .withIndex("by_token", (q) => q.eq("tokenValue", args.tokenValue))
@@ -192,7 +196,7 @@ export const stopImpersonation = mutation({
 
     if (token) {
       await ctx.db.patch(token._id, { expiresAt: Date.now() - 1 });
-      
+
       await ctx.db.insert("adminLogs", {
         adminUserId: token.createdBy,
         action: "stop_impersonation",

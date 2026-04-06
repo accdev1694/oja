@@ -764,3 +764,95 @@ describe("Edge Case Documentation", () => {
     expect(waitroseResult.candidates.some((c) => c.size === "2" && c.unit === "pt")).toBe(true);
   });
 });
+
+// ============================================================================
+// Division by Zero Bug Fix Tests
+// ============================================================================
+
+describe("matchPriceBracket - Division by zero protection (estimatedPrice <= 0)", () => {
+  it("should return no_match when only variant has estimatedPrice: 0", () => {
+    const zeroPriceVariants: ItemVariant[] = [
+      { variantName: "Broken Item", size: "1", unit: "unit", estimatedPrice: 0, baseItem: "item" },
+    ];
+    const result = matchPriceBracket(1.50, zeroPriceVariants);
+    expect(result.matched).toBe(false);
+    expect(result.matchType).toBe("no_match");
+    expect(result.candidates).toHaveLength(0);
+  });
+
+  it("should skip variant with estimatedPrice: -1", () => {
+    const negativePriceVariants: ItemVariant[] = [
+      { variantName: "Negative Price Item", size: "1", unit: "unit", estimatedPrice: -1, baseItem: "item" },
+    ];
+    const result = matchPriceBracket(1.50, negativePriceVariants);
+    expect(result.matched).toBe(false);
+    expect(result.matchType).toBe("no_match");
+    expect(result.candidates).toHaveLength(0);
+  });
+
+  it("should match valid variants when mixed with zero-price variants", () => {
+    const mixedVariants: ItemVariant[] = [
+      { variantName: "Zero Price Item", size: "S", unit: "unit", estimatedPrice: 0, baseItem: "item" },
+      { variantName: "Valid Item", size: "M", unit: "unit", estimatedPrice: 2.00, baseItem: "item" },
+      { variantName: "Negative Price Item", size: "L", unit: "unit", estimatedPrice: -5, baseItem: "item" },
+    ];
+    const result = matchPriceBracket(2.00, mixedVariants);
+    expect(result.matched).toBe(true);
+    expect(result.matchType).toBe("exact");
+    expect(result.variant?.variantName).toBe("Valid Item");
+    expect(result.variant?.size).toBe("M");
+    // Only the valid variant should appear in candidates
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0].variantName).toBe("Valid Item");
+  });
+
+  it("should return no_match when all variants have zero or negative prices", () => {
+    const allBadVariants: ItemVariant[] = [
+      { variantName: "Zero A", size: "1", unit: "unit", estimatedPrice: 0, baseItem: "item" },
+      { variantName: "Zero B", size: "2", unit: "unit", estimatedPrice: 0, baseItem: "item" },
+      { variantName: "Negative C", size: "3", unit: "unit", estimatedPrice: -2, baseItem: "item" },
+    ];
+    const result = matchPriceBracket(1.50, allBadVariants);
+    expect(result.matched).toBe(false);
+    expect(result.matchType).toBe("no_match");
+    expect(result.candidates).toHaveLength(0);
+  });
+
+  it("should not crash with zero-price variants and zero receipt price", () => {
+    const zeroPriceVariants: ItemVariant[] = [
+      { variantName: "Zero Item", size: "1", unit: "unit", estimatedPrice: 0, baseItem: "item" },
+    ];
+    // Both receipt price and variant price are 0 - should not produce NaN or crash
+    const result = matchPriceBracket(0, zeroPriceVariants);
+    expect(result.matched).toBe(false);
+    expect(result.matchType).toBe("no_match");
+  });
+});
+
+describe("calculatePriceDiff - Division by zero protection (variantPrice <= 0)", () => {
+  it("should return Infinity when variantPrice is 0", () => {
+    const result = calculatePriceDiff(1.50, 0);
+    expect(result).toBe(Infinity);
+  });
+
+  it("should return Infinity when variantPrice is -1", () => {
+    const result = calculatePriceDiff(1.50, -1);
+    expect(result).toBe(Infinity);
+  });
+
+  it("should return Infinity when variantPrice is a large negative number", () => {
+    const result = calculatePriceDiff(1.50, -100);
+    expect(result).toBe(Infinity);
+  });
+
+  it("should return Infinity when both receiptPrice and variantPrice are 0", () => {
+    const result = calculatePriceDiff(0, 0);
+    expect(result).toBe(Infinity);
+  });
+
+  it("should still work normally for valid positive variantPrice", () => {
+    // Sanity check: positive prices still compute correctly
+    expect(calculatePriceDiff(1.20, 1.00)).toBeCloseTo(0.20);
+    expect(calculatePriceDiff(1.00, 1.00)).toBe(0);
+  });
+});

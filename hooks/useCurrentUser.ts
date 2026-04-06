@@ -2,6 +2,7 @@ import { useUser } from "@clerk/clerk-expo";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { isGenericName } from "../lib/names";
+import { useIsSwitchingUsers } from "./useIsSwitchingUsers";
 
 /**
  * Extract first name from full name.
@@ -16,10 +17,11 @@ function getFirstName(fullName?: string | null) {
 
 export function useCurrentUser() {
   const { user: clerkUser, isLoaded: isClerkLoaded } = useUser();
+  const isSwitchingUsers = useIsSwitchingUsers();
 
   const convexUser = useQuery(
-    api.users.getByClerkId,
-    clerkUser?.id ? { clerkId: clerkUser.id } : "skip"
+    api.users.getCurrent,
+    clerkUser?.id && !isSwitchingUsers ? {} : "skip"
   );
 
   // Try Convex name first, then Clerk's firstName/fullName, then email prefix, then "Shopper"
@@ -34,7 +36,7 @@ export function useCurrentUser() {
     clerkUser,
     user: convexUser,
     firstName,
-    isLoading: !isClerkLoaded || convexUser === undefined,
+    isLoading: !isClerkLoaded || convexUser === undefined || isSwitchingUsers,
     hasProfile: !!convexUser,
   };
 }

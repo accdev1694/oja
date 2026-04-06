@@ -148,7 +148,9 @@ function InitialLayout() {
     if (currentUser === null && !creatingUser.current) {
       creatingUser.current = true;
       getOrCreate({ mfaEnabled: false })
-        .catch(() => {})
+        .catch((err) => {
+          console.error("[Layout] Failed to create/fetch user:", err);
+        })
         .finally(() => {
           creatingUser.current = false;
         });

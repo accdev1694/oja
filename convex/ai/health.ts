@@ -55,7 +55,7 @@ export const analyzeListHealth = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    const user = await ctx.runQuery(api.users.getByClerkId, {
+    const user = await ctx.runQuery(internal.users.internalGetByClerkId, {
       clerkId: identity.subject,
     });
     if (!user) throw new Error("User not found");

@@ -34,7 +34,7 @@ export interface PriceDisplayProps {
   /** Whether to show price-per-unit calculation (default: true) */
   showPerUnit?: boolean;
   /** Source of the price data */
-  priceSource?: "personal" | "crowdsourced" | "ai_estimate";
+  priceSource?: "personal" | "crowdsourced" | "ai_estimate" | "ai";
   /** Compact mode - smaller text, inline display */
   compact?: boolean;
   /** Text alignment */
@@ -104,7 +104,7 @@ function getUnitAbbreviation(unit: string): string {
  * Format price for display
  */
 export function formatPrice(price: number | null): string {
-  if (price === null) return "--";
+  if (price === null || isNaN(price)) return "--";
   return `£${price.toFixed(2)}`;
 }
 
@@ -119,8 +119,16 @@ export function calculatePricePerUnit(
   size: string,
   unit: string
 ): PricePerUnitResult | null {
-  // Parse numeric size from string
-  const numericSize = parseFloat(size);
+  // Handle multipack formats like "4x400g" — extract total weight
+  const multipackMatch = size.match(/^(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(\w+)?$/i);
+  let numericSize: number;
+  if (multipackMatch) {
+    const packCount = parseFloat(multipackMatch[1]);
+    const perUnitSize = parseFloat(multipackMatch[2]);
+    numericSize = packCount * perUnitSize;
+  } else {
+    numericSize = parseFloat(size);
+  }
   if (isNaN(numericSize) || numericSize <= 0) return null;
 
   const unitAbbrev = getUnitAbbreviation(unit);
@@ -174,8 +182,8 @@ export const PriceDisplay = memo(function PriceDisplay({
     }
   }, [align]);
 
-  // Show AI estimate indicator
-  const isAiEstimate = priceSource === "ai_estimate";
+  // Show AI estimate indicator (accept both "ai_estimate" and "ai")
+  const isAiEstimate = priceSource === "ai_estimate" || priceSource === "ai";
 
   // Render compact mode (inline)
   if (compact) {

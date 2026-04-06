@@ -311,19 +311,17 @@ export const adjustPoints = mutation({
     const admin = await requirePermission(ctx, "edit_users");
     
     if (args.amount > 0) {
-      // @ts-ignore
       await ctx.runMutation(internal.points.awardBonusPoints, {
         userId: args.userId,
         amount: args.amount,
         source: `admin_adjustment: ${args.reason}`,
-        metadata: { adminId: admin._id }
+        metadata: { adminId: admin._id as string },
       });
     } else if (args.amount < 0) {
-      // @ts-ignore
       await ctx.runMutation(internal.points.expirePoints, {
         userId: args.userId,
         points: Math.abs(args.amount),
-        reason: `admin_adjustment: ${args.reason}`
+        reason: `admin_adjustment: ${args.reason}`,
       });
     }
 

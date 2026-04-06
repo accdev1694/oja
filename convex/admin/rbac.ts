@@ -17,7 +17,8 @@ export const getMyPermissions = query({
         permissions: [
           "view_analytics", "view_users", "edit_users",
           "view_receipts", "delete_receipts", "manage_catalog",
-          "manage_flags", "manage_announcements", "manage_pricing", "view_audit_logs"
+          "manage_flags", "manage_announcements", "manage_pricing",
+          "view_audit_logs", "view_support", "bulk_operation",
         ],
       };
     }

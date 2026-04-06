@@ -90,6 +90,7 @@ export async function resolvePrice(
   storeName: string | undefined,
   userId: Id<"users"> | undefined,
   aiEstimatedPrice: number | undefined,
+  userRegion?: string,
 ): Promise<ResolvedPrice> {
   const normalizedStore = storeName?.toLowerCase().trim();
 
@@ -104,9 +105,9 @@ export async function resolvePrice(
       .collect();
 
     if (personalHistory.length > 0) {
-      // Filter to matching size/unit at this store (if store specified)
+      // Filter to matching size AND unit at this store (if store specified)
       let candidates = personalHistory.filter(
-        (h) => h.size === variantSize || h.unit === variantUnit
+        (h) => h.size === variantSize && h.unit === variantUnit
       );
 
       if (normalizedStore) {
@@ -146,16 +147,21 @@ export async function resolvePrice(
     .collect();
 
   if (currentPrices.length > 0) {
-    const user = userId ? await ctx.db.get(userId) : null;
-    const userRegion = user?.postcodePrefix || user?.country || "UK";
+    // Use passed userRegion, or fetch from user only if needed
+    let resolvedRegion = userRegion;
+    if (!resolvedRegion && userId) {
+      const user = await ctx.db.get(userId);
+      resolvedRegion = user?.postcodePrefix || user?.country || "UK";
+    }
+    if (!resolvedRegion) resolvedRegion = "UK";
     const now = Date.now();
     const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
 
-    // Filter to matching variant
+    // Filter to matching variant (must match both name+size or just size+unit)
     const variantPrices = currentPrices.filter(
       (p) =>
         p.variantName === variantName ||
-        p.size === variantSize
+        (p.size === variantSize && p.unit === variantUnit)
     );
 
     if (variantPrices.length > 0) {
@@ -166,8 +172,8 @@ export async function resolvePrice(
       // Priority 1: Exact Store + Region Match
       if (normalizedStore) {
         bestCrowdMatch = variantPrices.find(
-          (p) => (p.storeName?.toLowerCase() === normalizedStore || p.normalizedStoreId === normalizedStore) && 
-                 p.region === userRegion
+          (p) => (p.storeName?.toLowerCase() === normalizedStore || p.normalizedStoreId === normalizedStore) &&
+                 p.region === resolvedRegion
         );
         if (bestCrowdMatch !== undefined) crowdType = "store_region";
       }
@@ -198,7 +204,7 @@ export async function resolvePrice(
 
       // Priority 3: Region Match (any store)
       if (bestCrowdMatch === undefined) {
-        bestCrowdMatch = variantPrices.find(p => p.region === userRegion);
+        bestCrowdMatch = variantPrices.find(p => p.region === resolvedRegion);
         if (bestCrowdMatch !== undefined) crowdType = "region";
       }
 
@@ -308,6 +314,7 @@ export async function resolveVariantWithPrice(
   itemName: string,
   normalizedStoreId: string | undefined,
   userId: Id<"users"> | undefined,
+  userRegion?: string,
 ): Promise<ResolvedVariantWithPrice | null> {
   const normalizedBase = itemName.toLowerCase().trim();
 
@@ -319,6 +326,13 @@ export async function resolveVariantWithPrice(
 
   if (variants.length === 0) {
     return null;
+  }
+
+  // Fetch user region once for all variants (avoid N user lookups)
+  let resolvedUserRegion = userRegion;
+  if (!resolvedUserRegion && userId) {
+    const user = await ctx.db.get(userId);
+    resolvedUserRegion = user?.postcodePrefix || user?.country || "UK";
   }
 
   // Resolve prices for all variants
@@ -333,6 +347,7 @@ export async function resolveVariantWithPrice(
         normalizedStoreId,
         userId,
         variant.estimatedPrice,
+        resolvedUserRegion,
       );
       return {
         variant,

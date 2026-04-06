@@ -157,7 +157,7 @@ const clerkHandler = httpAction(async (ctx, request) => {
         eventType: payload.type,
       });
 
-      await ctx.runAction(api.users.handleClerkWebhook, {
+      await ctx.runAction(internal.users.handleClerkWebhook, {
         type: payload.type,
         data: JSON.stringify(payload.data),
       });

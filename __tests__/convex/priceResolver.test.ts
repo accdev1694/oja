@@ -68,12 +68,13 @@ describe("Price Resolver", () => {
         },
       ]);
 
-      // Setup fresh crowdsourced price
+      // Setup fresh crowdsourced price (must match size AND unit for variant filter)
       mockCtx.db.collect.mockResolvedValueOnce([
         {
           unitPrice: 1.3,
           averagePrice: 1.3,
           size: "500ml",
+          unit: "ml",
           storeName: "tesco",
           region: "UK",
           reportCount: 5,
@@ -441,6 +442,438 @@ describe("Price Resolver", () => {
       // Should skip store-based priorities and go to region/global
       expect(result.price).toBe(1.2);
       expect(result.priceSource).toBe("crowdsourced");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Bug fix: Personal history filter uses AND (not OR) for size+unit matching
+  // ---------------------------------------------------------------------------
+  describe("resolvePrice - personal history AND filter (size + unit)", () => {
+    it("should return personal price when BOTH size AND unit match", async () => {
+      mockCtx.db.collect.mockResolvedValueOnce([
+        {
+          unitPrice: 2.5,
+          size: "2 pints",
+          unit: "pint",
+          storeName: "tesco",
+          purchaseDate: Date.now() - 1000, // Fresh
+        },
+      ]);
+
+      const result = await resolvePrice(
+        mockCtx as unknown as QueryCtx,
+        "milk",
+        "2 pints",
+        "pint",
+        "Milk",
+        "tesco",
+        "user123" as unknown as Id<"users">,
+        undefined
+      );
+
+      expect(result.price).toBe(2.5);
+      expect(result.priceSource).toBe("personal");
+      expect(result.confidence).toBe(1.0);
+    });
+
+    it("should NOT match personal history when only unit matches but size differs", async () => {
+      // Personal history has size "1 pint" / unit "pint"
+      // but we're resolving for size "2 pints" / unit "pint"
+      // Old OR logic would incorrectly match on unit alone
+      mockCtx.db.collect.mockResolvedValueOnce([
+        {
+          unitPrice: 1.0,
+          size: "1 pint",
+          unit: "pint",
+          storeName: "tesco",
+          purchaseDate: Date.now() - 1000, // Fresh
+        },
+      ]);
+
+      // No crowdsourced data
+      mockCtx.db.collect.mockResolvedValueOnce([]);
+
+      const result = await resolvePrice(
+        mockCtx as unknown as QueryCtx,
+        "milk",
+        "2 pints", // Different size than the "1 pint" in history
+        "pint",    // Same unit
+        "Milk",
+        "tesco",
+        "user123" as unknown as Id<"users">,
+        3.0 // AI fallback
+      );
+
+      // Should NOT use personal price because size does not match
+      expect(result.price).toBe(3.0);
+      expect(result.priceSource).toBe("ai");
+    });
+
+    it("should NOT match personal history when only size matches but unit differs", async () => {
+      // Personal history has size "500ml" / unit "ml"
+      // but we're resolving for size "500ml" / unit "g"
+      // Old OR logic would incorrectly match on size alone
+      mockCtx.db.collect.mockResolvedValueOnce([
+        {
+          unitPrice: 1.5,
+          size: "500ml",
+          unit: "ml",
+          storeName: "tesco",
+          purchaseDate: Date.now() - 1000, // Fresh
+        },
+      ]);
+
+      // No crowdsourced data
+      mockCtx.db.collect.mockResolvedValueOnce([]);
+
+      const result = await resolvePrice(
+        mockCtx as unknown as QueryCtx,
+        "flour",
+        "500ml", // Same size string
+        "g",     // Different unit than "ml" in history
+        "Flour",
+        "tesco",
+        "user123" as unknown as Id<"users">,
+        2.0 // AI fallback
+      );
+
+      // Should NOT use personal price because unit does not match
+      expect(result.price).toBe(2.0);
+      expect(result.priceSource).toBe("ai");
+    });
+
+    it("should correctly filter among multiple personal history entries with AND logic", async () => {
+      // Multiple personal entries: only one matches both size AND unit
+      mockCtx.db.collect.mockResolvedValueOnce([
+        {
+          unitPrice: 0.80,
+          size: "1 pint",
+          unit: "pint",
+          storeName: "tesco",
+          purchaseDate: Date.now() - 2000,
+        },
+        {
+          unitPrice: 1.50,
+          size: "2 pints",
+          unit: "pint",
+          storeName: "tesco",
+          purchaseDate: Date.now() - 1000, // More recent
+        },
+        {
+          unitPrice: 3.00,
+          size: "2 pints",
+          unit: "litre", // Same size string but different unit
+          storeName: "tesco",
+          purchaseDate: Date.now() - 500,
+        },
+      ]);
+
+      const result = await resolvePrice(
+        mockCtx as unknown as QueryCtx,
+        "milk",
+        "2 pints",
+        "pint",
+        "Milk",
+        "tesco",
+        "user123" as unknown as Id<"users">,
+        undefined
+      );
+
+      // Should match only the entry with size="2 pints" AND unit="pint" (price 1.50)
+      // NOT the entry with unit="litre" despite size="2 pints"
+      expect(result.price).toBe(1.50);
+      expect(result.priceSource).toBe("personal");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Bug fix: Crowdsourced variant filter uses correct AND logic for size+unit
+  // ---------------------------------------------------------------------------
+  describe("resolvePrice - crowdsourced variant AND filter (size + unit)", () => {
+    it("should match crowdsourced by variantName even if size+unit differ", async () => {
+      // No personal data
+      mockCtx.db.collect.mockResolvedValueOnce([]);
+
+      // Crowdsourced: matches on variantName
+      mockCtx.db.collect.mockResolvedValueOnce([
+        {
+          unitPrice: 1.8,
+          averagePrice: 1.8,
+          variantName: "Semi-Skimmed Milk",
+          size: "4 pints",
+          unit: "pint",
+          storeName: "tesco",
+          normalizedStoreId: "tesco",
+          region: "UK",
+          reportCount: 10,
+          lastSeenDate: Date.now() - 1000,
+        },
+      ]);
+      mockCtx.db.get.mockResolvedValueOnce({ country: "UK" });
+
+      const result = await resolvePrice(
+        mockCtx as unknown as QueryCtx,
+        "milk",
+        "2 pints",  // Different size
+        "pint",     // Same unit but size differs
+        "Semi-Skimmed Milk", // Matches variantName
+        "tesco",
+        "user123" as unknown as Id<"users">,
+        undefined
+      );
+
+      // Should match because variantName matches (OR between name and size+unit)
+      expect(result.price).toBe(1.8);
+      expect(result.priceSource).toBe("crowdsourced");
+    });
+
+    it("should match crowdsourced by size+unit even if variantName differs", async () => {
+      // No personal data
+      mockCtx.db.collect.mockResolvedValueOnce([]);
+
+      // Crowdsourced: matches on size+unit but not variantName
+      mockCtx.db.collect.mockResolvedValueOnce([
+        {
+          unitPrice: 2.2,
+          averagePrice: 2.2,
+          variantName: "Whole Milk",
+          size: "2 pints",
+          unit: "pint",
+          storeName: "tesco",
+          normalizedStoreId: "tesco",
+          region: "UK",
+          reportCount: 5,
+          lastSeenDate: Date.now() - 1000,
+        },
+      ]);
+      mockCtx.db.get.mockResolvedValueOnce({ country: "UK" });
+
+      const result = await resolvePrice(
+        mockCtx as unknown as QueryCtx,
+        "milk",
+        "2 pints",
+        "pint",
+        "Semi-Skimmed Milk", // Different variantName
+        "tesco",
+        "user123" as unknown as Id<"users">,
+        undefined
+      );
+
+      // Should match because both size AND unit match
+      expect(result.price).toBe(2.2);
+      expect(result.priceSource).toBe("crowdsourced");
+    });
+
+    it("should NOT match crowdsourced when only size matches but unit differs and variantName differs", async () => {
+      // No personal data
+      mockCtx.db.collect.mockResolvedValueOnce([]);
+
+      // Crowdsourced: size matches but unit does not, variantName also differs
+      mockCtx.db.collect.mockResolvedValueOnce([
+        {
+          unitPrice: 4.0,
+          averagePrice: 4.0,
+          variantName: "Whole Milk",
+          size: "500ml",
+          unit: "ml",
+          storeName: "tesco",
+          normalizedStoreId: "tesco",
+          region: "UK",
+          reportCount: 5,
+          lastSeenDate: Date.now() - 1000,
+        },
+      ]);
+      mockCtx.db.get.mockResolvedValueOnce({ country: "UK" });
+
+      const result = await resolvePrice(
+        mockCtx as unknown as QueryCtx,
+        "flour",
+        "500ml", // Same size string
+        "g",     // Different unit
+        "Self-Raising Flour", // Different variantName
+        "tesco",
+        "user123" as unknown as Id<"users">,
+        5.0 // AI fallback
+      );
+
+      // Should NOT match crowdsourced: variantName differs AND unit differs
+      // Even though size string "500ml" matches, the unit "g" != "ml"
+      expect(result.price).toBe(5.0);
+      expect(result.priceSource).toBe("ai");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Bug fix: userRegion parameter avoids unnecessary user fetch
+  // ---------------------------------------------------------------------------
+  describe("resolvePrice - userRegion parameter", () => {
+    it("should use provided userRegion without fetching the user", async () => {
+      // No personal data
+      mockCtx.db.collect.mockResolvedValueOnce([]);
+
+      // Crowdsourced data with region match
+      mockCtx.db.collect.mockResolvedValueOnce([
+        {
+          unitPrice: 1.6,
+          averagePrice: 1.6,
+          variantName: "Milk",
+          size: "500ml",
+          unit: "ml",
+          storeName: "sainsburys",
+          normalizedStoreId: "sainsburys",
+          region: "SE",
+          reportCount: 8,
+          lastSeenDate: Date.now() - 1000,
+        },
+      ]);
+
+      const result = await resolvePrice(
+        mockCtx as unknown as QueryCtx,
+        "milk",
+        "500ml",
+        "ml",
+        "Milk",
+        "tesco",
+        "user123" as unknown as Id<"users">,
+        undefined,
+        "SE" // userRegion passed directly
+      );
+
+      // Should match the region "SE" entry
+      expect(result.price).toBe(1.6);
+      expect(result.priceSource).toBe("crowdsourced");
+
+      // db.get should NOT have been called because userRegion was provided
+      // (personal history collect is the only db call, no user lookup needed)
+      expect(mockCtx.db.get).not.toHaveBeenCalled();
+    });
+
+    it("should fetch user for region when userRegion is not provided", async () => {
+      // No personal data
+      mockCtx.db.collect.mockResolvedValueOnce([]);
+
+      // Crowdsourced data
+      mockCtx.db.collect.mockResolvedValueOnce([
+        {
+          unitPrice: 1.7,
+          averagePrice: 1.7,
+          variantName: "Milk",
+          size: "500ml",
+          unit: "ml",
+          storeName: "aldi",
+          normalizedStoreId: "aldi",
+          region: "NW",
+          reportCount: 4,
+          lastSeenDate: Date.now() - 1000,
+        },
+      ]);
+
+      // User lookup returns postcodePrefix
+      mockCtx.db.get.mockResolvedValueOnce({ postcodePrefix: "NW" });
+
+      const result = await resolvePrice(
+        mockCtx as unknown as QueryCtx,
+        "milk",
+        "500ml",
+        "ml",
+        "Milk",
+        "tesco",
+        "user123" as unknown as Id<"users">,
+        undefined
+        // No userRegion (9th arg omitted)
+      );
+
+      // Should have fetched the user to get region
+      expect(mockCtx.db.get).toHaveBeenCalledWith("user123");
+      expect(result.price).toBe(1.7);
+      expect(result.priceSource).toBe("crowdsourced");
+    });
+
+    it("should use userRegion for store+region priority matching", async () => {
+      // No personal data
+      mockCtx.db.collect.mockResolvedValueOnce([]);
+
+      // Two crowdsourced entries: one for store+region "SE", one for store+region "NW"
+      mockCtx.db.collect.mockResolvedValueOnce([
+        {
+          unitPrice: 2.0,
+          averagePrice: 2.0,
+          variantName: "Milk",
+          size: "1l",
+          unit: "l",
+          storeName: "tesco",
+          normalizedStoreId: "tesco",
+          region: "NW",
+          reportCount: 3,
+          lastSeenDate: Date.now() - 1000,
+        },
+        {
+          unitPrice: 1.9,
+          averagePrice: 1.9,
+          variantName: "Milk",
+          size: "1l",
+          unit: "l",
+          storeName: "tesco",
+          normalizedStoreId: "tesco",
+          region: "SE",
+          reportCount: 6,
+          lastSeenDate: Date.now() - 1000,
+        },
+      ]);
+
+      const result = await resolvePrice(
+        mockCtx as unknown as QueryCtx,
+        "milk",
+        "1l",
+        "l",
+        "Milk",
+        "tesco",
+        "user123" as unknown as Id<"users">,
+        undefined,
+        "SE" // Explicitly pass userRegion
+      );
+
+      // Should match Priority 1 (store + region "SE") with price 1.9
+      expect(result.price).toBe(1.9);
+      expect(result.priceSource).toBe("crowdsourced");
+      // db.get should NOT be called since userRegion was provided
+      expect(mockCtx.db.get).not.toHaveBeenCalled();
+    });
+
+    it("should default to UK when no userRegion and no userId provided", async () => {
+      // Crowdsourced data with UK region
+      mockCtx.db.collect.mockResolvedValueOnce([
+        {
+          unitPrice: 1.4,
+          averagePrice: 1.4,
+          variantName: "Bread",
+          size: "800g",
+          unit: "g",
+          storeName: "tesco",
+          normalizedStoreId: "tesco",
+          region: "UK",
+          reportCount: 12,
+          lastSeenDate: Date.now() - 1000,
+        },
+      ]);
+
+      const result = await resolvePrice(
+        mockCtx as unknown as QueryCtx,
+        "bread",
+        "800g",
+        "g",
+        "Bread",
+        "tesco",
+        undefined, // No userId
+        undefined
+        // No userRegion
+      );
+
+      // Should use "UK" as default region and match
+      expect(result.price).toBe(1.4);
+      expect(result.priceSource).toBe("crowdsourced");
+      // db.get should not be called because there is no userId
+      expect(mockCtx.db.get).not.toHaveBeenCalled();
     });
   });
 });

@@ -28,7 +28,7 @@ export const refreshPantryPrices = mutation({
         undefined,
         defaultStore,
         user._id,
-        item.lastPrice,
+        undefined, // Don't pass lastPrice as AI fallback — prevents self-reinforcing loop
       );
 
       if (
@@ -42,7 +42,7 @@ export const refreshPantryPrices = mutation({
             resolved.priceSource === "personal"
               ? "receipt"
               : resolved.priceSource === "crowdsourced"
-                ? "receipt"
+                ? "crowdsourced"
                 : "ai_estimate",
           updatedAt: Date.now(),
         });

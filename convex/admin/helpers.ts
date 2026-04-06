@@ -174,6 +174,32 @@ export async function checkRateLimit(ctx: MutationCtx, userId: Id<"users">, acti
   });
 }
 
+/**
+ * Check if a user (already validated as admin) has a specific permission.
+ * Shared logic for mutation and query contexts.
+ */
+async function checkPermissionForUser(ctx: QueryCtx | MutationCtx, user: Doc<"users">, permission: AdminPermission): Promise<void> {
+  if (user.isAdmin) return;
+
+  const userRole = await ctx.db
+    .query("userRoles")
+    .withIndex("by_user", (q) => q.eq("userId", user._id))
+    .first();
+
+  if (!userRole) throw new Error(`Permission denied: ${permission}`);
+
+  const role = await ctx.db.get(userRole.roleId);
+  if (!role || role.name !== "super_admin") {
+    const hasPermission = await ctx.db
+      .query("rolePermissions")
+      .withIndex("by_role", (q) => q.eq("roleId", userRole.roleId))
+      .filter((q) => q.eq(q.field("permission"), permission))
+      .first();
+
+    if (!hasPermission) throw new Error(`Permission denied: ${permission}`);
+  }
+}
+
 export async function requirePermission(ctx: MutationCtx, permission: AdminPermission, options?: { skipRateLimit?: boolean }): Promise<Doc<"users">> {
   const user = await requireAdmin(ctx);
 
@@ -181,72 +207,14 @@ export async function requirePermission(ctx: MutationCtx, permission: AdminPermi
     await checkRateLimit(ctx, user._id, permission);
   }
 
-  if (user.isAdmin) return user;
-
-  const userRole = await ctx.db
-    .query("userRoles")
-    .withIndex("by_user", (q) => q.eq("userId", user._id))
-    .first();
-
-  if (!userRole) throw new Error(`Permission denied: ${permission}`);
-
-  const role = await ctx.db.get(userRole.roleId);
-  if (!role || role.name !== "super_admin") {
-    const hasPermission = await ctx.db
-      .query("rolePermissions")
-      .withIndex("by_role", (q) => q.eq("roleId", userRole.roleId))
-      .filter((q) => q.eq(q.field("permission"), permission))
-      .first();
-
-    if (!hasPermission) throw new Error(`Permission denied: ${permission}`);
-  }
-
+  await checkPermissionForUser(ctx, user, permission);
   return user;
 }
 
 export async function requirePermissionQuery(ctx: QueryCtx, permission: AdminPermission): Promise<Doc<"users">> {
   const user = await requireAdmin(ctx);
-  if (user.isAdmin) return user;
-
-  const userRole = await ctx.db
-    .query("userRoles")
-    .withIndex("by_user", (q) => q.eq("userId", user._id))
-    .first();
-
-  if (!userRole) throw new Error(`Permission denied: ${permission}`);
-
-  const role = await ctx.db.get(userRole.roleId);
-  if (!role || role.name !== "super_admin") {
-    const hasPermission = await ctx.db
-      .query("rolePermissions")
-      .withIndex("by_role", (q) => q.eq("roleId", userRole.roleId))
-      .filter((q) => q.eq(q.field("permission"), permission))
-      .first();
-
-    if (!hasPermission) throw new Error(`Permission denied: ${permission}`);
-  }
-
+  await checkPermissionForUser(ctx, user, permission);
   return user;
-}
-
-const queryCache = new Map<string, { data: unknown; expiresAt: number }>();
-
-export async function getCachedOrCompute<T>(
-  cacheKey: string,
-  ttlMs: number,
-  computeFn: () => Promise<T>
-): Promise<T> {
-  const cached = queryCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.data as T;
-  }
-  
-  const result = await computeFn();
-  queryCache.set(cacheKey, {
-    data: result,
-    expiresAt: Date.now() + ttlMs,
-  });
-  return result;
 }
 
 export async function measureQueryPerformance<T>(

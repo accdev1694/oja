@@ -14,7 +14,7 @@ export const pruneStale = internalMutation({
     const stalePrices = await ctx.db
       .query("currentPrices")
       .withIndex("by_updated", (q) => q.lt("updatedAt", twelveMonthsAgo))
-      .collect();
+      .take(500);
 
     let deletedCount = 0;
     for (const price of stalePrices) {
@@ -147,7 +147,7 @@ export const upsertFromReceipt = mutation({
   },
 });
 
-export const upsertAIEstimate = mutation({
+export const upsertAIEstimate = internalMutation({
   args: {
     normalizedName: v.string(),
     itemName: v.string(),

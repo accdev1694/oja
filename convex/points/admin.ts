@@ -1,6 +1,6 @@
 import { mutation, internalMutation } from "../_generated/server";
 import { v } from "convex/values";
-import { requireAdmin } from "../lib/auth";
+import { requireAdmin } from "../admin/helpers";
 import { getOrCreatePointsBalance, processExpirePoints } from "./helpers";
 
 /**

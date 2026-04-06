@@ -41,7 +41,8 @@ export const adminTables = {
     permission: v.string(), // "view_users", "delete_receipts", "manage_flags", etc.
     createdAt: v.number(),
   }).index("by_role", ["roleId"])
-    .index("by_permission", ["permission"]),
+    .index("by_permission", ["permission"])
+    .index("by_role_permission", ["roleId", "permission"]),
 
   // User -> Role Mapping
   userRoles: defineTable({
@@ -62,7 +63,8 @@ export const adminTables = {
     logoutAt: v.optional(v.number()),
     status: v.union(v.literal("active"), v.literal("logged_out"), v.literal("expired")),
   }).index("by_user", ["userId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_user_status", ["userId", "status"]),
 
   adminRateLimits: defineTable({
     userId: v.id("users"),
