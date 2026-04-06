@@ -20,6 +20,16 @@
             "statusMessage": "Checking Convex query indexes..."
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-duplicate-exports.js\"",
+            "statusMessage": "Checking for duplicate exports..."
+          }
+        ]
       }
     ],
     "Stop": [

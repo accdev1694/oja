@@ -1,0 +1,50 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  claude-review:
+    # Run on PR events, or on issue comments that mention @claude
+    if: >
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-4-20250514
+          custom_instructions: |
+            You are reviewing code for Oja, a UK grocery budget app.
+            Read CLAUDE.md and FEATURE-RULES.md for project rules.
+            Key rules to enforce:
+            - No `any` type (use concrete types, unknown + narrowing)
+            - All Convex queries must use .withIndex()
+            - All item creation/update must use cleanItemForStorage()
+            - All item display must use formatItemDisplay()
+            - Size without unit is UNACCEPTABLE
+            - Max 400 lines per file
+            - Zero-blank prices (every item needs a price)
+            Focus on real bugs, rule violations, and security issues.
+            Do not comment on style preferences or minor nits.
