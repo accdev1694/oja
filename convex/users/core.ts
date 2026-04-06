@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import { internalQuery, mutation, query } from "../_generated/server";
 import { trackFunnelEvent, trackActivity } from "../lib/analytics";
 
 /** Generic placeholder names from identity providers — keep in sync with lib/names.ts */
@@ -48,11 +48,14 @@ export const getOrCreate = mutation({
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .unique();
 
+    // Normalize email case to prevent duplicates (User@Gmail.com vs user@gmail.com)
+    const normalizedEmail = identity.email?.toLowerCase();
+
     // 2. If not found by Clerk ID, check by email (to prevent duplicates for same person)
-    if (!existingUser && identity.email) {
+    if (!existingUser && normalizedEmail) {
       existingUser = await ctx.db
         .query("users")
-        .withIndex("by_email", (q) => q.eq("email", identity.email))
+        .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
         .unique();
 
       // If found by email, migrate/link this new Clerk ID to the existing record
@@ -93,7 +96,7 @@ export const getOrCreate = mutation({
     const userId = await ctx.db.insert("users", {
       clerkId: identity.subject,
       name: displayName,
-      email: identity.email,
+      email: normalizedEmail,
       avatarUrl: identity.pictureUrl,
       currency: "GBP", // Default for UK
       onboardingComplete: false,
@@ -101,6 +104,24 @@ export const getOrCreate = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // Race condition guard: if a concurrent mutation created a duplicate,
+    // keep the record with the lowest _id and delete ours.
+    const allByClerkId = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .collect();
+    if (allByClerkId.length > 1) {
+      // Sort by _id (lexicographic) — first one wins
+      allByClerkId.sort((a, b) => (a._id < b._id ? -1 : 1));
+      const winner = allByClerkId[0];
+      // Delete all duplicates (everything except the winner)
+      for (const dup of allByClerkId.slice(1)) {
+        await ctx.db.delete(dup._id);
+      }
+      console.warn(`[Users] Cleaned up ${allByClerkId.length - 1} duplicate(s) for clerkId: ${identity.subject}`);
+      return winner;
+    }
 
     // Track funnel event: signup
     await trackFunnelEvent(ctx, userId, "signup");
@@ -131,9 +152,31 @@ export const getCurrent = query({
 });
 
 /**
- * Get user by Clerk ID
+ * Get user by Clerk ID — caller must be the same user (enforced via auth identity).
  */
 export const getByClerkId = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    // Only allow looking up your own user record
+    if (identity.subject !== args.clerkId) {
+      return null;
+    }
+
+    return await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .unique();
+  },
+});
+
+/**
+ * Get user by Clerk ID — internal use only (webhooks, AI actions).
+ * No auth check since it's called from trusted internal/action contexts.
+ */
+export const internalGetByClerkId = internalQuery({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
     return await ctx.db
@@ -144,12 +187,23 @@ export const getByClerkId = query({
 });
 
 /**
- * Get user by internal ID
+ * Get user by internal ID — requires authentication, returns own record only.
  */
 export const getById = query({
   args: { id: v.id("users") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const user = await ctx.db.get(args.id);
+    if (!user) return null;
+
+    // Only allow looking up your own record
+    if (user.clerkId !== identity.subject) {
+      return null;
+    }
+
+    return user;
   },
 });
 

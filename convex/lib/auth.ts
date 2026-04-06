@@ -20,11 +20,15 @@ export async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
 /**
  * Require an authenticated user.
  * Throws "Not authenticated" if no session or user document exists.
+ * Throws "Account suspended" if the user is suspended.
  */
 export async function requireCurrentUser(ctx: QueryCtx | MutationCtx) {
   const user = await getCurrentUser(ctx);
   if (!user) {
     throw new Error("Not authenticated");
+  }
+  if (user.suspended) {
+    throw new Error("Account suspended");
   }
   return user;
 }
@@ -45,12 +49,45 @@ export async function requireOwnership(
 }
 
 /**
+ * Require MFA for sensitive operations.
+ * Calls requireCurrentUser first, then checks mfaEnabled.
+ * Throws if user has MFA enabled on their account but it's not verified
+ * in the current session (Clerk enforces this at the session level).
+ *
+ * For users WITHOUT MFA enabled, this serves as a server-side gate:
+ * sensitive mutations will reject until MFA is set up.
+ */
+export async function requireMfa(ctx: QueryCtx | MutationCtx) {
+  const user = await requireCurrentUser(ctx);
+  if (!user.mfaEnabled) {
+    throw new Error(
+      "MFA required. Enable two-factor authentication in your profile settings before performing this action."
+    );
+  }
+  return user;
+}
+
+/**
  * Require that the current user has admin privileges.
+ * Checks isAdmin flag OR RBAC role assignment, and respects suspension.
  */
 export async function requireAdmin(ctx: QueryCtx | MutationCtx) {
   const user = await requireCurrentUser(ctx);
-  if (!user.isAdmin) {
-    throw new Error("Admin privileges required");
+
+  // Super admin via isAdmin flag
+  if (user.isAdmin) {
+    return user;
   }
-  return user;
+
+  // Check RBAC role assignment
+  const userRole = await ctx.db
+    .query("userRoles")
+    .withIndex("by_user", (q) => q.eq("userId", user._id))
+    .first();
+
+  if (userRole) {
+    return user;
+  }
+
+  throw new Error("Admin privileges required");
 }

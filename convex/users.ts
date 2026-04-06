@@ -11,6 +11,7 @@ export {
   getOrCreate,
   getCurrent,
   getByClerkId,
+  internalGetByClerkId,
   getById,
   update,
   updateNotificationSettings,
@@ -23,14 +24,18 @@ export {
   completeOnboarding,
 } from "./users/onboarding";
 
-// Account management (reset, delete, admin operations)
+// Account management (reset, delete)
 export {
   resetUserByEmail,
   resetMyAccount,
   deleteMyAccount,
+} from "./users/accountManagement";
+
+// Account deletion (internal purge + storage cleanup)
+export {
   internalDeleteUser,
   cleanupUserStorage,
-} from "./users/accountManagement";
+} from "./users/accountDeletion";
 
 // Clerk webhook handlers
 export {
