@@ -21,7 +21,7 @@
 | 9 | Voice Assistant / Tobi (STT, TTS, AI, context injection) | :white_check_mark: Done | 2026-04-07 | 15 issues fixed (2C/4H/2M/1L + 6P): N+1 batch delete, Gemini null check+timeout, race conditions, rate limiting, safeHaptics, React.memo, error logging |
 | 10 | Insights (Weekly digest, monthly trends, challenges, personal bests) | :white_check_mark: Done | 2026-04-07 | 10 issues fixed (4C/3H/2M/1L): N+1 batch queries in weeklyDigest, monthlyTrends, personalBests, savingsJar; safeHaptics in insights.tsx; error logging; fixed inline require; HTML entity fix |
 | 11 | Partner / Sharing (Invites, roles, real-time collaboration) | :white_check_mark: Done | 2026-04-08 | 24 issues fixed (2C/10H/6M/6L): crypto-secure invites, N+1 batch queries, pagination limits, safeHaptics, error logging |
-| 12 | Subscriptions (Stripe, feature gating, trial) | :hourglass: Pending | | |
+| 12 | Subscriptions (Stripe, feature gating, trial) | :white_check_mark: Done | 2026-04-08 | 12 issues fixed (2C/5H/2M/1L/1R + 1 audit): webhook idempotency, null checks, points reservation expiry, safeHaptics, premium detection alignment |
 | 13 | Points / Gamification (Receipt points, fraud prevention, tiers) | :hourglass: Pending | | |
 | 14 | Admin Dashboard (RBAC, user/receipt management, analytics) | :hourglass: Pending | | |
 | 15 | Onboarding (Welcome flow, cuisine, store, pantry seeding) | :hourglass: Pending | | |
@@ -160,6 +160,30 @@
 
 **Rule compliance:**
 - [R1] Replaced expo-haptics with safeHaptics in 6 files: partners.tsx, join-list.tsx, CommentThread.tsx, ListChatThread.tsx, NotificationBell.tsx, NotificationDropdown.tsx
+
+### Feature 12: Subscriptions
+**Critical fixes:**
+- [C1] Atomic webhook idempotency — combined check+mark into single mutation to prevent race condition (webhooks.ts)
+- [C2] Duplicate notification prevention — check for existing notification before insert (webhooks.ts)
+
+**High priority fixes:**
+- [H1] Added idempotency key to handleCheckoutCompleted bonus award — prevents double-credit on annual (webhooks.ts)
+- [H2] Increased points reservation expiry from 5 to 15 minutes — handles slow Stripe processing (credits.ts)
+- [H3] Added null checks for optional Stripe webhook data — prevents crashes on malformed events (webhooks.ts)
+- [H4] Added deprecation warnings to stub functions — getScanCredits/earnScanCredit now log warnings (internal.ts)
+
+**Medium fixes:**
+- [M6] Aligned frontend premium detection with backend isEffectivelyPremium() logic (subscription.tsx)
+
+**Low fixes:**
+- [L5] Removed redundant useMemo for trivial string capitalization (useUserSubscription.ts)
+
+**Rule compliance:**
+- [R1] Replaced expo-haptics with safeHaptics in subscription.tsx (4 calls)
+
+**Audit fixes:**
+- Removed unused `showPaywall` state variable
+- Fixed missing useCallback dependencies (alert, firstName)
 
 ---
 

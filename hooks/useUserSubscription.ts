@@ -31,9 +31,8 @@ export function useUserSubscription() {
     return pointsBalance?.tier || "bronze";
   }, [pointsBalance]);
 
-  const formattedTier = useMemo(() => {
-    return tier.charAt(0).toUpperCase() + tier.slice(1);
-  }, [tier]);
+  // L5 fix: Removed redundant useMemo - string capitalization is trivial
+  const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1);
 
   const pointsToNextTier = useMemo(() => {
     return pointsBalance?.nextTierInfo?.scansToNextTier ?? 0;

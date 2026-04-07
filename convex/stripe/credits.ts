@@ -47,13 +47,14 @@ export const reservePoints = internalMutation({
     if (finalPoints === 0) return null;
 
     const now = Date.now();
+    // H2 fix: Increased expiry from 5 to 15 minutes to handle slow Stripe processing
     const reservationId = await ctx.db.insert("pointsReservations", {
       userId: sub.userId,
       stripeInvoiceId: args.stripeInvoiceId,
       amount: finalPoints,
       status: "pending",
       createdAt: now,
-      expiresAt: now + 5 * 60 * 1000,
+      expiresAt: now + 15 * 60 * 1000,
     });
 
     return {
@@ -122,7 +123,7 @@ export const releasePoints = internalMutation({
 
 /**
  * Cleanup expired point reservations that were never confirmed or released.
- * Reservations have a 5-minute window; this catches any orphans.
+ * Reservations have a 15-minute window; this catches any orphans.
  */
 export const cleanupExpiredReservations = internalMutation({
   args: {},

@@ -46,62 +46,87 @@ export const processWebhookEvent = action({
     const { eventId, eventType } = args;
     const data = JSON.parse(args.data) as StripeEventData;
 
-    const existing = await ctx.runQuery(internal.stripe.checkWebhookProcessed, { eventId });
-    if (existing) {
-      if (existing.status === "completed") return { success: true };
-      if (existing.status === "processing") return { success: true };
+    // C1 fix: Use atomic check-and-mark mutation to prevent race condition
+    const markResult = await ctx.runMutation(internal.stripe.markWebhookProcessing, { eventId, eventType });
+    if (markResult.alreadyExists) {
+      // Already being processed or completed - skip to prevent duplicates
+      return { success: true };
     }
-
-    await ctx.runMutation(internal.stripe.markWebhookProcessing, { eventId, eventType });
 
     try {
       switch (eventType) {
         case "checkout.session.completed": {
           const session = data;
-          if (session.metadata?.convexUserId && session.metadata?.planId) {
+          // H3 fix: Add null checks for optional Stripe data
+          if (session.metadata?.convexUserId && session.metadata?.planId && session.customer && session.subscription) {
             await ctx.runMutation(internal.stripe.handleCheckoutCompleted, {
               userId: session.metadata.convexUserId,
               planId: session.metadata.planId,
-              stripeCustomerId: session.customer!,
-              stripeSubscriptionId: session.subscription!,
+              stripeCustomerId: session.customer,
+              stripeSubscriptionId: session.subscription,
+            });
+          } else {
+            console.warn(`[Webhook] checkout.session.completed missing required fields:`, {
+              hasUserId: !!session.metadata?.convexUserId,
+              hasPlanId: !!session.metadata?.planId,
+              hasCustomer: !!session.customer,
+              hasSubscription: !!session.subscription,
             });
           }
           break;
         }
         case "customer.subscription.updated": {
           const sub = data;
+          // H3 fix: Add null checks for optional Stripe data
+          if (!sub.customer || !sub.id || !sub.status || sub.current_period_start === undefined || sub.current_period_end === undefined) {
+            console.warn(`[Webhook] customer.subscription.updated missing required fields`);
+            break;
+          }
           await ctx.runMutation(internal.stripe.handleSubscriptionUpdated, {
-            stripeCustomerId: sub.customer!,
-            stripeSubscriptionId: sub.id!,
-            status: mapStripeStatus(sub.status!, sub.cancel_at_period_end!),
-            currentPeriodStart: sub.current_period_start! * 1000,
-            currentPeriodEnd: sub.current_period_end! * 1000,
+            stripeCustomerId: sub.customer,
+            stripeSubscriptionId: sub.id,
+            status: mapStripeStatus(sub.status, sub.cancel_at_period_end ?? false),
+            currentPeriodStart: sub.current_period_start * 1000,
+            currentPeriodEnd: sub.current_period_end * 1000,
             plan: sub.metadata?.planId,
           });
           break;
         }
         case "customer.subscription.deleted": {
-          await ctx.runMutation(internal.stripe.handleSubscriptionDeleted, { stripeCustomerId: data.customer! });
+          if (!data.customer) {
+            console.warn(`[Webhook] customer.subscription.deleted missing customer`);
+            break;
+          }
+          await ctx.runMutation(internal.stripe.handleSubscriptionDeleted, { stripeCustomerId: data.customer });
           break;
         }
         case "invoice.payment_failed": {
-          await ctx.runMutation(internal.stripe.handlePaymentFailed, { stripeCustomerId: data.customer! });
+          if (!data.customer) {
+            console.warn(`[Webhook] invoice.payment_failed missing customer`);
+            break;
+          }
+          await ctx.runMutation(internal.stripe.handlePaymentFailed, { stripeCustomerId: data.customer });
           break;
         }
         case "invoice.created": {
+          // H3 fix: Add null checks for optional Stripe data
+          if (!data.customer || !data.id) {
+            console.warn(`[Webhook] invoice.created missing customer or id`);
+            break;
+          }
           const isSubscriptionInvoice = data.billing_reason === "subscription_cycle" || data.billing_reason === "subscription_create";
           if (isSubscriptionInvoice && data.status === "draft") {
             const creditResult = await ctx.runMutation(internal.stripe.reservePoints, {
-              stripeCustomerId: data.customer!,
-              stripeInvoiceId: data.id!,
+              stripeCustomerId: data.customer,
+              stripeInvoiceId: data.id,
             });
             if (creditResult && creditResult.pointsApplied > 0) {
               const stripe = await getStripeClient();
               const creditAmountPence = Math.round(creditResult.pointsApplied / 10);
               try {
                 const invoiceItem = await stripe.invoiceItems.create({
-                  customer: data.customer!,
-                  invoice: data.id!,
+                  customer: data.customer,
+                  invoice: data.id,
                   amount: -creditAmountPence,
                   currency: "gbp",
                   description: `Oja Points redemption (${creditResult.pointsApplied} pts applied)`,
@@ -140,12 +165,25 @@ export const checkWebhookProcessed = internalQuery({
 export const markWebhookProcessing = internalMutation({
   args: { eventId: v.string(), eventType: v.string() },
   handler: async (ctx, args) => {
+    // C1 fix: Atomic check-and-insert to prevent race condition
+    // If already exists, return the existing status instead of inserting
+    const existing = await ctx.db
+      .query("processedWebhooks")
+      .withIndex("by_event_id", (q) => q.eq("eventId", args.eventId))
+      .first();
+
+    if (existing) {
+      return { alreadyExists: true, status: existing.status };
+    }
+
     await ctx.db.insert("processedWebhooks", {
       eventId: args.eventId,
       eventType: args.eventType,
       processedAt: Date.now(),
       status: "processing",
     });
+
+    return { alreadyExists: false, status: "processing" };
   },
 });
 
@@ -198,24 +236,42 @@ export const handleCheckoutCompleted = internalMutation({
       });
     }
 
-    await ctx.db.insert("notifications", {
-      userId,
-      type: "subscription_activated",
-      title: "Premium Activated!",
-      body: "Welcome to Oja Premium. Enjoy all features!",
-      read: false,
-      createdAt: now,
-    });
+    // C2 fix: Check for existing notification to prevent duplicates on webhook retry
+    const existingNotification = await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("type"), "subscription_activated"),
+          q.gte(q.field("createdAt"), now - 60 * 1000) // Within last minute
+        )
+      )
+      .first();
+
+    if (!existingNotification) {
+      await ctx.db.insert("notifications", {
+        userId,
+        type: "subscription_activated",
+        title: "Premium Activated!",
+        body: "Welcome to Oja Premium. Enjoy all features!",
+        read: false,
+        createdAt: now,
+      });
+    }
 
     await trackFunnelEvent(ctx, userId, "subscribed", { plan: args.planId, stripeSubscriptionId: args.stripeSubscriptionId });
     await trackActivity(ctx, userId, "subscribed", { plan: args.planId });
 
+    // H1 fix: Add idempotency key to prevent double-credit scenario
     if (plan === "premium_annual") {
       await ctx.runMutation(internal.points.awardBonusPoints, {
         userId,
         amount: 500,
         source: "annual_subscription_bonus",
-        metadata: { stripeSubscriptionId: args.stripeSubscriptionId }
+        metadata: {
+          stripeSubscriptionId: args.stripeSubscriptionId,
+          idempotencyKey: `checkout_annual_${args.stripeSubscriptionId}`,
+        },
       });
     }
   },

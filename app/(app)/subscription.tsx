@@ -9,7 +9,7 @@ import { useRouter, type Href} from "expo-router";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useCallback } from "react";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
@@ -48,14 +48,16 @@ export default function SubscriptionScreen() {
   const [portalLoading, setPortalLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [showPaywall, setShowPaywall] = useState(false);
 
   const loading = subscription === undefined;
   const isAdmin = (subscription as { isAdminOverride?: boolean })?.isAdminOverride;
-  const isPremium =
-    subscription && "isActive" in subscription
-      ? (subscription as { isActive?: boolean }).isActive
-      : subscription?.plan !== "free";
+  // M6 fix: Align premium detection with backend isEffectivelyPremium() logic
+  // Premium = status "active" OR "trial" (matches featureGating.ts)
+  const isPremium = subscription
+    ? (("isActive" in subscription && (subscription as { isActive?: boolean }).isActive) ||
+       subscription.status === "active" ||
+       subscription.status === "trial")
+    : false;
   const isTrial = !isAdmin && subscription?.status === "trial";
   const isCancelled = !isAdmin && subscription?.status === "cancelled";
   const isExpired = !isAdmin && subscription?.status === "expired";
@@ -81,7 +83,7 @@ export default function SubscriptionScreen() {
   // Handle manage subscription (Stripe portal)
   const handleManageSubscription = useCallback(async () => {
     setPortalLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptics.medium();
     try {
       const result = await createPortal();
       if (result.url) {
@@ -93,7 +95,7 @@ export default function SubscriptionScreen() {
     } finally {
       setPortalLoading(false);
     }
-  }, [createPortal]);
+  }, [createPortal, alert]);
 
   // Handle Stripe checkout
   const handleCheckout = useCallback(
@@ -113,7 +115,7 @@ export default function SubscriptionScreen() {
       }
 
       setCheckoutLoading(planId);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      safeHaptics.medium();
       try {
         const result = await createCheckout({ planId });
         if (result.url) {
@@ -126,16 +128,16 @@ export default function SubscriptionScreen() {
         setCheckoutLoading(null);
       }
     },
-    [isPremium, isTrial, isAdmin, alert, handleManageSubscription, createCheckout]
+    [isPremium, isTrial, isAdmin, alert, firstName, handleManageSubscription, createCheckout]
   );
 
   // Handle cancel subscription
   const handleCancelSubscription = useCallback(async () => {
     setCancelLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    safeHaptics.heavy();
     try {
       await cancelSub();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      safeHaptics.warning();
       setShowCancelModal(false);
       alert(
         "Subscription Cancelled",
@@ -147,7 +149,7 @@ export default function SubscriptionScreen() {
     } finally {
       setCancelLoading(false);
     }
-  }, [cancelSub]);
+  }, [cancelSub, alert, firstName]);
 
   if (loading) {
     return (

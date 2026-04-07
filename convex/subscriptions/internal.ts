@@ -7,20 +7,31 @@ import { getTierFromScans } from "../lib/featureGating";
 // =============================================
 
 /**
- * Get scan rewards status for the authenticated user.
- * Returns data for ALL users (free + premium).
- * Free users see tier progress; premium users also see credit progress.
+ * @deprecated These stub functions are kept for API compatibility but do nothing.
+ * Scan credits have been migrated to the unified points system.
+ * Use api.points.getPointsBalance and api.points.earnPoints instead.
  */
 export const getScanCredits = query({
   args: {},
-  handler: async () => null,
+  handler: async () => {
+    // H4 fix: Log deprecation warning instead of silently returning null
+    console.warn("[DEPRECATED] getScanCredits is a stub. Use api.points.getPointsBalance instead.");
+    return null;
+  },
 });
 
+/**
+ * @deprecated Stub function - scan credits migrated to unified points system.
+ */
 export const earnScanCredit = mutation({
   args: {
     receiptId: v.id("receipts"),
   },
-  handler: async () => null,
+  handler: async () => {
+    // H4 fix: Log deprecation warning instead of silently returning null
+    console.warn("[DEPRECATED] earnScanCredit is a stub. Use api.points.earnPoints instead.");
+    return null;
+  },
 });
 
 // =============================================================================
