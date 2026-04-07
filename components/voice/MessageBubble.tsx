@@ -19,7 +19,7 @@ interface Props {
   text: string;
 }
 
-export function MessageBubble({ role, text }: Props) {
+export const MessageBubble = React.memo(function MessageBubble({ role, text }: Props) {
   const isUser = role === "user";
 
   return (
@@ -41,7 +41,7 @@ export function MessageBubble({ role, text }: Props) {
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

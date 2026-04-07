@@ -107,14 +107,26 @@ export function useVoiceTTS(userId?: string) {
           rate: 0.92,
           pitch: 1.05,
           onDone: wrappedOnDone,
+          onError: () => {
+            console.warn("[speakText] Device TTS failed");
+            wrappedOnDone(); // Ensure cleanup even on error
+          },
         });
-      } catch {
-        Speech.speak(ttsText, {
-          language: "en-GB",
-          rate: 0.92,
-          pitch: 1.05,
-          onDone: wrappedOnDone,
-        });
+      } catch (fallbackError) {
+        console.warn("[speakText] Device TTS voice lookup failed:", fallbackError);
+        try {
+          Speech.speak(ttsText, {
+            language: "en-GB",
+            rate: 0.92,
+            pitch: 1.05,
+            onDone: wrappedOnDone,
+            onError: () => wrappedOnDone(),
+          });
+        } catch (finalError) {
+          // Both TTS paths failed completely — ensure cleanup
+          console.error("[speakText] All TTS paths failed:", finalError);
+          wrappedOnDone();
+        }
       }
     },
     [textToSpeech, userId]

@@ -109,7 +109,7 @@ export async function executeListWriteTool(
                 }
               }
             }
-          } catch { /* ignore */ }
+          } catch (e) { console.warn("[voice:add_items] Size/price lookup failed:", e); }
         }
 
         if (size && !estimatedPrice && storeId) {
@@ -132,7 +132,7 @@ export async function executeListWriteTool(
                 priceSource = sizeInfo.source as "personal" | "crowdsourced" | "ai" | "manual";
               }
             }
-          } catch { /* ignore */ }
+          } catch (e) { console.warn("[voice:add_items] Size/price lookup failed:", e); }
         }
 
         if (!estimatedPrice) {
@@ -150,7 +150,7 @@ export async function executeListWriteTool(
                 priceSource = "ai";
               }
             }
-          } catch { /* ignore */ }
+          } catch (e) { console.warn("[voice:add_items] Size/price lookup failed:", e); }
         }
 
         const cleaned = cleanItemForStorage(item.name, size, unit);
@@ -328,9 +328,10 @@ export async function executeListWriteTool(
         return { success: true, message: "No checked items to clear." };
       }
 
-      for (const item of checkedItems) {
-        await ctx.runMutation(api.listItems.remove, { id: item._id });
-      }
+      // Batch delete using removeMultiple for efficiency
+      await ctx.runMutation(api.listItems.removeMultiple, {
+        ids: checkedItems.map((item: Doc<"listItems">) => item._id),
+      });
 
       return {
         success: true,

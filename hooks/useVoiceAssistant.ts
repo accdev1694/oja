@@ -11,7 +11,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { INITIAL_VOICE_STATE } from "@/lib/voice/voiceTypes";
 import { useConversationHistory } from "./voice/useConversationHistory";
 import { useVoiceTTS } from "./voice/useVoiceTTS";
@@ -117,7 +117,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions) {
     } else {
       setState((s) => ({ ...s, isSheetOpen: true }));
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptics.light();
   }, [loadHistory, historyRef]);
 
   const closeSheet = useCallback(() => {

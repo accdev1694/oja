@@ -8,9 +8,8 @@
 import { useCallback, useRef } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import * as Haptics from "expo-haptics";
-import type { VoiceAssistantState, PendingAction } from "@/lib/voice/voiceTypes";
-import type { ConversationMessage } from "@/lib/voice/voiceTypes";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
+import type { VoiceAssistantState, PendingAction, ConversationMessage } from "@/lib/voice/voiceTypes";
 import type { Id } from "@/convex/_generated/dataModel";
 
 const PENDING_ACTION_TIMEOUT_MS = 30_000; // 30 seconds to confirm a pending action
@@ -36,14 +35,23 @@ export function useVoiceToolExecution(
   const voiceAssistant = useAction(api.ai.voiceAssistant);
   const executeAction = useAction(api.ai.executeVoiceAction);
   const pendingActionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoResumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Auto-resume listening helper (used after TTS or action completion) */
   const autoResumeListen = useCallback((hasPendingAction: boolean) => {
+    // Clear any existing auto-resume timer to prevent stacking
+    if (autoResumeTimerRef.current) {
+      clearTimeout(autoResumeTimerRef.current);
+      autoResumeTimerRef.current = null;
+    }
+
     if (!hasPendingAction && opts.sheetOpenRef.current && opts.startListeningRef.current) {
-      setTimeout(() => {
-        if (opts.sheetOpenRef.current) {
-          opts.startListeningRef.current?.(true);
+      autoResumeTimerRef.current = setTimeout(() => {
+        // Double-check sheet is still open before resuming
+        if (opts.sheetOpenRef.current && opts.startListeningRef.current) {
+          opts.startListeningRef.current(true);
         }
+        autoResumeTimerRef.current = null;
       }, 500);
     }
   }, [opts.sheetOpenRef, opts.startListeningRef]);
@@ -101,7 +109,7 @@ export function useVoiceToolExecution(
           autoResumeListen(hasPendingAction);
         }
 
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        safeHaptics.success();
       } catch (error) {
         console.error("[useVoiceToolExecution] Action failed:", error);
         setState((s) => ({
@@ -109,9 +117,11 @@ export function useVoiceToolExecution(
           isProcessing: false,
           error: "Something went wrong. Try again?",
         }));
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        safeHaptics.error();
       }
     },
+    // Individual properties listed instead of `opts` object to minimize re-renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       opts.currentScreen,
       opts.activeListId,
@@ -137,7 +147,7 @@ export function useVoiceToolExecution(
       pendingActionTimerRef.current = null;
     }
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptics.medium();
     setState((s) => ({ ...s, isProcessing: true }));
 
     try {
@@ -162,15 +172,17 @@ export function useVoiceToolExecution(
         autoResumeListen(false);
       }
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
+      safeHaptics.success();
+    } catch (error) {
+      console.error("[useVoiceToolExecution] confirmAction failed:", error);
       setState((s) => ({
         ...s,
         isProcessing: false,
         error: "Couldn't complete that. Try again?",
       }));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      safeHaptics.error();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [executeAction, opts.ttsEnabled, opts.speakText, setState, autoResumeListen]);
 
   const cancelAction = useCallback(() => {
@@ -180,7 +192,7 @@ export function useVoiceToolExecution(
       pendingActionTimerRef.current = null;
     }
     setState((s) => ({ ...s, pendingAction: null }));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptics.light();
     autoResumeListen(false);
   }, [setState, autoResumeListen]);
 
@@ -188,6 +200,11 @@ export function useVoiceToolExecution(
   const cleanupTimers = useCallback(() => {
     if (pendingActionTimerRef.current) {
       clearTimeout(pendingActionTimerRef.current);
+      pendingActionTimerRef.current = null;
+    }
+    if (autoResumeTimerRef.current) {
+      clearTimeout(autoResumeTimerRef.current);
+      autoResumeTimerRef.current = null;
     }
   }, []);
 

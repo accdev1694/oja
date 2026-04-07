@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useRef } from "react";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import type { VoiceAssistantState } from "@/lib/voice/voiceTypes";
 
 // ── Safe dynamic import of expo-speech-recognition ──────────────────
@@ -106,11 +106,11 @@ export function useVoiceRecognition(
       return;
     }
 
-    Haptics.impactAsync(
-      isAutoResume
-        ? Haptics.ImpactFeedbackStyle.Light
-        : Haptics.ImpactFeedbackStyle.Medium
-    );
+    if (isAutoResume) {
+      safeHaptics.light();
+    } else {
+      safeHaptics.medium();
+    }
 
     if (!SpeechRecognitionModule || typeof SpeechRecognitionModule.requestPermissionsAsync !== "function") {
       setState((s) => ({

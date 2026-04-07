@@ -72,7 +72,7 @@ export async function executeItemWriteTool(
 
       if (!itemMatch) return { success: false, error: `Couldn't find "${(args.itemName as string)}" on your list.` };
 
-      const storeName = list.normalizedStoreId || list.storeName || "tesco";
+      const storeName = list.normalizedStoreId || list.storeName || "";
       const sizesResult = await ctx.runQuery(api.itemVariants.getSizesForStore, {
         itemName: itemMatch.name.toLowerCase().trim(),
         store: storeName,
@@ -134,7 +134,7 @@ export async function executeItemWriteTool(
         const list = await ctx.runQuery(api.shoppingLists.getById, {
           id: (args.listId as string) as Id<"shoppingLists">,
         });
-        const storeName = list?.normalizedStoreId || list?.storeName || "tesco";
+        const storeName = list?.normalizedStoreId || list?.storeName || "";
         const sizesResult = await ctx.runQuery(api.itemVariants.getSizesForStore, {
           itemName: lastItem.name.toLowerCase().trim(),
           store: storeName,

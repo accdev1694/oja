@@ -49,7 +49,7 @@ export async function executePantryStoreWriteTool(
           if (priceResult) {
             lastPrice = priceResult.estimatedPrice;
           }
-        } catch { /* ignore */ }
+        } catch (e) { console.warn("[voice:add_pantry_item] Price estimation failed:", e); }
       }
 
       await ctx.runMutation(api.pantryItems.create, {

@@ -239,8 +239,17 @@ export const voiceAssistant = action({
     const history = (args.conversationHistory || []).map((msg: ConversationMessage) => ({ role: msg.role, parts: [{ text: msg.text }] }));
     const chat = model.startChat({ history });
 
+    // Helper: wrap Gemini call with 30s timeout
+    const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Gemini timeout")), ms)
+        ),
+      ]);
+
     try {
-      let response = await chat.sendMessage(args.transcript);
+      let response = await withTimeout(chat.sendMessage(args.transcript), 30000);
 
       let pendingAction: PendingAction | null = null;
       for (let i = 0; i < 3; i++) {
@@ -254,7 +263,7 @@ export const voiceAssistant = action({
           pendingAction = { action: confirmData.action, params: confirmData.params, confirmLabel: confirmData.description };
         }
         const responsePayload = (toolResult.result ?? {}) as object;
-        response = await chat.sendMessage([{ functionResponse: { name, response: responsePayload } }]);
+        response = await withTimeout(chat.sendMessage([{ functionResponse: { name, response: responsePayload } }]), 30000);
       }
 
       // Track with actual Gemini metrics (replaces incrementUsage + correctTokenCount)
@@ -269,7 +278,9 @@ export const voiceAssistant = action({
         isFallback: false,
       });
 
-      return { type: pendingAction ? "confirm_action" : "answer", text: response.response.text(), pendingAction };
+      // Safely extract text with fallback for malformed/empty responses
+      const responseText = response.response.text?.() ?? "I'm not sure how to respond to that. Could you try rephrasing?";
+      return { type: pendingAction ? "confirm_action" : "answer", text: responseText, pendingAction };
     } catch (error) {
       console.error("voiceAssistant Gemini chat failed:", error);
       try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "voice" }); } catch {}
@@ -298,6 +309,12 @@ export const textToSpeech = action({
     userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
+    // Rate limit TTS requests (same as voice assistant)
+    const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "tts" });
+    if (!rateLimit.allowed) {
+      return { audioBase64: null, provider: null, error: "Too many TTS requests. Slow down." };
+    }
+
     // Check per-user monthly TTS cap
     const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "tts" });
     if (!usageCheck.allowed) {

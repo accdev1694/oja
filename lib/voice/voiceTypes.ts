@@ -14,9 +14,9 @@ export interface PendingAction {
 }
 
 export interface VoiceAssistantResponse {
-  type: "answer" | "confirm_action" | "error";
+  type: "answer" | "confirm_action" | "error" | "limit_reached";
   text: string;
-  pendingAction: PendingAction | null;
+  pendingAction?: PendingAction | null;
 }
 
 export interface VoiceAssistantState {
