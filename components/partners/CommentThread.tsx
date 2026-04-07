@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useQuery, useMutation } from "convex/react";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { colors, spacing, typography } from "@/lib/design/glassTokens";
@@ -74,10 +74,10 @@ export function CommentThread({
     setSending(true);
     try {
       await addComment({ listItemId: itemId, text: text.trim() });
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      safeHaptics.light();
       setText("");
     } catch {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      safeHaptics.error();
     } finally {
       setSending(false);
     }

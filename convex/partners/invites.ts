@@ -4,6 +4,16 @@ import { requireFeature } from "../lib/featureGating";
 import { requireUser } from "./helpers";
 
 /**
+ * Generate a cryptographically secure invite code
+ */
+function generateSecureCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Removed ambiguous: 0OI1
+  const array = new Uint8Array(6);
+  crypto.getRandomValues(array);
+  return Array.from(array, (byte) => chars[byte % chars.length]).join("");
+}
+
+/**
  * Generate a unique invite code for a shopping list
  */
 export const createInviteCode = mutation({
@@ -22,7 +32,8 @@ export const createInviteCode = mutation({
     const list = await ctx.db.get(args.listId);
     if (!list || list.userId !== user._id) throw new Error("Unauthorized");
 
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    // C1 fix: Use cryptographically secure random code
+    const code = generateSecureCode();
     const now = Date.now();
     const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 days
 

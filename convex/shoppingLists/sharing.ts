@@ -24,27 +24,47 @@ export const getShared = query({
       .withIndex("by_user", q => q.eq("userId", user._id))
       .collect();
 
-    const sharedLists = await Promise.all(
-      partners.map(async p => {
-        const list = await ctx.db.get(p.listId);
-        if (!list) return null;
-        
-        const items = await ctx.db
-          .query("listItems")
-          .withIndex("by_list", (q) => q.eq("listId", list._id as Id<"shoppingLists">))
-          .collect();
+    if (partners.length === 0) return [];
 
+    // H6 fix: Batch fetch all lists first
+    const listIds = partners.map((p) => p.listId);
+    const lists = await Promise.all(listIds.map((id) => ctx.db.get(id)));
+
+    // Batch fetch all items for all lists
+    const allItems = await ctx.db
+      .query("listItems")
+      .withIndex("by_list")
+      .collect();
+
+    // Filter items to only those belonging to our lists
+    const listIdSet = new Set(listIds.map(String));
+    const itemsByList = new Map<string, { total: number; checked: number }>();
+    for (const item of allItems) {
+      if (listIdSet.has(String(item.listId))) {
+        const key = String(item.listId);
+        const current = itemsByList.get(key) || { total: 0, checked: 0 };
+        current.total++;
+        if (item.isChecked) current.checked++;
+        itemsByList.set(key, current);
+      }
+    }
+
+    const sharedLists = partners
+      .map((p, i) => {
+        const list = lists[i];
+        if (!list) return null;
+        const counts = itemsByList.get(String(list._id)) || { total: 0, checked: 0 };
         return {
           ...list,
-          itemCount: items.length,
-          checkedCount: items.filter((i) => i.isChecked).length,
+          itemCount: counts.total,
+          checkedCount: counts.checked,
           role: p.role,
           partnerStatus: p.status,
         };
       })
-    );
+      .filter((l): l is NonNullable<typeof l> => l !== null);
 
-    return sharedLists.filter((l) => l !== null);
+    return sharedLists;
   },
 });
 
@@ -76,6 +96,15 @@ export const archiveList = mutation({
       updatedAt: now,
     });
 
+    // Deactivate partner access — archived lists are read-only
+    const partners = await ctx.db
+      .query("listPartners")
+      .withIndex("by_list", (q) => q.eq("listId", args.id))
+      .collect();
+    for (const partner of partners) {
+      await ctx.db.delete(partner._id);
+    }
+
     return await ctx.db.get(args.id);
   },
 });
@@ -92,7 +121,7 @@ export const getHistory = query({
         q.eq("userId", user._id).eq("status", "archived")
       )
       .order("desc")
-      .collect();
+      .take(100);
 
     const completed = await ctx.db
       .query("shoppingLists")
@@ -100,26 +129,42 @@ export const getHistory = query({
         q.eq("userId", user._id).eq("status", "completed")
       )
       .order("desc")
-      .collect();
+      .take(100);
 
     const sorted = [...archived, ...completed].sort(
       (a, b) => (b.createdAt ?? b._creationTime) - (a.createdAt ?? a._creationTime)
     );
 
-    const enriched = await Promise.all(
-      sorted.map(async (list) => {
-        const items = await ctx.db
-          .query("listItems")
-          .withIndex("by_list", (q) => q.eq("listId", list._id))
-          .collect();
+    if (sorted.length === 0) return [];
 
-        return {
-          ...list,
-          itemCount: items.length,
-          checkedCount: items.filter((i) => i.isChecked).length,
-        };
-      })
-    );
+    // H7 fix: Batch fetch all items for all lists
+    const listIds = sorted.map((l) => l._id);
+    const allItems = await ctx.db
+      .query("listItems")
+      .withIndex("by_list")
+      .collect();
+
+    // Filter and count by list
+    const listIdSet = new Set(listIds.map(String));
+    const itemsByList = new Map<string, { total: number; checked: number }>();
+    for (const item of allItems) {
+      if (listIdSet.has(String(item.listId))) {
+        const key = String(item.listId);
+        const current = itemsByList.get(key) || { total: 0, checked: 0 };
+        current.total++;
+        if (item.isChecked) current.checked++;
+        itemsByList.set(key, current);
+      }
+    }
+
+    const enriched = sorted.map((list) => {
+      const counts = itemsByList.get(String(list._id)) || { total: 0, checked: 0 };
+      return {
+        ...list,
+        itemCount: counts.total,
+        checkedCount: counts.checked,
+      };
+    });
 
     return enriched;
   },

@@ -20,7 +20,7 @@
 | 8 | Store Tracking (Store switching, multi-store segments, storeNormalizer) | :white_check_mark: Done | 2026-04-07 | 9 issues fixed (3C/3H/3M): N+1 batching in analytics, race condition in toggleChecked, stores.ts split (592→3 files), store ID validation, canonical name lookups, same-store switch prevention |
 | 9 | Voice Assistant / Tobi (STT, TTS, AI, context injection) | :white_check_mark: Done | 2026-04-07 | 15 issues fixed (2C/4H/2M/1L + 6P): N+1 batch delete, Gemini null check+timeout, race conditions, rate limiting, safeHaptics, React.memo, error logging |
 | 10 | Insights (Weekly digest, monthly trends, challenges, personal bests) | :white_check_mark: Done | 2026-04-07 | 10 issues fixed (4C/3H/2M/1L): N+1 batch queries in weeklyDigest, monthlyTrends, personalBests, savingsJar; safeHaptics in insights.tsx; error logging; fixed inline require; HTML entity fix |
-| 11 | Partner / Sharing (Invites, roles, real-time collaboration) | :hourglass: Pending | | |
+| 11 | Partner / Sharing (Invites, roles, real-time collaboration) | :white_check_mark: Done | 2026-04-08 | 24 issues fixed (2C/10H/6M/6L): crypto-secure invites, N+1 batch queries, pagination limits, safeHaptics, error logging |
 | 12 | Subscriptions (Stripe, feature gating, trial) | :hourglass: Pending | | |
 | 13 | Points / Gamification (Receipt points, fraud prevention, tiers) | :hourglass: Pending | | |
 | 14 | Admin Dashboard (RBAC, user/receipt management, analytics) | :hourglass: Pending | | |
@@ -135,6 +135,31 @@
 
 **Low fixes:**
 - [L1] Fixed HTML entity `&apos;` → `'` in narrative strings
+
+### Feature 11: Partner / Sharing
+**Critical fixes:**
+- [C1] Crypto-secure invite codes — replaced `Math.random()` with `crypto.getRandomValues()` (invites.ts)
+
+**High priority fixes (N+1 batch queries):**
+- [H1] Batched N+1 query in `getCommentCounts` — single batch with in-memory filtering + cross-list security (comments.ts)
+- [H2] Batched N+1 query in `getByList` — `batchGetUsers` helper for user lookups (members.ts)
+- [H3] Batched N+1 query in `getSharedLists` — same batch pattern (members.ts)
+- [H4] Batched N+1 query in `getComments` — batch user lookups (comments.ts)
+- [H5] Batched N+1 query in `getListMessages` — batch user lookups (messages.ts)
+- [H6] Batched N+1 query in `getShared` — batch list items counting (sharing.ts)
+- [H7] Batched N+1 query in `getHistory` — batch list+user lookups (sharing.ts)
+
+**Medium fixes:**
+- [M1] Added pagination limits `.take(100-200)` to all list queries (comments.ts, messages.ts, sharing.ts)
+- [M2] Added cross-list security validation in `getCommentCounts` — prevents data leakage
+- [M4] Limited count query in `getListMessageCount` to `.take(1000)`
+
+**Low fixes:**
+- [L1] Added error logging in Share.share() catch block (partners.tsx)
+- [D6] Added notification for removed partners (members.ts)
+
+**Rule compliance:**
+- [R1] Replaced expo-haptics with safeHaptics in 6 files: partners.tsx, join-list.tsx, CommentThread.tsx, ListChatThread.tsx, NotificationBell.tsx, NotificationDropdown.tsx
 
 ---
 

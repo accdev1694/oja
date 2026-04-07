@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState } from "react";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeKeyboardAwareScrollView } from "@/lib/keyboard/safeKeyboardController";
 import {
@@ -31,17 +31,17 @@ export default function JoinListScreen() {
     }
 
     setLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptics.medium();
 
     try {
       const result = await acceptInvite({ code: code.trim().toUpperCase() });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
 
       alert("Joined!", "You've successfully joined the shared list.", [
         { text: "View List", onPress: () => router.push(`/list/${result.listId}`) },
       ]);
     } catch (error) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      safeHaptics.error();
       let errorMessage = "Invalid or expired invite code";
       if (error && typeof error === "object" && "message" in error) {
         const msg = error.message;

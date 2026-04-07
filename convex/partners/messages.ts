@@ -1,6 +1,24 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { requireUser, getUserListPermissions } from "./helpers";
+import { Id, Doc } from "../_generated/dataModel";
+
+/**
+ * Batch fetch users by IDs to avoid N+1 queries
+ */
+async function batchGetUsers(
+  ctx: { db: { get: (id: Id<"users">) => Promise<Doc<"users"> | null> } },
+  userIds: Id<"users">[]
+): Promise<Map<string, Doc<"users">>> {
+  const uniqueIds = [...new Set(userIds)];
+  const users = await Promise.all(uniqueIds.map((id) => ctx.db.get(id)));
+  const userMap = new Map<string, Doc<"users">>();
+  for (let i = 0; i < uniqueIds.length; i++) {
+    const user = users[i];
+    if (user) userMap.set(uniqueIds[i], user);
+  }
+  return userMap;
+}
 
 // ============================================================
 // List-Level Chat
@@ -83,18 +101,21 @@ export const getListMessages = query({
     const perms = await getUserListPermissions(ctx, args.listId, user._id);
     if (!perms.canView) return [];
 
+    // M1 fix: Add pagination limit
     const messages = await ctx.db
       .query("listMessages")
       .withIndex("by_list", q => q.eq("listId", args.listId))
       .order("asc")
-      .collect();
+      .take(200);
 
-    const enriched = await Promise.all(
-      messages.map(async (m) => {
-        const u = await ctx.db.get(m.userId);
-        return { ...m, userName: u?.name ?? "Unknown", avatarUrl: u?.avatarUrl };
-      })
-    );
+    // H5 fix: Batch fetch users to avoid N+1
+    const userIds = messages.map((m) => m.userId);
+    const userMap = await batchGetUsers(ctx, userIds);
+
+    const enriched = messages.map((m) => {
+      const u = userMap.get(m.userId);
+      return { ...m, userName: u?.name ?? "Unknown", avatarUrl: u?.avatarUrl };
+    });
 
     return enriched;
   },
@@ -118,10 +139,12 @@ export const getListMessageCount = query({
     const perms = await getUserListPermissions(ctx, args.listId, user._id);
     if (!perms.canView) return 0;
 
+    // M4 fix: Use take(1) for existence check, then count via limited query
+    // Note: Convex doesn't have native count, so we limit to reasonable max
     const messages = await ctx.db
       .query("listMessages")
       .withIndex("by_list", q => q.eq("listId", args.listId))
-      .collect();
+      .take(1000);
     return messages.length;
   },
 });

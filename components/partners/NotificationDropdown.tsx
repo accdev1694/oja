@@ -15,7 +15,7 @@ import Reanimated, {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { useRouter, type Href } from "expo-router";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { useNotifications } from "@/hooks/useNotifications";
 import type { Id } from "@/convex/_generated/dataModel";
 import { GlassModal } from "@/components/ui/glass";
@@ -65,7 +65,7 @@ export function NotificationDropdown({
   const router = useRouter();
 
   const handleTap = async (notification: (typeof notifications)[0]) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptics.light();
     if (!notification.read) {
       await markAsRead(notification._id);
     }
@@ -77,12 +77,12 @@ export function NotificationDropdown({
   };
 
   const handleDismiss = useCallback(async (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptics.medium();
     await dismiss(id as Id<"notifications">).catch(console.warn);
   }, [dismiss]);
 
   const handleMarkAllRead = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptics.medium();
     await markAllAsRead();
   };
 

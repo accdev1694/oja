@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Pressable, Text, StyleSheet } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { useNotifications } from "@/hooks/useNotifications";
 import { colors, spacing, typography } from "@/lib/design/glassTokens";
 
@@ -13,7 +13,7 @@ export function NotificationBell({ onPress }: NotificationBellProps) {
   const { unreadCount } = useNotifications();
 
   const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptics.light();
     onPress();
   };
 

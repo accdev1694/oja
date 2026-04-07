@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { useState } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import * as Clipboard from "expo-clipboard";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   GlassScreen,
@@ -38,7 +38,7 @@ export default function PartnersScreen() {
 
   async function handleCreateInvite() {
     if (!listId) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptics.medium();
     try {
       const result = await createInvite({
         listId: listId as Id<"shoppingLists">,
@@ -48,7 +48,7 @@ export default function PartnersScreen() {
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes("Premium") || msg.includes("partner") || msg.includes("Upgrade")) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        safeHaptics.warning();
         alert(
           "Premium Feature",
           "Partner Mode lets you share lists with family and friends. Upgrade to Premium to unlock it.",
@@ -69,18 +69,21 @@ export default function PartnersScreen() {
         message: `Join my shopping list on Oja! Use code: ${inviteCode}`,
       });
     } catch (error) {
-      // User cancelled
+      // L1 fix: Log non-cancellation errors
+      if (error instanceof Error && error.message !== "User did not share") {
+        console.warn("[Partners] Share failed:", error);
+      }
     }
   }
 
   async function handleCopyCode() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptics.light();
     await Clipboard.setStringAsync(inviteCode);
     alert("Copied!", "Invite code copied to clipboard");
   }
 
   async function handleRemovePartner(partnerId: Id<"listPartners">, name: string) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptics.medium();
     alert("Remove Partner", `Remove ${name} from this list?`, [
       { text: "Cancel", style: "cancel" },
       {
@@ -93,7 +96,7 @@ export default function PartnersScreen() {
 
   async function handleLeaveList() {
     if (!listId) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptics.medium();
     alert(
       "Leave List",
       "Are you sure you want to leave this shared list?",
@@ -105,7 +108,7 @@ export default function PartnersScreen() {
           onPress: async () => {
             try {
               await leaveList({ listId: listId as Id<"shoppingLists"> });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              safeHaptics.success();
               router.back();
             } catch (error) {
               console.error("Failed to leave list:", error);
