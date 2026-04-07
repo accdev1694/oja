@@ -54,12 +54,20 @@ export const getWeeklyDigest = query({
 
     let totalBudget = 0;
     let totalSpent = 0;
+
+    // Batch fetch all listItems for completed lists (avoid N+1)
+    const listIds = completedThisWeek.map(l => l._id);
+    const allListItems = listIds.length > 0
+      ? await ctx.db
+          .query("listItems")
+          .withIndex("by_list")
+          .collect()
+          .then(items => items.filter(item => listIds.includes(item.listId)))
+      : [];
+
     for (const list of completedThisWeek) {
       if (list.budget) totalBudget += list.budget;
-      const items = await ctx.db
-        .query("listItems")
-        .withIndex("by_list", q => q.eq("listId", list._id))
-        .collect();
+      const items = allListItems.filter(item => item.listId === list._id);
       totalSpent += items.reduce(
         (sum, item) => sum + (item.actualPrice || item.estimatedPrice || 0) * item.quantity,
         0

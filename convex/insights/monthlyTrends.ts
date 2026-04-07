@@ -72,11 +72,19 @@ export const getMonthlyTrends = query({
 
     let underBudget = 0;
     let overBudget = 0;
+
+    // Batch fetch all listItems for completed lists (avoid N+1)
+    const listIds = completedWithBudget.map(l => l._id);
+    const allListItems = listIds.length > 0
+      ? await ctx.db
+          .query("listItems")
+          .withIndex("by_list")
+          .collect()
+          .then(items => items.filter(item => listIds.includes(item.listId)))
+      : [];
+
     for (const list of completedWithBudget) {
-      const items = await ctx.db
-        .query("listItems")
-        .withIndex("by_list", q => q.eq("listId", list._id))
-        .collect();
+      const items = allListItems.filter(item => item.listId === list._id);
       const spent = items.reduce(
         (sum, item) => sum + (item.actualPrice || item.estimatedPrice || 0) * item.quantity,
         0

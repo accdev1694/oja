@@ -19,7 +19,7 @@
 | 7 | Receipt Scanning (Camera, Gemini parsing, confirm, reconciliation) | :white_check_mark: Done | 2026-04-07 | 2+5 issues fixed (2C/2H/1M from initial + 2C/2H/1M from audit): race conditions (create+update), cleanItemForStorage, input validation, error logging. 2 false positives (auth pattern, backend cleaning) |
 | 8 | Store Tracking (Store switching, multi-store segments, storeNormalizer) | :white_check_mark: Done | 2026-04-07 | 9 issues fixed (3C/3H/3M): N+1 batching in analytics, race condition in toggleChecked, stores.ts split (592→3 files), store ID validation, canonical name lookups, same-store switch prevention |
 | 9 | Voice Assistant / Tobi (STT, TTS, AI, context injection) | :white_check_mark: Done | 2026-04-07 | 15 issues fixed (2C/4H/2M/1L + 6P): N+1 batch delete, Gemini null check+timeout, race conditions, rate limiting, safeHaptics, React.memo, error logging |
-| 10 | Insights (Weekly digest, monthly trends, challenges, personal bests) | :hourglass: Pending | | |
+| 10 | Insights (Weekly digest, monthly trends, challenges, personal bests) | :white_check_mark: Done | 2026-04-07 | 10 issues fixed (4C/3H/2M/1L): N+1 batch queries in weeklyDigest, monthlyTrends, personalBests, savingsJar; safeHaptics in insights.tsx; error logging; fixed inline require; HTML entity fix |
 | 11 | Partner / Sharing (Invites, roles, real-time collaboration) | :hourglass: Pending | | |
 | 12 | Subscriptions (Stripe, feature gating, trial) | :hourglass: Pending | | |
 | 13 | Points / Gamification (Receipt points, fraud prevention, tiers) | :hourglass: Pending | | |
@@ -116,6 +116,25 @@
 
 **Bug fixes:**
 - [B3] Added "limit_reached" type to VoiceAssistantResponse interface (voiceTypes.ts)
+
+### Feature 10: Insights
+**Critical fixes (N+1 queries):**
+- [C1] Batched N+1 query in `getWeeklyDigest` — batch-fetch listItems upfront then filter in memory (weeklyDigest.ts)
+- [C2] Batched N+1 query in `getMonthlyTrends` — same pattern for budget adherence (monthlyTrends.ts)
+- [C3] Batched N+1 query in `getPersonalBests` — batch-fetch all listItems for completed lists (personalBests.ts)
+- [C4] Batched N+1 query in `getSavingsJar` — same batch-fetch pattern (savingsJar.ts)
+
+**High priority fixes:**
+- [H1] Replaced expo-haptics with safeHaptics in insights.tsx (device-safe haptic feedback)
+- [H2] Replaced inline `require()` for GlassToast with proper top-level import
+- [H3] Fixed over-fetching in store analytics queries (already optimized from Store Tracking)
+
+**Medium fixes:**
+- [M1] Added error logging in challenge generation catch block instead of silent swallow
+- [M2] Moved inline require to top-level import for proper bundling
+
+**Low fixes:**
+- [L1] Fixed HTML entity `&apos;` → `'` in narrative strings
 
 ---
 

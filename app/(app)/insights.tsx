@@ -9,14 +9,14 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
 import ConfettiCannon from "react-native-confetti-cannon";
-import { impactAsync, ImpactFeedbackStyle } from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import {
   GlassScreen,
   SimpleHeader,
   SkeletonCard,
   AnimatedSection,
+  GlassToast as UIGlassToast,
   colors,
-  spacing,
 } from "@/components/ui/glass";
 import { useDelightToast } from "@/hooks/useDelightToast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -91,7 +91,7 @@ export default function InsightsScreen() {
       const newest = achievements[achievements.length - 1];
       onAchievementUnlock(newest?.type || "unknown");
       confettiRef.current?.start();
-      impactAsync(ImpactFeedbackStyle.Heavy);
+      safeHaptics.heavy();
     }
     prevAchievementCount.current = count;
   }, [achievements, onAchievementUnlock]);
@@ -144,9 +144,9 @@ export default function InsightsScreen() {
     setChallengeGenerating(true);
     try {
       await generateChallenge();
-      impactAsync(ImpactFeedbackStyle.Medium);
-    } catch {
-      // ignore
+      safeHaptics.medium();
+    } catch (error) {
+      console.warn("[Insights] Challenge generation failed:", error);
     } finally {
       setChallengeGenerating(false);
     }
@@ -168,7 +168,7 @@ export default function InsightsScreen() {
   return (
     <GlassScreen>
       <SimpleHeader
-        title={firstName ? `${firstName}&apos;s Insights` : "Insights"}
+        title={firstName ? `${firstName}'s Insights` : "Insights"}
         subtitle={
           savingsJar && savingsJar.totalSaved > 0
             ? `You've saved £${savingsJar.totalSaved.toFixed(2)} so far!`
@@ -332,9 +332,9 @@ function generateWeeklyNarrative(digest: {
 
   if (digest.lastWeekTotal > 0 && digest.tripsCount > 0) {
     if (digest.percentChange < -10) {
-      parts.push(`That&apos;s ${Math.abs(digest.percentChange).toFixed(0)}% less than last week — nice restraint.`);
+      parts.push(`That's ${Math.abs(digest.percentChange).toFixed(0)}% less than last week — nice restraint.`);
     } else if (digest.percentChange > 10) {
-      parts.push(`That&apos;s ${digest.percentChange.toFixed(0)}% more than last week.`);
+      parts.push(`That's ${digest.percentChange.toFixed(0)}% more than last week.`);
     } else if (digest.tripsCount > 0) {
       parts.push("Pretty consistent with last week.");
     }
@@ -347,8 +347,7 @@ function generateWeeklyNarrative(digest: {
   return parts.join(" ");
 }
 
-// Inline GlassToast for backward compatibility with existing insights logic
+// Inline GlassToast wrapper for backward compatibility with existing insights logic
 function GlassToast({ message, icon, iconColor, visible, onDismiss }: { message: string; icon?: string; iconColor?: string; visible: boolean; onDismiss: () => void }) {
-  const { GlassToast: UIStoreToast } = require("@/components/ui/glass");
-  return <UIStoreToast message={message} icon={icon} iconColor={iconColor} visible={visible} onDismiss={onDismiss} />;
+  return <UIGlassToast message={message} icon={icon} iconColor={iconColor} visible={visible} onDismiss={onDismiss} />;
 }
