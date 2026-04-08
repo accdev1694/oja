@@ -25,6 +25,7 @@ import {
   colors,
   typography,
   spacing,
+  useGlassAlert,
 } from "@/components/ui/glass";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { CUISINES, DIETARY_RESTRICTIONS } from "./cuisineData";
@@ -37,6 +38,7 @@ export default function CuisineSelectionScreen() {
   const insets = useSafeAreaInsets();
   const { user: clerkUser } = useUser();
   const { user: convexUser, firstName: convexFirstName } = useCurrentUser();
+  const { alert } = useGlassAlert();
   const getOrCreateUser = useMutation(api.users.getOrCreate);
   const setOnboardingData = useMutation(api.users.setOnboardingData);
 
@@ -155,6 +157,7 @@ export default function CuisineSelectionScreen() {
     } catch (error) {
       console.error("Failed to save onboarding data:", error);
       safeHaptics.error();
+      alert("Error", "Failed to save your preferences. Please try again.");
     } finally {
       setIsSaving(false);
     }

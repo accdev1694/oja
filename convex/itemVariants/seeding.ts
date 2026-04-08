@@ -14,11 +14,11 @@ export const getPopularForSeeding = internalQuery({
   handler: async (ctx, args) => {
     const limit = args.limit ?? 200;
 
-    // Get all variants that have been scan-verified
-    // We can't filter by source in the index, so we fetch and filter
+    // C5 fix: Use .take() to prevent full table scan (Convex 16k doc limit)
     const allVariants = await ctx.db
       .query("itemVariants")
-      .collect();
+      .withIndex("by_base_item")
+      .take(5000);
 
     // Filter to scan-verified items with meaningful data
     const verified = allVariants.filter((variant) => {
@@ -51,7 +51,7 @@ export const getPopularForSeeding = internalQuery({
     });
 
     return deduped.slice(0, limit).map((variant) => ({
-      name: variant.productName ?? variant.variantName,
+      name: variant.productName ?? variant.variantName ?? variant.baseItem,
       category: variant.category,
       size: variant.size,
       unit: variant.unit,

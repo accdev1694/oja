@@ -1,12 +1,12 @@
-import React, { useEffect } from "react";
+import { useEffect, type ComponentProps } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ComponentProps } from "react";
+
 
 import {
   GlassScreen,
@@ -30,14 +30,14 @@ export default function AdminSetupScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user: convexUser } = useCurrentUser();
-  const myAdminPerms = useQuery(api.admin.getMyPermissions, {});
+  const myAdminPerms = useQuery(api.admin.getMyPermissions, convexUser !== undefined ? {} : "skip");
   const completeOnboarding = useMutation(api.users.completeOnboarding);
 
   const isAdmin = !!convexUser?.isAdmin || !!myAdminPerms;
   const isSuperAdmin = myAdminPerms?.role === "super_admin";
 
   const handleLaunchDashboard = async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    safeHaptics.success();
     
     // Mark onboarding as complete in the background so they don't see it again
     try {
@@ -51,7 +51,7 @@ export default function AdminSetupScreen() {
   };
 
   const handleLaunchApp = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptics.medium();
     
     // Mark onboarding as complete
     try {
@@ -65,13 +65,15 @@ export default function AdminSetupScreen() {
   };
 
   // If somehow a non-admin gets here, send them back to regular onboarding
+  // Wait for both queries to resolve before deciding
   useEffect(() => {
-    if (convexUser !== undefined && !isAdmin) {
+    if (convexUser !== undefined && myAdminPerms !== undefined && !isAdmin) {
       router.replace("/onboarding/cuisine-selection");
     }
-  }, [convexUser, isAdmin]);
+  }, [convexUser, myAdminPerms, isAdmin]);
 
-  if (!convexUser || !myAdminPerms) {
+  // H7 fix: Show loading while queries haven't resolved (undefined = still loading)
+  if (convexUser === undefined || convexUser === null || myAdminPerms === undefined) {
     return (
       <GlassScreen>
         <View style={styles.loadingContainer}>
@@ -104,7 +106,7 @@ export default function AdminSetupScreen() {
               </View>
               <View style={styles.roleInfo}>
                 <Text style={styles.roleLabel}>Assigned Role</Text>
-                <Text style={styles.roleName}>{myAdminPerms.displayName || "Administrator"}</Text>
+                <Text style={styles.roleName}>{myAdminPerms?.displayName || "Administrator"}</Text>
               </View>
             </View>
           </GlassCard>

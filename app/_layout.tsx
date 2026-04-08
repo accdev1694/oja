@@ -6,7 +6,7 @@ import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { ConvexReactClient, useMutation, useQuery } from "convex/react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { SafeKeyboardProvider } from "@/lib/keyboard/safeKeyboardController";
 import {
   GlassAlertProvider,
@@ -132,10 +132,10 @@ function InitialLayout() {
       await updateUser({ name: trimmed });
       // Reset prompt counter so it never shows again
       await AsyncStorage.setItem(NAME_PROMPT_STORAGE_KEY, String(MAX_NAME_PROMPTS));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       setShowNameModal(false);
     } catch {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      safeHaptics.error();
     } finally {
       setSavingName(false);
     }
@@ -178,13 +178,12 @@ function InitialLayout() {
     // Wait for user record to load (undefined = loading, null = not found yet)
     if (isSignedIn && currentUser !== undefined && currentUser !== null) {
       const inAppGroup = segments[0] === "(app)";
-      const inOnboarding = segments[0] === "onboarding";
       const isAdminSetup = segments.length > 1 && segments[1] === "admin-setup";
       const isAdminPath = segments.length > 1 && segments[1] === "admin";
       
       if (!currentUser.onboardingComplete && !inOnboarding) {
         router.replace("/onboarding/welcome");
-      } else if (currentUser.onboardingComplete && !inAppGroup && !isAdminPath && !isAdminSetup) {
+      } else if (currentUser.onboardingComplete && !inAppGroup && !inOnboarding && !isAdminPath && !isAdminSetup) {
         router.replace("/(app)/(tabs)");
       }
     }

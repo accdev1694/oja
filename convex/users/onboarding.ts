@@ -90,14 +90,24 @@ export const setOnboardingData = mutation({
       throw new Error("User not found");
     }
 
+    // M1 fix: Server-side input validation
+    const name = args.name.trim().slice(0, 100);
+    if (!name) throw new Error("Name is required");
+    const country = args.country.trim().slice(0, 100);
+    if (!country) throw new Error("Country is required");
+    if (args.cuisinePreferences.length > 20) throw new Error("Too many cuisine preferences");
+    const cuisinePreferences = args.cuisinePreferences.map(c => c.trim().slice(0, 50)).filter(Boolean);
+    const dietaryRestrictions = args.dietaryRestrictions?.map(d => d.trim().slice(0, 50)).filter(Boolean);
+    const postcodePrefix = args.postcodePrefix?.trim().slice(0, 10) || undefined;
+
     await ctx.db.patch(user._id, {
-      name: args.name,
+      name,
       nameManuallySet: true,
-      country: args.country,
-      cuisinePreferences: args.cuisinePreferences,
-      dietaryRestrictions: args.dietaryRestrictions,
+      country,
+      cuisinePreferences,
+      dietaryRestrictions,
       defaultBudget: args.defaultBudget,
-      postcodePrefix: args.postcodePrefix,
+      postcodePrefix,
       updatedAt: Date.now(),
     });
 
@@ -123,6 +133,11 @@ export const completeOnboarding = mutation({
 
     if (!user) {
       throw new Error("User not found");
+    }
+
+    // C1 fix: Idempotency guard — prevent duplicate subscriptions/analytics on retry
+    if (user.onboardingComplete) {
+      return true;
     }
 
     const now = Date.now();

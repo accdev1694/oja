@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, StyleSheet, Image, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation } from "convex/react";
@@ -23,18 +23,26 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user: convexUser } = useCurrentUser();
-  const myAdminPerms = useQuery(api.admin.getMyPermissions, {});
+  const myAdminPerms = useQuery(api.admin.getMyPermissions, convexUser ? {} : "skip");
   const updateUser = useMutation(api.users.update);
 
   const isAdmin = !!convexUser?.isAdmin || !!myAdminPerms;
 
   // Pre-fill with existing name if it's a real one, otherwise empty
-  const existingName = convexUser?.name && !isGenericName(convexUser.name) ? convexUser.name : "";
-  const [nameInput, setNameInput] = useState(existingName);
+  const [nameInput, setNameInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [namePreFilled, setNamePreFilled] = useState(false);
+
+  // M2 fix: Reactively update name when convexUser loads (async query)
+  useEffect(() => {
+    if (!namePreFilled && convexUser?.name && !isGenericName(convexUser.name)) {
+      setNameInput(convexUser.name);
+      setNamePreFilled(true);
+    }
+  }, [convexUser?.name, namePreFilled]);
 
   const handleContinue = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptics.medium();
 
     // Save the name if the user typed a valid one
     const trimmed = nameInput.trim();

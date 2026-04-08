@@ -84,6 +84,8 @@ export const create = mutation({
     autoAddToList: v.optional(v.boolean()),
     lastPrice: v.optional(v.number()),
     priceSource: v.optional(v.string()),
+    size: v.optional(v.string()),
+    unit: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
@@ -91,7 +93,7 @@ export const create = mutation({
     const rateLimit = await ctx.runMutation(api.aiUsage.checkRateLimit, { feature: "pantry_items" });
     if (!rateLimit.allowed) throw new Error("Rate limit exceeded");
 
-    const existing = await findExistingPantryItem(ctx, user._id, args.name);
+    const existing = await findExistingPantryItem(ctx, user._id, args.name, args.size);
     if (existing) return existing._id;
 
     const access = await canAddPantryItem(ctx, user._id);
@@ -99,18 +101,21 @@ export const create = mutation({
 
     await enforceActiveCap(ctx, user._id);
 
+    const cleaned = cleanItemForStorage(toGroceryTitleCase(args.name), args.size, args.unit);
     const normalizedCat = normalizeCategory(args.category);
     const itemId = await ctx.db.insert("pantryItems", {
       userId: user._id,
-      name: toGroceryTitleCase(args.name),
+      name: cleaned.name,
       category: normalizedCat,
-      icon: getIconForItem(toGroceryTitleCase(args.name), normalizedCat),
+      icon: getIconForItem(cleaned.name, normalizedCat),
       stockLevel: args.stockLevel,
       status: "active",
       nameSource: "system",
       autoAddToList: args.autoAddToList ?? false,
       lastPrice: args.lastPrice,
       priceSource: args.priceSource,
+      ...(cleaned.size ? { defaultSize: cleaned.size } : {}),
+      ...(cleaned.unit ? { defaultUnit: cleaned.unit } : {}),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -128,22 +133,31 @@ export const update = mutation({
     category: v.optional(v.string()),
     stockLevel: v.optional(v.union(v.literal("stocked"), v.literal("low"), v.literal("out"))),
     autoAddToList: v.optional(v.boolean()),
+    size: v.optional(v.string()),
+    unit: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     const item = await ctx.db.get(args.id);
     if (!item || item.userId !== user._id) throw new Error("Unauthorized");
 
-    const updates = {
-      updatedAt: Date.now(),
-      ...(args.name !== undefined && {
-        name: toGroceryTitleCase(args.name),
-        ...(args.name !== item.name && { nameSource: "user" as const }),
-      }),
-      ...(args.category !== undefined && { category: args.category }),
-      ...(args.stockLevel !== undefined && { stockLevel: args.stockLevel }),
-      ...(args.autoAddToList !== undefined && { autoAddToList: args.autoAddToList }),
-    };
+    const updates: Record<string, unknown> = { updatedAt: Date.now() };
+
+    if (args.name !== undefined) {
+      const cleaned = cleanItemForStorage(toGroceryTitleCase(args.name), args.size ?? item.defaultSize, args.unit ?? item.defaultUnit);
+      updates.name = cleaned.name;
+      if (args.name !== item.name) updates.nameSource = "user";
+      if (cleaned.size) { updates.defaultSize = cleaned.size; updates.defaultUnit = cleaned.unit; }
+      else if (args.size !== undefined) { updates.defaultSize = undefined; updates.defaultUnit = undefined; }
+    } else if (args.size !== undefined || args.unit !== undefined) {
+      const cleaned = cleanItemForStorage(item.name, args.size ?? item.defaultSize, args.unit ?? item.defaultUnit);
+      if (cleaned.size) { updates.defaultSize = cleaned.size; updates.defaultUnit = cleaned.unit; }
+      else { updates.defaultSize = undefined; updates.defaultUnit = undefined; }
+    }
+
+    if (args.category !== undefined) updates.category = normalizeCategory(args.category);
+    if (args.stockLevel !== undefined) updates.stockLevel = args.stockLevel;
+    if (args.autoAddToList !== undefined) updates.autoAddToList = args.autoAddToList;
 
     await ctx.db.patch(args.id, updates);
     return await ctx.db.get(args.id);
@@ -195,13 +209,23 @@ export const bulkCreate = mutation({
       return false;
     });
 
-    const promises = newItems.map((item) => {
+    // C4 fix: Enforce free-tier pantry cap during bulk create (onboarding)
+    const access = await canAddPantryItem(ctx, user._id);
+    const remainingSlots = access.allowed
+      ? (access.maxCount != null && access.currentCount != null
+          ? access.maxCount - access.currentCount
+          : newItems.length)
+      : 0;
+    const cappedItems = newItems.slice(0, remainingSlots);
+
+    const promises = cappedItems.map((item) => {
+      const cleaned = cleanItemForStorage(toGroceryTitleCase(item.name), item.defaultSize, item.defaultUnit);
       const normCat = normalizeCategory(item.category);
       return ctx.db.insert("pantryItems", {
         userId: user._id,
-        name: toGroceryTitleCase(item.name),
+        name: cleaned.name,
         category: normCat,
-        icon: getIconForItem(toGroceryTitleCase(item.name), normCat),
+        icon: getIconForItem(cleaned.name, normCat),
         stockLevel: item.stockLevel,
         status: "active",
         nameSource: "system",
@@ -209,8 +233,8 @@ export const bulkCreate = mutation({
           lastPrice: item.estimatedPrice,
           priceSource: "ai_estimate",
         }),
-        ...(item.defaultSize && { defaultSize: item.defaultSize }),
-        ...(item.defaultUnit && { defaultUnit: item.defaultUnit }),
+        ...(cleaned.size ? { defaultSize: cleaned.size } : {}),
+        ...(cleaned.unit ? { defaultUnit: cleaned.unit } : {}),
         autoAddToList: false,
         createdAt: now,
         updatedAt: now,
@@ -218,12 +242,14 @@ export const bulkCreate = mutation({
     });
 
     await Promise.all(promises);
-    if (newItems.length > 0) {
+    if (cappedItems.length > 0) {
       await ctx.runMutation(internal.insights.checkPantryAchievements, { userId: user._id });
-      await updateAddItemsChallenge(ctx, user._id, newItems.length);
+      await updateAddItemsChallenge(ctx, user._id, cappedItems.length);
     }
 
-    return { count: promises.length, skipped: args.items.length - newItems.length };
+    const skipped = args.items.length - newItems.length;
+    const capped = newItems.length - cappedItems.length;
+    return { count: promises.length, skipped, capped };
   },
 });
 
@@ -294,11 +320,11 @@ export const addBatchFromScan = mutation({
       const existingItem = existing.find((p) => isDuplicateItem(item.name, item.size, p.name, p.defaultSize));
 
       if (existingItem) {
+        const cleaned = cleanItemForStorage(existingItem.name, item.size ?? existingItem.defaultSize, item.unit ?? existingItem.defaultUnit);
         await ctx.db.patch(existingItem._id, {
           stockLevel: "stocked",
           ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "receipt" } : {}),
-          ...(item.size ? { defaultSize: item.size } : {}),
-          ...(item.unit ? { defaultUnit: item.unit } : {}),
+          ...(cleaned.size ? { defaultSize: cleaned.size, defaultUnit: cleaned.unit } : {}),
           ...(item.quantity ? { quantity: (existingItem.quantity ?? 0) + item.quantity } : {}),
           purchaseCount: (existingItem.purchaseCount ?? 0) + 1,
           lastPurchasedAt: now,

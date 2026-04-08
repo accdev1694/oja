@@ -203,11 +203,14 @@ export async function enforceGeminiQuota(ctx: ActionCtx): Promise<void> {
 
 /** Strip markdown code blocks from AI response */
 export function stripCodeBlocks(text: string): string {
-  if (text.startsWith("```json")) {
-    return text.replace(/```json\n?/g, "").replace(/```\n?/g, "");
+  // Normalize line endings first to handle CRLF from some AI providers
+  const trimmed = text.trim().replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // Match opening ```<lang> or ``` and closing ```
+  const match = trimmed.match(/^```\w*\n?([\s\S]*?)```$/);
+  if (match) return match[1].trim();
+  // Fallback: strip all code fences if present
+  if (trimmed.includes("```")) {
+    return trimmed.replace(/```\w*\n?/g, "").replace(/```/g, "").trim();
   }
-  if (text.startsWith("```")) {
-    return text.replace(/```\n?/g, "");
-  }
-  return text;
+  return trimmed;
 }

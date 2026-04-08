@@ -13,6 +13,7 @@ interface OnboardingCategorySectionProps {
   categoryItems: OnboardingItem[];
   selectedItems: Set<number>;
   allItems: OnboardingItem[];
+  itemIndexMap?: Map<OnboardingItem, number>;
   onToggleItem: (index: number) => void;
   accentColor: string;
 }
@@ -22,11 +23,13 @@ export const OnboardingCategorySection = ({
   categoryItems,
   selectedItems,
   allItems,
+  itemIndexMap,
   onToggleItem,
   accentColor,
 }: OnboardingCategorySectionProps) => {
+  const getIndex = (item: OnboardingItem) => itemIndexMap?.get(item) ?? allItems.indexOf(item);
   const selectedCount = categoryItems.filter((item) =>
-    selectedItems.has(allItems.indexOf(item))
+    selectedItems.has(getIndex(item))
   ).length;
 
   return (
@@ -41,7 +44,7 @@ export const OnboardingCategorySection = ({
 
       <View style={styles.itemGrid}>
         {categoryItems.map((item) => {
-          const globalIndex = allItems.indexOf(item);
+          const globalIndex = getIndex(item);
           return (
             <OnboardingItemCard
               key={globalIndex}

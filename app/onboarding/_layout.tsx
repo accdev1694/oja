@@ -11,6 +11,11 @@ export default function OnboardingLayout() {
       }}
     >
       <Stack.Screen name="welcome" />
+      <Stack.Screen name="cuisine-selection" />
+      <Stack.Screen name="store-selection" />
+      <Stack.Screen name="pantry-seeding" />
+      <Stack.Screen name="review-items" />
+      <Stack.Screen name="admin-setup" />
     </Stack>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -87,6 +87,12 @@ export default function ReviewItemsScreen() {
 
   const [isSaving, setIsSaving] = useState(false);
 
+  // C9 fix: Build O(1) lookup map instead of O(n) indexOf per item
+  const itemIndexMap = useMemo(
+    () => new Map(items.map((item, i) => [item, i])),
+    [items]
+  );
+
   const localCutoff = Math.floor(items.length * 0.6);
   const grouped: GroupedBySource = { local: {}, cultural: {} };
   items.forEach((item, index) => {
@@ -105,10 +111,10 @@ export default function ReviewItemsScreen() {
 
   const localSelected = Object.values(grouped.local)
     .flat()
-    .filter((item) => selectedItems.has(items.indexOf(item))).length;
+    .filter((item) => selectedItems.has(itemIndexMap.get(item) ?? -1)).length;
   const culturalSelected = Object.values(grouped.cultural)
     .flat()
-    .filter((item) => selectedItems.has(items.indexOf(item))).length;
+    .filter((item) => selectedItems.has(itemIndexMap.get(item) ?? -1)).length;
 
   function toggleItem(index: number) {
     safeHaptics.light();
@@ -126,7 +132,7 @@ export default function ReviewItemsScreen() {
   function toggleSection(source: SourceGroup) {
     safeHaptics.medium();
     const sectionItems = Object.values(grouped[source]).flat();
-    const sectionIndices = sectionItems.map((item) => items.indexOf(item));
+    const sectionIndices = sectionItems.map((item) => itemIndexMap.get(item) ?? -1);
     const allSelected = sectionIndices.every((i) => selectedItems.has(i));
 
     setSelectedItems((prev) => {
@@ -153,7 +159,11 @@ export default function ReviewItemsScreen() {
             text: "Continue",
             onPress: async () => {
               safeHaptics.light();
-              await completeOnboarding();
+              try {
+                await completeOnboarding();
+              } catch (e) {
+                console.warn("Failed to complete onboarding:", e);
+              }
               router.replace("/(app)/(tabs)");
             },
           },
@@ -250,7 +260,7 @@ export default function ReviewItemsScreen() {
 
           const config = SOURCE_CONFIG[source];
           const sectionItems = Object.values(categories).flat();
-          const allSelected = sectionItems.every((item) => selectedItems.has(items.indexOf(item)));
+          const allSelected = sectionItems.every((item) => selectedItems.has(itemIndexMap.get(item) ?? -1));
 
           return (
             <View key={source} style={styles.sourceSection}>
@@ -286,6 +296,7 @@ export default function ReviewItemsScreen() {
                   categoryItems={categoryItems}
                   selectedItems={selectedItems}
                   allItems={items}
+                  itemIndexMap={itemIndexMap}
                   onToggleItem={toggleItem}
                   accentColor={config.accent}
                 />

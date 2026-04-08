@@ -27,6 +27,7 @@ import {
   typography,
   spacing,
   animations,
+  useGlassAlert,
 } from "@/components/ui/glass";
 
 export default function StoreSelectionScreen() {
@@ -40,6 +41,7 @@ export default function StoreSelectionScreen() {
   const storeData = useQuery(api.stores.getForCuisines, { cuisines: cuisineList });
   const setStorePreferences = useMutation(api.stores.setUserPreferences);
 
+  const { alert } = useGlassAlert();
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -78,6 +80,7 @@ export default function StoreSelectionScreen() {
     } catch (error) {
       console.error("Failed to save store preferences:", error);
       safeHaptics.error();
+      alert("Error", "Failed to save store preferences. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -156,17 +159,30 @@ export default function StoreSelectionScreen() {
         )}
 
         {/* Mainstream UK Supermarkets */}
-        <Text style={styles.sectionTitle}>UK supermarkets</Text>
-        <View style={styles.storeGrid}>
-          {storeData.mainstream.map((store) => (
-            <StoreButton
-              key={store.id}
-              store={store}
-              isSelected={selectedStores.includes(store.id)}
-              onToggle={() => toggleStore(store.id)}
-            />
-          ))}
-        </View>
+        {storeData.mainstream.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>UK supermarkets</Text>
+            <View style={styles.storeGrid}>
+              {storeData.mainstream.map((store) => (
+                <StoreButton
+                  key={store.id}
+                  store={store}
+                  isSelected={selectedStores.includes(store.id)}
+                  onToggle={() => toggleStore(store.id)}
+                />
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* H8 fix: Empty state when no stores available */}
+        {storeData.recommended.length === 0 && storeData.mainstream.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <MaterialCommunityIcons name="store-off" size={48} color={colors.text.tertiary} />
+            <Text style={styles.emptyText}>No stores available for your area yet.</Text>
+            <Text style={styles.emptySubtext}>You can skip this step and add stores later.</Text>
+          </View>
+        )}
       </ScrollView>
 
       {/* Pinned Buttons */}
@@ -378,6 +394,21 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+  },
+  emptyContainer: {
+    alignItems: "center",
+    paddingVertical: spacing.xl,
+    gap: spacing.sm,
+  },
+  emptyText: {
+    ...typography.bodyLarge,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  emptySubtext: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: "center",
   },
   pinnedButtonContainer: {
     position: "absolute",

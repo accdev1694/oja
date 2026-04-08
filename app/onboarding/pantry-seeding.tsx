@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -6,7 +6,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useAction } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { SeedItem } from "@/convex/ai";
 import { safeHaptics } from "@/lib/haptics/safeHaptics";
@@ -33,6 +33,7 @@ export default function PantrySeedingScreen() {
   const params = useLocalSearchParams<{ country?: string; cuisines?: string }>();
 
   const generateItems = useAction(api.ai.generateHybridSeedItems);
+  const completeOnboarding = useMutation(api.users.completeOnboarding);
 
   const [isGenerating, setIsGenerating] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,11 +54,17 @@ export default function PantrySeedingScreen() {
     transform: [{ rotate: `${rotation.value}deg` }],
   }));
 
+  const isGeneratingRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     generateSeedItems();
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, []);
 
   async function generateSeedItems() {
+    if (isGeneratingRef.current) return;
+    isGeneratingRef.current = true;
     setIsGenerating(true);
     setError(null);
 
@@ -70,7 +77,7 @@ export default function PantrySeedingScreen() {
       setSeedItems(items);
       safeHaptics.success();
 
-      setTimeout(() => {
+      timerRef.current = setTimeout(() => {
         router.push({
           pathname: "/onboarding/review-items",
           params: { items: JSON.stringify(items) },
@@ -81,12 +88,18 @@ export default function PantrySeedingScreen() {
       setError("Failed to generate your pantry. Please try again.");
       safeHaptics.error();
     } finally {
+      isGeneratingRef.current = false;
       setIsGenerating(false);
     }
   }
 
   async function handleSkip() {
     safeHaptics.light();
+    try {
+      await completeOnboarding();
+    } catch (e) {
+      console.warn("Failed to complete onboarding on skip:", e);
+    }
     router.replace("/(app)/(tabs)");
   }
 
