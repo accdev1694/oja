@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Switch,
   ActivityIndicator,
   Pressable,
+  AppState,
 } from "react-native";
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -130,16 +131,22 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
     safeHaptics.selection();
   }, [preferences, updatePreferences]);
 
+  // L3 fix: Only auto-refresh when app is in foreground
+  const appState = useRef(AppState.currentState);
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
     if (autoRefreshEnabled) {
       interval = setInterval(() => {
-        setRefreshKey(Date.now().toString());
-        setLastUpdated(new Date());
+        if (appState.current === "active") {
+          setRefreshKey(Date.now().toString());
+          setLastUpdated(new Date());
+        }
       }, 120000); // M1 fix: 2 minutes instead of 30s to reduce query storms
     }
+    const sub = AppState.addEventListener("change", (next) => { appState.current = next; });
     return () => {
       if (interval) clearInterval(interval);
+      sub.remove();
     };
   }, [autoRefreshEnabled]);
 

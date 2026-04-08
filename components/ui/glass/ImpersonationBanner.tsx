@@ -4,9 +4,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { colors, spacing, typography } from "@/lib/design/glassTokens";
 import { useImpersonation } from "@/hooks/useImpersonation";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 /**
  * High-visibility banner shown when an admin is impersonating a user.
@@ -14,15 +15,16 @@ import { useImpersonation } from "@/hooks/useImpersonation";
  */
 export function ImpersonationBanner() {
   const insets = useSafeAreaInsets();
-  const { isImpersonated, adminName, tokenValue } = useImpersonation();
-  const stopImpersonation = useMutation(api.admin.stopImpersonation);
+  const { isImpersonated, adminName } = useImpersonation();
+  const { user } = useCurrentUser();
+  const stopImpersonationForUser = useMutation(api.admin.stopImpersonationForUser);
 
   if (!isImpersonated) return null;
 
   const handleStop = async () => {
-    if (!tokenValue) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await stopImpersonation({ tokenValue });
+    if (!user?._id) return;
+    safeHaptics.success();
+    await stopImpersonationForUser({ userId: user._id });
   };
 
   return (

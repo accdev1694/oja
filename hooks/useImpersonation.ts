@@ -25,6 +25,5 @@ export function useImpersonation() {
     adminId: activeToken?.createdBy,
     adminName: activeToken?.adminName,
     expiresAt: activeToken?.expiresAt,
-    tokenValue: activeToken?.tokenValue,
   };
 }

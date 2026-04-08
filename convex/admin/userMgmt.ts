@@ -11,7 +11,7 @@ export const getUsers = query({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_users");
-    return await ctx.db.query("users").order("desc").paginate(args.paginationOpts);
+    return await ctx.db.query("users").withIndex("by_created").order("desc").paginate(args.paginationOpts);
   },
 });
 
@@ -316,7 +316,7 @@ export const adjustPoints = mutation({
         userId: args.userId,
         amount: args.amount,
         source: `admin_adjustment: ${args.reason}`,
-        metadata: { adminId: admin._id as string, reason: args.reason, adjustedBy: admin.name || "Admin" },
+        metadata: { adminId: admin._id, reason: args.reason, adjustedBy: admin.name || "Admin" },
       });
     } else if (args.amount < 0) {
       // Use expirePoints for negative — admin trail is preserved in adminLogs entry below

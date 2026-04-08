@@ -66,20 +66,9 @@ export const logAdminSession = mutation({
       });
     }
 
-    // C2 fix: Re-check active count after expiring old sessions to prevent race condition
-    const recheck = await ctx.db
-      .query("adminSessions")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .filter((q) => q.eq(q.field("status"), "active"))
-      .collect();
-    const activeCount = recheck.filter(s => (now - s.lastSeenAt) <= SESSION_TIMEOUT_MS).length;
-    if (activeCount >= MAX_CONCURRENT_SESSIONS) {
-      // Another concurrent request already created a session — expire oldest
-      const sorted = recheck
-        .filter(s => (now - s.lastSeenAt) <= SESSION_TIMEOUT_MS)
-        .sort((a, b) => a.loginAt - b.loginAt);
-      await ctx.db.patch(sorted[0]._id, { status: "expired", logoutAt: now });
-    }
+    // Note: Convex OCC (optimistic concurrency control) serializes concurrent mutations
+    // on the same documents, so true race conditions are handled at the DB level.
+    // No redundant re-check needed — OCC will retry if another mutation committed first.
 
     const sessionId = await ctx.db.insert("adminSessions", {
       userId: user._id,
@@ -191,7 +180,7 @@ export const getActiveImpersonationToken = query({
     const admin = await ctx.db.get(token.createdBy);
 
     return {
-      tokenValue: token.tokenValue,
+      hasActiveToken: true,
       createdBy: token.createdBy,
       adminName: admin?.name || "Admin",
       expiresAt: token.expiresAt,
@@ -218,6 +207,39 @@ export const stopImpersonation = mutation({
         targetType: "user",
         targetId: token.userId,
         details: `Stopped impersonation of user ${token.userId}`,
+        createdAt: Date.now(),
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+export const stopImpersonationForUser = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const token = await ctx.db
+      .query("impersonationTokens")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("usedAt"), undefined),
+          q.gt(q.field("expiresAt"), Date.now())
+        )
+      )
+      .first();
+
+    if (token) {
+      await ctx.db.patch(token._id, { expiresAt: Date.now() - 1 });
+
+      await ctx.db.insert("adminLogs", {
+        adminUserId: token.createdBy,
+        action: "stop_impersonation",
+        targetType: "user",
+        targetId: args.userId,
+        details: `Stopped impersonation of user ${args.userId}`,
         createdAt: Date.now(),
       });
     }

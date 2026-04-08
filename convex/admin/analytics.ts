@@ -71,7 +71,7 @@ export const getAnalytics = query({
       let metrics = await ctx.db.query("platformMetrics").withIndex("by_date", q => q.eq("date", today)).unique();
       
       if (!metrics) {
-        metrics = await ctx.db.query("platformMetrics").order("desc").first();
+        metrics = await ctx.db.query("platformMetrics").withIndex("by_date").order("desc").first();
       }
       
       if (metrics) {
@@ -136,7 +136,10 @@ async function getLiveAnalytics(ctx: QueryCtx, dateFrom?: number, dateTo?: numbe
         totalUsers: u.length,
         newUsersThisWeek: u.filter(x => x.createdAt >= weekAgo).length,
         newUsersThisMonth: u.filter(x => x.createdAt >= monthAgo).length,
-        activeUsersThisWeek: new Set(l.filter(x => x.updatedAt >= weekAgo).map(x => x.userId.toString())).size,
+        activeUsersThisWeek: await ctx.db.query("activityEvents")
+          .withIndex("by_timestamp", q => q.gte("timestamp", weekAgo))
+          .take(50000)
+          .then(events => new Set(events.map(e => e.userId.toString())).size),
         totalLists: l.length,
         completedLists: l.filter(x => x.status === "completed").length,
         totalReceipts: r.length,
@@ -175,8 +178,12 @@ export const getFinancialReport = query({
     const grossRevenue: number = rev?.mrr || 0;
     const estimatedTax: number = grossRevenue * 0.20; // 20% VAT
 
-    const analytics = await getLiveAnalytics(ctx);
-    const activeUsers: number = analytics?.activeUsersThisWeek || 0;
+    // L2 fix: Query only activeUsersThisWeek instead of full getLiveAnalytics (avoids 3 extra large fetches)
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recentActivity = await ctx.db.query("activityEvents")
+      .withIndex("by_timestamp", q => q.gte("timestamp", weekAgo))
+      .take(50000);
+    const activeUsers = new Set(recentActivity.map(e => e.userId.toString())).size;
     const estimatedCOGS: number = activeUsers * 0.50;
     
     const netRevenue: number = grossRevenue - estimatedTax - estimatedCOGS;
@@ -195,7 +202,7 @@ export const getCohortMetrics = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    return await ctx.db.query("cohortMetrics").order("desc").take(100);
+    return await ctx.db.query("cohortMetrics").withIndex("by_cohort").order("desc").take(100);
   },
 });
 
@@ -206,7 +213,7 @@ export const getFunnelAnalytics = query({
     
     // M2 fix: Query per step using by_event index instead of loading 10K records
     const steps = ["signup", "onboarding_complete", "first_list", "first_receipt", "first_scan", "subscribed"];
-    const funnel: { step: string; count: number; percentage: number }[] = [];
+    const funnel: { step: string; count: number; percentage: number; stepConversion: number }[] = [];
 
     // Parallel fetch per step using proper index
     const stepResults = await Promise.all(
@@ -222,14 +229,20 @@ export const getFunnelAnalytics = query({
     );
 
     let baseCount = 0;
+    let previousCount = 0;
     for (const { step, uniqueUsers } of stepResults) {
-      if (step === "signup") baseCount = uniqueUsers;
+      if (step === "signup") {
+        baseCount = uniqueUsers;
+        previousCount = uniqueUsers;
+      }
 
       funnel.push({
         step,
         count: uniqueUsers,
         percentage: baseCount > 0 ? (uniqueUsers / baseCount) * 100 : 0,
+        stepConversion: previousCount > 0 ? (uniqueUsers / previousCount) * 100 : 0,
       });
+      previousCount = uniqueUsers;
     }
 
     return funnel;
@@ -240,7 +253,7 @@ export const getChurnMetrics = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    return await ctx.db.query("churnMetrics").order("desc").take(100);
+    return await ctx.db.query("churnMetrics").withIndex("by_month").order("desc").take(100);
   },
 });
 
@@ -248,7 +261,7 @@ export const getLTVMetrics = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    return await ctx.db.query("ltvMetrics").order("desc").take(100);
+    return await ctx.db.query("ltvMetrics").withIndex("by_cohort").order("desc").take(100);
   },
 });
 
@@ -256,7 +269,7 @@ export const getUserSegmentSummary = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    const segments = await ctx.db.query("userSegments").take(5000);
+    const segments = await ctx.db.query("userSegments").withIndex("by_segment").take(5000);
     
     const summary: Record<string, number> = {};
     for (const s of segments) {
@@ -277,7 +290,7 @@ export const getPointsEconomics = query({
     await requirePermissionQuery(ctx, "view_analytics");
 
     // H2 fix: Limit to prevent loading all 50K+ balances into memory
-    const balances = await ctx.db.query("pointsBalance").take(10000);
+    const balances = await ctx.db.query("pointsBalance").withIndex("by_tier").take(10000);
     
     const totalPointsIssued = balances.reduce((sum, b) => sum + (b.totalPoints || 0), 0);
     const totalPointsRedeemed = balances.reduce((sum, b) => sum + (b.pointsUsed || 0), 0);
@@ -326,16 +339,17 @@ export const getAdminSupportSummary = query({
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
     
+    // H4 audit fix: Add .take() limits to prevent full table scans
     const [open, inProgress, resolved] = await Promise.all([
-      ctx.db.query("supportTickets").withIndex("by_status", q => q.eq("status", "open")).collect().then(res => res.length),
-      ctx.db.query("supportTickets").withIndex("by_status", q => q.eq("status", "in_progress")).collect().then(res => res.length),
-      ctx.db.query("supportTickets").withIndex("by_status", q => q.eq("status", "resolved")).collect().then(res => res.length),
+      ctx.db.query("supportTickets").withIndex("by_status", q => q.eq("status", "open")).take(10000).then(res => res.length),
+      ctx.db.query("supportTickets").withIndex("by_status", q => q.eq("status", "in_progress")).take(10000).then(res => res.length),
+      ctx.db.query("supportTickets").withIndex("by_status", q => q.eq("status", "resolved")).take(10000).then(res => res.length),
     ]);
-    
+
     const unassignedTickets = await ctx.db
       .query("supportTickets")
       .filter(q => q.and(q.eq(q.field("assignedTo"), undefined), q.neq(q.field("status"), "resolved")))
-      .collect();
+      .take(10000);
     const unassigned = unassignedTickets.length;
     
     return {
@@ -360,7 +374,7 @@ export const getAdminTickets = query({
         .query("supportTickets")
         .withIndex("by_status", q => q.eq("status", status));
     } else {
-      ticketsQuery = ctx.db.query("supportTickets");
+      ticketsQuery = ctx.db.query("supportTickets").withIndex("by_status");
     }
     
     const tickets = await ticketsQuery.order("desc").take(100);

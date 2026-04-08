@@ -105,7 +105,8 @@ export const analyticsTables = {
     timestamp: v.number(),
   })
     .index("by_user_timestamp", ["userId", "timestamp"])
-    .index("by_type", ["eventType"]),
+    .index("by_type", ["eventType"])
+    .index("by_timestamp", ["timestamp"]),
 
   // Monthly AI usage per user (voice, estimates, etc.)
   aiUsage: defineTable({
