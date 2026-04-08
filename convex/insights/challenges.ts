@@ -79,7 +79,7 @@ export const generateChallenge = mutation({
 });
 
 /**
- * Update challenge progress
+ * Update challenge progress (H4 fix: race condition prevention)
  */
 export const updateChallengeProgress = mutation({
   args: {
@@ -94,16 +94,22 @@ export const updateChallengeProgress = mutation({
 
     const newProgress = Math.min(challenge.progress + args.increment, challenge.target);
     const completed = newProgress >= challenge.target;
+    const now = Date.now();
 
     await ctx.db.patch(args.challengeId, {
       progress: newProgress,
-      ...(completed ? { completedAt: Date.now() } : {}),
+      ...(completed ? { completedAt: now } : {}),
     });
 
     if (completed) {
-      const now = Date.now();
+      // H4 fix: Re-fetch to verify this mutation won the race
+      const refreshed = await ctx.db.get(args.challengeId);
+      if (refreshed?.completedAt && refreshed.completedAt !== now) {
+        // Another concurrent request already completed this challenge
+        return { ...challenge, progress: newProgress, completedAt: refreshed.completedAt };
+      }
 
-      // Award achievement for first challenge completion
+      // Award achievement for first challenge completion (already idempotent via unique check)
       const existingAch = await ctx.db
         .query("achievements")
         .withIndex("by_user_type", q => q.eq("userId", user._id).eq("type", "first_challenge"))
@@ -120,7 +126,7 @@ export const updateChallengeProgress = mutation({
         });
       }
 
-      // Award the challenge reward points
+      // Award the challenge reward points (already has idempotencyKey)
       await ctx.runMutation(internal.points.awardBonusPoints, {
         userId: user._id,
         amount: challenge.reward,
@@ -132,17 +138,29 @@ export const updateChallengeProgress = mutation({
         },
       });
 
-      await ctx.db.insert("notifications", {
-        userId: user._id,
-        type: "challenge_completed",
-        title: "Challenge Complete!",
-        body: `You completed "${challenge.title}" — +${challenge.reward} points!`,
-        data: { challengeId: args.challengeId },
-        read: false,
-        createdAt: now,
-      });
+      // H4 fix: Check for existing notification to prevent duplicates
+      const existingNotif = await ctx.db
+        .query("notifications")
+        .withIndex("by_user", q => q.eq("userId", user._id))
+        .filter(q => q.and(
+          q.eq(q.field("type"), "challenge_completed"),
+          q.eq(q.field("data.challengeId"), args.challengeId)
+        ))
+        .first();
+
+      if (!existingNotif) {
+        await ctx.db.insert("notifications", {
+          userId: user._id,
+          type: "challenge_completed",
+          title: "Challenge Complete!",
+          body: `You completed "${challenge.title}" — +${challenge.reward} points!`,
+          data: { challengeId: args.challengeId },
+          read: false,
+          createdAt: now,
+        });
+      }
     }
 
-    return { ...challenge, progress: newProgress, completedAt: completed ? Date.now() : undefined };
+    return { ...challenge, progress: newProgress, completedAt: completed ? now : undefined };
   },
 });

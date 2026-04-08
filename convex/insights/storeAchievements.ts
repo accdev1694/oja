@@ -41,6 +41,9 @@ export const checkStoreAchievements = mutation({
   },
 });
 
+/**
+ * Check deal achievements (H6 fix: parallel price fetching instead of N+1)
+ */
 export const checkDealAchievements = mutation({
   args: {},
   handler: async (ctx) => {
@@ -85,6 +88,19 @@ export const checkDealAchievements = mutation({
       });
     }
 
+    // H6 fix: Parallel fetch all current prices upfront instead of N+1 queries
+    const normalizedNames = [...userPurchases.keys()];
+    const pricePromises = normalizedNames.map(normalizedName =>
+      ctx.db
+        .query("currentPrices")
+        .withIndex("by_item", q => q.eq("normalizedName", normalizedName))
+        .collect()
+        .then(prices => ({ normalizedName, prices }))
+    );
+
+    const priceResults = await Promise.all(pricePromises);
+    const priceMap = new Map(priceResults.map(r => [r.normalizedName, r.prices]));
+
     let itemsCheaperElsewhere = 0;
     let totalSavings = 0;
 
@@ -94,10 +110,8 @@ export const checkDealAchievements = mutation({
       );
       const mostRecent = sortedPurchases[0];
 
-      const currentPrices = await ctx.db
-        .query("currentPrices")
-        .withIndex("by_item", q => q.eq("normalizedName", normalizedName))
-        .collect();
+      // H6 fix: Use pre-fetched prices from map
+      const currentPrices = priceMap.get(normalizedName) || [];
 
       if (currentPrices.length === 0) {
         continue;

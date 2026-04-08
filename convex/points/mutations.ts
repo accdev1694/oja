@@ -4,10 +4,12 @@ import { internal } from "../_generated/api";
 import { getOrCreatePointsBalance, processEarnPoints, processExpirePoints } from "./helpers";
 import { getTierFromScans } from "../lib/featureGating";
 
-export const initializePointsBalance = mutation({
+/**
+ * Initialize points balance - internal only to prevent arbitrary userId manipulation (C4 fix)
+ */
+export const initializePointsBalance = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    // Usually called internally or on signup
     return await getOrCreatePointsBalance(ctx, args.userId);
   },
 });
@@ -117,6 +119,10 @@ export const awardBonusPoints = internalMutation({
   },
 });
 
+/**
+ * Refund points for fraudulent/deleted receipts (C3 fix)
+ * Now properly tracks shortfall when user has insufficient balance
+ */
 export const refundPoints = internalMutation({
   args: {
     userId: v.id("users"),
@@ -125,16 +131,26 @@ export const refundPoints = internalMutation({
   },
   handler: async (ctx, args) => {
     const balance = await getOrCreatePointsBalance(ctx, args.userId);
-
-    // We only refund up to what's available to avoid negative balance, though theoretically it could go negative
-    const refundAmount = args.points;
     const now = Date.now();
+
+    // Track actual vs requested refund to prevent silent under-refund
+    const requestedAmount = args.points;
+    const actualRefund = Math.min(balance.availablePoints, requestedAmount);
+    const shortfall = requestedAmount - actualRefund;
+
+    if (shortfall > 0) {
+      console.warn(
+        `[refundPoints] User ${args.userId} has insufficient balance. ` +
+        `Requested: ${requestedAmount}, Available: ${balance.availablePoints}, Shortfall: ${shortfall}`
+      );
+    }
 
     const newTierProgress = Math.max(0, balance.tierProgress - 1);
     const newTier = getTierFromScans(newTierProgress);
+
     await ctx.db.patch(balance._id, {
-      totalPoints: Math.max(0, balance.totalPoints - refundAmount),
-      availablePoints: Math.max(0, balance.availablePoints - refundAmount),
+      totalPoints: Math.max(0, balance.totalPoints - actualRefund),
+      availablePoints: balance.availablePoints - actualRefund,
       tierProgress: newTierProgress,
       tier: newTier.tier,
       updatedAt: now,
@@ -143,13 +159,16 @@ export const refundPoints = internalMutation({
     await ctx.db.insert("pointsTransactions", {
       userId: args.userId,
       type: "refund",
-      amount: -refundAmount,
+      amount: -actualRefund, // Record actual refunded amount, not requested
       source: "receipt_deleted_or_fraud",
       receiptId: args.receiptId,
       balanceBefore: balance.availablePoints,
-      balanceAfter: Math.max(0, balance.availablePoints - refundAmount),
+      balanceAfter: balance.availablePoints - actualRefund,
+      metadata: shortfall > 0 ? { shortfall, requestedAmount } : undefined,
       createdAt: now,
     });
+
+    return { actualRefund, shortfall };
   }
 });
 

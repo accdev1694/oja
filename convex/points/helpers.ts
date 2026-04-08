@@ -163,18 +163,53 @@ export async function processEarnPoints(ctx: MutationCtx, userId: Id<"users">, r
 
   const totalEarnedThisScan = pointsAmount + streakBonus;
 
-  const newTierProgress = balance.tierProgress + 1;
+  // C1 fix: Re-verify monthly limit before patching to handle race conditions
+  // Re-fetch balance to get latest state (handles concurrent mutations)
+  const latestBalance = await ctx.db.get(balance._id);
+  if (!latestBalance) {
+    throw new Error("Balance disappeared during point earning");
+  }
+
+  // Check if another concurrent mutation already hit the limit
+  if (latestBalance.earningScansThisMonth >= maxEarningScans) {
+    return { earned: false, reason: "monthly_limit_reached_concurrent" };
+  }
+
+  // C1 fix (audit): Recalculate tier using LATEST balance to avoid stale tier assignment
+  const newTierProgress = latestBalance.tierProgress + 1;
   const newTierInfo = getTierFromScans(newTierProgress);
 
-  // Update balance
-  await ctx.db.patch(balance._id, {
-    totalPoints: balance.totalPoints + totalEarnedThisScan,
-    availablePoints: balance.availablePoints + totalEarnedThisScan,
+  // C1 fix (audit): Recalculate streak using latest balance for concurrent safety
+  const latestLastWeek = latestBalance.lastStreakScan > 0 ? getWeekNumber(latestBalance.lastStreakScan) : 0;
+  let finalStreakCount = latestBalance.streakCount;
+  if (currentWeek === latestLastWeek + 1) {
+    finalStreakCount++;
+  } else if (currentWeek > latestLastWeek + 1) {
+    finalStreakCount = 1;
+  } else if (latestLastWeek === 0) {
+    finalStreakCount = 1;
+  }
+  // Don't change streak if we're in the same week as the last scan
+  // (currentWeek === latestLastWeek means no streak change needed)
+
+  // Recalculate streak bonus based on final streak count
+  let finalStreakBonus = 0;
+  if (finalStreakCount === 3 && currentWeek !== latestLastWeek) finalStreakBonus = 50;
+  if (finalStreakCount === 4 && currentWeek !== latestLastWeek) finalStreakBonus = 100;
+  if (finalStreakCount === 8 && currentWeek !== latestLastWeek) finalStreakBonus = 250;
+  if (finalStreakCount === 12 && currentWeek !== latestLastWeek) finalStreakBonus = 500;
+
+  const finalTotalEarned = pointsAmount + finalStreakBonus;
+
+  // Update balance with latest values
+  await ctx.db.patch(latestBalance._id, {
+    totalPoints: latestBalance.totalPoints + finalTotalEarned,
+    availablePoints: latestBalance.availablePoints + finalTotalEarned,
     tier: newTierInfo.tier,
     tierProgress: newTierProgress,
-    earningScansThisMonth: balance.earningScansThisMonth + 1,
+    earningScansThisMonth: latestBalance.earningScansThisMonth + 1,
     lastEarnedAt: now,
-    streakCount: newStreakCount,
+    streakCount: finalStreakCount,
     lastStreakScan: now,
     updatedAt: now,
   });
@@ -182,13 +217,13 @@ export async function processEarnPoints(ctx: MutationCtx, userId: Id<"users">, r
   // Phase 5.1: Check points achievements
   await ctx.runMutation(internal.insights.checkPointsAchievements, {
     userId,
-    totalPoints: balance.totalPoints + totalEarnedThisScan,
+    totalPoints: latestBalance.totalPoints + finalTotalEarned,
     currentTier: newTierInfo.tier,
   });
 
   // Create transaction for base points (excluding event bonus — itemized separately)
   const baseAmount = pointsAmount - eventBonus;
-  let runningBalance = balance.availablePoints;
+  let runningBalance = latestBalance.availablePoints;
   await ctx.db.insert("pointsTransactions", {
     userId: userId,
     type: "earn",
@@ -218,17 +253,17 @@ export async function processEarnPoints(ctx: MutationCtx, userId: Id<"users">, r
     runningBalance += eventBonus;
   }
 
-  // Create transaction for streak bonus if applicable
-  if (streakBonus > 0) {
+  // Create transaction for streak bonus if applicable (using recalculated values)
+  if (finalStreakBonus > 0) {
     await ctx.db.insert("pointsTransactions", {
       userId: userId,
       type: "bonus",
-      amount: streakBonus,
-      source: `streak_bonus_${newStreakCount}_weeks`,
+      amount: finalStreakBonus,
+      source: `streak_bonus_${finalStreakCount}_weeks`,
       receiptId: receiptId,
       balanceBefore: runningBalance,
-      balanceAfter: runningBalance + streakBonus,
-      metadata: { streakCount: newStreakCount },
+      balanceAfter: runningBalance + finalStreakBonus,
+      metadata: { streakCount: finalStreakCount },
       createdAt: now,
     });
   }
@@ -236,10 +271,10 @@ export async function processEarnPoints(ctx: MutationCtx, userId: Id<"users">, r
   return {
     earned: true,
     pointsAmount,
-    bonusPoints: streakBonus,
+    bonusPoints: finalStreakBonus,
     eventBonus,
     newTier: newTierInfo.tier,
-    newStreakCount
+    newStreakCount: finalStreakCount
   };
 }
 

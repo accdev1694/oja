@@ -4,24 +4,30 @@ import { requireAdmin } from "../admin/helpers";
 import { getOrCreatePointsBalance, processExpirePoints } from "./helpers";
 
 /**
- * Cron job: Expire points older than 12 months
+ * Cron job: Expire points older than 12 months (H5 fix: batched processing)
+ * Processes in batches of 500 to avoid memory issues at scale
  */
 export const expireOldPoints = internalMutation({
   args: {},
   handler: async (ctx) => {
     const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
+    const BATCH_SIZE = 500;
 
-    // Find "earn" transactions older than 12 months
+    // H5 fix: Process in batches to avoid unbounded memory usage
     const oldTransactions = await ctx.db
       .query("pointsTransactions")
       .withIndex("by_created", (q) => q.lt("createdAt", oneYearAgo))
-      .collect();
+      .take(BATCH_SIZE);
 
     // Filter for "earn" types (since the index doesn't include type)
     const earnTransactions = oldTransactions.filter(tx => tx.type === "earn" || tx.type === "bonus");
 
+    if (earnTransactions.length === 0) {
+      return { usersAffected: 0, totalExpired: 0, hasMore: false };
+    }
+
     // Group by userId and sum points
-    const expiryMap = new Map();
+    const expiryMap = new Map<string, number>();
     for (const tx of earnTransactions) {
       const current = expiryMap.get(tx.userId) || 0;
       expiryMap.set(tx.userId, current + tx.amount);
@@ -32,23 +38,31 @@ export const expireOldPoints = internalMutation({
     let totalExpired = 0;
 
     for (const [userId, points] of expiryMap.entries()) {
-      // Check if user still has available points to expire
-      const balance = await ctx.db
-        .query("pointsBalance")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .first();
+      try {
+        // L4 fix: Error isolation - one user's failure doesn't block others
+        const balance = await ctx.db
+          .query("pointsBalance")
+          .withIndex("by_user", (q) => q.eq("userId", userId as never))
+          .first();
 
-      if (balance && balance.availablePoints > 0) {
-        const toExpire = Math.min(balance.availablePoints, points);
-        if (toExpire > 0) {
-          await processExpirePoints(ctx, userId, toExpire, "12_month_expiration");
-          usersAffected++;
-          totalExpired += toExpire;
+        if (balance && balance.availablePoints > 0) {
+          const toExpire = Math.min(balance.availablePoints, points);
+          if (toExpire > 0) {
+            await processExpirePoints(ctx, balance.userId, toExpire, "12_month_expiration");
+            usersAffected++;
+            totalExpired += toExpire;
+          }
         }
+      } catch (error) {
+        console.error(`[expireOldPoints] Failed to expire points for user ${userId}:`, error);
+        // Continue processing other users
       }
     }
 
-    return { usersAffected, totalExpired };
+    // Indicate if there may be more transactions to process
+    const hasMore = oldTransactions.length === BATCH_SIZE;
+
+    return { usersAffected, totalExpired, hasMore };
   }
 });
 

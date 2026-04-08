@@ -90,10 +90,15 @@ process.stdin.on("end", () => {
             `Export "${c.name}" already exists in ${c.existsIn}`
         )
         .join("\n");
-      console.error(
-        `[duplicate-export-hook] Potential export name collision detected:\n${msg}\n\nConsider reusing the existing export or choosing a different name.`
-      );
-      // Exit 0 (warn, don't block) — this is a PostToolUse hook, can't block anyway
+      // Use proper JSON output format instead of console.error (which shows as hook error)
+      const result = {
+        hookSpecificOutput: {
+          hookEventName: "PostToolUse",
+          additionalContext:
+            `[duplicate-export-hook] Potential export name collision detected:\n${msg}\n\nConsider reusing the existing export or choosing a different name.`,
+        },
+      };
+      process.stdout.write(JSON.stringify(result));
       process.exit(0);
     }
 
