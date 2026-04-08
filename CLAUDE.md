@@ -174,6 +174,8 @@ Never add providers outside ClerkProvider that import native modules. `InitialLa
 14. **Convex cross-function calls:** `import { api } from "./_generated/api"` then `ctx.runQuery(api.module.fn, args)`
 15. **Post-refactor validation:** run `npx expo start` + `npm run typecheck` before marking complete. Check JSX tag matching.
 16. **Modular backend:** new functions go in subdirectory files, not barrel files. New tables go in correct `convex/schema/*.ts` domain file.
+17. **Read feature-specific notes before validation** — Before running `/validate-feature`, read the FULL checklist row for that feature in `FEATURE-VALIDATION-CHECKLIST.md`. If there's a REMINDER, custom instruction, or Plan Mode requirement in the Notes column, follow it BEFORE the standard validation workflow. Explicit instructions override default workflow patterns.
+18. **MANDATORY audit after fixes** — After applying fixes (Phase 4 of validate-feature), ALWAYS spawn a fresh `codebase-bug-scrutinizer` agent to independently verify the fixes before committing. The audit agent must have fresh context (no `resume` parameter) and explicitly list all modified files. Fix any issues found by the audit before proceeding to commit. Never skip this step.
 
 ## Keyboard Pattern
 

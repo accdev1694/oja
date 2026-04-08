@@ -22,7 +22,7 @@
 | 10 | Insights (Weekly digest, monthly trends, challenges, personal bests) | :white_check_mark: Done | 2026-04-07 | 10 issues fixed (4C/3H/2M/1L): N+1 batch queries in weeklyDigest, monthlyTrends, personalBests, savingsJar; safeHaptics in insights.tsx; error logging; fixed inline require; HTML entity fix |
 | 11 | Partner / Sharing (Invites, roles, real-time collaboration) | :white_check_mark: Done | 2026-04-08 | 24 issues fixed (2C/10H/6M/6L): crypto-secure invites, N+1 batch queries, pagination limits, safeHaptics, error logging |
 | 12 | Subscriptions (Stripe, feature gating, trial) | :white_check_mark: Done | 2026-04-08 | 12 issues fixed (2C/5H/2M/1L/1R + 1 audit): webhook idempotency, null checks, points reservation expiry, safeHaptics, premium detection alignment |
-| 13 | Points / Gamification (Receipt points, fraud prevention, tiers) | :hourglass: Pending | | |
+| 13 | Points / Gamification (Receipt points, fraud prevention, tiers) | :white_check_mark: Done | 2026-04-08 | 14 issues fixed (4C/3H/3M/2L + 2 audit): month boundary race, refund tracking, auth fix, challenge race, batch processing, N+1 parallel fetch, eventBonus in receipts, cron self-scheduling |
 | 14 | Admin Dashboard (RBAC, user/receipt management, analytics) | :hourglass: Pending | | |
 | 15 | Onboarding (Welcome flow, cuisine, store, pantry seeding) | :hourglass: Pending | | |
 
@@ -184,6 +184,29 @@
 **Audit fixes:**
 - Removed unused `showPaywall` state variable
 - Fixed missing useCallback dependencies (alert, firstName)
+
+### Feature 13: Points / Gamification
+**Critical fixes:**
+- [C1] Month boundary race condition — re-fetch balance before patch to verify limit not exceeded (helpers.ts)
+- [C3] Negative balance via refunds — track actual vs requested refund amount, log shortfall in metadata (mutations.ts)
+- [C4] Missing auth on initializePointsBalance — changed from `mutation` to `internalMutation` (mutations.ts)
+
+**High priority fixes:**
+- [H4] Challenge completion race condition — re-verify completedAt after patch, check existing notification (challenges.ts)
+- [H5] Unbounded table scan in expireOldPoints — batch processing (500 records) with error isolation (admin.ts)
+- [H6] N+1 query in checkDealAchievements — parallel fetch with Promise.all, Map lookup (storeAchievements.ts)
+
+**Low fixes:**
+- [L4] Error isolation in cron jobs — try-catch per user, continue on failure (admin.ts)
+
+**Hook fixes:**
+- Fixed check-duplicate-exports.js output format (JSON hookSpecificOutput instead of console.error)
+- Fixed post-fix-audit.js output format (wrapped in hookSpecificOutput)
+
+**Audit fixes (post-implementation verification):**
+- [Audit-C1] Fixed stale tier/streak calculation — moved recalculation AFTER re-fetch (helpers.ts)
+- [REMAINING-1] Added eventBonus to receipt.pointsEarned calculation — both create and update paths (receipts/core.ts)
+- [REMAINING-3] Added self-scheduling cron loop — expireOldPoints schedules next batch if hasMore (admin.ts)
 
 ---
 
