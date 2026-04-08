@@ -23,7 +23,7 @@
 | 11 | Partner / Sharing (Invites, roles, real-time collaboration) | :white_check_mark: Done | 2026-04-08 | 24 issues fixed (2C/10H/6M/6L): crypto-secure invites, N+1 batch queries, pagination limits, safeHaptics, error logging |
 | 12 | Subscriptions (Stripe, feature gating, trial) | :white_check_mark: Done | 2026-04-08 | 12 issues fixed (2C/5H/2M/1L/1R + 1 audit): webhook idempotency, null checks, points reservation expiry, safeHaptics, premium detection alignment |
 | 13 | Points / Gamification (Receipt points, fraud prevention, tiers) | :white_check_mark: Done | 2026-04-08 | 14 issues fixed (4C/3H/3M/2L + 2 audit): month boundary race, refund tracking, auth fix, challenge race, batch processing, N+1 parallel fetch, eventBonus in receipts, cron self-scheduling |
-| 14 | Admin Dashboard (RBAC, user/receipt management, analytics) | :hourglass: Pending | | |
+| 14 | Admin Dashboard (RBAC, user/receipt management, analytics) | :white_check_mark: Done | 2026-04-08 | 34 issues fixed across 3 commits (2C/4H/3M/1L/12R initial + 9 first audit + 8 second audit): MFA grace period with RBAC support, session OCC cleanup, impersonation token filter+exposure, .take() limits on all analytics, funnel per-step queries, safeHaptics migration (12 files), activeUsers via activityEvents, financial report optimization, AppState-gated auto-refresh, missing indexes, cross-admin SIEM logging |
 | 15 | Onboarding (Welcome flow, cuisine, store, pantry seeding) | :hourglass: Pending | | |
 
 ---
@@ -207,6 +207,46 @@
 - [Audit-C1] Fixed stale tier/streak calculation — moved recalculation AFTER re-fetch (helpers.ts)
 - [REMAINING-1] Added eventBonus to receipt.pointsEarned calculation — both create and update paths (receipts/core.ts)
 - [REMAINING-3] Added self-scheduling cron loop — expireOldPoints schedules next batch if hasMore (admin.ts)
+
+### Feature 14: Admin Dashboard
+**Commits:** `a3a9c4b`, `16876e0`, `a4615b6`
+
+**Critical/High fixes:**
+- [C1] MFA grace period enforcement in requireAdmin — blocks access after 14 days if mfaEnabled is false, uses userRole.grantedAt for RBAC admins (helpers.ts)
+- [C2→H2] Session concurrency defense — removed ineffective re-check, documented Convex OCC reliance (sessions.ts)
+- [C3] .take(50000) limit on getLiveAnalytics queries — prevents unbounded memory (analytics.ts)
+- [C4] .take(10000) limit on computeRevenueReport subscriptions query (analytics.ts)
+- [H2] .take(10000) on getPointsEconomics balances query (analytics.ts)
+- [H3-audit] .take(50000) on recentTxns in getPointsEconomics (analytics.ts)
+- [H4-audit] .take(10000) on all support ticket queries (analytics.ts)
+- [C1-audit] Fixed inverted impersonation token filter — query by expiry only, not usedAt (sessions.ts)
+
+**Medium fixes:**
+- [M1] Auto-refresh interval 30s → 120s with AppState foreground check (OverviewTab.tsx)
+- [M2] Per-step funnel queries using by_event index with Promise.all + stepConversion field (analytics.ts)
+- [H6] Admin audit metadata on adjustPoints (adminId, reason, adjustedBy) (userMgmt.ts)
+- [M1-audit] Removed unnecessary `as string` cast on admin._id (userMgmt.ts)
+- [M3-audit] Aligned activeUsersThisWeek — both precomputed and live paths use activityEvents (analytics.ts, analytics cron)
+- [M5-audit] Removed raw tokenValue from getActiveImpersonationToken response; added stopImpersonationForUser mutation (sessions.ts)
+- [M4-audit] Cross-admin SIEM logging for impersonation stop (sessions.ts)
+
+**Low fixes:**
+- [L5-audit] JavaScript && → q.and() in support ticket filter (analytics.ts)
+- [L1-audit] activeUsersThisWeek uses activityEvents not list updatedAt (analytics.ts)
+- [L2-audit] getFinancialReport queries activeUsers directly, not full getLiveAnalytics (analytics.ts)
+- [L3-audit] Separate AppState listener from interval useEffect (OverviewTab.tsx)
+- [L4-audit] Test timestamps use 6/15 day values instead of fragile 1s (admin-auth.test.ts)
+- [L5-audit-2] Document COGS as rough proxy, add isEstimatedCOGS flag (analytics.ts)
+
+**Frontend migration (R1):**
+- expo-haptics → safeHaptics across 13 admin files (12 tabs/components + ImpersonationBanner)
+
+**Index fixes:**
+- Added .withIndex() to 12 queries across analytics.ts, admin/analytics.ts, userMgmt.ts
+- Added by_timestamp index to activityEvents schema
+
+**Tests:**
+- 4 new MFA grace period tests (isAdmin expired/within, RBAC expired/within)
 
 ---
 
