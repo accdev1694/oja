@@ -134,20 +134,19 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
   // L3 fix: Only auto-refresh when app is in foreground
   const appState = useRef(AppState.currentState);
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | undefined;
-    if (autoRefreshEnabled) {
-      interval = setInterval(() => {
-        if (appState.current === "active") {
-          setRefreshKey(Date.now().toString());
-          setLastUpdated(new Date());
-        }
-      }, 120000); // M1 fix: 2 minutes instead of 30s to reduce query storms
-    }
     const sub = AppState.addEventListener("change", (next) => { appState.current = next; });
-    return () => {
-      if (interval) clearInterval(interval);
-      sub.remove();
-    };
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!autoRefreshEnabled) return;
+    const interval = setInterval(() => {
+      if (appState.current === "active") {
+        setRefreshKey(Date.now().toString());
+        setLastUpdated(new Date());
+      }
+    }, 120000); // M1 fix: 2 minutes instead of 30s to reduce query storms
+    return () => clearInterval(interval);
   }, [autoRefreshEnabled]);
 
   const sortedWidgets = useMemo(() => {

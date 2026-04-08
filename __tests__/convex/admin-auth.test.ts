@@ -177,7 +177,7 @@ describe("admin/helpers", () => {
     });
 
     it("should allow admin within MFA grace period", async () => {
-      const recentAdmin = { _id: "user1", clerkId: "clerk_123", isAdmin: true, mfaEnabled: false, adminGrantedAt: Date.now() - 7 * 24 * 60 * 60 * 1000 }; // 7 days ago — well within 14-day grace
+      const recentAdmin = { _id: "user1", clerkId: "clerk_123", isAdmin: true, mfaEnabled: false, adminGrantedAt: Date.now() - 6 * 24 * 60 * 60 * 1000 }; // 6 days ago — safely within 14-day grace
       mockCtx.auth.getUserIdentity.mockResolvedValue({ subject: "clerk_123" });
       mockCtx.db.first.mockResolvedValueOnce(recentAdmin);
       mockCtx.db.first.mockResolvedValueOnce({ roleId: "role1" });
@@ -203,7 +203,7 @@ describe("admin/helpers", () => {
       const rbacAdmin = { _id: "user1", clerkId: "clerk_123", isAdmin: false, mfaEnabled: false };
       mockCtx.auth.getUserIdentity.mockResolvedValue({ subject: "clerk_123" });
       mockCtx.db.first.mockResolvedValueOnce(rbacAdmin);
-      mockCtx.db.first.mockResolvedValueOnce({ roleId: "role1", grantedAt: Date.now() - 7 * 24 * 60 * 60 * 1000 }); // 7 days ago — within grace
+      mockCtx.db.first.mockResolvedValueOnce({ roleId: "role1", grantedAt: Date.now() - 6 * 24 * 60 * 60 * 1000 }); // 6 days ago — safely within grace
 
       const result = await adminRequireAdmin(
         mockCtx as unknown as Parameters<typeof adminRequireAdmin>[0]

@@ -164,15 +164,11 @@ export const getActiveImpersonationToken = query({
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
 
+    // A non-expired token means impersonation could be active (regardless of usedAt stamp)
     const token = await ctx.db
       .query("impersonationTokens")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("usedAt"), undefined),
-          q.gt(q.field("expiresAt"), Date.now())
-        )
-      )
+      .filter((q) => q.gt(q.field("expiresAt"), Date.now()))
       .first();
 
     if (!token) return null;
@@ -218,30 +214,37 @@ export const stopImpersonation = mutation({
 export const stopImpersonationForUser = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    const admin = await requireAdmin(ctx);
 
     const token = await ctx.db
       .query("impersonationTokens")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("usedAt"), undefined),
-          q.gt(q.field("expiresAt"), Date.now())
-        )
-      )
+      .filter((q) => q.gt(q.field("expiresAt"), Date.now()))
       .first();
 
     if (token) {
       await ctx.db.patch(token._id, { expiresAt: Date.now() - 1 });
 
       await ctx.db.insert("adminLogs", {
-        adminUserId: token.createdBy,
+        adminUserId: admin._id,
         action: "stop_impersonation",
         targetType: "user",
         targetId: args.userId,
-        details: `Stopped impersonation of user ${args.userId}`,
+        details: `Admin ${admin._id} stopped impersonation of user ${args.userId}` +
+          (token.createdBy !== admin._id ? ` (token created by ${token.createdBy})` : ""),
         createdAt: Date.now(),
       });
+
+      // Log cross-admin termination for security visibility
+      if (token.createdBy !== admin._id) {
+        await logToSIEM(ctx as MutationCtx, {
+          action: "cross_admin_impersonation_stop",
+          userId: admin._id,
+          status: "success",
+          severity: "medium",
+          details: `Admin ${admin._id} terminated impersonation session created by ${token.createdBy} for user ${args.userId}`,
+        });
+      }
     }
 
     return { success: true };

@@ -184,12 +184,15 @@ export const getFinancialReport = query({
       .withIndex("by_timestamp", q => q.gte("timestamp", weekAgo))
       .take(50000);
     const activeUsers = new Set(recentActivity.map(e => e.userId.toString())).size;
+    // Rough proxy: £0.50/active user/week for compute, API, storage costs
+    // TODO: Replace with actual aiUsage-based COGS calculation
     const estimatedCOGS: number = activeUsers * 0.50;
-    
+
     const netRevenue: number = grossRevenue - estimatedTax - estimatedCOGS;
-    
+
     return {
       grossRevenue,
+      isEstimatedCOGS: true, // Flag so UI can label appropriately
       estimatedTax,
       estimatedCOGS,
       netRevenue,
@@ -231,16 +234,16 @@ export const getFunnelAnalytics = query({
     let baseCount = 0;
     let previousCount = 0;
     for (const { step, uniqueUsers } of stepResults) {
-      if (step === "signup") {
+      const isFirst = step === "signup";
+      if (isFirst) {
         baseCount = uniqueUsers;
-        previousCount = uniqueUsers;
       }
 
       funnel.push({
         step,
         count: uniqueUsers,
         percentage: baseCount > 0 ? (uniqueUsers / baseCount) * 100 : 0,
-        stepConversion: previousCount > 0 ? (uniqueUsers / previousCount) * 100 : 0,
+        stepConversion: isFirst ? 100 : (previousCount > 0 ? (uniqueUsers / previousCount) * 100 : 0),
       });
       previousCount = uniqueUsers;
     }
@@ -346,8 +349,11 @@ export const getAdminSupportSummary = query({
       ctx.db.query("supportTickets").withIndex("by_status", q => q.eq("status", "resolved")).take(10000).then(res => res.length),
     ]);
 
+    // Note: Cannot index on undefined assignedTo — filter scan is unavoidable here.
+    // Mitigated by .take(10000) cap. Consider adding isAssigned boolean field if this becomes a bottleneck.
     const unassignedTickets = await ctx.db
       .query("supportTickets")
+      .withIndex("by_status")
       .filter(q => q.and(q.eq(q.field("assignedTo"), undefined), q.neq(q.field("status"), "resolved")))
       .take(10000);
     const unassigned = unassignedTickets.length;

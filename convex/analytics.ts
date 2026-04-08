@@ -20,7 +20,7 @@ export const computeDailyMetrics = internalMutation({
     console.log(`[Analytics] Computing daily metrics for ${today}...`);
 
     // === USER METRICS ===
-    const totalUsers = await ctx.db.query("users").collect().then(u => u.length); // count() not available in some versions, but at least we don't hold the whole array
+    const totalUsers = await ctx.db.query("users").withIndex("by_created").collect().then(u => u.length);
     
     const newUsersToday = await ctx.db
       .query("users")
@@ -40,18 +40,19 @@ export const computeDailyMetrics = internalMutation({
       .collect()
       .then(u => u.length);
 
-    // Active users: created or updated a list in the last 7 days
-    const recentActiveLists = await ctx.db
-      .query("shoppingLists")
-      .withIndex("by_updated", q => q.gte("updatedAt", oneWeekAgo))
-      .collect();
+    // Active users: had explicit activity events in the last 7 days
+    // (consistent with live analytics path in admin/analytics.ts)
+    const recentActivityEvents = await ctx.db
+      .query("activityEvents")
+      .withIndex("by_timestamp", q => q.gte("timestamp", oneWeekAgo))
+      .take(50000);
 
     const activeUsersThisWeek = new Set(
-      recentActiveLists.map((l) => l.userId.toString())
+      recentActivityEvents.map((e) => e.userId.toString())
     ).size;
 
     // === LIST METRICS ===
-    const totalLists = await ctx.db.query("shoppingLists").collect().then(l => l.length);
+    const totalLists = await ctx.db.query("shoppingLists").withIndex("by_created").collect().then(l => l.length);
     
     const completedLists = await ctx.db
       .query("shoppingLists")
@@ -66,7 +67,7 @@ export const computeDailyMetrics = internalMutation({
       .then(l => l.length);
 
     // === RECEIPT METRICS ===
-    const totalReceipts = await ctx.db.query("receipts").collect().then(r => r.length);
+    const totalReceipts = await ctx.db.query("receipts").withIndex("by_created").collect().then(r => r.length);
     
     const receiptsToday = await ctx.db
       .query("receipts")

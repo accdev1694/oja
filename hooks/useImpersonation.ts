@@ -9,10 +9,8 @@ import { useCurrentUser } from "./useCurrentUser";
 export function useImpersonation() {
   const { user } = useCurrentUser();
   
-  // We check the impersonationTokens table for a token that:
-  // 1. Matches this user
-  // 2. Is NOT expired
-  // 3. Was marked as 'used' (meaning an admin is currently using it)
+  // Check for a non-expired impersonation token for this user.
+  // A non-expired token means an admin may be viewing this account.
   const activeToken = useQuery(
     api.admin.getActiveImpersonationToken,
     user?._id ? { userId: user._id } : "skip"
