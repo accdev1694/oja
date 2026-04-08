@@ -73,34 +73,26 @@ interface OcrData {
 }
 
 export async function validateReceiptData(
-  ctx: GenericMutationCtx<DataModel>, 
-  userId: Id<"users">, 
-  imageHash: string, 
+  ctx: GenericMutationCtx<DataModel>,
+  userId: Id<"users">,
+  _imageHash: string, // M1 fix: duplicate check moved to caller (hash-first pattern)
   ocrData: OcrData
 ): Promise<ValidationResult> {
   const flags: string[] = [];
   let isValid = true;
   let reason: string | undefined;
 
-  // 1. Duplicate detection
-  const duplicates = await ctx.db
-    .query("receiptHashes")
-    .withIndex("by_hash", (q) => q.eq("imageHash", imageHash))
-    .collect();
-    
-  if (duplicates.length > 0) {
-    flags.push("duplicate_hash");
-    isValid = false;
-    reason = "This exact receipt image has already been submitted.";
-    return { isValid, flags, reason };
-  }
+  // NOTE: Duplicate detection removed - caller now uses hash-first pattern:
+  // 1. Check if hash exists → return early if duplicate
+  // 2. Insert hash BEFORE calling this function
+  // This eliminates race conditions and redundant queries.
 
-  // 2. OCR Confidence
+  // 1. OCR Confidence
   if (ocrData.imageQuality != null && ocrData.imageQuality < 70) {
     flags.push("low_confidence");
   }
 
-  // 3. Date validation
+  // 2. Date validation
   if (ocrData.purchaseDate) {
     const purchaseTime = new Date(ocrData.purchaseDate).getTime();
     const now = Date.now();
@@ -117,12 +109,12 @@ export async function validateReceiptData(
     }
   }
 
-  // 4. Store validation
+  // 3. Store validation
   if (!isValidUKStore(ocrData.storeName ?? "")) {
     flags.push("unknown_store");
   }
 
-  // 5. Price validation
+  // 4. Price validation
   if (ocrData.items) {
     let suspiciousPrices = 0;
     for (const item of ocrData.items) {
@@ -135,7 +127,7 @@ export async function validateReceiptData(
     }
   }
 
-  // 6. Rate limiting (Daily) — query by createdAt (upload time) not purchaseDate
+  // 5. Rate limiting (Daily) — query by createdAt (upload time) not purchaseDate
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
 
@@ -152,7 +144,7 @@ export async function validateReceiptData(
     return { isValid, flags, reason };
   }
 
-  // 7. Pattern Detection
+  // 6. Pattern Detection
   const recentScans = await ctx.db
     .query("receipts")
     .withIndex("by_user", (q) => q.eq("userId", userId))

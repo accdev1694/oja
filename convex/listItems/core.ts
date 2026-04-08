@@ -1,21 +1,16 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import { api } from "../_generated/api";
-import { 
-  requireUser, 
-  optionalUser, 
-  recalculateListTotal, 
+import {
+  requireUser,
+  optionalUser,
+  recalculateListTotal,
   findDuplicateListItem,
-  findDuplicatePantryItem 
+  findDuplicatePantryItem
 } from "./helpers";
 import { getUserListPermissions } from "../partners";
-import { getIconForItem } from "../iconMapping";
-import { canAddPantryItem } from "../lib/featureGating";
 import { toGroceryTitleCase } from "../lib/titleCase";
 import { isValidSize as isSizeValid, cleanItemForStorage } from "../lib/itemNameParser";
 import { getEmergencyPriceEstimate } from "../lib/priceValidator";
-import { resolveVariantWithPrice } from "../lib/priceResolver";
-import { enrichGlobalFromProductScan } from "../lib/globalEnrichment";
 import { Id } from "../_generated/dataModel";
 import { checkRateLimit as performRateLimitCheck } from "../lib/rateLimit";
 
@@ -58,23 +53,9 @@ export const create = mutation({
     const rateLimit = await performRateLimitCheck(ctx, user._id, "list_items", 100);
     if (!rateLimit.allowed) throw new Error("Rate limit exceeded");
 
+    // Early clean to get normalized name
     const earlyCleaned = cleanItemForStorage(toGroceryTitleCase(args.name), args.size, args.unit);
     const name = earlyCleaned.name;
-    const existingItem = await findDuplicateListItem(ctx, args.listId, name, earlyCleaned.size);
-    
-    if (existingItem) {
-      if (!args.force) return {
-        status: "duplicate",
-        existingItemId: existingItem._id,
-        existingName: existingItem.name,
-        existingQuantity: existingItem.quantity,
-        existingSize: existingItem.size,
-        isChecked: existingItem.isChecked,
-      };
-      await ctx.db.patch(existingItem._id, { quantity: existingItem.quantity + args.quantity, updatedAt: Date.now() });
-      await recalculateListTotal(ctx, args.listId);
-      return { status: "bumped", itemId: existingItem._id };
-    }
 
     let size = args.size;
     let unit = args.unit;
@@ -83,6 +64,7 @@ export const create = mutation({
     let priceConfidence = args.priceConfidence;
     let pantryItemId = args.pantryItemId;
 
+    // Check pantry for size/price hints
     if (!pantryItemId) {
       const existingPantry = await findDuplicatePantryItem(ctx, user._id, name, size);
       if (existingPantry) {
@@ -99,6 +81,7 @@ export const create = mutation({
       }
     }
 
+    // Apply emergency estimates if needed
     if (estimatedPrice === undefined || !isSizeValid(size, unit)) {
       const emergency = getEmergencyPriceEstimate(name, args.category);
       if (estimatedPrice === undefined) {
@@ -112,7 +95,26 @@ export const create = mutation({
       }
     }
 
+    // Final clean with resolved size/unit
     const cleaned = cleanItemForStorage(name, size, unit);
+
+    // Check for duplicates using final cleaned values
+    const existingItem = await findDuplicateListItem(ctx, args.listId, cleaned.name, cleaned.size);
+
+    if (existingItem) {
+      if (!args.force) return {
+        status: "duplicate",
+        existingItemId: existingItem._id,
+        existingName: existingItem.name,
+        existingQuantity: existingItem.quantity,
+        existingSize: existingItem.size,
+        isChecked: existingItem.isChecked,
+      };
+      await ctx.db.patch(existingItem._id, { quantity: existingItem.quantity + args.quantity, updatedAt: Date.now() });
+      await recalculateListTotal(ctx, args.listId);
+      return { status: "bumped", itemId: existingItem._id };
+    }
+
     const itemId = await ctx.db.insert("listItems", {
       listId: args.listId,
       userId: user._id,
@@ -162,7 +164,6 @@ export const update = mutation({
 
     const updates = {} as Record<string, unknown>;
     updates.updatedAt = Date.now();
-    if (args.name !== undefined) updates.name = toGroceryTitleCase(args.name);
     if (args.quantity !== undefined) updates.quantity = args.quantity;
     if (args.priority !== undefined) updates.priority = args.priority;
     if (args.notes !== undefined) updates.notes = args.notes;
@@ -175,10 +176,20 @@ export const update = mutation({
       }
     }
 
-    if (args.size !== undefined && args.size !== item.size) {
-      if (!item.originalSize && item.size) updates.originalSize = item.size;
-      updates.size = args.size;
-      updates.sizeOverride = true;
+    // Clean name/size/unit through mandatory parser
+    const newName = args.name !== undefined ? toGroceryTitleCase(args.name) : item.name;
+    const newSize = args.size !== undefined ? args.size : item.size;
+    const newUnit = args.unit !== undefined ? args.unit : item.unit;
+
+    if (args.name !== undefined || args.size !== undefined || args.unit !== undefined) {
+      const cleaned = cleanItemForStorage(newName, newSize, newUnit);
+      if (args.name !== undefined) updates.name = cleaned.name;
+      if (args.size !== undefined && args.size !== item.size) {
+        if (!item.originalSize && item.size) updates.originalSize = item.size;
+        updates.size = cleaned.size;
+        updates.unit = cleaned.unit;
+        updates.sizeOverride = true;
+      }
     }
 
     await ctx.db.patch(args.id, updates);
@@ -207,15 +218,20 @@ export const toggleChecked = mutation({
       });
     }
 
+    // C3 fix: Re-read list to get freshest store info (minimizes stale-read window
+    // in case another user switched stores via switchStoreMidShop)
+    const freshList = await ctx.db.get(item.listId);
+
     // Record which store the item was purchased at
     await ctx.db.patch(args.id, {
       isChecked: newChecked,
       checkedAt: newChecked ? Date.now() : undefined,
       checkedByUserId: newChecked ? user._id : undefined,
-      purchasedAtStoreId: newChecked ? (list?.normalizedStoreId ?? undefined) : undefined,
-      purchasedAtStoreName: newChecked ? (list?.storeName ?? undefined) : undefined,
+      purchasedAtStoreId: newChecked ? (freshList?.normalizedStoreId ?? undefined) : undefined,
+      purchasedAtStoreName: newChecked ? (freshList?.storeName ?? undefined) : undefined,
       updatedAt: Date.now(),
     });
+    await recalculateListTotal(ctx, item.listId);
     return await ctx.db.get(args.id);
   },
 });
@@ -228,7 +244,9 @@ export const remove = mutation({
     if (!item) return { success: true };
     const perms = await getUserListPermissions(ctx, item.listId, user._id);
     if (!perms.canEdit) throw new Error("Unauthorized");
+    const listId = item.listId;
     await ctx.db.delete(args.id);
+    await recalculateListTotal(ctx, listId);
     return { success: true };
   },
 });
@@ -238,210 +256,21 @@ export const removeMultiple = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     let deleted = 0;
+    const affectedLists = new Set<Id<"shoppingLists">>();
     for (const id of args.ids) {
       const item = await ctx.db.get(id);
       if (!item) continue;
       const perms = await getUserListPermissions(ctx, item.listId, user._id);
       if (perms.canEdit) {
+        affectedLists.add(item.listId);
         await ctx.db.delete(id);
         deleted++;
       }
+    }
+    for (const listId of affectedLists) {
+      await recalculateListTotal(ctx, listId);
     }
     return { success: true, deleted };
   },
 });
 
-export const addBatchFromScan = mutation({
-  args: {
-    listId: v.id("shoppingLists"),
-    items: v.array(
-      v.object({
-        name: v.string(),
-        category: v.string(),
-        size: v.optional(v.string()),
-        unit: v.optional(v.string()),
-        quantity: v.optional(v.number()),
-        estimatedPrice: v.optional(v.number()),
-        brand: v.optional(v.string()),
-        confidence: v.optional(v.number()),
-        imageStorageId: v.optional(v.string()),
-      })
-    ),
-  },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const perms = await getUserListPermissions(ctx, args.listId, user._id);
-    if (!perms.canEdit) throw new Error("Unauthorized");
-
-    const now = Date.now();
-    let added = 0;
-    let bumped = 0;
-
-    for (const item of args.items) {
-      const existing = await findDuplicateListItem(ctx, args.listId, item.name, item.size);
-      if (existing) {
-        await ctx.db.patch(existing._id, { quantity: existing.quantity + (item.quantity || 1), updatedAt: now });
-        bumped++;
-      } else {
-        const cleaned = cleanItemForStorage(item.name, item.size, item.unit);
-
-        // Zero-blank-price: fallback to emergency estimate when scan has no price
-        let finalPrice = item.estimatedPrice;
-        let priceSource = "ai" as "personal" | "crowdsourced" | "ai" | "manual";
-        let priceConfidence = 0.5;
-        if (finalPrice === undefined) {
-          const emergency = getEmergencyPriceEstimate(cleaned.name, item.category);
-          finalPrice = emergency.price;
-          priceSource = "ai";
-          priceConfidence = 0.3;
-        }
-
-        await ctx.db.insert("listItems", {
-          listId: args.listId,
-          userId: user._id,
-          name: cleaned.name,
-          category: item.category,
-          quantity: item.quantity || 1,
-          size: cleaned.size,
-          unit: cleaned.unit,
-          estimatedPrice: finalPrice,
-          priceSource,
-          priceConfidence,
-          isChecked: false,
-          autoAdded: false,
-          priority: "should-have",
-          createdAt: now,
-          updatedAt: now,
-        });
-        added++;
-      }
-      await enrichGlobalFromProductScan(ctx, item, user._id);
-    }
-
-    await recalculateListTotal(ctx, args.listId);
-    return { added, bumped };
-  },
-});
-
-export const addItemMidShop = mutation({
-  args: {
-    listId: v.id("shoppingLists"),
-    name: v.string(),
-    quantity: v.number(),
-    actualPrice: v.optional(v.number()),
-    storeId: v.optional(v.string()),
-    storeName: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const perms = await getUserListPermissions(ctx, args.listId, user._id);
-    if (!perms.canEdit) throw new Error("Unauthorized");
-
-    const cleaned = cleanItemForStorage(toGroceryTitleCase(args.name), undefined, undefined);
-    const itemId = await ctx.db.insert("listItems", {
-      listId: args.listId,
-      userId: user._id,
-      name: cleaned.name,
-      size: cleaned.size,
-      unit: cleaned.unit,
-      quantity: args.quantity,
-      actualPrice: args.actualPrice,
-      estimatedPrice: args.actualPrice,
-      priceSource: "manual",
-      isChecked: true,
-      checkedAt: Date.now(),
-      checkedByUserId: user._id,
-      addedMidShop: true,
-      purchasedAtStoreId: args.storeId,
-      purchasedAtStoreName: args.storeName,
-      autoAdded: false,
-      priority: "should-have",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-
-    await recalculateListTotal(ctx, args.listId);
-    return itemId;
-  },
-});
-
-export const addFromPantryBulk = mutation({
-  args: {
-    listId: v.id("shoppingLists"),
-    pantryItemIds: v.array(v.id("pantryItems")),
-  },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const perms = await getUserListPermissions(ctx, args.listId, user._id);
-    if (!perms.canEdit) throw new Error("Unauthorized");
-
-    let added = 0;
-    const now = Date.now();
-
-    for (const pid of args.pantryItemIds) {
-      const pantryItem = await ctx.db.get(pid);
-      if (!pantryItem || pantryItem.userId !== user._id) continue;
-
-      const existing = await findDuplicateListItem(ctx, args.listId, pantryItem.name, pantryItem.defaultSize);
-      if (existing) continue;
-
-      const cleaned = cleanItemForStorage(pantryItem.name, pantryItem.defaultSize, pantryItem.defaultUnit);
-      await ctx.db.insert("listItems", {
-        listId: args.listId,
-        userId: user._id,
-        pantryItemId: pid,
-        name: cleaned.name,
-        category: pantryItem.category,
-        quantity: 1,
-        size: cleaned.size,
-        unit: cleaned.unit,
-        estimatedPrice: pantryItem.lastPrice,
-        priceSource: "personal",
-        isChecked: false,
-        autoAdded: true,
-        priority: "should-have",
-        createdAt: now,
-        updatedAt: now,
-      });
-      added++;
-    }
-
-    await recalculateListTotal(ctx, args.listId);
-    return { added };
-  },
-});
-
-export const addAndSeedPantry = mutation({
-  args: {
-    listId: v.id("shoppingLists"),
-    name: v.string(),
-    category: v.string(),
-    quantity: v.number(),
-    size: v.optional(v.string()),
-    unit: v.optional(v.string()),
-    estimatedPrice: v.optional(v.number()),
-    force: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args): Promise<{ status: string; itemId?: Id<"listItems">; existingItemId?: Id<"listItems">; [key: string]: unknown }> => {
-    const user = await requireUser(ctx);
-
-    // @ts-ignore
-    const pantryId = await ctx.runMutation(api.pantryItems.create, {
-      name: args.name,
-      category: args.category,
-      stockLevel: "out",
-    }) as Id<"pantryItems">;
-
-    return await ctx.runMutation(api.listItems.create, {
-      listId: args.listId,
-      name: args.name,
-      category: args.category,
-      quantity: args.quantity,
-      size: args.size,
-      unit: args.unit,
-      estimatedPrice: args.estimatedPrice,
-      pantryItemId: pantryId,
-      force: args.force ?? false,
-    });
-  },
-});

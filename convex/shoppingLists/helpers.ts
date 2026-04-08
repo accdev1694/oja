@@ -12,6 +12,7 @@ export async function requireUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"use
     .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .unique();
   if (!user) throw new Error("User not found");
+  if (user.suspended) throw new Error("Account suspended");
   return user;
 }
 
@@ -29,18 +30,15 @@ export async function getNextListNumber(
   ctx: QueryCtx | MutationCtx,
   userId: Id<"users">
 ): Promise<number> {
-  const lists = await ctx.db
+  // Fetch only the most recent list to find the highest listNumber,
+  // rather than collecting ALL user lists.
+  const latest = await ctx.db
     .query("shoppingLists")
     .withIndex("by_user", (q) => q.eq("userId", userId))
-    .collect();
+    .order("desc")
+    .first();
 
-  let max = 0;
-  for (const l of lists) {
-    if (l.listNumber != null && l.listNumber > max) {
-      max = l.listNumber;
-    }
-  }
-  return max + 1;
+  return (latest?.listNumber ?? 0) + 1;
 }
 
 /**

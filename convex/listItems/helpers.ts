@@ -68,27 +68,19 @@ export async function findDuplicatePantryItem(
   name: string,
   size?: string | null,
 ) {
-  const activeItems = await ctx.db
+  // Single query instead of two separate active/archived queries
+  const allItems = await ctx.db
     .query("pantryItems")
-    .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "active"))
+    .withIndex("by_user", (q) => q.eq("userId", userId))
     .collect();
 
-  for (const item of activeItems) {
+  // Prefer active match over archived
+  let archivedMatch = null;
+  for (const item of allItems) {
     if (isDuplicateItem(name, size, item.name, item.defaultSize)) {
-      return item;
+      if (item.status === "active") return item;
+      if (!archivedMatch) archivedMatch = item;
     }
   }
-
-  const archivedItems = await ctx.db
-    .query("pantryItems")
-    .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "archived"))
-    .collect();
-
-  for (const item of archivedItems) {
-    if (isDuplicateItem(name, size, item.name, item.defaultSize)) {
-      return item;
-    }
-  }
-
-  return null;
+  return archivedMatch;
 }

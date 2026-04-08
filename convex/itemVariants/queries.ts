@@ -6,6 +6,7 @@ import {
   getUnitLabel,
 } from "../lib/sizeUtils";
 import { resolvePrice } from "../lib/priceResolver";
+import { getEmergencyPriceEstimate } from "../lib/priceValidator";
 
 // Count-like suffixes that all represent the same "X units" concept
 const COUNT_WORDS = new Set([
@@ -85,7 +86,7 @@ export const getWithPrices = query({
       }
     }
 
-    // Layer 1: Personal priceHistory (if userId provided)
+    // Layer 1: Personal priceHistory (if userId provided) - single batch query
     let personalHistory: {
       normalizedName: string;
       size?: string;
@@ -104,108 +105,116 @@ export const getWithPrices = query({
         .collect();
     }
 
-    // For each variant, look up the best price via cascade
-    const results = await Promise.all(
-      variants.map(async (variant) => {
-        let bestPrice: number | null = null;
-        let bestStore: string | null = null;
-        let reportCount = 0;
-        let priceSource: "personal" | "crowdsourced" | "ai_estimate" = "ai_estimate";
+    // Layer 2: Batch fetch currentPrices for this item (single query instead of N)
+    const allCurrentPrices = await ctx.db
+      .query("currentPrices")
+      .withIndex("by_item", (q) => q.eq("normalizedName", normalizedBase))
+      .collect();
 
-        // Layer 1: Personal priceHistory -- most recent matching entry
-        if (personalHistory.length > 0) {
-          const matching = personalHistory
-            .filter((h) => h.size === variant.size || h.unit === variant.unit)
-            .sort((a, b) => b.purchaseDate - a.purchaseDate);
+    // For each variant, look up the best price via cascade (in-memory)
+    const results = variants.map((variant) => {
+      let bestPrice: number | null = null;
+      let bestStore: string | null = null;
+      let reportCount = 0;
+      let priceSource: "personal" | "crowdsourced" | "ai" = "ai";
 
-          if (matching.length > 0) {
-            bestPrice = matching[0].unitPrice;
-            bestStore = matching[0].storeName;
-            reportCount = matching.length;
-            priceSource = "personal";
-          }
+      // Layer 1: Personal priceHistory -- most recent matching entry
+      // Fix L1: Use AND for precise size+unit matching
+      if (personalHistory.length > 0) {
+        const matching = personalHistory
+          .filter((h) => h.size === variant.size && h.unit === variant.unit)
+          .sort((a, b) => b.purchaseDate - a.purchaseDate);
+
+        if (matching.length > 0) {
+          bestPrice = matching[0].unitPrice;
+          bestStore = matching[0].storeName;
+          reportCount = matching.length;
+          priceSource = "personal";
         }
+      }
 
-        // Layer 2: Crowdsourced currentPrices (region-aware 4-tier priority)
-        if (bestPrice === null) {
-          const prices = await ctx.db
-            .query("currentPrices")
-            .withIndex("by_item", (q) => q.eq("normalizedName", normalizedBase))
-            .collect();
+      // Layer 2: Crowdsourced currentPrices (region-aware 4-tier priority)
+      if (bestPrice === null) {
+        const variantPrices = allCurrentPrices.filter(
+          (p) =>
+            p.variantName === variant.variantName ||
+            p.size === variant.size
+        );
 
-          const variantPrices = prices.filter(
-            (p) =>
-              p.variantName === variant.variantName ||
-              p.size === variant.size
-          );
+        if (variantPrices.length > 0) {
+          const normalizedStore = args.storeName?.toLowerCase().trim();
+          let crowdMatch;
 
-          if (variantPrices.length > 0) {
-            const normalizedStore = args.storeName?.toLowerCase().trim();
-            let crowdMatch;
+          // Priority 1: Store + Region
+          if (normalizedStore && userRegion) {
+            crowdMatch = variantPrices.find(
+              (p) =>
+                (p.storeName?.toLowerCase() === normalizedStore ||
+                  p.normalizedStoreId === normalizedStore) &&
+                p.region === userRegion
+            );
+          }
 
-            // Priority 1: Store + Region
-            if (normalizedStore && userRegion) {
-              crowdMatch = variantPrices.find(
-                (p) =>
-                  (p.storeName?.toLowerCase() === normalizedStore ||
-                    p.normalizedStoreId === normalizedStore) &&
-                  p.region === userRegion
-              );
-            }
-
-            // Priority 2: Store (any region) — pick highest reportCount
-            if (!crowdMatch && normalizedStore) {
-              const storeMatches = variantPrices.filter(
-                (p) =>
-                  p.storeName?.toLowerCase() === normalizedStore ||
-                  p.normalizedStoreId === normalizedStore
-              );
-              if (storeMatches.length > 0) {
-                crowdMatch = storeMatches.sort(
-                  (a, b) => b.reportCount - a.reportCount
-                )[0];
-              }
-            }
-
-            // Priority 3: Region (any store)
-            if (!crowdMatch && userRegion) {
-              crowdMatch = variantPrices.find(
-                (p) => p.region === userRegion
-              );
-            }
-
-            // Priority 4: Most-reported entry (most representative)
-            if (!crowdMatch) {
-              crowdMatch = [...variantPrices].sort(
+          // Priority 2: Store (any region) — pick highest reportCount
+          if (!crowdMatch && normalizedStore) {
+            const storeMatches = variantPrices.filter(
+              (p) =>
+                p.storeName?.toLowerCase() === normalizedStore ||
+                p.normalizedStoreId === normalizedStore
+            );
+            if (storeMatches.length > 0) {
+              crowdMatch = storeMatches.sort(
                 (a, b) => b.reportCount - a.reportCount
               )[0];
             }
+          }
 
-            if (crowdMatch) {
-              bestPrice = crowdMatch.averagePrice ?? crowdMatch.unitPrice;
-              bestStore = crowdMatch.storeName;
-              reportCount = crowdMatch.reportCount;
-              priceSource = "crowdsourced";
-            }
+          // Priority 3: Region (any store)
+          if (!crowdMatch && userRegion) {
+            crowdMatch = variantPrices.find(
+              (p) => p.region === userRegion
+            );
+          }
+
+          // Priority 4: Most-reported entry (most representative)
+          if (!crowdMatch) {
+            crowdMatch = [...variantPrices].sort(
+              (a, b) => b.reportCount - a.reportCount
+            )[0];
+          }
+
+          if (crowdMatch) {
+            bestPrice = crowdMatch.averagePrice ?? crowdMatch.unitPrice;
+            bestStore = crowdMatch.storeName;
+            reportCount = crowdMatch.reportCount;
+            priceSource = "crowdsourced";
           }
         }
+      }
 
-        // Layer 3: AI-estimated price from the variant itself
-        if (bestPrice === null && variant.estimatedPrice != null) {
-          bestPrice = variant.estimatedPrice;
-          priceSource = "ai_estimate";
-          reportCount = 0;
-        }
+      // Layer 3: AI-estimated price from the variant itself
+      if (bestPrice === null && variant.estimatedPrice != null) {
+        bestPrice = variant.estimatedPrice;
+        priceSource = "ai";
+        reportCount = 0;
+      }
 
-        return {
-          ...variant,
-          price: bestPrice,
-          storeName: bestStore,
-          reportCount,
-          priceSource,
-        };
-      })
-    );
+      // M2: Emergency fallback - ensure zero-blank-price
+      if (bestPrice === null) {
+        const emergency = getEmergencyPriceEstimate(variant.variantName || args.baseItem, variant.category);
+        bestPrice = emergency.price;
+        priceSource = "ai";
+        reportCount = 0;
+      }
+
+      return {
+        ...variant,
+        price: bestPrice,
+        storeName: bestStore,
+        reportCount,
+        priceSource,
+      };
+    });
 
     // Sort by commonality (most common first), then by price
     return results.sort((a, b) => {

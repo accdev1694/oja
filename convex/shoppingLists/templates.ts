@@ -57,7 +57,14 @@ export const createFromReceipt = mutation({
       updatedAt: now,
     });
 
-    await trackFunnelEvent(ctx, user._id, "first_list");
+    // Only track "first_list" funnel event if this is actually the user's first list
+    const existingLists = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+    if (!existingLists || existingLists._id === listId) {
+      await trackFunnelEvent(ctx, user._id, "first_list");
+    }
 
     const seenNames = new Set<string>();
     for (const item of receipt.items) {
@@ -65,8 +72,9 @@ export const createFromReceipt = mutation({
       if (seenNames.has(normalizedName)) continue;
       seenNames.add(normalizedName);
 
-      const size = (item).size as string | undefined;
-      const unit = (item).unit as string | undefined;
+      const receiptItem = item as { name: string; category?: string; quantity: number; unitPrice: number; size?: string; unit?: string };
+      const size = receiptItem.size;
+      const unit = receiptItem.unit;
       const cleaned = cleanItemForStorage(toGroceryTitleCase(item.name), size, unit);
 
       await ctx.db.insert("listItems", {
@@ -131,7 +139,14 @@ export const createFromTemplate = mutation({
       updatedAt: now,
     });
 
-    await trackFunnelEvent(ctx, user._id, "first_list");
+    // Only track "first_list" funnel event if this is actually the user's first list
+    const existingListForTemplate = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+    if (!existingListForTemplate || existingListForTemplate._id === newListId) {
+      await trackFunnelEvent(ctx, user._id, "first_list");
+    }
     await trackActivity(ctx, user._id, "create_list", { listId: newListId, name: args.newListName });
 
     for (const item of sourceItems) {

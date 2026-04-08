@@ -197,6 +197,10 @@ export const upsertAIEstimate = internalMutation({
 export const getByItemName = query({
   args: { normalizedName: v.string() },
   handler: async (ctx, args) => {
+    // Require authentication to prevent bulk scraping of price data
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+
     return await ctx.db
       .query("currentPrices")
       .withIndex("by_item", (q) => q.eq("normalizedName", args.normalizedName))

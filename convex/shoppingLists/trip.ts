@@ -1,12 +1,13 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import { 
-  requireUser, 
-  optionalUser, 
-  requireEditableList 
+import {
+  requireUser,
+  optionalUser,
+  requireEditableList
 } from "./helpers";
-import { 
-  getStoreInfoSafe, 
+import {
+  getStoreInfoSafe,
+  isValidStoreId,
 } from "../lib/storeNormalizer";
 import { getReceiptIds } from "../lib/receiptHelpers";
 import { getUserListPermissions } from "../partners";
@@ -26,6 +27,11 @@ export const markTripStart = mutation({
 
     const perms = await getUserListPermissions(ctx, args.id, user._id);
     if (!perms.canEdit) throw new Error("Unauthorized");
+
+    // H2 fix: Validate store ID if provided
+    if (args.storeId && !isValidStoreId(args.storeId)) {
+      throw new Error(`Invalid store ID: ${args.storeId}`);
+    }
 
     if (!list.shoppingStartedAt) {
       // Seed the initial store into storeSegments so the full trip journey
@@ -75,7 +81,14 @@ export const finishTrip = mutation({
     for (const item of items) {
       if (!item.isChecked) continue;
       const storeId = item.purchasedAtStoreId ?? list.normalizedStoreId ?? "unknown";
-      const storeName = item.purchasedAtStoreName ?? list.storeName ?? "Unknown";
+      // H3/M3 fix: Look up canonical store name instead of using "Unknown" fallback
+      let storeName = item.purchasedAtStoreName ?? list.storeName;
+      if (!storeName && storeId !== "unknown") {
+        const storeInfo = getStoreInfoSafe(storeId);
+        storeName = storeInfo?.displayName ?? "Unknown Store";
+      } else if (!storeName) {
+        storeName = "Unknown Store";
+      }
       const price = item.actualPrice ?? item.estimatedPrice ?? 0;
       const existing = storeMap.get(storeId);
       if (existing) {
@@ -119,6 +132,17 @@ export const switchStoreMidShop = mutation({
     
     const perms = await getUserListPermissions(ctx, args.listId, user._id);
     if (!perms.canEdit) throw new Error("Unauthorized");
+
+    // M2 fix: Prevent no-op switch to same store
+    if (list.normalizedStoreId === args.newStoreId) {
+      return {
+        success: true,
+        storeName: list.storeName ?? "Unknown",
+        storeId: args.newStoreId,
+        segmentCount: list.storeSegments?.length ?? 0,
+        alreadyAtStore: true,
+      };
+    }
 
     const storeInfo = getStoreInfoSafe(args.newStoreId);
     if (!storeInfo) throw new Error(`Invalid store: ${args.newStoreId}`);

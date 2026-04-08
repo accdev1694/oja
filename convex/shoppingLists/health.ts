@@ -35,13 +35,15 @@ export const pruneStaleHealthAnalyses = internalMutation({
   args: {},
   handler: async (ctx) => {
     const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    const listsWithAnalysis = await ctx.db
+    // Use by_status index to only scan active lists (archived/completed lists
+    // will be cleaned up naturally when they expire). This avoids a full table scan.
+    const activeLists = await ctx.db
       .query("shoppingLists")
-      .filter((q) => q.neq(q.field("healthAnalysis"), undefined))
+      .withIndex("by_status", (q) => q.eq("status", "active"))
       .collect();
 
     let prunedCount = 0;
-    for (const list of listsWithAnalysis) {
+    for (const list of activeLists) {
       if (list.healthAnalysis && list.healthAnalysis.updatedAt < thirtyDaysAgo) {
         await ctx.db.patch(list._id, {
           healthAnalysis: undefined,

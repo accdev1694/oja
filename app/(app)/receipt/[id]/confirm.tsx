@@ -146,13 +146,14 @@ export default function ConfirmReceiptScreen() {
         onPointsEarned(updatedReceipt.pointsEarned);
       }
       await savePriceHistory({ receiptId }); await upsertCurrentPrices({ receiptId });
-      try { await improveArchivedPrices({ receiptId }); } catch { /* non-critical */ }
+      // M2 fix: Log non-critical errors for debugging instead of silent swallowing
+      try { await improveArchivedPrices({ receiptId }); } catch (e) { console.warn("[confirm] improveArchivedPrices failed:", e); }
       let listPricesUpdated = 0;
-      try { const r = await refreshActiveListPrices({ receiptId }); listPricesUpdated = r.updated; } catch { /* non-critical */ }
+      try { const r = await refreshActiveListPrices({ receiptId }); listPricesUpdated = r.updated; } catch (e) { console.warn("[confirm] refreshActiveListPrices failed:", e); }
       let pendingMatches = 0;
-      try { const m = await processReceiptMatching({ receiptId }); pendingMatches = m.pendingCount; listPricesUpdated += m.autoMatched; } catch { /* non-critical */ }
+      try { const m = await processReceiptMatching({ receiptId }); pendingMatches = m.pendingCount; listPricesUpdated += m.autoMatched; } catch (e) { console.warn("[confirm] processReceiptMatching failed:", e); }
       const alerts = await checkPriceAlerts({ receiptId });
-      try { await updateStreak({ type: "receipt_scanner" }); if (activeChallenge && activeChallenge.type === "scan_receipts" && !activeChallenge.completedAt) await updateChallengeProgress({ challengeId: activeChallenge._id, increment: 1 }); } catch { /* non-critical */ }
+      try { await updateStreak({ type: "receipt_scanner" }); if (activeChallenge && activeChallenge.type === "scan_receipts" && !activeChallenge.completedAt) await updateChallengeProgress({ challengeId: activeChallenge._id, increment: 1 }); } catch (e) { console.warn("[confirm] streak/challenge update failed:", e); }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const goSaved = () => { if (pendingMatches > 0) setShowUnmatchedModal(true); else { setReceiptSaved(true); setIsInitialized(false); } };
       if (alerts && alerts.length > 0) {

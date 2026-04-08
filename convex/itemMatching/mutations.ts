@@ -167,13 +167,16 @@ export const processReceiptMatching = mutation({
 
         // Update the matched item's price if it's a list item
         if (result.bestMatch.type === "list_item") {
-          await ctx.db.patch(result.bestMatch.id as Id<"listItems">, {
-            estimatedPrice: result.receiptItem.unitPrice,
-            priceSource: "personal",
-            priceConfidence: 0.95,
-            updatedAt: now,
-          });
-          autoMatched++;
+          const matchedItemId = ctx.db.normalizeId("listItems", result.bestMatch.id as string);
+          if (matchedItemId) {
+            await ctx.db.patch(matchedItemId, {
+              estimatedPrice: result.receiptItem.unitPrice,
+              priceSource: "personal",
+              priceConfidence: 0.95,
+              updatedAt: now,
+            });
+            autoMatched++;
+          }
         }
       }
     }
@@ -236,22 +239,28 @@ export const confirmMatch = mutation({
 
     // Update the matched item's price
     if (args.matchType === "list_item" && args.itemId) {
-      const listItem = await ctx.db.get(args.itemId as Id<"listItems">);
-      if (listItem) {
-        await ctx.db.patch(args.itemId as Id<"listItems">, {
-          estimatedPrice: pendingMatch.receiptItemPrice,
-          priceSource: "personal",
-          priceConfidence: 0.95,
-          updatedAt: now,
-        });
+      const listItemId = ctx.db.normalizeId("listItems", args.itemId);
+      if (listItemId) {
+        const listItem = await ctx.db.get(listItemId);
+        if (listItem) {
+          await ctx.db.patch(listItemId, {
+            estimatedPrice: pendingMatch.receiptItemPrice,
+            priceSource: "personal",
+            priceConfidence: 0.95,
+            updatedAt: now,
+          });
+        }
       }
     } else if (args.matchType === "pantry_item" && args.itemId) {
-      const pantryItem = await ctx.db.get(args.itemId as Id<"pantryItems">);
-      if (pantryItem) {
-        await ctx.db.patch(args.itemId as Id<"pantryItems">, {
-          lastPrice: pendingMatch.receiptItemPrice,
-          updatedAt: now,
-        });
+      const pantryItemId = ctx.db.normalizeId("pantryItems", args.itemId);
+      if (pantryItemId) {
+        const pantryItem = await ctx.db.get(pantryItemId);
+        if (pantryItem) {
+          await ctx.db.patch(pantryItemId, {
+            lastPrice: pendingMatch.receiptItemPrice,
+            updatedAt: now,
+          });
+        }
       }
     }
 

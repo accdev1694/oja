@@ -10,8 +10,10 @@
 
 import type * as admin from "../admin.js";
 import type * as admin_analytics from "../admin/analytics.js";
+import type * as admin_analyticsAI from "../admin/analyticsAI.js";
 import type * as admin_catalog from "../admin/catalog.js";
 import type * as admin_content from "../admin/content.js";
+import type * as admin_experiments from "../admin/experiments.js";
 import type * as admin_filters from "../admin/filters.js";
 import type * as admin_helpers from "../admin/helpers.js";
 import type * as admin_index from "../admin/index.js";
@@ -116,6 +118,7 @@ import type * as lib_voice_storeSizeDeclarations from "../lib/voice/storeSizeDec
 import type * as lib_voice_types from "../lib/voice/types.js";
 import type * as lib_voice_writeTools from "../lib/voice/writeTools.js";
 import type * as listItems from "../listItems.js";
+import type * as listItems_batch from "../listItems/batch.js";
 import type * as listItems_core from "../listItems/core.js";
 import type * as listItems_helpers from "../listItems/helpers.js";
 import type * as listItems_index from "../listItems/index.js";
@@ -163,6 +166,10 @@ import type * as points_helpers from "../points/helpers.js";
 import type * as points_mutations from "../points/mutations.js";
 import type * as points_queries from "../points/queries.js";
 import type * as priceHistory from "../priceHistory.js";
+import type * as priceHistory_analytics from "../priceHistory/analytics.js";
+import type * as priceHistory_core from "../priceHistory/core.js";
+import type * as priceHistory_index from "../priceHistory/index.js";
+import type * as priceHistory_maintenance from "../priceHistory/maintenance.js";
 import type * as pricingConfig from "../pricingConfig.js";
 import type * as receipts from "../receipts.js";
 import type * as receipts_core from "../receipts/core.js";
@@ -199,11 +206,13 @@ import type * as stripe_helpers from "../stripe/helpers.js";
 import type * as stripe_index from "../stripe/index.js";
 import type * as stripe_webhooks from "../stripe/webhooks.js";
 import type * as subscriptions from "../subscriptions.js";
+import type * as subscriptions_internal from "../subscriptions/internal.js";
 import type * as support from "../support.js";
 import type * as tags from "../tags.js";
 import type * as tips from "../tips.js";
 import type * as tutorialHints from "../tutorialHints.js";
 import type * as users from "../users.js";
+import type * as users_accountDeletion from "../users/accountDeletion.js";
 import type * as users_accountManagement from "../users/accountManagement.js";
 import type * as users_core from "../users/core.js";
 import type * as users_onboarding from "../users/onboarding.js";
@@ -219,8 +228,10 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   "admin/analytics": typeof admin_analytics;
+  "admin/analyticsAI": typeof admin_analyticsAI;
   "admin/catalog": typeof admin_catalog;
   "admin/content": typeof admin_content;
+  "admin/experiments": typeof admin_experiments;
   "admin/filters": typeof admin_filters;
   "admin/helpers": typeof admin_helpers;
   "admin/index": typeof admin_index;
@@ -325,6 +336,7 @@ declare const fullApi: ApiFromModules<{
   "lib/voice/types": typeof lib_voice_types;
   "lib/voice/writeTools": typeof lib_voice_writeTools;
   listItems: typeof listItems;
+  "listItems/batch": typeof listItems_batch;
   "listItems/core": typeof listItems_core;
   "listItems/helpers": typeof listItems_helpers;
   "listItems/index": typeof listItems_index;
@@ -372,6 +384,10 @@ declare const fullApi: ApiFromModules<{
   "points/mutations": typeof points_mutations;
   "points/queries": typeof points_queries;
   priceHistory: typeof priceHistory;
+  "priceHistory/analytics": typeof priceHistory_analytics;
+  "priceHistory/core": typeof priceHistory_core;
+  "priceHistory/index": typeof priceHistory_index;
+  "priceHistory/maintenance": typeof priceHistory_maintenance;
   pricingConfig: typeof pricingConfig;
   receipts: typeof receipts;
   "receipts/core": typeof receipts_core;
@@ -408,11 +424,13 @@ declare const fullApi: ApiFromModules<{
   "stripe/index": typeof stripe_index;
   "stripe/webhooks": typeof stripe_webhooks;
   subscriptions: typeof subscriptions;
+  "subscriptions/internal": typeof subscriptions_internal;
   support: typeof support;
   tags: typeof tags;
   tips: typeof tips;
   tutorialHints: typeof tutorialHints;
   users: typeof users;
+  "users/accountDeletion": typeof users_accountDeletion;
   "users/accountManagement": typeof users_accountManagement;
   "users/core": typeof users_core;
   "users/onboarding": typeof users_onboarding;

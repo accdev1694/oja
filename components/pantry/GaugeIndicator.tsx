@@ -60,7 +60,7 @@ const SIZE_CONFIG = {
  * Segmented gauge bar — 3 discrete segments that light up
  * based on stock level. Bottom-to-top: red, amber, green.
  */
-export function GaugeIndicator({
+export const GaugeIndicator = React.memo(function GaugeIndicator({
   level,
   size = "small",
 }: GaugeIndicatorProps) {
@@ -151,7 +151,7 @@ export function GaugeIndicator({
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   track: {

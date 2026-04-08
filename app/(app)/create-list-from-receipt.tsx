@@ -1,9 +1,7 @@
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
-  Pressable,
   TextInput,
   ActivityIndicator,
 } from "react-native";
@@ -14,7 +12,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import * as Haptics from "expo-haptics";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import {
   GlassScreen,
@@ -23,39 +20,20 @@ import {
   SimpleHeader,
   GlassToast,
   colors,
-  typography,
-  spacing,
-  borderRadius,
   useGlassAlert,
 } from "@/components/ui/glass";
 import { useDelightToast } from "@/hooks/useDelightToast";
-import { getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
+import { formatReceiptDate, getStoreColor } from "@/lib/receiptFormatters";
+import {
+  Receipt,
+  usePickerHeader,
+  usePickerRenderItem,
+  PickerEmpty,
+  PickerFooter,
+} from "@/components/receipt/ReceiptPickerComponents";
+import { styles } from "./createListFromReceipt.styles";
 
 const MAX_LIST_NAME_LENGTH = 30;
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type ReceiptItem = {
-  name: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  category?: string;
-  size?: string;
-  unit?: string;
-};
-
-type Receipt = {
-  _id: Id<"receipts">;
-  storeName: string;
-  normalizedStoreId?: string;
-  total: number;
-  purchaseDate: number;
-  items: ReceiptItem[];
-  processingStatus: string;
-};
-
-// ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function CreateListFromReceiptScreen() {
   const router = useRouter();
@@ -63,18 +41,15 @@ export default function CreateListFromReceiptScreen() {
   const { alert } = useGlassAlert();
   const { toast, dismiss, showToast } = useDelightToast();
 
-  // Queries
   const receipts = useQuery(api.receipts.getByUser, {});
   const createListFromReceipt = useMutation(api.shoppingLists.createFromReceipt);
 
-  // State
   const [selectedReceiptId, setSelectedReceiptId] = useState<Id<"receipts"> | null>(
     params.receiptId ? (params.receiptId as Id<"receipts">) : null
   );
   const [listName, setListName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  // Filter to completed receipts with items
   const validReceipts = useMemo(() => {
     if (!receipts) return [];
     return receipts.filter(
@@ -82,28 +57,24 @@ export default function CreateListFromReceiptScreen() {
     ) as Receipt[];
   }, [receipts]);
 
-  // Selected receipt data
   const selectedReceipt = useMemo(() => {
     if (!selectedReceiptId) return null;
     return validReceipts.find((r) => r._id === selectedReceiptId) ?? null;
   }, [selectedReceiptId, validReceipts]);
 
-  // Auto-set list name when receipt is selected
   const effectiveListName = listName || (selectedReceipt ? `${selectedReceipt.storeName} Re-shop` : "");
   const effectiveBudget = selectedReceipt
     ? Math.ceil(selectedReceipt.total / 5) * 5
     : 0;
 
-  // ─── Handlers ────────────────────────────────────────────────────────────
-
   function handleSelectReceipt(receiptId: Id<"receipts">) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedReceiptId(receiptId);
-    setListName(""); // Reset to let auto-name kick in
+    setListName("");
   }
 
   const handleBackToPicker = useCallback(() => {
-    if (isCreating) return; // Prevent navigation while creating
+    if (isCreating) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedReceiptId(null);
     setListName("");
@@ -130,7 +101,6 @@ export default function CreateListFromReceiptScreen() {
         colors.accent.primary
       );
 
-      // Brief delay so user sees the success toast, then navigate
       setTimeout(() => {
         router.replace(`/list/${listId}` as never);
       }, 800);
@@ -154,119 +124,9 @@ export default function CreateListFromReceiptScreen() {
     }
   }, [selectedReceiptId, selectedReceipt, isCreating, effectiveListName, effectiveBudget, createListFromReceipt, showToast, alert, router]);
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────
-
-  function formatDate(timestamp: number) {
-    const d = new Date(timestamp);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = String(d.getFullYear()).slice(-2);
-    return `${day}/${month}/${year}`;
-  }
-
-  function getStoreColor(normalizedStoreId: string | undefined) {
-    if (!normalizedStoreId) return colors.text.tertiary;
-    return getStoreInfoSafe(normalizedStoreId)?.color ?? colors.text.tertiary;
-  }
-
-  // ─── FlashList callbacks (receipt picker) ──────────────────────────────────
-
-  const pickerRenderItem = useCallback(
-    ({ item: receipt }: { item: NonNullable<typeof validReceipts>[number] }) => {
-      const storeColor = getStoreColor(receipt.normalizedStoreId);
-      return (
-        <Pressable
-          style={styles.receiptCard}
-          onPress={() => handleSelectReceipt(receipt._id)}
-        >
-          <View style={[styles.storeDot, { backgroundColor: storeColor }]} />
-          <View style={styles.receiptCardInfo}>
-            <Text style={styles.receiptCardStore}>{receipt.storeName}</Text>
-            <Text style={styles.receiptCardMeta}>
-              {formatDate(receipt.purchaseDate)} · {receipt.items.length} item
-              {receipt.items.length !== 1 ? "s" : ""}
-            </Text>
-          </View>
-          <Text style={styles.receiptCardTotal}>
-            £{receipt.total.toFixed(2)}
-          </Text>
-          <MaterialCommunityIcons
-            name="chevron-right"
-            size={20}
-            color={colors.text.tertiary}
-          />
-        </Pressable>
-      );
-    },
-    [handleSelectReceipt]
-  );
-
+  const PickerHeader = usePickerHeader(validReceipts.length, router);
+  const pickerRenderItem = usePickerRenderItem(handleSelectReceipt);
   const pickerKeyExtractor = useCallback((item: { _id: string }) => item._id, []);
-
-  const PickerHeader = useMemo(
-    () => (
-      <View>
-        {/* Scan New Receipt CTA */}
-        <Pressable
-          style={styles.scanCta}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            router.push("/(app)/(tabs)/scan?returnTo=create-list-from-receipt");
-          }}
-        >
-          <View style={styles.scanCtaIcon}>
-            <MaterialCommunityIcons
-              name="camera"
-              size={28}
-              color={colors.accent.primary}
-            />
-          </View>
-          <View style={styles.scanCtaText}>
-            <Text style={styles.scanCtaTitle}>Scan a New Receipt</Text>
-            <Text style={styles.scanCtaDesc}>
-              Have a receipt? Scan it and we&apos;ll build your list
-            </Text>
-          </View>
-          <MaterialCommunityIcons
-            name="chevron-right"
-            size={24}
-            color={colors.text.tertiary}
-          />
-        </Pressable>
-
-        {/* Divider */}
-        {validReceipts.length > 0 && (
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Or pick a past receipt</Text>
-            <View style={styles.dividerLine} />
-          </View>
-        )}
-      </View>
-    ),
-    [validReceipts.length, router]
-  );
-
-  const PickerEmpty = useMemo(
-    () => (
-      <View style={styles.emptyState}>
-        <MaterialCommunityIcons
-          name="receipt"
-          size={48}
-          color={colors.text.tertiary}
-        />
-        <Text style={styles.emptyTitle}>No receipts yet</Text>
-        <Text style={styles.emptyDesc}>
-          Scan a receipt above to get started
-        </Text>
-      </View>
-    ),
-    []
-  );
-
-  const PickerFooter = useMemo(() => <View style={styles.bottomSpacer} />, []);
-
-  // ─── Loading State ───────────────────────────────────────────────────────
 
   if (receipts === undefined) {
     return (
@@ -278,8 +138,6 @@ export default function CreateListFromReceiptScreen() {
       </GlassScreen>
     );
   }
-
-  // ─── Receipt Preview + Confirmation ──────────────────────────────────────
 
   if (selectedReceipt) {
     const storeColor = getStoreColor(selectedReceipt.normalizedStoreId);
@@ -298,14 +156,13 @@ export default function CreateListFromReceiptScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Receipt Header */}
           <GlassCard style={styles.receiptHeader}>
             <View style={styles.receiptHeaderRow}>
               <View style={[styles.storeDot, { backgroundColor: storeColor }]} />
               <View style={styles.receiptHeaderText}>
                 <Text style={styles.receiptStoreName}>{selectedReceipt.storeName}</Text>
                 <Text style={styles.receiptDate}>
-                  {formatDate(selectedReceipt.purchaseDate)}
+                  {formatReceiptDate(selectedReceipt.purchaseDate)}
                 </Text>
               </View>
               <Text style={styles.receiptTotal}>
@@ -314,7 +171,6 @@ export default function CreateListFromReceiptScreen() {
             </View>
           </GlassCard>
 
-          {/* Item List */}
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>
               Items ({selectedReceipt.items.length})
@@ -352,12 +208,10 @@ export default function CreateListFromReceiptScreen() {
             </GlassCard>
           </View>
 
-          {/* List Settings */}
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>List Settings</Text>
 
             <GlassCard style={styles.settingsCard}>
-              {/* Name Input */}
               <View style={styles.settingRow}>
                 <Text style={styles.settingLabel}>Name</Text>
                 <View style={styles.nameInputWrap}>
@@ -381,7 +235,6 @@ export default function CreateListFromReceiptScreen() {
                 </View>
               </View>
 
-              {/* Budget Display */}
               <View style={[styles.settingRow, styles.settingRowLast]}>
                 <Text style={styles.settingLabel}>Budget</Text>
                 <Text style={styles.budgetValue}>£{effectiveBudget}</Text>
@@ -389,7 +242,6 @@ export default function CreateListFromReceiptScreen() {
             </GlassCard>
           </View>
 
-          {/* CTA */}
           <GlassButton
             variant="primary"
             size="lg"
@@ -405,7 +257,6 @@ export default function CreateListFromReceiptScreen() {
           <View style={styles.bottomSpacer} />
         </ScrollView>
 
-        {/* Success toast */}
         <GlassToast
           message={toast.message}
           icon={toast.icon}
@@ -416,8 +267,6 @@ export default function CreateListFromReceiptScreen() {
       </GlassScreen>
     );
   }
-
-  // ─── Receipt Picker ──────────────────────────────────────────────────────
 
   return (
     <GlassScreen>
@@ -435,263 +284,3 @@ export default function CreateListFromReceiptScreen() {
     </GlassScreen>
   );
 }
-
-// ─── Styles ──────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  bottomSpacer: {
-    height: 140,
-  },
-
-  // ── Scan CTA ────────────────────────────────────────────────────────────
-
-  scanCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: `${colors.accent.primary}08`,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: `${colors.accent.primary}30`,
-    padding: spacing.lg,
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  scanCtaIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.md,
-    backgroundColor: `${colors.accent.primary}15`,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  scanCtaText: {
-    flex: 1,
-    gap: 2,
-  },
-  scanCtaTitle: {
-    ...typography.bodyLarge,
-    color: colors.accent.primary,
-    fontWeight: "700",
-  },
-  scanCtaDesc: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-
-  // ── Divider ─────────────────────────────────────────────────────────────
-
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.glass.border,
-  },
-  dividerText: {
-    ...typography.labelSmall,
-    color: colors.text.tertiary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  // ── Receipt Card (Picker) ───────────────────────────────────────────────
-
-  receiptCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.glass.background,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-    padding: spacing.md,
-    gap: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  storeDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  receiptCardInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  receiptCardStore: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-  receiptCardMeta: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-  receiptCardTotal: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-    fontWeight: "700",
-  },
-
-  // ── Empty State ─────────────────────────────────────────────────────────
-
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: spacing["3xl"],
-    gap: spacing.sm,
-  },
-  emptyTitle: {
-    ...typography.bodyLarge,
-    color: colors.text.secondary,
-    fontWeight: "600",
-  },
-  emptyDesc: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-
-  // ── Receipt Preview ─────────────────────────────────────────────────────
-
-  receiptHeader: {
-    marginBottom: spacing.md,
-  },
-  receiptHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  receiptHeaderText: {
-    flex: 1,
-    gap: 2,
-  },
-  receiptStoreName: {
-    ...typography.headlineSmall,
-    color: colors.text.primary,
-    fontWeight: "700",
-  },
-  receiptDate: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-  receiptTotal: {
-    ...typography.headlineMedium,
-    color: colors.accent.primary,
-    fontWeight: "700",
-  },
-
-  // ── Item List ───────────────────────────────────────────────────────────
-
-  section: {
-    marginBottom: spacing.md,
-  },
-  sectionLabel: {
-    ...typography.labelMedium,
-    color: colors.text.secondary,
-    marginBottom: spacing.sm,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  itemListCard: {
-    paddingVertical: 0,
-  },
-  itemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  itemRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.glass.border,
-  },
-  itemInfo: {
-    flex: 1,
-    gap: 2,
-    marginRight: spacing.md,
-  },
-  itemName: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-  },
-  itemMeta: {
-    ...typography.bodySmall,
-    color: colors.text.tertiary,
-  },
-  itemPrice: {
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-
-  // ── Settings Card ───────────────────────────────────────────────────────
-
-  settingsCard: {
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-  },
-  settingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.glass.border,
-  },
-  settingRowLast: {
-    borderBottomWidth: 0,
-  },
-  settingLabel: {
-    ...typography.bodyMedium,
-    color: colors.text.secondary,
-    marginRight: spacing.md,
-  },
-  nameInputWrap: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  nameInput: {
-    flex: 1,
-    ...typography.bodyMedium,
-    color: colors.text.primary,
-    textAlign: "right",
-    paddingVertical: 0,
-  },
-  charCount: {
-    ...typography.labelSmall,
-    color: colors.text.tertiary,
-    minWidth: 16,
-    textAlign: "right",
-  },
-  charCountWarning: {
-    color: colors.semantic.warning,
-  },
-  budgetValue: {
-    ...typography.bodyMedium,
-    color: colors.accent.primary,
-    fontWeight: "700",
-  },
-
-  // ── CTA ─────────────────────────────────────────────────────────────────
-
-  createCta: {
-    marginTop: spacing.sm,
-  },
-});

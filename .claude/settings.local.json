@@ -204,7 +204,11 @@
       "Bash(timeout 30 bash:*)",
       "Bash(node:*)",
       "WebFetch(domain:docs.stripe.com)",
-      "Skill(validate-feature)"
+      "Skill(validate-feature)",
+      "mcp__firecrawl__firecrawl_search",
+      "Skill(commit)",
+      "Skill(bmad:core:tasks:shard-doc)",
+      "Bash([ -f debug.md ])"
     ]
   },
   "enableAllProjectMcpServers": true,

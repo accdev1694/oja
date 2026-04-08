@@ -1,16 +1,43 @@
 import { v } from "convex/values";
 import { mutation } from "../_generated/server";
-import { api } from "../_generated/api";
 import {
   requireUser,
   findExistingPantryItem,
-  enforceActiveCap
+  enforceActiveCap,
+  MutationCtx,
 } from "./helpers";
 import { getIconForItem } from "../iconMapping";
 import { canAddPantryItem } from "../lib/featureGating";
 import { calculateSimilarity } from "../lib/fuzzyMatch";
 import { toGroceryTitleCase } from "../lib/titleCase";
+import { cleanItemForStorage } from "../lib/itemNameParser";
+import { normalizeCategory } from "../lib/categoryNormalizer";
 import { Id } from "../_generated/dataModel";
+import { api } from "../_generated/api";
+
+const FUZZY_MATCH_THRESHOLD = 80;
+
+/** Update the "add_items" weekly challenge progress if one is active */
+async function updateAddItemsChallenge(ctx: MutationCtx, userId: Id<"users">, count: number) {
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const challenges = await ctx.db
+      .query("weeklyChallenges")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const active = challenges.find(
+      (c) => c.type === "add_items" && c.endDate >= today && !c.completedAt
+    );
+    if (active) {
+      await ctx.runMutation(api.insights.updateChallengeProgress, {
+        challengeId: active._id,
+        increment: count,
+      });
+    }
+  } catch {
+    // non-critical — don't block pantry operations
+  }
+}
 
 export const autoRestockFromReceipt = mutation({
   args: { receiptId: v.id("receipts") },
@@ -24,23 +51,41 @@ export const autoRestockFromReceipt = mutation({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
-    const restockedItems = [];
-    const fuzzyMatches = [];
-    const itemsToAdd = [];
+    const restockedItems: { pantryItemId: Id<"pantryItems">; name: string }[] = [];
+    const fuzzyMatches: {
+      receiptItemName: string;
+      pantryItemName: string;
+      pantryItemId: Id<"pantryItems">;
+      similarity: number;
+      price: number | undefined;
+      size: string | undefined;
+      unit: string | undefined;
+    }[] = [];
+    const itemsToAdd: {
+      name: string;
+      category: string | undefined;
+      price: number | undefined;
+      size: string | undefined;
+      unit: string | undefined;
+    }[] = [];
     const now = Date.now();
+
+    if (!receipt.items || receipt.items.length === 0) {
+      return { restockedItems, fuzzyMatches, itemsToAdd };
+    }
 
     for (const receiptItem of receipt.items) {
       const receiptItemName = receiptItem.name.toLowerCase().trim();
       const exactMatch = pantryItems.find((p) => p.name.toLowerCase().trim() === receiptItemName);
 
       if (exactMatch) {
+        const cleaned = cleanItemForStorage(exactMatch.name, receiptItem.size ?? exactMatch.defaultSize, receiptItem.unit ?? exactMatch.defaultUnit);
         await ctx.db.patch(exactMatch._id, {
           stockLevel: "stocked",
           lastPrice: receiptItem.unitPrice,
           priceSource: "receipt",
           lastStoreName: receipt.storeName,
-          ...(receiptItem.size && { defaultSize: receiptItem.size }),
-          ...(receiptItem.unit && { defaultUnit: receiptItem.unit }),
+          ...(cleaned.size ? { defaultSize: cleaned.size, defaultUnit: cleaned.unit } : {}),
           purchaseCount: (exactMatch.purchaseCount ?? 0) + 1,
           lastPurchasedAt: now,
           ...(exactMatch.status === "archived" && { status: "active", archivedAt: undefined }),
@@ -53,7 +98,7 @@ export const autoRestockFromReceipt = mutation({
       let bestMatch = null;
       for (const pantryItem of pantryItems) {
         const similarity = calculateSimilarity(receiptItem.name, pantryItem.name);
-        if (similarity > 80 && (!bestMatch || similarity > bestMatch.similarity)) {
+        if (similarity > FUZZY_MATCH_THRESHOLD && (!bestMatch || similarity > bestMatch.similarity)) {
           bestMatch = { item: pantryItem, similarity };
         }
       }
@@ -181,12 +226,12 @@ export const confirmFuzzyRestock = mutation({
     const item = await ctx.db.get(args.pantryItemId);
     if (!item || item.userId !== user._id) throw new Error("Unauthorized");
 
+    const cleaned = cleanItemForStorage(item.name, args.size ?? item.defaultSize, args.unit ?? item.defaultUnit);
     await ctx.db.patch(args.pantryItemId, {
       stockLevel: "stocked",
       ...(args.price !== undefined && { lastPrice: args.price, priceSource: "receipt" }),
       ...(args.storeName && { lastStoreName: args.storeName }),
-      ...(args.size && { defaultSize: args.size }),
-      ...(args.unit && { defaultUnit: args.unit }),
+      ...(cleaned.size ? { defaultSize: cleaned.size, defaultUnit: cleaned.unit } : {}),
       purchaseCount: (item.purchaseCount ?? 0) + 1,
       lastPurchasedAt: Date.now(),
       ...(item.status === "archived" && { status: "active", archivedAt: undefined }),
@@ -211,11 +256,11 @@ export const addFromReceipt = mutation({
 
     const existing = await findExistingPantryItem(ctx, user._id, args.name, args.size);
     if (existing) {
+      const cleaned = cleanItemForStorage(existing.name, args.size ?? existing.defaultSize, args.unit ?? existing.defaultUnit);
       await ctx.db.patch(existing._id, {
         stockLevel: "stocked",
         ...(args.price !== undefined && { lastPrice: args.price, priceSource: "receipt" }),
-        ...(args.size && { defaultSize: args.size }),
-        ...(args.unit && { defaultUnit: args.unit }),
+        ...(cleaned.size ? { defaultSize: cleaned.size, defaultUnit: cleaned.unit } : {}),
         purchaseCount: (existing.purchaseCount ?? 0) + 1,
         lastPurchasedAt: now,
         ...(existing.status === "archived" && { status: "active", archivedAt: undefined }),
@@ -224,46 +269,32 @@ export const addFromReceipt = mutation({
       return existing._id;
     }
 
+    const access = await canAddPantryItem(ctx, user._id);
+    if (!access.allowed) throw new Error(access.reason ?? "Pantry item limit reached");
+
     await enforceActiveCap(ctx, user._id);
 
+    const cleaned = cleanItemForStorage(toGroceryTitleCase(args.name), args.size, args.unit);
+    const normCat = normalizeCategory(args.category || "Pantry Staples");
     const itemId = await ctx.db.insert("pantryItems", {
       userId: user._id,
-      name: toGroceryTitleCase(args.name),
-      category: args.category || "Pantry Staples",
-      icon: getIconForItem(toGroceryTitleCase(args.name), args.category || "Pantry Staples"),
+      name: cleaned.name,
+      category: normCat,
+      icon: getIconForItem(cleaned.name, normCat),
       stockLevel: "stocked",
       status: "active",
       nameSource: "system",
       purchaseCount: 1,
       lastPurchasedAt: now,
       ...(args.price !== undefined && { lastPrice: args.price, priceSource: "receipt" }),
-      ...(args.size && { defaultSize: args.size }),
-      ...(args.unit && { defaultUnit: args.unit }),
+      ...(cleaned.size ? { defaultSize: cleaned.size } : {}),
+      ...(cleaned.unit ? { defaultUnit: cleaned.unit } : {}),
       autoAddToList: false,
       createdAt: now,
       updatedAt: now,
     });
 
-    // Update add_items challenge progress
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const challenges = await ctx.db
-        .query("weeklyChallenges")
-        .withIndex("by_user", (q) => q.eq("userId", user._id))
-        .collect();
-      const active = challenges.find(
-        (c) => c.type === "add_items" && c.endDate >= today && !c.completedAt
-      );
-      if (active) {
-        await ctx.runMutation(api.insights.updateChallengeProgress, {
-          challengeId: active._id,
-          increment: 1,
-        });
-      }
-    } catch {
-      // non-critical
-    }
-
+    await updateAddItemsChallenge(ctx, user._id, 1);
     return itemId;
   },
 });

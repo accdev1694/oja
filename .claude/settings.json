@@ -6,6 +6,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-fix-audit.js\"",
+            "statusMessage": "Tracking changes for audit..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-item-parser.js\"",
             "statusMessage": "Checking itemNameParser usage..."
           }

@@ -4,14 +4,14 @@ import Animated, { FadeIn, FadeOut, runOnJS } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { GaugeIndicator, type StockLevel } from "./GaugeIndicator";
 
+const SWIPE_DISTANCE_THRESHOLD = 50;
+
 interface PantryItemCardProps {
-  id: string;
   name: string;
   category: string;
   stockLevel: StockLevel;
   onSwipeDecrease: () => void;
   onSwipeIncrease?: () => void;
-  onMeasure?: (x: number, y: number) => void;
 }
 
 /**
@@ -22,14 +22,12 @@ interface PantryItemCardProps {
  * - Swipe left to decrease, right to increase (card stays still)
  * - Measures position for fly animation
  */
-export function PantryItemCard({
-  id,
+export const PantryItemCard = React.memo(function PantryItemCard({
   name,
   category,
   stockLevel,
   onSwipeDecrease,
   onSwipeIncrease,
-  onMeasure,
 }: PantryItemCardProps) {
   const cardRef = useRef<View>(null);
 
@@ -37,9 +35,9 @@ export function PantryItemCard({
     .activeOffsetX([-20, 20])
     .failOffsetY([-10, 10])
     .onEnd((e) => {
-      if (e.translationX < -50) {
+      if (e.translationX < -SWIPE_DISTANCE_THRESHOLD) {
         runOnJS(onSwipeDecrease)();
-      } else if (e.translationX > 50 && onSwipeIncrease) {
+      } else if (e.translationX > SWIPE_DISTANCE_THRESHOLD && onSwipeIncrease) {
         runOnJS(onSwipeIncrease)();
       }
     });
@@ -85,7 +83,7 @@ export function PantryItemCard({
       </GestureDetector>
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

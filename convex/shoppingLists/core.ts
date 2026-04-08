@@ -184,13 +184,48 @@ export const remove = mutation({
     const perms = await getUserListPermissions(ctx, args.id, user._id);
     if (!perms.canEdit) throw new Error("Unauthorized");
 
+    // Delete list items and their comments
     const items = await ctx.db
       .query("listItems")
       .withIndex("by_list", (q) => q.eq("listId", args.id))
       .collect();
 
     for (const item of items) {
+      const comments = await ctx.db
+        .query("itemComments")
+        .withIndex("by_item", (q) => q.eq("listItemId", item._id))
+        .collect();
+      for (const comment of comments) {
+        await ctx.db.delete(comment._id);
+      }
       await ctx.db.delete(item._id);
+    }
+
+    // Delete list partners
+    const partners = await ctx.db
+      .query("listPartners")
+      .withIndex("by_list", (q) => q.eq("listId", args.id))
+      .collect();
+    for (const partner of partners) {
+      await ctx.db.delete(partner._id);
+    }
+
+    // Delete invite codes
+    const inviteCodes = await ctx.db
+      .query("inviteCodes")
+      .withIndex("by_list", (q) => q.eq("listId", args.id))
+      .collect();
+    for (const code of inviteCodes) {
+      await ctx.db.delete(code._id);
+    }
+
+    // Delete list messages
+    const messages = await ctx.db
+      .query("listMessages")
+      .withIndex("by_list", (q) => q.eq("listId", args.id))
+      .collect();
+    for (const msg of messages) {
+      await ctx.db.delete(msg._id);
     }
 
     await ctx.db.delete(args.id);

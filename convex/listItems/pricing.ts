@@ -8,8 +8,6 @@ import {
   MutationCtx,
 } from "./helpers";
 import { getUserListPermissions } from "../partners";
-import { isDuplicateItemName } from "../lib/fuzzyMatch";
-import { findLearnedMapping } from "../lib/itemMatcher";
 import { resolveVariantWithPrice } from "../lib/priceResolver";
 import { isValidSize as isSizeValid, cleanItemForStorage } from "../lib/itemNameParser";
 import { getEmergencyPriceEstimate } from "../lib/priceValidator";
@@ -47,60 +45,68 @@ export const refreshListPrices = mutation({
       .withIndex("by_list", (q) => q.eq("listId", args.listId))
       .collect();
 
-    let updated = 0;
     const storeName = list.storeName;
     const normalizedStoreId = list.normalizedStoreId;
     const userRegion = user.postcodePrefix || user.country || "UK";
 
-    for (const item of items) {
-      if (item.isChecked || item.priceOverride) continue;
+    // Filter to items that need price refresh
+    const refreshableItems = items.filter(item => !item.isChecked && !item.priceOverride);
+    if (refreshableItems.length === 0) return { updated: 0, total: items.length };
 
+    // Batch fetch: user's priceHistory for all item names (single query)
+    const allPersonalHistory = await ctx.db
+      .query("priceHistory")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    // Index personal history by normalized name for O(1) lookup
+    const personalHistoryByName = new Map<string, typeof allPersonalHistory>();
+    for (const ph of allPersonalHistory) {
+      const existing = personalHistoryByName.get(ph.normalizedName) || [];
+      existing.push(ph);
+      personalHistoryByName.set(ph.normalizedName, existing);
+    }
+
+    // Batch fetch: currentPrices for this store (single query if store specified)
+    const storePrices = storeName
+      ? await ctx.db
+          .query("currentPrices")
+          .withIndex("by_store", (q) => q.eq("storeName", storeName))
+          .collect()
+      : [];
+
+    // Index store prices by normalized name
+    const storePricesByName = new Map<string, typeof storePrices>();
+    for (const sp of storePrices) {
+      const existing = storePricesByName.get(sp.normalizedName) || [];
+      existing.push(sp);
+      storePricesByName.set(sp.normalizedName, existing);
+    }
+
+    let updated = 0;
+    const now = Date.now();
+
+    for (const item of refreshableItems) {
+      const normalizedItemName = item.name.toLowerCase().trim();
       let newPrice: number | undefined;
       let newSource: "personal" | "crowdsourced" | "ai" | "manual" | undefined;
       let newConfidence: number | undefined;
 
-      if (normalizedStoreId) {
-        const learnedMapping = await findLearnedMapping(ctx, normalizedStoreId, item.name);
-        if (learnedMapping && learnedMapping.confidence >= 50) {
-          const canonicalNormalized = learnedMapping.canonicalName.toLowerCase().trim();
-          const canonicalPersonal = await ctx.db
-            .query("priceHistory")
-            .withIndex("by_user_item", q => q.eq("userId", user._id).eq("normalizedName", canonicalNormalized))
-            .order("desc").first();
-
-          if (canonicalPersonal) {
-            newPrice = canonicalPersonal.unitPrice;
-            newSource = "personal";
-            newConfidence = 0.9;
-          }
-        }
+      // Layer 1: Personal history (in-memory lookup)
+      const personalEntries = personalHistoryByName.get(normalizedItemName) || [];
+      if (personalEntries.length > 0) {
+        const sorted = [...personalEntries].sort((a, b) => b.purchaseDate - a.purchaseDate);
+        newPrice = sorted[0].unitPrice;
+        newSource = "personal";
+        newConfidence = 0.9;
       }
 
-      if (newPrice === undefined) {
-        const personal = await ctx.db
-          .query("priceHistory")
-          .withIndex("by_user_item", q => q.eq("userId", user._id).eq("normalizedName", item.name.toLowerCase().trim()))
-          .order("desc").first();
-        if (personal) {
-          newPrice = personal.unitPrice;
-          newSource = "personal";
-          newConfidence = 0.9;
-        }
-      }
-
+      // Layer 2: Crowdsourced from store (in-memory lookup)
       if (newPrice === undefined && storeName) {
-        const normalizedItemName = item.name.toLowerCase().trim();
-        // Prefer region-specific price, fall back to any region at this store
-        let storePrice = await ctx.db
-          .query("currentPrices")
-          .withIndex("by_item_store_region", q => q.eq("normalizedName", normalizedItemName).eq("storeName", storeName).eq("region", userRegion))
-          .first();
-        if (!storePrice) {
-          storePrice = await ctx.db
-            .query("currentPrices")
-            .withIndex("by_item_store", q => q.eq("normalizedName", normalizedItemName).eq("storeName", storeName))
-            .first();
-        }
+        const storeEntries = storePricesByName.get(normalizedItemName) || [];
+        // Prefer region match, then any
+        const regionMatch = storeEntries.find(sp => sp.region === userRegion);
+        const storePrice = regionMatch || storeEntries[0];
         if (storePrice) {
           newPrice = storePrice.unitPrice;
           newSource = "crowdsourced";
@@ -108,12 +114,21 @@ export const refreshListPrices = mutation({
         }
       }
 
+      // Layer 3: Emergency fallback - zero-blank-price policy
+      // Apply if Layers 1+2 failed AND item has no price or stale AI price
+      if (newPrice === undefined && (item.estimatedPrice === undefined || item.priceSource === "ai")) {
+        const emergency = getEmergencyPriceEstimate(item.name, item.category);
+        newPrice = emergency.price;
+        newSource = "ai";
+        newConfidence = 0.3;
+      }
+
       if (newPrice !== undefined && newPrice !== item.estimatedPrice) {
         await ctx.db.patch(item._id, {
           estimatedPrice: newPrice,
           priceSource: newSource,
           priceConfidence: newConfidence,
-          updatedAt: Date.now(),
+          updatedAt: now,
         });
         updated++;
       }
@@ -194,6 +209,7 @@ export const applyHealthSwap = mutation({
       });
     }
 
+    await recalculateListTotal(ctx, args.listId);
     return newItemId;
   },
 });

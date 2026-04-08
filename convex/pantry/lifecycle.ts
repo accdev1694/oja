@@ -7,8 +7,6 @@ import {
 } from "./helpers";
 import { getIconForItem } from "../iconMapping";
 import { isDuplicateItem } from "../lib/fuzzyMatch";
-import { Id } from "../_generated/dataModel";
-
 export const togglePin = mutation({
   args: { pantryItemId: v.id("pantryItems") },
   handler: async (ctx, args) => {
@@ -65,20 +63,23 @@ export const unarchiveItem = mutation({
   },
 });
 
+/** Cron job: archives out-of-stock items untouched for 90+ days (all users). */
 export const archiveStaleItems = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+    const STALE_DAYS = 90;
+    const BATCH_LIMIT = 500;
+    const cutoff = Date.now() - (STALE_DAYS * 24 * 60 * 60 * 1000);
     const candidateItems = await ctx.db
       .query("pantryItems")
       .withIndex("by_status_stock", (q) => q.eq("status", "active").eq("stockLevel", "out"))
-      .collect();
+      .take(BATCH_LIMIT);
 
     let archived = 0;
     for (const item of candidateItems) {
       if (item.pinned) continue;
       const lastActivity = item.lastPurchasedAt ?? item.updatedAt;
-      if (lastActivity < ninetyDaysAgo) {
+      if (lastActivity < cutoff) {
         await ctx.db.patch(item._id, {
           status: "archived",
           archivedAt: Date.now(),
@@ -125,7 +126,7 @@ export const migrateStockLevels = mutation({
 
     let migrated = 0;
     for (const item of items) {
-      const level = item.stockLevel as string;
+      const level: string = String(item.stockLevel);
       if (level === "good") {
         await ctx.db.patch(item._id, { stockLevel: "stocked", updatedAt: Date.now() });
         migrated++;
@@ -187,9 +188,14 @@ export const mergeDuplicates = mutation({
       if (!item || item.userId !== user._id) continue;
       totalPurchaseCount += item.purchaseCount ?? 0;
       if (item.pinned) shouldPin = true;
-      
-      const listItems = await ctx.db.query("listItems").withIndex("by_user", q => q.eq("userId", user._id)).collect();
-      for (const li of listItems.filter(li => li.pantryItemId === deleteId)) {
+
+      // Re-point list items from deleted duplicate to the kept item
+      const linkedListItems = await ctx.db
+        .query("listItems")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .filter((q) => q.eq(q.field("pantryItemId"), deleteId))
+        .collect();
+      for (const li of linkedListItems) {
         await ctx.db.patch(li._id, { pantryItemId: args.keepId });
       }
       await ctx.db.delete(deleteId);

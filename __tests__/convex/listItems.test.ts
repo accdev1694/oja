@@ -120,7 +120,10 @@ describe("listItems mutations", () => {
       mockCtx.db.unique.mockResolvedValueOnce({ _id: "user1" }); // User
       mockRateLimitCheck.mockResolvedValueOnce({ allowed: true, remaining: 99 }); // Rate limit
 
-      // Existing duplicate
+      // Pantry lookup (no match)
+      mockCtx.db.collect.mockResolvedValueOnce([]);
+
+      // Existing duplicate in list
       mockCtx.db.collect.mockResolvedValueOnce([
         { _id: "existing_item1", name: "Milk", quantity: 1, isChecked: false }
       ]);
@@ -143,6 +146,9 @@ describe("listItems mutations", () => {
       mockCtx.db.get.mockResolvedValueOnce({ _id: "list1" });
       mockCtx.db.unique.mockResolvedValueOnce({ _id: "user1" });
       mockRateLimitCheck.mockResolvedValueOnce({ allowed: true, remaining: 99 });
+
+      // Pantry lookup (no match)
+      mockCtx.db.collect.mockResolvedValueOnce([]);
 
       // Mock item must have no size so isDuplicateItem matches (both sizes undefined)
       mockCtx.db.collect.mockResolvedValueOnce([

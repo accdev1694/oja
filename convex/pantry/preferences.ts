@@ -19,11 +19,13 @@ export const setPreferredVariant = mutation({
       (item) => item.name.toLowerCase().trim() === normalizedName
     );
 
-    if (match) {
-      await ctx.db.patch(match._id, {
-        preferredVariant: args.preferredVariant,
-        updatedAt: Date.now(),
-      });
-    }
+    if (!match) throw new Error("Pantry item not found");
+
+    await ctx.db.patch(match._id, {
+      preferredVariant: args.preferredVariant,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
   },
 });

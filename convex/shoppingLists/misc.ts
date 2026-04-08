@@ -4,8 +4,6 @@ import {
   requireUser,
   optionalUser,
   requireEditableList,
-  QueryCtx,
-  MutationCtx,
 } from "./helpers";
 import {
   getAllStores,
@@ -13,7 +11,6 @@ import {
 } from "../lib/storeNormalizer";
 import { parseSize } from "../lib/sizeUtils";
 import { getUserListPermissions } from "../partners";
-import { Id } from "../_generated/dataModel";
 
 const SIZE_MATCH_TOLERANCE = 0.2;
 
@@ -32,6 +29,7 @@ function findClosestSizeMatch(
     if (availableParsed.category !== targetParsed.category) continue;
 
     const diff = Math.abs(availableParsed.normalizedValue - targetParsed.normalizedValue);
+    if (targetParsed.normalizedValue === 0) continue;
     const percentDiff = diff / targetParsed.normalizedValue;
 
     if (percentDiff <= SIZE_MATCH_TOLERANCE) {
@@ -91,68 +89,74 @@ export const compareListAcrossStores = query({
       }
     }
 
-    const alternatives = await Promise.all(
-      storesToCompare.map(async (storeId) => {
-        const storeInfo = getStoreInfoSafe(storeId);
-        if (!storeInfo) return null;
+    // Batch-fetch all prices once per item (not per item × per store)
+    type PriceRow = Awaited<ReturnType<typeof ctx.db.get<"currentPrices">>> & {};
+    const pricesByItem = new Map<string, PriceRow[]>();
+    const uniqueItemNames = new Set(items.map((i) => i.name.toLowerCase().trim()));
+    for (const normalizedName of uniqueItemNames) {
+      const prices = await ctx.db
+        .query("currentPrices")
+        .withIndex("by_item", (q) => q.eq("normalizedName", normalizedName))
+        .collect();
+      pricesByItem.set(normalizedName, prices);
+    }
 
-        let storeTotal = 0;
-        for (const item of items) {
-          const normalizedItemName = item.name.toLowerCase().trim();
-          if (item.priceOverride && item.estimatedPrice) {
-            storeTotal += item.estimatedPrice * item.quantity;
-            continue;
-          }
+    const alternatives = storesToCompare.map((storeId) => {
+      const storeInfo = getStoreInfoSafe(storeId);
+      if (!storeInfo) return null;
 
-          const prices = await ctx.db
-            .query("currentPrices")
-            .withIndex("by_item", (q) => q.eq("normalizedName", normalizedItemName))
-            .collect();
-
-          const storePrices = prices.filter(
-            (p) => p.normalizedStoreId === storeId || p.storeName?.toLowerCase() === storeId
-          );
-
-          if (storePrices.length === 0) {
-            if (item.estimatedPrice) storeTotal += item.estimatedPrice * item.quantity;
-            continue;
-          }
-
-          const availableSizes = storePrices.map((p) => ({
-            size: p.size ?? "",
-            price: p.averagePrice ?? p.unitPrice,
-          }));
-
-          const itemSize = item.size ?? "";
-          let matchedPrice: number | null = null;
-
-          if (itemSize) {
-            const sizeMatch = findClosestSizeMatch(itemSize, availableSizes);
-            if (sizeMatch) matchedPrice = sizeMatch.price;
-          }
-
-          if (matchedPrice === null) {
-            const exactMatch = storePrices.find((p) => p.size === itemSize);
-            if (exactMatch) matchedPrice = exactMatch.averagePrice ?? exactMatch.unitPrice;
-            else {
-              const cheapest = storePrices.sort((a, b) => (a.averagePrice ?? a.unitPrice) - (b.averagePrice ?? b.unitPrice))[0];
-              matchedPrice = cheapest.averagePrice ?? cheapest.unitPrice;
-            }
-          }
-
-          if (matchedPrice !== null) storeTotal += matchedPrice * item.quantity;
-          else if (item.estimatedPrice) storeTotal += item.estimatedPrice * item.quantity;
+      let storeTotal = 0;
+      for (const item of items) {
+        const normalizedItemName = item.name.toLowerCase().trim();
+        if (item.priceOverride && item.estimatedPrice) {
+          storeTotal += item.estimatedPrice * item.quantity;
+          continue;
         }
 
-        return {
-          store: storeId,
-          storeDisplayName: storeInfo.displayName,
-          storeColor: storeInfo.color,
-          total: Math.round(storeTotal * 100) / 100,
-          savings: Math.round((currentTotal - storeTotal) * 100) / 100,
-        };
-      })
-    );
+        const allPrices = pricesByItem.get(normalizedItemName) ?? [];
+        const storePrices = allPrices.filter(
+          (p) => p.normalizedStoreId === storeId || p.storeName?.toLowerCase() === storeId
+        );
+
+        if (storePrices.length === 0) {
+          if (item.estimatedPrice) storeTotal += item.estimatedPrice * item.quantity;
+          continue;
+        }
+
+        const availableSizes = storePrices.map((p) => ({
+          size: p.size ?? "",
+          price: p.averagePrice ?? p.unitPrice,
+        }));
+
+        const itemSize = item.size ?? "";
+        let matchedPrice: number | null = null;
+
+        if (itemSize) {
+          const sizeMatch = findClosestSizeMatch(itemSize, availableSizes);
+          if (sizeMatch) matchedPrice = sizeMatch.price;
+        }
+
+        if (matchedPrice === null) {
+          const exactMatch = storePrices.find((p) => p.size === itemSize);
+          if (exactMatch) matchedPrice = exactMatch.averagePrice ?? exactMatch.unitPrice;
+          else {
+            const sorted = [...storePrices].sort((a, b) => (a.averagePrice ?? a.unitPrice) - (b.averagePrice ?? b.unitPrice));
+            matchedPrice = sorted[0].averagePrice ?? sorted[0].unitPrice;
+          }
+        }
+
+        if (matchedPrice !== null) storeTotal += matchedPrice * item.quantity;
+        else if (item.estimatedPrice) storeTotal += item.estimatedPrice * item.quantity;
+      }
+
+      return {
+        store: storeId,
+        storeDisplayName: storeInfo.displayName,
+        storeColor: storeInfo.color,
+        total: Math.round(storeTotal * 100) / 100,
+        savings: Math.round((currentTotal - storeTotal) * 100) / 100,
+      };
+    });
 
     return {
       currentStore: currentStoreId ?? "unknown",
@@ -183,12 +187,29 @@ export const switchStore = mutation({
       .withIndex("by_list", (q) => q.eq("listId", args.listId))
       .collect();
 
+    // Batch-fetch all prices once per unique item name (avoids N+1)
+    type SwitchPriceRow = Awaited<ReturnType<typeof ctx.db.get<"currentPrices">>> & {};
+    const priceCache = new Map<string, SwitchPriceRow[]>();
+    const uniqueNames = new Set(items.map((i) => i.name.toLowerCase().trim()));
+    for (const normalizedName of uniqueNames) {
+      const prices = await ctx.db
+        .query("currentPrices")
+        .withIndex("by_item", (q) => q.eq("normalizedName", normalizedName))
+        .collect();
+      priceCache.set(normalizedName, prices);
+    }
+
     for (const item of items) {
       if (item.priceOverride === true) continue;
       const normalizedItemName = item.name.toLowerCase().trim();
 
       if (item.sizeOverride === true) {
-        const priceForSize = await findPriceForExactSize(ctx, normalizedItemName, item.size ?? "", args.newStore);
+        const allItemPrices = priceCache.get(normalizedItemName) ?? [];
+        const storePrice = allItemPrices.find((p) =>
+          (p.normalizedStoreId === args.newStore || p.storeName?.toLowerCase() === args.newStore) &&
+          p.size === (item.size ?? "")
+        );
+        const priceForSize = storePrice ? (storePrice.averagePrice ?? storePrice.unitPrice) : null;
         if (priceForSize !== null) await ctx.db.patch(item._id, { estimatedPrice: priceForSize, updatedAt: Date.now() });
         continue;
       }
@@ -196,10 +217,7 @@ export const switchStore = mutation({
       const isSwitchingBackToOriginal = item.originalSize && previousStore !== args.newStore;
       let targetSize = isSwitchingBackToOriginal ? item.originalSize! : (item.size ?? "");
 
-      const prices = await ctx.db
-        .query("currentPrices")
-        .withIndex("by_item", (q) => q.eq("normalizedName", normalizedItemName))
-        .collect();
+      const prices = priceCache.get(normalizedItemName) ?? [];
 
       const storePrices = prices.filter(
         (p) => p.normalizedStoreId === args.newStore || p.storeName?.toLowerCase() === args.newStore
@@ -261,16 +279,3 @@ export const switchStore = mutation({
   },
 });
 
-const findPriceForExactSize = async (ctx: QueryCtx | MutationCtx, normalizedItemName: string, size: string, storeId: string) => {
-  const prices = await ctx.db
-    .query("currentPrices")
-    .withIndex("by_item", (q) => q.eq("normalizedName", normalizedItemName))
-    .collect();
-
-  const storePrice = prices.find((p) =>
-    (p.normalizedStoreId === storeId || p.storeName?.toLowerCase() === storeId) &&
-    p.size === size
-  );
-
-  return storePrice ? (storePrice.averagePrice ?? storePrice.unitPrice) : null;
-};
