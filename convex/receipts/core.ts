@@ -3,6 +3,7 @@ import { mutation, query, internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { normalizeStoreName } from "../lib/storeNormalizer";
 import { toGroceryTitleCase } from "../lib/titleCase";
+import { cleanItemForStorage } from "../lib/itemNameParser";
 import { trackFunnelEvent, trackActivity } from "../lib/analytics";
 import { enrichGlobalFromReceipt } from "../lib/globalEnrichment";
 import { validateReceiptData } from "../lib/receiptValidation";
@@ -10,7 +11,68 @@ import { processEarnPoints } from "../points";
 import { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 
+// Input validation constants
+const MAX_ITEMS = 500;
+const MAX_STRING_LENGTH = 500;
+const MAX_PRICE = 100000; // £100,000 max
+const MIN_PRICE = 0;
+
 const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
+
+/** Clean receipt items using cleanItemForStorage (Rule #13 compliance) */
+function cleanReceiptItems(items: Array<{
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  category?: string;
+  size?: string;
+  unit?: string;
+  confidence?: number;
+}>) {
+  return items.map(item => {
+    const cleaned = cleanItemForStorage(item.name, item.size, item.unit);
+    return {
+      ...item,
+      name: cleaned.name,
+      size: cleaned.size,
+      unit: cleaned.unit,
+      // Clamp prices to valid bounds
+      unitPrice: Math.max(MIN_PRICE, Math.min(MAX_PRICE, item.unitPrice)),
+      totalPrice: Math.max(MIN_PRICE, Math.min(MAX_PRICE, item.totalPrice)),
+      quantity: Math.max(0, Math.min(9999, item.quantity)),
+    };
+  });
+}
+
+/** Validate receipt input bounds (H2 fix) */
+function validateReceiptInput(args: {
+  storeName?: string;
+  storeAddress?: string;
+  items?: unknown[];
+  total?: number;
+  subtotal?: number;
+  tax?: number;
+}) {
+  if (args.storeName && args.storeName.length > MAX_STRING_LENGTH) {
+    throw new Error(`Store name exceeds ${MAX_STRING_LENGTH} characters`);
+  }
+  if (args.storeAddress && args.storeAddress.length > MAX_STRING_LENGTH) {
+    throw new Error(`Store address exceeds ${MAX_STRING_LENGTH} characters`);
+  }
+  if (args.items && args.items.length > MAX_ITEMS) {
+    throw new Error(`Too many items (max ${MAX_ITEMS})`);
+  }
+  if (args.total !== undefined && (args.total < MIN_PRICE || args.total > MAX_PRICE)) {
+    throw new Error(`Total must be between ${MIN_PRICE} and ${MAX_PRICE}`);
+  }
+  if (args.subtotal !== undefined && (args.subtotal < MIN_PRICE || args.subtotal > MAX_PRICE)) {
+    throw new Error(`Subtotal must be between ${MIN_PRICE} and ${MAX_PRICE}`);
+  }
+  if (args.tax !== undefined && (args.tax < MIN_PRICE || args.tax > MAX_PRICE)) {
+    throw new Error(`Tax must be between ${MIN_PRICE} and ${MAX_PRICE}`);
+  }
+}
 
 export const cleanupOldImages = internalMutation({
   args: {},
@@ -93,10 +155,15 @@ export const create = mutation({
     const user = await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject)).unique();
     if (!user) throw new Error("User not found");
 
+    // Input validation (H2 fix)
+    validateReceiptInput(args);
+
     const now = Date.now();
     const finalStoreName = args.storeName || "Unknown Store";
 
     const isCompleted = !!args.items;
+    // Clean items using cleanItemForStorage (C1 fix - Rule #13 compliance)
+    const cleanedItems = args.items ? cleanReceiptItems(args.items) : [];
 
     const receiptId = await ctx.db.insert("receipts", {
       userId: user._id,
@@ -107,7 +174,7 @@ export const create = mutation({
       subtotal: args.subtotal || 0,
       tax: args.tax,
       total: args.total || 0,
-      items: (args.items || []).map(item => ({ ...item, name: toGroceryTitleCase(item.name) })),
+      items: cleanedItems,
       processingStatus: isCompleted ? "completed" : "pending",
       purchaseDate: args.purchaseDate || now,
       imageQuality: args.imageQuality,
@@ -118,16 +185,19 @@ export const create = mutation({
 
     // Award points when receipt is created directly as completed with imageHash
     if (isCompleted && args.imageHash) {
-      // Validate BEFORE inserting hash (validation checks for duplicate hashes)
-      const validation = await validateReceiptData(ctx, user._id, args.imageHash, {
-        storeName: args.storeName,
-        total: args.total ?? 0,
-        purchaseDate: args.purchaseDate,
-        items: args.items,
-        imageQuality: args.imageQuality,
-      });
+      // Check for duplicate hash FIRST to prevent race condition
+      const existingHash = await ctx.db
+        .query("receiptHashes")
+        .withIndex("by_hash", (q) => q.eq("imageHash", args.imageHash!))
+        .first();
 
-      // Record hash after validation
+      if (existingHash) {
+        // Duplicate receipt - mark as such and skip points
+        await ctx.db.patch(receiptId, { fraudFlags: ["duplicate_hash"] });
+        return receiptId;
+      }
+
+      // Record hash BEFORE validation to win the race
       await ctx.db.insert("receiptHashes", {
         userId: user._id,
         imageHash: args.imageHash,
@@ -140,12 +210,22 @@ export const create = mutation({
         createdAt: now,
       });
 
+      // Now validate (hash is already recorded, no race)
+      const validation = await validateReceiptData(ctx, user._id, args.imageHash, {
+        storeName: args.storeName,
+        total: args.total ?? 0,
+        purchaseDate: args.purchaseDate,
+        items: args.items,
+        imageQuality: args.imageQuality,
+      });
+
       if (validation.isValid) {
         const pointsResult = await processEarnPoints(ctx, user._id, receiptId);
         if (pointsResult && pointsResult.earned) {
+          // REMAINING-1 fix: Include eventBonus in pointsEarned calculation
           await ctx.db.patch(receiptId, {
             earnedPoints: true,
-            pointsEarned: (pointsResult.pointsAmount ?? 0) + (pointsResult.bonusPoints || 0),
+            pointsEarned: (pointsResult.pointsAmount ?? 0) + (pointsResult.bonusPoints || 0) + (pointsResult.eventBonus || 0),
             fraudFlags: validation.flags,
           });
         } else {
@@ -160,7 +240,7 @@ export const create = mutation({
         storeName: finalStoreName,
         normalizedStoreId: args.storeName ? (normalizeStoreName(args.storeName) ?? undefined) : undefined,
         purchaseDate: args.purchaseDate || now,
-        items: (args.items || []).map(item => ({ ...item, name: toGroceryTitleCase(item.name) })),
+        items: cleanedItems,
       });
       await trackFunnelEvent(ctx, user._id, "first_scan");
       await trackActivity(ctx, user._id, "receipt_processed", { receiptId, storeName: finalStoreName });
@@ -203,6 +283,9 @@ export const update = mutation({
     const user = await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject)).unique();
     if (!user || receipt.userId !== user._id) throw new Error("Unauthorized");
 
+    // Input validation (H2 fix)
+    validateReceiptInput(args);
+
     const updates: Record<string, unknown> = {};
     if (args.storeName !== undefined) {
       updates.storeName = args.storeName;
@@ -215,12 +298,39 @@ export const update = mutation({
     if (args.tax !== undefined) updates.tax = args.tax;
     if (args.total !== undefined) updates.total = args.total;
     if (args.processingStatus !== undefined) updates.processingStatus = args.processingStatus;
-    if (args.items !== undefined) updates.items = args.items.map((item) => ({ ...item, name: toGroceryTitleCase(item.name) }));
+    // Clean items using cleanItemForStorage (C1 fix - Rule #13 compliance)
+    if (args.items !== undefined) updates.items = cleanReceiptItems(args.items);
     if (args.imageQuality !== undefined) updates.imageQuality = args.imageQuality;
     if (args.imageHash !== undefined) updates.imageHash = args.imageHash;
 
     if (args.processingStatus === "completed" && args.imageHash && !receipt.earnedPoints) {
-      // Validate BEFORE inserting hash (validation checks for duplicate hashes)
+      // H1 fix: Check for duplicate hash FIRST to prevent race condition (same as create path)
+      const existingHash = await ctx.db
+        .query("receiptHashes")
+        .withIndex("by_hash", (q) => q.eq("imageHash", args.imageHash!))
+        .first();
+
+      if (existingHash) {
+        // Duplicate receipt - mark as such and skip points
+        updates.fraudFlags = ["duplicate_hash"];
+        await ctx.db.patch(args.id, updates);
+        return await ctx.db.get(args.id);
+      }
+
+      // Record hash BEFORE validation to win the race
+      await ctx.db.insert("receiptHashes", {
+        userId: user._id,
+        imageHash: args.imageHash,
+        receiptId: args.id,
+        storeName: args.storeName,
+        receiptDate: args.purchaseDate,
+        totalAmount: args.total,
+        ocrConfidence: args.imageQuality,
+        firstSeenAt: Date.now(),
+        createdAt: Date.now(),
+      });
+
+      // Now validate (hash is already recorded, no race)
       const validation = await validateReceiptData(ctx, user._id, args.imageHash, {
         storeName: args.storeName,
         total: args.total ?? receipt.total ?? 0,
@@ -229,31 +339,13 @@ export const update = mutation({
         imageQuality: args.imageQuality
       });
 
-      // Only insert hash if not already recorded (create path may have done it)
-      const existingHash = await ctx.db
-        .query("receiptHashes")
-        .withIndex("by_hash", (q) => q.eq("imageHash", args.imageHash!))
-        .first();
-      if (!existingHash) {
-        await ctx.db.insert("receiptHashes", {
-          userId: user._id,
-          imageHash: args.imageHash,
-          receiptId: args.id,
-          storeName: args.storeName,
-          receiptDate: args.purchaseDate,
-          totalAmount: args.total,
-          ocrConfidence: args.imageQuality,
-          firstSeenAt: Date.now(),
-          createdAt: Date.now(),
-        });
-      }
-
       updates.fraudFlags = validation.flags;
       if (validation.isValid) {
         const pointsResult = await processEarnPoints(ctx, user._id, args.id);
         if (pointsResult && pointsResult.earned) {
           updates.earnedPoints = true;
-          updates.pointsEarned = (pointsResult.pointsAmount ?? 0) + (pointsResult.bonusPoints || 0);
+          // REMAINING-1 fix: Include eventBonus in pointsEarned calculation
+          updates.pointsEarned = (pointsResult.pointsAmount ?? 0) + (pointsResult.bonusPoints || 0) + (pointsResult.eventBonus || 0);
         }
       }
     }
@@ -261,18 +353,23 @@ export const update = mutation({
     await ctx.db.patch(args.id, updates);
 
     if (args.processingStatus === "completed") {
-      const finalReceipt = await ctx.db.get(args.id);
-      if (finalReceipt && finalReceipt.items) {
+      // Use merged data from updates + original receipt (avoid redundant db.get)
+      const finalStoreName = (updates.storeName as string) || receipt.storeName;
+      const finalNormalizedStoreId = (updates.normalizedStoreId as string | undefined) || receipt.normalizedStoreId;
+      const finalPurchaseDate = (updates.purchaseDate as number) || receipt.purchaseDate;
+      const finalItems = (updates.items as typeof receipt.items) || receipt.items;
+
+      if (finalItems && finalItems.length > 0) {
         await enrichGlobalFromReceipt(ctx as MutationCtx, {
           userId: user._id,
-          storeName: finalReceipt.storeName,
-          normalizedStoreId: finalReceipt.normalizedStoreId,
-          purchaseDate: finalReceipt.purchaseDate,
-          items: finalReceipt.items,
+          storeName: finalStoreName,
+          normalizedStoreId: finalNormalizedStoreId,
+          purchaseDate: finalPurchaseDate,
+          items: finalItems,
         });
       }
       await trackFunnelEvent(ctx, user._id, "first_scan");
-      await trackActivity(ctx, user._id, "receipt_processed", { receiptId: args.id, storeName: (updates.storeName as string) || receipt.storeName });
+      await trackActivity(ctx, user._id, "receipt_processed", { receiptId: args.id, storeName: finalStoreName });
     }
 
     return await ctx.db.get(args.id);

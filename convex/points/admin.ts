@@ -1,11 +1,13 @@
 import { mutation, internalMutation } from "../_generated/server";
 import { v } from "convex/values";
+import { internal } from "../_generated/api";
 import { requireAdmin } from "../admin/helpers";
 import { getOrCreatePointsBalance, processExpirePoints } from "./helpers";
 
 /**
  * Cron job: Expire points older than 12 months (H5 fix: batched processing)
- * Processes in batches of 500 to avoid memory issues at scale
+ * Processes in batches of 500 to avoid memory issues at scale.
+ * REMAINING-3 fix: Self-schedules next batch if more data exists.
  */
 export const expireOldPoints = internalMutation({
   args: {},
@@ -23,7 +25,7 @@ export const expireOldPoints = internalMutation({
     const earnTransactions = oldTransactions.filter(tx => tx.type === "earn" || tx.type === "bonus");
 
     if (earnTransactions.length === 0) {
-      return { usersAffected: 0, totalExpired: 0, hasMore: false };
+      return { usersAffected: 0, totalExpired: 0, hasMore: false, batchesProcessed: 1 };
     }
 
     // Group by userId and sum points
@@ -59,10 +61,17 @@ export const expireOldPoints = internalMutation({
       }
     }
 
-    // Indicate if there may be more transactions to process
+    // Check if there may be more transactions to process
     const hasMore = oldTransactions.length === BATCH_SIZE;
 
-    return { usersAffected, totalExpired, hasMore };
+    // REMAINING-3 fix: Self-schedule next batch if more data exists
+    if (hasMore) {
+      // Schedule next batch after 1 second delay to avoid overwhelming the system
+      await ctx.scheduler.runAfter(1000, internal.points.expireOldPoints, {});
+      console.log(`[expireOldPoints] Scheduled next batch. This batch: ${usersAffected} users, ${totalExpired} points`);
+    }
+
+    return { usersAffected, totalExpired, hasMore, batchesProcessed: 1 };
   }
 });
 
