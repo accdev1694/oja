@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, typography } from "@/components/ui/glass";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { AdminTab } from "../types";
 
 interface TabItem {
@@ -55,7 +55,7 @@ export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: Admi
   const handleOverflowTabPress = (tab: AdminTab) => {
     setShowMoreMenu(false);
     onTabPress(tab);
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   };
 
   return (
@@ -74,7 +74,7 @@ export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: Admi
                 key={tab.key}
                 onPress={() => {
                   onTabPress(tab.key);
-                  Haptics.selectionAsync();
+                  safeHaptics.selection();
                 }}
                 style={[styles.tabItem, isActive && styles.tabItemActive]}
               >
@@ -96,7 +96,7 @@ export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: Admi
             <Pressable
               onPress={() => {
                 setShowMoreMenu(true);
-                Haptics.selectionAsync();
+                safeHaptics.selection();
               }}
               style={[styles.tabItem, activeInOverflow && styles.tabItemActive]}
             >
@@ -116,7 +116,7 @@ export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: Admi
         <Pressable
           onPress={() => {
             onSearchPress();
-            Haptics.selectionAsync();
+            safeHaptics.selection();
           }}
           style={styles.searchButton}
         >

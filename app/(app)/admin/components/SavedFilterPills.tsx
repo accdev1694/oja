@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, typography } from "@/components/ui/glass";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import type { Id } from "@/convex/_generated/dataModel";
 
 // Discriminated union for filter data
@@ -46,7 +46,7 @@ export function SavedFilterPills({ tab, onSelect }: SavedFilterPillsProps) {
   const handleDelete = useCallback(async (id: string) => {
     try {
       await deleteFilter({ id: id as Id<"savedFilters"> });
-      Haptics.selectionAsync();
+      safeHaptics.selection();
     } catch (e) {
       console.error("Failed to delete filter", e);
     }
@@ -61,7 +61,7 @@ export function SavedFilterPills({ tab, onSelect }: SavedFilterPillsProps) {
         {filters.map((f) => (
           <View key={f._id} style={styles.pillWrapper}>
             <Pressable 
-              onPress={() => { onSelect(f.filterData); Haptics.selectionAsync(); }}
+              onPress={() => { onSelect(f.filterData); safeHaptics.selection(); }}
               style={styles.pill}
             >
               <Text style={styles.pillText}>{f.name}</Text>

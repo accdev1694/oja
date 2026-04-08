@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   GlassCard,
@@ -67,7 +67,7 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
         ? prev.events.filter(e => e !== event)
         : [...prev.events, event]
     }));
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   };
 
   const handleCreate = useCallback(async () => {
@@ -79,7 +79,7 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
       await createWebhook(form);
       setModalVisible(false);
       setForm({ url: "", description: "", events: ["receipt.completed", "user.subscribed"] });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Webhook created", "success");
     } catch (e) {
       showToast((e as Error).message, "error");

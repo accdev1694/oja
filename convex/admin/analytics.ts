@@ -30,7 +30,8 @@ async function computeRevenueReport(
     ? ctx.db.query("subscriptions").withIndex("by_created", q => q.gte("createdAt", dateFrom))
     : ctx.db.query("subscriptions").withIndex("by_created");
 
-  let subs = await subsQuery.collect();
+  // C4 fix: Add limit to prevent full table scan
+  let subs = await subsQuery.take(10000);
   if (dateTo) subs = subs.filter(s => s.createdAt <= dateTo);
 
   const activeSubs = subs.filter(s => s.status === "active");
@@ -117,9 +118,11 @@ async function getLiveAnalytics(ctx: QueryCtx, dateFrom?: number, dateTo?: numbe
         ? ctx.db.query("receipts").withIndex("by_created", q => q.gte("createdAt", dateFrom))
         : ctx.db.query("receipts").withIndex("by_created");
 
-      let u = await usersQuery.collect();
-      let l = await listsQuery.collect();
-      let r = await receiptsQuery.collect();
+      // C3 fix: Add .take() limits to prevent unbounded memory usage
+      const LIVE_LIMIT = 50000;
+      let u = await usersQuery.take(LIVE_LIMIT);
+      let l = await listsQuery.take(LIVE_LIMIT);
+      let r = await receiptsQuery.take(LIVE_LIMIT);
 
       if (dateTo) {
         u = u.filter(x => x.createdAt <= dateTo);
@@ -201,27 +204,34 @@ export const getFunnelAnalytics = query({
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
     
+    // M2 fix: Query per step using by_event index instead of loading 10K records
     const steps = ["signup", "onboarding_complete", "first_list", "first_receipt", "first_scan", "subscribed"];
     const funnel: { step: string; count: number; percentage: number }[] = [];
-    const allEvents = await ctx.db.query("funnelEvents").order("desc").take(10000);
-    
+
+    // Parallel fetch per step using proper index
+    const stepResults = await Promise.all(
+      steps.map(step =>
+        ctx.db.query("funnelEvents")
+          .withIndex("by_event", q => q.eq("eventName", step))
+          .take(50000)
+          .then(events => ({
+            step,
+            uniqueUsers: new Set(events.map(e => e.userId.toString())).size,
+          }))
+      )
+    );
+
     let baseCount = 0;
-    for (const step of steps) {
-      const uniqueUsers = new Set(
-        allEvents
-          .filter(e => e.eventName === step)
-          .map(e => e.userId.toString())
-      ).size;
-      
+    for (const { step, uniqueUsers } of stepResults) {
       if (step === "signup") baseCount = uniqueUsers;
-      
+
       funnel.push({
         step,
         count: uniqueUsers,
         percentage: baseCount > 0 ? (uniqueUsers / baseCount) * 100 : 0,
       });
     }
-    
+
     return funnel;
   },
 });
@@ -266,7 +276,8 @@ export const getPointsEconomics = query({
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
 
-    const balances = await ctx.db.query("pointsBalance").collect();
+    // H2 fix: Limit to prevent loading all 50K+ balances into memory
+    const balances = await ctx.db.query("pointsBalance").take(10000);
     
     const totalPointsIssued = balances.reduce((sum, b) => sum + (b.totalPoints || 0), 0);
     const totalPointsRedeemed = balances.reduce((sum, b) => sum + (b.pointsUsed || 0), 0);
@@ -275,10 +286,11 @@ export const getPointsEconomics = query({
     const liabilityGBP = totalPointsOutstanding / 1000;
 
     const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    // H3 audit fix: Add .take() to prevent unbounded memory usage
     const recentTxns = await ctx.db
       .query("pointsTransactions")
       .withIndex("by_created", (q) => q.gte("createdAt", thirtyDaysAgo))
-      .collect();
+      .take(50000);
 
     const pointsEarned30d = recentTxns
       .filter(t => t.type === "earn" || t.type === "bonus")
@@ -322,7 +334,7 @@ export const getAdminSupportSummary = query({
     
     const unassignedTickets = await ctx.db
       .query("supportTickets")
-      .filter(q => q.eq(q.field("assignedTo"), undefined) && q.neq(q.field("status"), "resolved"))
+      .filter(q => q.and(q.eq(q.field("assignedTo"), undefined), q.neq(q.field("status"), "resolved")))
       .collect();
     const unassigned = unassignedTickets.length;
     

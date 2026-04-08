@@ -28,6 +28,13 @@ jest.mock("@clerk/clerk-expo", () => ({
   })),
 }));
 
+// Mock AsyncStorage (required by safeHaptics)
+jest.mock("@react-native-async-storage/async-storage", () => ({
+  getItem: jest.fn(() => Promise.resolve(null)),
+  setItem: jest.fn(() => Promise.resolve()),
+  removeItem: jest.fn(() => Promise.resolve()),
+}));
+
 // Mock Expo modules
 jest.mock("expo-haptics", () => ({
   impactAsync: jest.fn(),

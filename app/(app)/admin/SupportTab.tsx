@@ -9,7 +9,7 @@ import {
 import { FlashList } from "@shopify/flash-list";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import {
   GlassCard,
   AnimatedSection,
@@ -51,7 +51,7 @@ export function SupportTab({ hasPermission }: SupportTabProps) {
   const handleAssign = useCallback(async (ticketId: string) => {
     try {
       await assignTicket({ ticketId: ticketId as Id<"supportTickets"> });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Ticket assigned to you", "success");
     } catch (e) {
       showToast((e as Error).message, "error");
@@ -62,7 +62,7 @@ export function SupportTab({ hasPermission }: SupportTabProps) {
     if (!selectedTicketId) return;
     try {
       await addMessage({ ticketId: selectedTicketId as Id<"supportTickets">, message });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Reply sent", "success");
     } catch (e) {
       showToast((e as Error).message, "error");
@@ -76,7 +76,7 @@ export function SupportTab({ hasPermission }: SupportTabProps) {
       if (status === "closed" || status === "resolved") {
         setSelectedTicketId(null);
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast(`Ticket ${status}`, "success");
     } catch (e) {
       showToast((e as Error).message, "error");
@@ -95,7 +95,7 @@ export function SupportTab({ hasPermission }: SupportTabProps) {
     ({ item: t }: { item: SupportTicket }) => (
       <Pressable
         style={styles.ticketRow}
-        onPress={() => { setSelectedTicketId(t._id); Haptics.selectionAsync(); }}
+        onPress={() => { setSelectedTicketId(t._id); safeHaptics.selection(); }}
       >
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -156,7 +156,7 @@ export function SupportTab({ hasPermission }: SupportTabProps) {
                 <Pressable
                   key={opt.value || "all"}
                   style={[styles.filterChip, statusFilter === opt.value && styles.filterChipActive]}
-                  onPress={() => { setStatusFilter(opt.value); Haptics.selectionAsync(); }}
+                  onPress={() => { setStatusFilter(opt.value); safeHaptics.selection(); }}
                 >
                   <Text style={[styles.filterChipText, statusFilter === opt.value && styles.filterChipTextActive]}>
                     {opt.label}

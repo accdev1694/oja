@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   GlassCard,
@@ -84,22 +84,22 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
   // Performance: Memoize date picker handlers
   const handleDateChange = useCallback((range: DateRange) => {
     setDateRange(range);
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   }, []);
 
   const handleClearDates = useCallback(() => {
     setDateRange({ startDate: null, endDate: null });
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   }, []);
 
   const handleGmvFilterChange = useCallback((f: typeof gmvFilter) => {
     setGmvFilter(f);
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   }, []);
 
   const handleLoadMoreLogs = useCallback(() => {
     loadMoreLogs(20);
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   }, [loadMoreLogs]);
 
   const handleToggleWidget = useCallback(async (widgetId: string) => {
@@ -108,7 +108,7 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
       w.id === widgetId ? { ...w, visible: !w.visible } : w
     );
     await updatePreferences({ overviewWidgets: nextWidgets });
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   }, [preferences, updatePreferences]);
 
   const handleMoveWidget = useCallback(async (widgetId: string, direction: "up" | "down") => {
@@ -127,7 +127,7 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
     // Re-assign orders
     const nextWidgets = widgets.map((w, i) => ({ ...w, order: i }));
     await updatePreferences({ overviewWidgets: nextWidgets });
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   }, [preferences, updatePreferences]);
 
   useEffect(() => {
@@ -136,7 +136,7 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
       interval = setInterval(() => {
         setRefreshKey(Date.now().toString());
         setLastUpdated(new Date());
-      }, 30000);
+      }, 120000); // M1 fix: 2 minutes instead of 30s to reduce query storms
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -407,7 +407,7 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
           </View>
           <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center" }}>
             <Pressable 
-              onPress={() => { setIsCustomizing(!isCustomizing); Haptics.selectionAsync(); }}
+              onPress={() => { setIsCustomizing(!isCustomizing); safeHaptics.selection(); }}
               style={[styles.customizeBtn, isCustomizing && styles.gridItemActive]}
             >
               <MaterialCommunityIcons 

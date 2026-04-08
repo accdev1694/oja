@@ -13,7 +13,7 @@ import {
 import { FlashList } from "@shopify/flash-list";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import {
@@ -210,7 +210,7 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
 
   const handleSelectReceipt = useCallback((id: string) => {
     setSelectedReceiptId(id);
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   }, []);
 
   const handleStartEdit = useCallback((receipt: Receipt) => {
@@ -219,7 +219,7 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
       storeName: receipt.storeName,
       total: receipt.total.toString(),
     });
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   }, []);
 
   const handleSaveEdit = useCallback(async () => {
@@ -231,7 +231,7 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
         total: parseFloat(editForm.total),
       });
       setEditingReceipt(null);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Receipt updated", "success");
     } catch (e) {
       showToast((e as Error).message, "error");
@@ -248,7 +248,7 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
           try {
             await deleteReceipt({ receiptId: receiptId as Id<"receipts"> });
             if (selectedReceiptId === receiptId) setSelectedReceiptId(null);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            safeHaptics.success();
             showToast("Receipt deleted", "success");
           } catch (error) {
             showToast((error as Error).message || "Failed to delete receipt", "error");
@@ -272,7 +272,7 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
             const ids = flaggedReceipts.map((r) => r._id);
             try {
               const result = await bulkAction({ receiptIds: ids as Id<"receipts">[], action: "approve" });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              safeHaptics.success();
               showToast(`Approved ${result.count} receipts`, "success");
             } catch (error) {
               showToast((error as Error).message || "Failed to approve receipts", "error");
@@ -286,7 +286,7 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
   const handleDeletePrice = useCallback(async (priceId: string) => {
     try {
       await overridePrice({ priceId: priceId as Id<"currentPrices">, deleteEntry: true });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Price record removed", "success");
     } catch (error) {
       showToast((error as Error).message || "Failed to delete price", "error");
@@ -397,7 +397,7 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
                 <Pressable
                   key={opt.value || "all"}
                   style={[styles.filterChip, statusFilter === opt.value && styles.filterChipActive]}
-                  onPress={() => { setStatusFilter(opt.value); Haptics.selectionAsync(); }}
+                  onPress={() => { setStatusFilter(opt.value); safeHaptics.selection(); }}
                 >
                   <Text style={[styles.filterChipText, statusFilter === opt.value && styles.filterChipTextActive]}>
                     {opt.label}

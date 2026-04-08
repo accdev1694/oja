@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, createContext, useContext } from "react
 import { useWindowDimensions } from "react-native";
 import { useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { PermissionData, AnalyticsData, AdminTab } from "./types";
 
 /**
@@ -92,7 +92,7 @@ export function useAdminExport() {
 
   const handleExportCSV = useCallback(async (type: "users" | "receipts" | "prices" | "analytics") => {
     try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       const result = await exportData({ dataType: type });
       showToast(`Export complete: ${result.fileName}`, "success");
     } catch (e) {

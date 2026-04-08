@@ -89,6 +89,17 @@ export async function requireAdmin(ctx: QueryCtx | MutationCtx): Promise<Doc<"us
     .first();
 
   if (user.isAdmin || userRole) {
+    // C1 fix: Enforce MFA grace period — block access after 14-day grace expires
+    if (!user.mfaEnabled) {
+      const GRACE_PERIOD_MS = 14 * 24 * 60 * 60 * 1000;
+      // Use userRole.grantedAt for RBAC admins who may not have adminGrantedAt
+      const adminGrantedAt = user.adminGrantedAt || (userRole as { grantedAt?: number } | null)?.grantedAt || user.createdAt || 0;
+      const gracePeriodExpired = (Date.now() - adminGrantedAt) > GRACE_PERIOD_MS;
+      if (gracePeriodExpired) {
+        console.warn(`[requireAdmin] MFA grace period expired for admin ${user._id}`);
+        throw new Error("MFA required: Your 14-day grace period has expired. Please enable MFA to continue.");
+      }
+    }
     return user;
   }
 

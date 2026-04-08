@@ -154,7 +154,7 @@ describe("admin/helpers", () => {
     });
 
     it("should return user with isAdmin flag", async () => {
-      const adminUser = { _id: "user1", clerkId: "clerk_123", isAdmin: true };
+      const adminUser = { _id: "user1", clerkId: "clerk_123", isAdmin: true, mfaEnabled: true };
       mockCtx.auth.getUserIdentity.mockResolvedValue({ subject: "clerk_123" });
       mockCtx.db.first.mockResolvedValueOnce(adminUser); // getCurrentUser
       mockCtx.db.first.mockResolvedValueOnce({ roleId: "role1" }); // userRoles query
@@ -165,8 +165,54 @@ describe("admin/helpers", () => {
       expect(result).toEqual(adminUser);
     });
 
+    it("should throw when MFA grace period expired", async () => {
+      const adminNoMfa = { _id: "user1", clerkId: "clerk_123", isAdmin: true, mfaEnabled: false, adminGrantedAt: Date.now() - 15 * 24 * 60 * 60 * 1000 };
+      mockCtx.auth.getUserIdentity.mockResolvedValue({ subject: "clerk_123" });
+      mockCtx.db.first.mockResolvedValueOnce(adminNoMfa);
+      mockCtx.db.first.mockResolvedValueOnce({ roleId: "role1" });
+
+      await expect(
+        adminRequireAdmin(mockCtx as unknown as Parameters<typeof adminRequireAdmin>[0])
+      ).rejects.toThrow("MFA required");
+    });
+
+    it("should allow admin within MFA grace period", async () => {
+      const recentAdmin = { _id: "user1", clerkId: "clerk_123", isAdmin: true, mfaEnabled: false, adminGrantedAt: Date.now() - 1000 };
+      mockCtx.auth.getUserIdentity.mockResolvedValue({ subject: "clerk_123" });
+      mockCtx.db.first.mockResolvedValueOnce(recentAdmin);
+      mockCtx.db.first.mockResolvedValueOnce({ roleId: "role1" });
+
+      const result = await adminRequireAdmin(
+        mockCtx as unknown as Parameters<typeof adminRequireAdmin>[0]
+      );
+      expect(result).toEqual(recentAdmin);
+    });
+
+    it("should throw for RBAC admin with expired MFA grace period", async () => {
+      const rbacAdmin = { _id: "user1", clerkId: "clerk_123", isAdmin: false, mfaEnabled: false };
+      mockCtx.auth.getUserIdentity.mockResolvedValue({ subject: "clerk_123" });
+      mockCtx.db.first.mockResolvedValueOnce(rbacAdmin);
+      mockCtx.db.first.mockResolvedValueOnce({ roleId: "role1", grantedAt: Date.now() - 15 * 24 * 60 * 60 * 1000 });
+
+      await expect(
+        adminRequireAdmin(mockCtx as unknown as Parameters<typeof adminRequireAdmin>[0])
+      ).rejects.toThrow("MFA required");
+    });
+
+    it("should allow RBAC admin within MFA grace period", async () => {
+      const rbacAdmin = { _id: "user1", clerkId: "clerk_123", isAdmin: false, mfaEnabled: false };
+      mockCtx.auth.getUserIdentity.mockResolvedValue({ subject: "clerk_123" });
+      mockCtx.db.first.mockResolvedValueOnce(rbacAdmin);
+      mockCtx.db.first.mockResolvedValueOnce({ roleId: "role1", grantedAt: Date.now() - 1000 });
+
+      const result = await adminRequireAdmin(
+        mockCtx as unknown as Parameters<typeof adminRequireAdmin>[0]
+      );
+      expect(result).toEqual(rbacAdmin);
+    });
+
     it("should return user with RBAC role but no isAdmin flag", async () => {
-      const rbacAdmin = { _id: "user1", clerkId: "clerk_123", isAdmin: false };
+      const rbacAdmin = { _id: "user1", clerkId: "clerk_123", isAdmin: false, mfaEnabled: true };
       mockCtx.auth.getUserIdentity.mockResolvedValue({ subject: "clerk_123" });
       mockCtx.db.first.mockResolvedValueOnce(rbacAdmin); // getCurrentUser
       mockCtx.db.first.mockResolvedValueOnce({ roleId: "role1" }); // has RBAC role

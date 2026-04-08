@@ -310,18 +310,20 @@ export const adjustPoints = mutation({
   handler: async (ctx, args) => {
     const admin = await requirePermission(ctx, "edit_users");
     
+    // H6 fix: Include full admin audit trail in metadata for both positive and negative adjustments
     if (args.amount > 0) {
       await ctx.runMutation(internal.points.awardBonusPoints, {
         userId: args.userId,
         amount: args.amount,
         source: `admin_adjustment: ${args.reason}`,
-        metadata: { adminId: admin._id as string },
+        metadata: { adminId: admin._id as string, reason: args.reason, adjustedBy: admin.name || "Admin" },
       });
     } else if (args.amount < 0) {
+      // Use expirePoints for negative — admin trail is preserved in adminLogs entry below
       await ctx.runMutation(internal.points.expirePoints, {
         userId: args.userId,
         points: Math.abs(args.amount),
-        reason: `admin_adjustment: ${args.reason}`,
+        reason: `admin_adjustment_by_${admin._id}: ${args.reason}`,
       });
     }
 

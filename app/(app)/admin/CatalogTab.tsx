@@ -7,7 +7,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   GlassCard,
@@ -46,7 +46,7 @@ export function CatalogTab({ hasPermission }: CatalogTabProps) {
         onPress: async () => {
           try {
             const result = await mergeStores({ fromNames: variants, toName: suggested });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            safeHaptics.success();
             showToast(`Merged ${result.updatedCount} records`, "success");
           } catch (error) {
             showToast((error as Error).message || "Failed to merge stores", "error");

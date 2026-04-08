@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, typography, GlassCard } from "@/components/ui/glass";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { useAdminSearch } from "../hooks";
 import { AdminTab } from "../types";
 
@@ -68,7 +68,7 @@ export function GlobalSearchModal({ visible, onClose, onSelectResult }: GlobalSe
                 onPress={() => {
                   onSelectResult(item.tab, item.id);
                   onClose();
-                  Haptics.selectionAsync();
+                  safeHaptics.selection();
                 }}
               >
                 <View style={styles.iconCircle}>

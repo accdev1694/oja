@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   GlassCard,
@@ -67,7 +67,7 @@ export function MonitoringTab({ hasPermission }: MonitoringTabProps) {
   const handleResolveAlert = useCallback(async (id: string) => {
     try {
       await resolveAlert({ alertId: id as Id<"adminAlerts"> });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Alert resolved", "success");
     } catch (e) { showToast((e as Error).message, "error"); }
   }, [resolveAlert, showToast]);
@@ -75,7 +75,7 @@ export function MonitoringTab({ hasPermission }: MonitoringTabProps) {
   const handleToggleWorkflow = useCallback(async (workflowId: string) => {
     try {
       await toggleWorkflow({ workflowId: workflowId as Id<"automationWorkflows"> });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Workflow status updated", "success");
     } catch (e) { showToast((e as Error).message, "error"); }
   }, [toggleWorkflow, showToast]);
@@ -87,7 +87,7 @@ export function MonitoringTab({ hasPermission }: MonitoringTabProps) {
         return;
       }
       await createExperiment(experimentForm);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Experiment created", "success");
       setExperimentModalVisible(false);
       setExperimentForm({

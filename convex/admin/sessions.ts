@@ -66,6 +66,21 @@ export const logAdminSession = mutation({
       });
     }
 
+    // C2 fix: Re-check active count after expiring old sessions to prevent race condition
+    const recheck = await ctx.db
+      .query("adminSessions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .collect();
+    const activeCount = recheck.filter(s => (now - s.lastSeenAt) <= SESSION_TIMEOUT_MS).length;
+    if (activeCount >= MAX_CONCURRENT_SESSIONS) {
+      // Another concurrent request already created a session — expire oldest
+      const sorted = recheck
+        .filter(s => (now - s.lastSeenAt) <= SESSION_TIMEOUT_MS)
+        .sort((a, b) => a.loginAt - b.loginAt);
+      await ctx.db.patch(sorted[0]._id, { status: "expired", logoutAt: now });
+    }
+
     const sessionId = await ctx.db.insert("adminSessions", {
       userId: user._id,
       ipAddress: args.ipAddress,
@@ -165,7 +180,7 @@ export const getActiveImpersonationToken = query({
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .filter((q) =>
         q.and(
-          q.neq(q.field("usedAt"), undefined),
+          q.eq(q.field("usedAt"), undefined),
           q.gt(q.field("expiresAt"), Date.now())
         )
       )

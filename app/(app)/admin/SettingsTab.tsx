@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import * as ImageManipulator from "expo-image-manipulator";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
@@ -98,7 +98,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
           setIsCleaning(true);
           try {
             const result = await clearSeedDataMutation({});
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            safeHaptics.success();
             showToast(`Cleared ${result.deletedReceipts} test records`, "success");
           } catch (e) {
             showToast((e as Error).message || "Failed to clear seed data", "error");
@@ -114,7 +114,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
     setIsArchiving(true);
     try {
       const result = await archiveLogs({});
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast(`Archived ${result.archivedCount} old logs`, "success");
     } catch (e) {
       showToast((e as Error).message || "Failed to archive logs", "error");
@@ -133,7 +133,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
           setIsSimulating(true);
           try {
             const result = await simulateLoad({ intensity: 50 });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            safeHaptics.success();
             showToast("Scale test complete", "success");
           } catch (e) {
             showToast((e as Error).message || "Scale test failed", "error");
@@ -150,7 +150,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
     if (isNaN(price)) return;
     try {
       await updatePricing({ id: item._id as Id<"pricingConfig">, priceAmount: price, isActive: true });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Price updated", "success");
     } catch (error) {
       showToast((error as Error).message || "Failed to update price", "error");
@@ -160,7 +160,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
   const handleToggleFlag = useCallback(async (key: string, currentValue: boolean) => {
     try {
       await toggleFlag({ key });
-      Haptics.selectionAsync();
+      safeHaptics.selection();
       showToast(`${key} toggled`, "success");
     } catch (error) {
       showToast((error as Error).message || "Failed to toggle flag", "error");
@@ -172,7 +172,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
     try {
       await toggleFlag({ key: newFlagKey.trim() });
       setNewFlagKey("");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Flag added", "success");
     } catch (error) {
       showToast((error as Error).message || "Failed to add flag", "error");
@@ -195,7 +195,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
       setEditingAnnouncement(null);
       setAnnTitle("");
       setAnnBody("");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast(editingAnnouncement ? "Announcement updated" : "Announcement created", "success");
     } catch (error) {
       showToast((error as Error).message || "Failed to save announcement", "error");
@@ -208,13 +208,13 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
     setAnnBody(ann.body);
     setAnnType(ann.type);
     setShowNewAnnouncement(true);
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   }, []);
 
   const handleToggleAnnouncement = useCallback(async (id: string) => {
     try {
       await toggleAnnouncement({ id: id as Id<"announcements"> });
-      Haptics.selectionAsync();
+      safeHaptics.selection();
       showToast("Announcement status toggled", "success");
     } catch (error) {
       showToast((error as Error).message || "Failed to toggle announcement", "error");
@@ -229,7 +229,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
         onPress: async () => {
           try {
             await forceLogout({ sessionId: sessionId as Id<"adminSessions"> });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            safeHaptics.success();
             showToast("Session expired", "success");
           } catch (error) {
             showToast((error as Error).message || "Failed to force logout", "error");
@@ -338,7 +338,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
             await markMigrationComplete({ imagesOptimized: processed, bytesFreed: totalSaved });
 
             setIsOptimizing(false);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            safeHaptics.success();
             showToast(
               `Optimized ${processed} images, freed ${(totalSaved / 1024 / 1024).toFixed(1)} MB`,
               "success"

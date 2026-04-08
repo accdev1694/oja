@@ -8,7 +8,7 @@ import {
 import { FlashList } from "@shopify/flash-list";
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import * as Haptics from "expo-haptics";
+import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   GlassCard,
@@ -142,7 +142,7 @@ export function UsersTab({
 
   const handleSelectUser = useCallback((userId: string) => {
     setSelectedUser(userId);
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   }, []);
 
   const toggleUserSelection = useCallback((userId: string) => {
@@ -152,7 +152,7 @@ export function UsersTab({
       else next.add(userId);
       return next;
     });
-    Haptics.selectionAsync();
+    safeHaptics.selection();
   }, []);
 
   const handleBulkExtend = useCallback(async () => {
@@ -166,7 +166,7 @@ export function UsersTab({
             await bulkExtendTrial({ userIds: Array.from(selectedUsers) as Id<"users">[], days: 14 });
             const count = selectedUsers.size;
             setSelectedUsers(new Set());
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            safeHaptics.success();
             showToast(`Extended trials for ${count} users`, "success");
           } catch (e) { showToast((e as Error).message, "error"); }
         }
@@ -194,7 +194,7 @@ export function UsersTab({
     try {
       await addTag({ userId: selectedUser as Id<"users">, tag: newTag.trim() });
       setNewTag("");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Tag added", "success");
     } catch (e) {
       showToast((e as Error).message, "error");
@@ -205,7 +205,7 @@ export function UsersTab({
     if (!selectedUser) return;
     try {
       await removeTag({ userId: selectedUser as Id<"users">, tag });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast("Tag removed", "success");
     } catch (e) {
       showToast((e as Error).message, "error");
@@ -215,7 +215,7 @@ export function UsersTab({
   const handleToggleAdmin = useCallback(async (userId: string) => {
     try {
       const result = await toggleAdmin({ userId: userId as Id<"users"> });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      safeHaptics.success();
       showToast(result.isAdmin ? "Admin privileges granted" : "Admin privileges revoked", "success");
     } catch (error) {
       showToast((error as Error).message || "Failed to toggle admin status", "error");
@@ -230,7 +230,7 @@ export function UsersTab({
         onPress: async () => {
           try {
             await extendTrial({ userId: userId as Id<"users">, days: 14 });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            safeHaptics.success();
             showToast("Trial extended", "success");
           } catch (error) {
             showToast((error as Error).message || "Failed to extend trial", "error");
@@ -272,7 +272,7 @@ export function UsersTab({
         onPress: async () => {
           try {
             await grantAccess({ userId: userId as Id<"users">, months: 12 });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            safeHaptics.success();
             showToast("Premium access granted", "success");
           } catch (error) {
             showToast((error as Error).message || "Failed to grant access", "error");
@@ -285,7 +285,7 @@ export function UsersTab({
   const handleToggleSuspension = useCallback(async (userId: string) => {
     try {
       await toggleSuspension({ userId: userId as Id<"users"> });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      safeHaptics.warning();
       showToast("User status updated", "success");
     } catch (error) {
       showToast((error as Error).message || "Failed to toggle suspension", "error");
