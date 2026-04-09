@@ -159,12 +159,29 @@ export const cleanupExpiredSessions = internalMutation({
   },
 });
 
+/**
+ * Check if the current authenticated user is being impersonated.
+ * Does NOT require admin — any user can check their own impersonation status.
+ * Returns minimal info (no sensitive admin IDs exposed to non-admins).
+ */
 export const getActiveImpersonationToken = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    // Auth check: caller must be authenticated
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
 
-    // A non-expired token means impersonation could be active (regardless of usedAt stamp)
+    // Only allow checking your own impersonation status (unless admin)
+    const caller = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!caller) return null;
+
+    const isAdmin = caller.isAdmin === true;
+    if (caller._id !== args.userId && !isAdmin) return null;
+
+    // A non-expired token means impersonation could be active
     const token = await ctx.db
       .query("impersonationTokens")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -173,8 +190,16 @@ export const getActiveImpersonationToken = query({
 
     if (!token) return null;
 
-    const admin = await ctx.db.get(token.createdBy);
+    // Non-admins get minimal info; admins get full details
+    if (!isAdmin) {
+      return {
+        hasActiveToken: true,
+        adminName: "Admin",
+        expiresAt: token.expiresAt,
+      };
+    }
 
+    const admin = await ctx.db.get(token.createdBy);
     return {
       hasActiveToken: true,
       createdBy: token.createdBy,

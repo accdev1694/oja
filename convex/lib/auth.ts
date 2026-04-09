@@ -56,10 +56,14 @@ export async function requireOwnership(
  *
  * For users WITHOUT MFA enabled, this serves as a server-side gate:
  * sensitive mutations will reject until MFA is set up.
+ *
+ * Set env var CONVEX_SKIP_MFA="true" to bypass in local dev.
  */
 export async function requireMfa(ctx: QueryCtx | MutationCtx) {
   const user = await requireCurrentUser(ctx);
-  if (!user.mfaEnabled) {
+  // Skip MFA enforcement only when explicitly opted in for local dev
+  const skipMfa = process.env.CONVEX_SKIP_MFA === "true";
+  if (!skipMfa && !user.mfaEnabled) {
     throw new Error(
       "MFA required. Enable two-factor authentication in your profile settings before performing this action."
     );

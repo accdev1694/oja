@@ -90,7 +90,9 @@ export async function requireAdmin(ctx: QueryCtx | MutationCtx): Promise<Doc<"us
 
   if (user.isAdmin || userRole) {
     // C1 fix: Enforce MFA grace period — block access after 14-day grace expires
-    if (!user.mfaEnabled) {
+    // Skip only when explicitly opted in for local dev
+    const skipMfa = process.env.CONVEX_SKIP_MFA === "true";
+    if (!skipMfa && !user.mfaEnabled) {
       const GRACE_PERIOD_MS = 14 * 24 * 60 * 60 * 1000;
       // Use userRole.grantedAt for RBAC admins who may not have adminGrantedAt
       const adminGrantedAt = user.adminGrantedAt || (userRole as { grantedAt?: number } | null)?.grantedAt || user.createdAt || 0;
