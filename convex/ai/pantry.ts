@@ -12,6 +12,7 @@ import {
 import { toGroceryTitleCase } from "../lib/titleCase";
 import { cleanItemForStorage } from "../lib/itemNameParser";
 import { AI_CATEGORY_PROMPT } from "../lib/categoryNormalizer";
+import { getCuisineFoods } from "../lib/cuisineFoods";
 
 export interface SeedItem {
   name: string;
@@ -198,25 +199,28 @@ Return ONLY JSON array.`;
         isVision: false,
         isFallback: aiMetrics.isFallback,
       });
-      return deduplicateItems([...globalItems, ...aiItems]).slice(0, totalItems);
+      // Supplement with cuisine-specific items to fill any gaps
+      const cuisineFallback = getFallbackItems(country, cuisines);
+      return deduplicateItems([...globalItems, ...aiItems, ...cuisineFallback]).slice(0, totalItems);
     } catch (error) {
       console.error("AI generation failed:", error);
-      try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "pantry_seed" }); } catch {}
+      try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "pantry_seed" }); } catch (trackErr) { console.error("[pantry seed] Failed to track AI error:", trackErr); }
       const fallback = getFallbackItems(country, cuisines);
       return deduplicateItems([...globalItems, ...fallback]).slice(0, totalItems);
     }
   },
 });
 
-export function getFallbackItems(country: string, cuisines: string[]): SeedItem[] {
-  const localItems: SeedItem[] = [
-    { name: "Whole Milk", category: "Dairy", stockLevel: "low", estimatedPrice: 1.15, hasVariants: true },
-    { name: "Butter", category: "Dairy", stockLevel: "low", estimatedPrice: 1.85, hasVariants: false, defaultSize: "250", defaultUnit: "g" },
-    { name: "Eggs", category: "Dairy", stockLevel: "low", estimatedPrice: 2.10, hasVariants: true },
-    { name: "White Bread", category: "Bakery", stockLevel: "low", estimatedPrice: 1.10, hasVariants: false, defaultSize: "800", defaultUnit: "g" },
-    { name: "Pasta", category: "Pantry Staples", stockLevel: "low", estimatedPrice: 0.70, hasVariants: true },
-    { name: "Chopped Tomatoes", category: "Canned Goods", stockLevel: "low", estimatedPrice: 0.55, hasVariants: false, defaultSize: "400", defaultUnit: "g" },
-    { name: "Toilet Roll", category: "Household", stockLevel: "low", estimatedPrice: 3.50, hasVariants: true },
-  ];
-  return localItems;
+export function getFallbackItems(_country: string, cuisines: string[]): SeedItem[] {
+  const cuisineItems = getCuisineFoods(cuisines, 200);
+  return cuisineItems.map((item) => ({
+    name: item.name,
+    category: item.category,
+    stockLevel: "low" as const,
+    source: item.source,
+    estimatedPrice: item.estimatedPrice,
+    hasVariants: item.hasVariants,
+    defaultSize: item.defaultSize,
+    defaultUnit: item.defaultUnit,
+  }));
 }

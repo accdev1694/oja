@@ -209,13 +209,23 @@ export const bulkCreate = mutation({
       return false;
     });
 
-    // C4 fix: Enforce free-tier pantry cap during bulk create (onboarding)
-    const access = await canAddPantryItem(ctx, user._id);
-    const remainingSlots = access.allowed
-      ? (access.maxCount != null && access.currentCount != null
-          ? access.maxCount - access.currentCount
-          : newItems.length)
-      : 0;
+    // Onboarding seed: allow up to 100 items regardless of tier so free users
+    // get a useful starting pantry. Uses onboardingComplete flag (not empty-pantry
+    // heuristic) to avoid TOCTOU races with concurrent requests.
+    const isOnboardingSeed = user.onboardingComplete === false;
+    const ONBOARDING_CAP = 100;
+
+    let remainingSlots: number;
+    if (isOnboardingSeed) {
+      remainingSlots = Math.min(newItems.length, ONBOARDING_CAP);
+    } else {
+      const access = await canAddPantryItem(ctx, user._id);
+      remainingSlots = access.allowed
+        ? (access.maxCount != null && access.currentCount != null
+            ? access.maxCount - access.currentCount
+            : newItems.length)
+        : 0;
+    }
     const cappedItems = newItems.slice(0, remainingSlots);
 
     const promises = cappedItems.map((item) => {
