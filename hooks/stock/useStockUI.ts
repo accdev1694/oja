@@ -58,11 +58,21 @@ export function useStockUI(
     setCollapsedCategories(new Set(categories as string[]));
   }, [categories]);
 
+  // Track which category was just expanded (for fast animation on toggle)
+  const [expandingCategory, setExpandingCategory] = useState<string | null>(null);
+  const expandingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const toggleCategory = useCallback((category: string) => {
     setCollapsedCategories((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(category)) {
+        // Expanding — mark for fast animation
         newSet.delete(category);
+        setExpandingCategory(category);
+        if (expandingTimerRef.current) clearTimeout(expandingTimerRef.current);
+        expandingTimerRef.current = setTimeout(() => {
+          setExpandingCategory(null);
+        }, 800);
       } else {
         newSet.add(category);
       }
@@ -212,6 +222,7 @@ export function useStockUI(
     // Categories
     collapsedCategories,
     toggleCategory,
+    expandingCategory,
 
     // Search & filters
     searchQuery,

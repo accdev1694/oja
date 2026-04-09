@@ -28,6 +28,7 @@ interface StockSectionListProps {
   hasExpandedCategory: boolean;
   archivedCount: number;
   bottomInset: number;
+  expandingCategory: string | null;
   itemRef: React.RefObject<View | null>;
   onSwipeDecrease: (itemId: Id<"pantryItems">) => void;
   onSwipeIncrease: (itemId: Id<"pantryItems">) => void;
@@ -48,6 +49,7 @@ export const StockSectionList = React.memo(function StockSectionList({
   hasExpandedCategory,
   archivedCount,
   bottomInset,
+  expandingCategory,
   itemRef,
   onSwipeDecrease,
   onSwipeIncrease,
@@ -101,8 +103,12 @@ export const StockSectionList = React.memo(function StockSectionList({
           if (collapsedCategories.has(section.title)) return null;
           const isArchivedResult = item.status === "archived";
 
-          // Use pre-calculated section delay + small item stagger
-          const delay = section.sectionDelay + (index * 20);
+          // Fast animation when user just toggled this category open;
+          // full stagger delay on initial page load
+          const isQuickExpand = expandingCategory === section.title;
+          const delay = isQuickExpand
+            ? index * 30            // immediate cascade, no base delay
+            : section.sectionDelay + (index * 20);
 
           const isFirstItem = index === 0 && section.title === sections[0]?.title;
 
@@ -124,10 +130,11 @@ export const StockSectionList = React.memo(function StockSectionList({
         }}
         renderSectionHeader={(info) => {
           const section = info.section;
-          const delay = section.sectionDelay - 50;
+          const isQuickExpandHeader = expandingCategory === section.title;
+          const headerDelay = isQuickExpandHeader ? 0 : section.sectionDelay - 50;
 
           return (
-            <AnimatedSection key={`header-${section.title}-${animationKey}`} animation="fadeInDown" duration={400} delay={delay}>
+            <AnimatedSection key={`header-${section.title}-${animationKey}`} animation="fadeInDown" duration={400} delay={headerDelay}>
               {section.title === ESSENTIALS_SECTION_TITLE ? (
                 <EssentialsSectionHeader
                   count={section.data.length}

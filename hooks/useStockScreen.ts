@@ -99,6 +99,7 @@ export function useStockScreen() {
     animationKey: ui.animationKey,
     pageAnimationKey: ui.pageAnimationKey,
     showGestureOnboarding: ui.showGestureOnboarding,
+    expandingCategory: ui.expandingCategory,
     dedupDismissed: data.dedupDismissed,
     flyStartPosition: ui.flyStartPosition,
     toastVisible: ui.toastVisible,

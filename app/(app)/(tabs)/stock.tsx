@@ -58,6 +58,7 @@ export default function PantryScreen() {
     animationKey,
     pageAnimationKey,
     showGestureOnboarding,
+    expandingCategory,
     dedupDismissed,
     flyStartPosition,
     toastVisible,
@@ -167,6 +168,7 @@ export default function PantryScreen() {
             hasExpandedCategory={hasExpandedCategory}
             archivedCount={archivedCount}
             bottomInset={insets.bottom}
+            expandingCategory={expandingCategory}
             itemRef={itemRef}
             onSwipeDecrease={handleSwipeDecrease}
             onSwipeIncrease={handleSwipeIncrease}
