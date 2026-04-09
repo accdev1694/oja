@@ -41,7 +41,7 @@ export default function AdminSetupScreen() {
     
     // Mark onboarding as complete in the background so they don't see it again
     try {
-      await completeOnboarding();
+      await completeOnboarding({});
     } catch (e) {
       console.warn("Failed to mark admin onboarding complete:", e);
     }
@@ -55,7 +55,7 @@ export default function AdminSetupScreen() {
     
     // Mark onboarding as complete
     try {
-      await completeOnboarding();
+      await completeOnboarding({});
     } catch (e) {
       console.warn("Failed to mark admin onboarding complete:", e);
     }

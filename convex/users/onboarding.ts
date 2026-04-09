@@ -119,8 +119,10 @@ export const setOnboardingData = mutation({
  * Mark onboarding as complete
  */
 export const completeOnboarding = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    cuisines: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
@@ -143,6 +145,7 @@ export const completeOnboarding = mutation({
     const now = Date.now();
     await ctx.db.patch(user._id, {
       onboardingComplete: true,
+      ...(args.cuisines && args.cuisines.length > 0 ? { cuisinePreferences: args.cuisines } : {}),
       updatedAt: now,
     });
 

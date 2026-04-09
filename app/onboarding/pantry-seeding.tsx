@@ -80,7 +80,7 @@ export default function PantrySeedingScreen() {
       timerRef.current = setTimeout(() => {
         router.push({
           pathname: "/onboarding/review-items",
-          params: { items: JSON.stringify(items) },
+          params: { items: JSON.stringify(items), cuisines: params.cuisines || "british" },
         });
       }, 1000);
     } catch (err) {
@@ -96,7 +96,8 @@ export default function PantrySeedingScreen() {
   async function handleSkip() {
     safeHaptics.light();
     try {
-      await completeOnboarding();
+      const cuisineList = params.cuisines ? params.cuisines.split(",") : [];
+      await completeOnboarding({ cuisines: cuisineList });
     } catch (e) {
       console.warn("Failed to complete onboarding on skip:", e);
     }

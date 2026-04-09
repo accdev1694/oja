@@ -65,7 +65,7 @@ const SOURCE_CONFIG: Record<
 export default function ReviewItemsScreen() {
   const router = useRouter();
   const { alert } = useGlassAlert();
-  const params = useLocalSearchParams<{ items?: string }>();
+  const params = useLocalSearchParams<{ items?: string; cuisines?: string }>();
   const insets = useSafeAreaInsets();
 
   const bulkCreate = useMutation(api.pantryItems.bulkCreate);
@@ -160,7 +160,8 @@ export default function ReviewItemsScreen() {
             onPress: async () => {
               safeHaptics.light();
               try {
-                await completeOnboarding();
+                const cuisineList = params.cuisines ? params.cuisines.split(",") : [];
+                await completeOnboarding({ cuisines: cuisineList });
               } catch (e) {
                 console.warn("Failed to complete onboarding:", e);
               }
@@ -189,7 +190,8 @@ export default function ReviewItemsScreen() {
         }));
 
       await bulkCreate({ items: itemsToSave });
-      await completeOnboarding();
+      const cuisineList = params.cuisines ? params.cuisines.split(",") : [];
+      await completeOnboarding({ cuisines: cuisineList });
       safeHaptics.success();
 
       const variantItems = itemsToSave.filter((item) => item.hasVariants);
