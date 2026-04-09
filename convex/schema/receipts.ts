@@ -72,6 +72,7 @@ export const receiptTables = {
     .index("by_store_status", ["storeName", "processingStatus"])
     .index("by_status_created", ["processingStatus", "createdAt"])
     .index("by_hash", ["imageHash"]) // Deduplication
+    .index("by_admin_seed", ["isAdminSeed"]) // Used by clearSeedData to avoid full-table scan
     .searchIndex("search_store", { searchField: "storeName" }),
 
   receiptHashes: defineTable({

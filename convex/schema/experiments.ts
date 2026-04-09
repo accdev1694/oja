@@ -13,7 +13,8 @@ export const experimentTables = {
     createdBy: v.id("users"),
     createdAt: v.number(),
   })
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_created", ["createdAt"]),
 
   experimentVariants: defineTable({
     experimentId: v.id("experiments"),

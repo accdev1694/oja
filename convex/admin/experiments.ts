@@ -60,7 +60,11 @@ export const getExperiments = query({
   args: {},
   handler: async (ctx) => {
     await requirePermissionQuery(ctx, "view_analytics");
-    return await ctx.db.query("experiments").order("desc").collect();
+    return await ctx.db
+      .query("experiments")
+      .withIndex("by_created")
+      .order("desc")
+      .collect();
   },
 });
 
@@ -70,10 +74,22 @@ export const exportDataToCSV = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
+    // Defense-in-depth: gate the action itself on admin/view_analytics.
+    // Downstream query calls (listUsersForExport, getRecentReceipts) gate
+    // their own permissions, but the "prices"/"analytics" stub branches
+    // don't touch any gated query — without this check a non-admin could
+    // probe the endpoint and confirm its existence.
+    const perms = await ctx.runQuery(api.admin.getMyPermissions, {});
+    if (!perms || !perms.permissions.includes("view_analytics")) {
+      throw new Error("Admin access required");
+    }
+
     let csv = "";
 
     if (args.dataType === "users") {
-      const users = await ctx.runQuery(api.admin.searchUsers, { searchTerm: "" });
+      // Use the dedicated export query — `searchUsers` short-circuits to [] for
+      // terms shorter than 2 characters, so it produced header-only CSVs.
+      const users = await ctx.runQuery(api.admin.listUsersForExport, {});
       csv = "ID,Name,Email,IsAdmin,Suspended,CreatedAt\n";
       for (const u of users) {
         csv += `${u._id},"${u.name || ""}",${u.email || ""},${!!u.isAdmin},${!!u.suspended},${new Date(u.createdAt).toISOString()}\n`;
@@ -97,13 +113,17 @@ export const clearSeedData = mutation({
   handler: async (ctx) => {
     const admin = await requirePermission(ctx, "manage_catalog");
 
+    // Use the dedicated by_admin_seed index instead of scanning every receipt
+    // in the table — receipts can grow to 10K+ rows in production, and this
+    // function was previously loading them all into memory just to filter in JS.
     let deletedReceipts = 0;
-    const receipts = await ctx.db.query("receipts").collect();
-    for (const r of receipts) {
-      if (r.isAdminSeed) {
-        await ctx.db.delete(r._id);
-        deletedReceipts++;
-      }
+    const seedReceipts = await ctx.db
+      .query("receipts")
+      .withIndex("by_admin_seed", (q) => q.eq("isAdminSeed", true))
+      .collect();
+    for (const r of seedReceipts) {
+      await ctx.db.delete(r._id);
+      deletedReceipts++;
     }
 
     await ctx.db.insert("adminLogs", {
