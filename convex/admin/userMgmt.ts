@@ -1,17 +1,40 @@
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { mutation, query } from "../_generated/server";
+import { mutation, query, type QueryCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { 
-  requirePermission, 
+import type { Doc, Id } from "../_generated/dataModel";
+import {
+  requirePermission,
   requirePermissionQuery,
 } from "./helpers";
+import { getSubscriptionDisplay } from "../lib/subscriptionDisplay";
+
+type UserDoc = Doc<"users">;
+
+/** Attach the computed subscriptionDisplay to a list of users. */
+async function attachSubscriptionDisplay(
+  ctx: QueryCtx,
+  users: UserDoc[]
+): Promise<(UserDoc & { subscriptionDisplay: ReturnType<typeof getSubscriptionDisplay> })[]> {
+  return Promise.all(
+    users.map(async (u) => {
+      const sub = await ctx.db
+        .query("subscriptions")
+        .withIndex("by_user", (q) => q.eq("userId", u._id))
+        .order("desc")
+        .first();
+      return { ...u, subscriptionDisplay: getSubscriptionDisplay(sub) };
+    })
+  );
+}
 
 export const getUsers = query({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
     await requirePermissionQuery(ctx, "view_users");
-    return await ctx.db.query("users").withIndex("by_created").order("desc").paginate(args.paginationOpts);
+    const page = await ctx.db.query("users").withIndex("by_created").order("desc").paginate(args.paginationOpts);
+    const enriched = await attachSubscriptionDisplay(ctx, page.page);
+    return { ...page, page: enriched };
   },
 });
 
@@ -33,8 +56,8 @@ export const searchUsers = query({
       .take(args.limit || 50);
 
     const results = [...byName];
-    const userIds = new Set(results.map(u => u._id));
-    
+    const userIds = new Set<Id<"users">>(results.map(u => u._id));
+
     for (const user of byEmail) {
       if (!userIds.has(user._id)) {
         results.push(user);
@@ -42,7 +65,10 @@ export const searchUsers = query({
       }
     }
 
-    return results.slice(0, args.limit || 50);
+    // Cap enrichment fan-out at 20 for search to bound N+1 subscription lookups
+    // (pagination already limits to 50 per page in getUsers)
+    const limited = results.slice(0, Math.min(args.limit || 50, 20));
+    return attachSubscriptionDisplay(ctx, limited);
   },
 });
 
@@ -104,20 +130,60 @@ export const extendTrial = mutation({
   handler: async (ctx, args) => {
     const admin = await requirePermission(ctx, "edit_users");
     const now = Date.now();
+
+    if (!Number.isInteger(args.days) || args.days <= 0) {
+      throw new Error("days must be a positive integer");
+    }
+
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("User not found");
 
     const subscription = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
       .first();
 
-    if (!subscription) {
-      throw new Error("No subscription found for user");
+    // Guard: never turn an active paying premium subscriber into a trial user.
+    // Use downgradeSubscription first if an admin needs to revert an active sub.
+    if (subscription && subscription.status === "active") {
+      throw new Error(
+        "Cannot start a trial for an active premium subscriber. Downgrade first if needed."
+      );
     }
 
-    const newTrialEnd = (subscription.trialEndsAt || now) + (args.days * 24 * 60 * 60 * 1000);
+    const durationMs = args.days * 24 * 60 * 60 * 1000;
+
+    if (!subscription) {
+      // Create a fresh trial subscription if none exists
+      const trialEnd = now + durationMs;
+      await ctx.db.insert("subscriptions", {
+        userId: args.userId,
+        plan: "free",
+        status: "trial",
+        trialEndsAt: trialEnd,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await ctx.db.insert("adminLogs", {
+        adminUserId: admin._id,
+        action: "extend_trial",
+        targetType: "user",
+        targetId: args.userId,
+        details: `Created trial subscription with ${args.days} days`,
+        createdAt: now,
+      });
+      return { success: true };
+    }
+
+    // Extend from the later of (existing trialEnd, now) so an expired trial
+    // gets a fresh window instead of accumulating past-dated time.
+    const baseEnd = Math.max(subscription.trialEndsAt ?? 0, now);
+    const newTrialEnd = baseEnd + durationMs;
+
     await ctx.db.patch(subscription._id, {
+      status: "trial",
       trialEndsAt: newTrialEnd,
       updatedAt: now,
     });
@@ -134,25 +200,114 @@ export const extendTrial = mutation({
   },
 });
 
+/**
+ * Admin force-downgrade: ends the subscription and returns the user to free.
+ * Used for refunds, abuse resolution, or correcting mis-granted access.
+ * Status is set to "expired" (admin action) to distinguish from user-initiated "cancelled".
+ *
+ * IMPORTANT: This does NOT cancel the Stripe subscription. The stripeSubscriptionId
+ * is cleared from the local record so future webhooks don't overwrite the downgrade,
+ * but the Stripe subscription itself must be cancelled separately in the Stripe
+ * dashboard if the user should stop being billed. The cleared stripeSubscriptionId
+ * is recorded in the audit log for reference.
+ *
+ * No-ops gracefully if the user has no subscription or is already downgraded.
+ */
+export const downgradeSubscription = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const admin = await requirePermission(ctx, "edit_users");
+    const now = Date.now();
+
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .first();
+
+    // No-op only if the sub is already in a terminal ended state.
+    // Trial users (plan=free, status=trial) must still be downgradable —
+    // an admin may need to revoke an active trial.
+    if (
+      !subscription ||
+      (subscription.plan === "free" &&
+        (subscription.status === "expired" || subscription.status === "cancelled"))
+    ) {
+      return { success: true, alreadyDowngraded: true };
+    }
+
+    const priorStripeSubId = subscription.stripeSubscriptionId;
+    const priorStripeCustomerId = subscription.stripeCustomerId;
+
+    await ctx.db.patch(subscription._id, {
+      plan: "free",
+      status: "expired",
+      currentPeriodEnd: now,
+      // Clear BOTH Stripe links so handleSubscriptionUpdated (which looks up
+      // by stripeCustomerId) can't reverse this admin action. If the user
+      // pays again later, checkout will create a fresh record.
+      stripeSubscriptionId: undefined,
+      stripeCustomerId: undefined,
+      updatedAt: now,
+    });
+
+    const stripeDetails = priorStripeSubId
+      ? ` Cleared Stripe sub link (${priorStripeSubId}, customer ${priorStripeCustomerId ?? "unknown"}) — cancel in Stripe dashboard if needed.`
+      : "";
+
+    await ctx.db.insert("adminLogs", {
+      adminUserId: admin._id,
+      action: "downgrade_subscription",
+      targetType: "user",
+      targetId: args.userId,
+      details: `Downgraded subscription to free.${stripeDetails}`,
+      createdAt: now,
+    });
+    return {
+      success: true,
+      priorStripeSubscriptionId: priorStripeSubId,
+      stripeCancelRequired: !!priorStripeSubId,
+    };
+  },
+});
+
 export const grantComplimentaryAccess = mutation({
   args: { userId: v.id("users"), months: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const admin = await requirePermission(ctx, "edit_users");
     const now = Date.now();
     const months = args.months ?? 12;
+
+    if (!Number.isInteger(months) || months <= 0) {
+      throw new Error("months must be a positive integer");
+    }
+
     const duration = months * 30 * 24 * 60 * 60 * 1000;
 
-    let subscription = await ctx.db
+    const subscription = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
       .first();
+
+    // If already active with time remaining, extend from the current period end.
+    // Otherwise start a fresh period from now. Preserves purchased time on an
+    // "extend +12mo" action.
+    const baseStart =
+      subscription?.status === "active" &&
+      subscription.currentPeriodEnd &&
+      subscription.currentPeriodEnd > now
+        ? subscription.currentPeriodEnd
+        : now;
+    const newPeriodEnd = baseStart + duration;
+    const isExtension = baseStart !== now;
 
     if (subscription) {
       await ctx.db.patch(subscription._id, {
         plan: "premium_annual",
         status: "active",
-        currentPeriodStart: now,
-        currentPeriodEnd: now + duration,
+        currentPeriodStart: isExtension ? (subscription.currentPeriodStart ?? now) : now,
+        currentPeriodEnd: newPeriodEnd,
         updatedAt: now,
       });
     } else {
@@ -161,7 +316,7 @@ export const grantComplimentaryAccess = mutation({
         plan: "premium_annual",
         status: "active",
         currentPeriodStart: now,
-        currentPeriodEnd: now + duration,
+        currentPeriodEnd: newPeriodEnd,
         createdAt: now,
         updatedAt: now,
       });
@@ -172,10 +327,12 @@ export const grantComplimentaryAccess = mutation({
       action: "grant_complimentary",
       targetType: "user",
       targetId: args.userId,
-      details: `Granted free premium for ${months} months`,
+      details: isExtension
+        ? `Extended premium by ${months} months (from existing period end)`
+        : `Granted free premium for ${months} months`,
       createdAt: now,
     });
-    return { success: true };
+    return { success: true, extended: isExtension };
   },
 });
 
@@ -222,17 +379,18 @@ export const getUserDetail = query({
       .withIndex("by_user", q => q.eq("userId", u._id))
       .first();
 
-    return { 
-      ...u, 
-      receiptCount: r.length, 
-      listCount: l.length, 
-      totalSpent: Math.round(r.reduce((s, x) => s + (x.total || 0), 0) * 100) / 100, 
-      scanRewards: { 
+    return {
+      ...u,
+      receiptCount: r.length,
+      listCount: l.length,
+      totalSpent: Math.round(r.reduce((s, x) => s + (x.total || 0), 0) * 100) / 100,
+      scanRewards: {
         lifetimeScans: pointsBalance?.tierProgress ?? r.length,
         points: pointsBalance?.availablePoints ?? 0,
         tier: pointsBalance?.tier ?? "bronze"
-      }, 
-      subscription: subscription || { plan: "free", status: "active" } 
+      },
+      subscription: subscription ?? null,
+      subscriptionDisplay: getSubscriptionDisplay(subscription),
     };
   },
 });
@@ -269,35 +427,61 @@ export const bulkExtendTrial = mutation({
   handler: async (ctx, args) => {
     const admin = await requirePermission(ctx, "bulk_operation");
     const now = Date.now();
+
+    if (!Number.isInteger(args.days) || args.days <= 0) {
+      throw new Error("days must be a positive integer");
+    }
+
     const duration = args.days * 24 * 60 * 60 * 1000;
-    
+
     let count = 0;
+    let skipped = 0;
     for (const userId of args.userIds) {
       const sub = await ctx.db
         .query("subscriptions")
         .withIndex("by_user", (q) => q.eq("userId", userId))
+        .order("desc")
         .first();
-        
-      if (sub) {
-        const currentEnd = sub.trialEndsAt || sub.currentPeriodEnd || now;
-        await ctx.db.patch(sub._id, {
-          trialEndsAt: currentEnd + duration,
-          currentPeriodEnd: currentEnd + duration,
+
+      if (!sub) {
+        // Create a fresh trial for users with no subscription record
+        await ctx.db.insert("subscriptions", {
+          userId,
+          plan: "free",
+          status: "trial",
+          trialEndsAt: now + duration,
+          createdAt: now,
           updatedAt: now,
         });
         count++;
+        continue;
       }
+
+      // Skip active paying subscribers — never downgrade them implicitly
+      if (sub.status === "active") {
+        skipped++;
+        continue;
+      }
+
+      // Extend from the later of (existing trialEnd, now) and reset status to trial
+      const baseEnd = Math.max(sub.trialEndsAt ?? 0, now);
+      await ctx.db.patch(sub._id, {
+        status: "trial",
+        trialEndsAt: baseEnd + duration,
+        updatedAt: now,
+      });
+      count++;
     }
-    
+
     await ctx.db.insert("adminLogs", {
       adminUserId: admin._id,
       action: "bulk_extend_trial",
       targetType: "user",
-      details: `Bulk extended trial by ${args.days} days for ${count} users`,
+      details: `Bulk extended trial by ${args.days} days for ${count} users (skipped ${skipped} active subscribers)`,
       createdAt: now,
     });
-    
-    return { success: true, count };
+
+    return { success: true, count, skipped };
   },
 });
 

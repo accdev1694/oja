@@ -19,12 +19,58 @@ import {
   useGlassAlert,
 } from "@/components/ui/glass";
 import { adminStyles as styles } from "./styles";
-import { User } from "./types";
+import { User, SubscriptionEffectiveStatus } from "./types";
 import { ActivityTimeline } from "./ActivityTimeline";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAdminToast, useResponsive } from "./hooks";
 import { SavedFilterPills } from "./components/SavedFilterPills";
 import type { FilterData } from "./components/SavedFilterPills";
+import { SubscriptionBadge } from "./components/SubscriptionBadge";
+
+// Contextual action map — what should show based on effective subscription status
+type ContextualActionKey = "start_trial" | "extend_7" | "extend_14" | "grant_premium" | "downgrade";
+
+interface ContextualAction {
+  key: ContextualActionKey;
+  label: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+  danger?: boolean;
+}
+
+function getContextualActions(status: SubscriptionEffectiveStatus | undefined): ContextualAction[] {
+  switch (status) {
+    case "free":
+      return [
+        { key: "start_trial", label: "Start Trial", icon: "clock-plus-outline" },
+        { key: "grant_premium", label: "Grant Premium", icon: "crown" },
+      ];
+    case "trial":
+      return [
+        { key: "extend_7", label: "+7d Trial", icon: "clock-plus-outline" },
+        { key: "extend_14", label: "+14d Trial", icon: "clock-plus-outline" },
+        { key: "grant_premium", label: "Grant Premium", icon: "crown" },
+      ];
+    case "active":
+      return [
+        { key: "grant_premium", label: "Extend +12mo", icon: "crown" },
+        { key: "downgrade", label: "Downgrade", icon: "arrow-down-circle-outline", danger: true },
+      ];
+    case "expired":
+      return [
+        { key: "start_trial", label: "New Trial", icon: "clock-plus-outline" },
+        { key: "grant_premium", label: "Grant Premium", icon: "crown" },
+      ];
+    case "cancelled":
+      return [
+        { key: "grant_premium", label: "Reactivate", icon: "crown" },
+      ];
+    default:
+      return [
+        { key: "start_trial", label: "Start Trial", icon: "clock-plus-outline" },
+        { key: "grant_premium", label: "Grant Premium", icon: "crown" },
+      ];
+  }
+}
 
 interface UsersTabProps {
   /** Permission check function */
@@ -102,6 +148,7 @@ export function UsersTab({
   const bulkExtendTrial = useMutation(api.admin.bulkExtendTrial);
   const adjustPoints = useMutation(api.admin.adjustPoints);
   const grantAccess = useMutation(api.admin.grantComplimentaryAccess);
+  const downgradeSubscription = useMutation(api.admin.downgradeSubscription);
   const toggleSuspension = useMutation(api.admin.toggleSuspension);
   const generateToken = useMutation(api.impersonation.generateImpersonationToken);
   const addTag = useMutation(api.tags.addUserTag);
@@ -222,16 +269,16 @@ export function UsersTab({
     }
   }, [toggleAdmin, showToast]);
 
-  const handleExtendTrial = useCallback(async (userId: string) => {
-    showAlert("Extend Trial", "Add 14 days to trial?", [
+  const handleExtendTrial = useCallback(async (userId: string, days: number = 14) => {
+    showAlert("Extend Trial", `Add ${days} days to trial?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Extend",
         onPress: async () => {
           try {
-            await extendTrial({ userId: userId as Id<"users">, days: 14 });
+            await extendTrial({ userId: userId as Id<"users">, days });
             safeHaptics.success();
-            showToast("Trial extended", "success");
+            showToast(`Trial extended by ${days} days`, "success");
           } catch (error) {
             showToast((error as Error).message || "Failed to extend trial", "error");
           }
@@ -239,6 +286,50 @@ export function UsersTab({
       },
     ]);
   }, [extendTrial, showAlert, showToast]);
+
+  const handleStartTrial = useCallback(async (userId: string) => {
+    showAlert("Start Trial", "Start a fresh 7-day trial for this user?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Start Trial",
+        onPress: async () => {
+          try {
+            await extendTrial({ userId: userId as Id<"users">, days: 7 });
+            safeHaptics.success();
+            showToast("7-day trial started", "success");
+          } catch (error) {
+            showToast((error as Error).message || "Failed to start trial", "error");
+          }
+        },
+      },
+    ]);
+  }, [extendTrial, showAlert, showToast]);
+
+  const handleDowngrade = useCallback(async (userId: string) => {
+    showAlert(
+      "Downgrade to Free",
+      "End this user's premium access immediately?\n\nWARNING: This does NOT cancel the Stripe subscription. If the user is still being billed, you must cancel in the Stripe dashboard as well.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Downgrade",
+          onPress: async () => {
+            try {
+              const result = await downgradeSubscription({ userId: userId as Id<"users"> });
+              safeHaptics.warning();
+              if (result.stripeCancelRequired) {
+                showToast("Downgraded. Remember to cancel the Stripe subscription.", "info");
+              } else {
+                showToast("Subscription downgraded", "success");
+              }
+            } catch (error) {
+              showToast((error as Error).message || "Failed to downgrade", "error");
+            }
+          },
+        },
+      ]
+    );
+  }, [downgradeSubscription, showAlert, showToast]);
 
   const handleAdjustPoints = useCallback(async (userId: string) => {
     showAlert("Adjust Points", "Add or remove points for this user:", [
@@ -314,6 +405,11 @@ export function UsersTab({
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{u.name}</Text>
             <Text style={styles.userEmail}>{u.email || "No email"}</Text>
+            {u.subscriptionDisplay && (
+              <View style={{ marginTop: 4 }}>
+                <SubscriptionBadge display={u.subscriptionDisplay} size="compact" />
+              </View>
+            )}
           </View>
         </View>
 
@@ -472,24 +568,43 @@ export function UsersTab({
                     <Text style={styles.detailLabel}>Points</Text>
                   </View>
                 </View>
-                {userDetail.subscription && (
-                  <Text style={styles.metricText}>
-                    Plan: {userDetail.subscription.plan} • Status: {userDetail.subscription.status} • Tier: {userDetail.scanRewards?.tier || "bronze"} ({userDetail.scanRewards?.lifetimeScans || 0} scans)
-                  </Text>
+                {userDetail.subscriptionDisplay && (
+                  <View style={{ marginTop: spacing.sm, marginBottom: spacing.xs }}>
+                    <SubscriptionBadge display={userDetail.subscriptionDisplay} size="full" />
+                  </View>
                 )}
+                <Text style={styles.metricText}>
+                  Tier: {userDetail.scanRewards?.tier || "bronze"} ({userDetail.scanRewards?.lifetimeScans || 0} scans)
+                </Text>
                 {canEdit && (
-                  <View style={[styles.actionRow, isMobile && styles.mobileActionRow]}>
-                    <Pressable style={styles.actionBtn} onPress={() => handleExtendTrial(selectedUser)}>
-                      <MaterialCommunityIcons name="clock-plus-outline" size={16} color={colors.accent.primary} />
-                      <Text style={styles.actionBtnText}>+14d Trial</Text>
-                    </Pressable>
+                  <View style={[styles.actionRow, isMobile && styles.mobileActionRow, { flexWrap: "wrap" }]}>
+                    {getContextualActions(userDetail.subscriptionDisplay?.effectiveStatus).map((action) => (
+                      <Pressable
+                        key={action.key}
+                        style={[styles.actionBtn, action.danger && styles.dangerBtn]}
+                        onPress={() => {
+                          switch (action.key) {
+                            case "start_trial": return handleStartTrial(selectedUser);
+                            case "extend_7": return handleExtendTrial(selectedUser, 7);
+                            case "extend_14": return handleExtendTrial(selectedUser, 14);
+                            case "grant_premium": return handleGrantAccess(selectedUser);
+                            case "downgrade": return handleDowngrade(selectedUser);
+                          }
+                        }}
+                      >
+                        <MaterialCommunityIcons
+                          name={action.icon}
+                          size={16}
+                          color={action.danger ? colors.semantic.danger : colors.accent.primary}
+                        />
+                        <Text style={[styles.actionBtnText, action.danger && { color: colors.semantic.danger }]}>
+                          {action.label}
+                        </Text>
+                      </Pressable>
+                    ))}
                     <Pressable style={styles.actionBtn} onPress={() => handleAdjustPoints(selectedUser)}>
                       <MaterialCommunityIcons name="star-plus-outline" size={16} color={colors.accent.secondary} />
                       <Text style={styles.actionBtnText}>Adjust Pts</Text>
-                    </Pressable>
-                    <Pressable style={styles.actionBtn} onPress={() => handleGrantAccess(selectedUser)}>
-                      <MaterialCommunityIcons name="crown" size={16} color={colors.semantic.warning} />
-                      <Text style={styles.actionBtnText}>Free Premium</Text>
                     </Pressable>
                     <Pressable
                       style={[styles.actionBtn, styles.suspendBtn]}
@@ -523,7 +638,7 @@ export function UsersTab({
         )}
       </View>
     ),
-    [search, selectedUsers, canBulk, canEdit, selectedUser, userDetail, userTags, detailTab, isMobile, displayUsers, newTag, handleSavePreset, handleApplyPreset, handleBulkExtend, handleExportCSV, handleImpersonate, handleRemoveTag, handleAddTag, handleExtendTrial, handleAdjustPoints, handleGrantAccess, handleToggleSuspension]
+    [search, selectedUsers, canBulk, canEdit, selectedUser, userDetail, userTags, detailTab, isMobile, displayUsers, newTag, handleSavePreset, handleApplyPreset, handleBulkExtend, handleExportCSV, handleImpersonate, handleRemoveTag, handleAddTag, handleExtendTrial, handleStartTrial, handleDowngrade, handleAdjustPoints, handleGrantAccess, handleToggleSuspension]
   );
 
   const userListData = useMemo(
