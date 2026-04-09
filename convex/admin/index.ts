@@ -2,6 +2,7 @@ export * from "./helpers";
 export * from "./analytics";
 export * from "./analyticsAI";
 export * from "./userMgmt";
+export * from "./subscriptionMgmt";
 export * from "./receiptMgmt";
 export * from "./sessions";
 export * from "./rbac";

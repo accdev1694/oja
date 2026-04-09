@@ -7,9 +7,16 @@ export type BadgeVariant =
   | "premium_monthly"
   | "premium_annual"
   | "expired"
-  | "cancelled";
+  | "cancelled"
+  | "admin";
 
-export type EffectiveStatus = "free" | "trial" | "active" | "expired" | "cancelled";
+export type EffectiveStatus =
+  | "free"
+  | "trial"
+  | "active"
+  | "expired"
+  | "cancelled"
+  | "admin";
 
 /** Anchored to the schema's plan enum plus "none" for users with no subscription record. */
 export type DisplayPlan = Doc<"subscriptions">["plan"] | "none";
@@ -33,6 +40,7 @@ function daysBetween(future: number, past: number): number {
 /**
  * Compute the display state for a user's subscription.
  * Handles:
+ *  - Admin users → "admin" (takes precedence over subscription state)
  *  - null subscription → "free"
  *  - Stale "trial" status where trialEndsAt is in the past (cron lag) → "expired"
  *  - Trials with ≤2 days remaining → "trial_expiring" variant
@@ -40,8 +48,21 @@ function daysBetween(future: number, past: number): number {
  */
 export function getSubscriptionDisplay(
   sub: Doc<"subscriptions"> | null,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  opts: { isAdmin?: boolean } = {}
 ): SubscriptionDisplay {
+  // Admins have unlimited access regardless of subscription record — short-circuit
+  // so the badge reflects their staff status rather than a stale/expired trial.
+  if (opts.isAdmin) {
+    return {
+      variant: "admin",
+      label: "Admin",
+      shortLabel: "Admin",
+      plan: sub?.plan ?? "none",
+      effectiveStatus: "admin",
+    };
+  }
+
   if (!sub) {
     return {
       variant: "free",

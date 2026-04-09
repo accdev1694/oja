@@ -1,76 +1,24 @@
 import React, { useState, useCallback, useMemo, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-} from "react-native";
+import { View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FlashList } from "@shopify/flash-list";
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { safeHaptics } from "@/lib/haptics/safeHaptics";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
-  GlassCard,
   GlassButton,
-  AnimatedSection,
-  colors,
   spacing,
   useGlassAlert,
+  TAB_BAR_HEIGHT,
 } from "@/components/ui/glass";
 import { adminStyles as styles } from "./styles";
-import { User, SubscriptionEffectiveStatus } from "./types";
-import { ActivityTimeline } from "./ActivityTimeline";
+import { User } from "./types";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAdminToast, useResponsive } from "./hooks";
-import { SavedFilterPills } from "./components/SavedFilterPills";
+import { useUserActions } from "./hooks/useUserActions";
 import type { FilterData } from "./components/SavedFilterPills";
-import { SubscriptionBadge } from "./components/SubscriptionBadge";
-
-// Contextual action map — what should show based on effective subscription status
-type ContextualActionKey = "start_trial" | "extend_7" | "extend_14" | "grant_premium" | "downgrade";
-
-interface ContextualAction {
-  key: ContextualActionKey;
-  label: string;
-  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
-  danger?: boolean;
-}
-
-function getContextualActions(status: SubscriptionEffectiveStatus | undefined): ContextualAction[] {
-  switch (status) {
-    case "free":
-      return [
-        { key: "start_trial", label: "Start Trial", icon: "clock-plus-outline" },
-        { key: "grant_premium", label: "Grant Premium", icon: "crown" },
-      ];
-    case "trial":
-      return [
-        { key: "extend_7", label: "+7d Trial", icon: "clock-plus-outline" },
-        { key: "extend_14", label: "+14d Trial", icon: "clock-plus-outline" },
-        { key: "grant_premium", label: "Grant Premium", icon: "crown" },
-      ];
-    case "active":
-      return [
-        { key: "grant_premium", label: "Extend +12mo", icon: "crown" },
-        { key: "downgrade", label: "Downgrade", icon: "arrow-down-circle-outline", danger: true },
-      ];
-    case "expired":
-      return [
-        { key: "start_trial", label: "New Trial", icon: "clock-plus-outline" },
-        { key: "grant_premium", label: "Grant Premium", icon: "crown" },
-      ];
-    case "cancelled":
-      return [
-        { key: "grant_premium", label: "Reactivate", icon: "crown" },
-      ];
-    default:
-      return [
-        { key: "start_trial", label: "Start Trial", icon: "clock-plus-outline" },
-        { key: "grant_premium", label: "Grant Premium", icon: "crown" },
-      ];
-  }
-}
+import { UserRow } from "./components/UserRow";
+import { UserListHeader } from "./components/UserListHeader";
 
 interface UsersTabProps {
   /** Permission check function */
@@ -86,16 +34,28 @@ interface UsersTabProps {
 /**
  * UsersTab Component
  * Manages user accounts, permissions, and trial extensions.
+ * Row and header rendering live in ./components/{UserRow,UserListHeader}.tsx
+ * to keep this file under the 400-line limit.
  */
-export function UsersTab({ 
+export function UsersTab({
   hasPermission,
   handleExportCSV,
   initialUserId,
-  onSelectionChange
+  onSelectionChange,
 }: UsersTabProps) {
   const { isMobile } = useResponsive();
   const { alert: showAlert } = useGlassAlert();
   const { showToast } = useAdminToast();
+  const insets = useSafeAreaInsets();
+
+  // Current admin, used to hide self-targeting actions. Every destructive
+  // action on the admin's own account is blocked server-side, so the button
+  // only produces a confusing error toast — better to not show it at all.
+  const currentUser = useQuery(api.users.getCurrent);
+  const currentUserId = currentUser?._id ?? null;
+  // Bottom clearance = tab bar + safe-area inset + extra room for the floating
+  // VoiceFAB which overlays the bottom-left corner and can hide the last row.
+  const listBottomPadding = TAB_BAR_HEIGHT + insets.bottom + 40;
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
@@ -126,10 +86,10 @@ export function UsersTab({
     api.admin.searchUsers,
     search.length >= 2 ? { searchTerm: search } : "skip"
   ) as User[] | undefined;
-  
+
   // Memoized user detail query args
-  const userQueryArgs = useMemo(() => 
-    selectedUser ? { userId: selectedUser as Id<"users"> } : "skip", 
+  const userQueryArgs = useMemo(() =>
+    selectedUser ? { userId: selectedUser as Id<"users"> } : "skip",
   [selectedUser]);
 
   const userDetail = useQuery(api.admin.getUserDetail, userQueryArgs) as User | undefined | null;
@@ -142,21 +102,26 @@ export function UsersTab({
     }
   }, [userDetail, selectedUser, onSelectionChange]);
 
-  // Mutations
-  const toggleAdmin = useMutation(api.admin.toggleAdmin);
-  const extendTrial = useMutation(api.admin.extendTrial);
+  // Mutations — only those that depend on component-local state remain here.
+  // Mutation-wrapping action handlers live in useUserActions.
   const bulkExtendTrial = useMutation(api.admin.bulkExtendTrial);
-  const adjustPoints = useMutation(api.admin.adjustPoints);
-  const grantAccess = useMutation(api.admin.grantComplimentaryAccess);
-  const downgradeSubscription = useMutation(api.admin.downgradeSubscription);
-  const toggleSuspension = useMutation(api.admin.toggleSuspension);
-  const generateToken = useMutation(api.impersonation.generateImpersonationToken);
   const addTag = useMutation(api.tags.addUserTag);
   const removeTag = useMutation(api.tags.removeUserTag);
   const saveFilter = useMutation(api.admin.saveFilter);
 
+  const {
+    handleImpersonate,
+    handleToggleAdmin,
+    handleExtendTrial,
+    handleStartTrial,
+    handleDowngrade,
+    handleAdjustPoints,
+    handleGrantAccess,
+    handleToggleSuspension,
+  } = useUserActions({ showAlert, showToast });
+
   // Determine which users to display based on search
-  const displayUsers = useMemo(() => 
+  const displayUsers = useMemo(() =>
     (search.length >= 2 ? searchResults : users) as User[] | undefined,
   [search, searchResults, users]);
 
@@ -173,17 +138,15 @@ export function UsersTab({
     if (!search) return;
     showAlert("Save Preset", "Give this search filter a name:", [
       { text: "Cancel", style: "cancel" },
-      { 
-        text: "Save", 
+      {
+        text: "Save",
         onPress: async () => {
-          // In a real app we'd have a text input in the alert
-          // For now let's use the search term as the name
           try {
             await saveFilter({ name: `Search: ${search}`, tab: "users", filterData: { search } });
             showToast("Search preset saved", "success");
           } catch (e) { showToast((e as Error).message, "error"); }
-        }
-      }
+        },
+      },
     ]);
   }, [search, saveFilter, showAlert, showToast]);
 
@@ -206,35 +169,22 @@ export function UsersTab({
     if (selectedUsers.size === 0) return;
     showAlert("Bulk Extend", `Add 14 days to trial for ${selectedUsers.size} users?`, [
       { text: "Cancel", style: "cancel" },
-      { 
-        text: "Extend", 
+      {
+        text: "Extend",
         onPress: async () => {
           try {
-            await bulkExtendTrial({ userIds: Array.from(selectedUsers) as Id<"users">[], days: 14 });
-            const count = selectedUsers.size;
+            const result = await bulkExtendTrial({ userIds: Array.from(selectedUsers) as Id<"users">[], days: 14 });
             setSelectedUsers(new Set());
             safeHaptics.success();
-            showToast(`Extended trials for ${count} users`, "success");
+            // Server silently skips admin accounts and active paying subscribers;
+            // surface the real counts so the admin knows who was actually extended.
+            const skippedSuffix = result.skipped > 0 ? ` (${result.skipped} skipped)` : "";
+            showToast(`Extended trials for ${result.count} users${skippedSuffix}`, "success");
           } catch (e) { showToast((e as Error).message, "error"); }
-        }
-      }
+        },
+      },
     ]);
   }, [selectedUsers, bulkExtendTrial, showAlert, showToast]);
-
-  const handleImpersonate = useCallback(async (userId: string) => {
-    try {
-      const result = await generateToken({ userId: userId as Id<"users"> });
-      const impersonateUrl = `oja://impersonate?token=${result.tokenValue}`;
-      showAlert(
-        "Impersonation Ready", 
-        `User session token generated.\n\nDeep Link:\n${impersonateUrl}\n\nNote: This token expires in 1 hour.`,
-        [
-          { text: "Copy Link", onPress: () => showToast("Link copied to clipboard", "info") },
-          { text: "Done", style: "cancel" }
-        ]
-      );
-    } catch (e) { showToast((e as Error).message, "error"); }
-  }, [generateToken, showAlert, showToast]);
 
   const handleAddTag = useCallback(async () => {
     if (!selectedUser || !newTag.trim()) return;
@@ -259,386 +209,61 @@ export function UsersTab({
     }
   }, [selectedUser, removeTag, showToast]);
 
-  const handleToggleAdmin = useCallback(async (userId: string) => {
-    try {
-      const result = await toggleAdmin({ userId: userId as Id<"users"> });
-      safeHaptics.success();
-      showToast(result.isAdmin ? "Admin privileges granted" : "Admin privileges revoked", "success");
-    } catch (error) {
-      showToast((error as Error).message || "Failed to toggle admin status", "error");
-    }
-  }, [toggleAdmin, showToast]);
-
-  const handleExtendTrial = useCallback(async (userId: string, days: number = 14) => {
-    showAlert("Extend Trial", `Add ${days} days to trial?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Extend",
-        onPress: async () => {
-          try {
-            await extendTrial({ userId: userId as Id<"users">, days });
-            safeHaptics.success();
-            showToast(`Trial extended by ${days} days`, "success");
-          } catch (error) {
-            showToast((error as Error).message || "Failed to extend trial", "error");
-          }
-        },
-      },
-    ]);
-  }, [extendTrial, showAlert, showToast]);
-
-  const handleStartTrial = useCallback(async (userId: string) => {
-    showAlert("Start Trial", "Start a fresh 7-day trial for this user?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Start Trial",
-        onPress: async () => {
-          try {
-            await extendTrial({ userId: userId as Id<"users">, days: 7 });
-            safeHaptics.success();
-            showToast("7-day trial started", "success");
-          } catch (error) {
-            showToast((error as Error).message || "Failed to start trial", "error");
-          }
-        },
-      },
-    ]);
-  }, [extendTrial, showAlert, showToast]);
-
-  const handleDowngrade = useCallback(async (userId: string) => {
-    showAlert(
-      "Downgrade to Free",
-      "End this user's premium access immediately?\n\nWARNING: This does NOT cancel the Stripe subscription. If the user is still being billed, you must cancel in the Stripe dashboard as well.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Downgrade",
-          onPress: async () => {
-            try {
-              const result = await downgradeSubscription({ userId: userId as Id<"users"> });
-              safeHaptics.warning();
-              if (result.stripeCancelRequired) {
-                showToast("Downgraded. Remember to cancel the Stripe subscription.", "info");
-              } else {
-                showToast("Subscription downgraded", "success");
-              }
-            } catch (error) {
-              showToast((error as Error).message || "Failed to downgrade", "error");
-            }
-          },
-        },
-      ]
-    );
-  }, [downgradeSubscription, showAlert, showToast]);
-
-  const handleAdjustPoints = useCallback(async (userId: string) => {
-    showAlert("Adjust Points", "Add or remove points for this user:", [
-      { text: "Cancel", style: "cancel" },
-      { 
-        text: "+500 pts", 
-        onPress: async () => {
-          try {
-            await adjustPoints({ userId: userId as Id<"users">, amount: 500, reason: "Customer goodwill" });
-            showToast("Added 500 points", "success");
-          } catch (e) { showToast((e as Error).message, "error"); }
-        }
-      },
-      { 
-        text: "-500 pts", 
-        onPress: async () => {
-          try {
-            await adjustPoints({ userId: userId as Id<"users">, amount: -500, reason: "Fraud correction" });
-            showToast("Removed 500 points", "success");
-          } catch (e) { showToast((e as Error).message, "error"); }
-        }
-      }
-    ]);
-  }, [adjustPoints, showAlert, showToast]);
-
-  const handleGrantAccess = useCallback(async (userId: string) => {
-    showAlert("Grant Premium", "Give free premium annual access?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Grant",
-        onPress: async () => {
-          try {
-            await grantAccess({ userId: userId as Id<"users">, months: 12 });
-            safeHaptics.success();
-            showToast("Premium access granted", "success");
-          } catch (error) {
-            showToast((error as Error).message || "Failed to grant access", "error");
-          }
-        },
-      },
-    ]);
-  }, [grantAccess, showAlert, showToast]);
-
-  const handleToggleSuspension = useCallback(async (userId: string) => {
-    try {
-      await toggleSuspension({ userId: userId as Id<"users"> });
-      safeHaptics.warning();
-      showToast("User status updated", "success");
-    } catch (error) {
-      showToast((error as Error).message || "Failed to toggle suspension", "error");
-    }
-  }, [toggleSuspension, showToast]);
-
   const userRenderItem = useCallback(
-    ({ item: u }: { item: User }) => (
-      <Pressable
-        style={[styles.userRow, selectedUsers.has(u._id) && { backgroundColor: `${colors.accent.primary}05` }]}
-        onPress={() => handleSelectUser(u._id)}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-          {canBulk && (
-            <Pressable
-              onPress={() => toggleUserSelection(u._id)}
-              style={{ padding: 4, marginRight: spacing.xs }}
-            >
-              <MaterialCommunityIcons
-                name={selectedUsers.has(u._id) ? "checkbox-marked" : "checkbox-blank-outline"}
-                size={20}
-                color={selectedUsers.has(u._id) ? colors.accent.primary : colors.text.tertiary}
-              />
-            </Pressable>
-          )}
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{u.name}</Text>
-            <Text style={styles.userEmail}>{u.email || "No email"}</Text>
-            {u.subscriptionDisplay && (
-              <View style={{ marginTop: 4 }}>
-                <SubscriptionBadge display={u.subscriptionDisplay} size="compact" />
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Inline Quick Actions */}
-        <View style={styles.userActions}>
-          {canEdit && (
-            <>
-              <Pressable
-                onPress={() => handleImpersonate(u._id)}
-                hitSlop={12}
-                style={{ padding: 4 }}
-              >
-                <MaterialCommunityIcons name="incognito" size={18} color={colors.text.tertiary} />
-              </Pressable>
-              <Pressable
-                onPress={() => handleToggleAdmin(u._id)}
-                hitSlop={12}
-                style={{ padding: 4 }}
-              >
-                <MaterialCommunityIcons
-                  name={u.isAdmin ? "shield-check" : "shield-outline"}
-                  size={18}
-                  color={u.isAdmin ? colors.accent.primary : colors.text.tertiary}
-                />
-              </Pressable>
-            </>
-          )}
-          <MaterialCommunityIcons name="chevron-right" size={18} color={colors.text.tertiary} />
-        </View>
-      </Pressable>
+    ({ item }: { item: User }) => (
+      <UserRow
+        user={item}
+        isBulkSelected={selectedUsers.has(item._id)}
+        canBulk={canBulk}
+        canEdit={canEdit}
+        isSelf={item._id === currentUserId}
+        onSelect={handleSelectUser}
+        onToggleBulk={toggleUserSelection}
+        onImpersonate={handleImpersonate}
+        onToggleAdmin={handleToggleAdmin}
+      />
     ),
-    [selectedUsers, canBulk, canEdit, handleSelectUser, toggleUserSelection, handleImpersonate, handleToggleAdmin]
+    [selectedUsers, canBulk, canEdit, currentUserId, handleSelectUser, toggleUserSelection, handleImpersonate, handleToggleAdmin]
   );
 
   const userKeyExtractor = useCallback((item: User) => item._id, []);
 
-  const UserListHeader = useMemo(
+  const listHeader = useMemo(
     () => (
-      <View>
-        {/* Search & Saved Filters */}
-        <GlassCard style={styles.section}>
-          <View style={styles.searchRow}>
-            <MaterialCommunityIcons name="magnify" size={20} color={colors.text.tertiary} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search users..."
-              placeholderTextColor={colors.text.tertiary}
-              value={search}
-              onChangeText={setSearch}
-            />
-            {search.length > 0 && (
-              <Pressable onPress={handleSavePreset} hitSlop={12} style={{ padding: 4 }}>
-                <MaterialCommunityIcons name="bookmark-plus-outline" size={20} color={colors.accent.primary} />
-              </Pressable>
-            )}
-          </View>
-
-          <View style={{ marginTop: spacing.sm }}>
-            <SavedFilterPills tab="users" onSelect={handleApplyPreset} />
-          </View>
-        </GlassCard>
-
-        {/* Bulk Actions Bar */}
-        {selectedUsers.size > 0 && canBulk && (
-          <GlassCard style={[styles.section, { backgroundColor: `${colors.accent.primary}10` }]}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={styles.userName}>{selectedUsers.size} users selected</Text>
-              <View style={{ flexDirection: "row", gap: spacing.sm }}>
-                <GlassButton onPress={handleBulkExtend} variant="secondary" size="sm">
-                  +14d Trial
-                </GlassButton>
-                <GlassButton onPress={() => handleExportCSV("users")} variant="ghost" size="sm">
-                  CSV
-                </GlassButton>
-                <Pressable onPress={() => setSelectedUsers(new Set())} style={{ padding: 4 }}>
-                  <MaterialCommunityIcons name="close" size={20} color={colors.text.tertiary} />
-                </Pressable>
-              </View>
-            </View>
-          </GlassCard>
-        )}
-
-        {/* User Detail View */}
-        {selectedUser && userDetail && (
-          <GlassCard style={styles.section}>
-            <View style={styles.detailHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>{userDetail.name}</Text>
-                <Text style={styles.userEmail}>{userDetail.email || "No email"}</Text>
-              </View>
-              <View style={{ flexDirection: "row", gap: spacing.md }}>
-                <Pressable onPress={() => handleImpersonate(selectedUser)} hitSlop={8}>
-                  <MaterialCommunityIcons name="incognito" size={24} color={colors.accent.primary} />
-                </Pressable>
-                <Pressable onPress={() => setSelectedUser(null)}>
-                  <MaterialCommunityIcons name="close" size={24} color={colors.text.tertiary} />
-                </Pressable>
-              </View>
-            </View>
-
-            {/* Tags */}
-            <View style={[styles.filterRow, { marginVertical: spacing.sm }]}>
-              {userTags?.map((tag, idx) => (
-                <View key={`${tag}-${idx}`} style={styles.tagBadge}>
-                  <Text style={styles.tagBadgeText}>{tag}</Text>
-                  <Pressable onPress={() => handleRemoveTag(tag)}>
-                    <MaterialCommunityIcons name="close-circle" size={14} color={colors.text.tertiary} />
-                  </Pressable>
-                </View>
-              ))}
-              <View style={styles.addTagRow}>
-                <TextInput
-                  style={styles.tagInput}
-                  placeholder="+Tag"
-                  placeholderTextColor={colors.text.tertiary}
-                  value={newTag}
-                  onChangeText={setNewTag}
-                  onSubmitEditing={handleAddTag}
-                />
-              </View>
-            </View>
-
-            {/* Details Tabs */}
-            <View style={[styles.filterRow, { marginBottom: spacing.md }]}>
-              <Pressable
-                style={[styles.filterChip, detailTab === "info" && styles.filterChipActive]}
-                onPress={() => setDetailTab("info")}
-              >
-                <Text style={[styles.filterChipText, detailTab === "info" && styles.filterChipTextActive]}>Info</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.filterChip, detailTab === "activity" && styles.filterChipActive]}
-                onPress={() => setDetailTab("activity")}
-              >
-                <Text style={[styles.filterChipText, detailTab === "activity" && styles.filterChipTextActive]}>Activity</Text>
-              </Pressable>
-            </View>
-
-            {detailTab === "info" ? (
-              <>
-                <View style={[styles.detailGrid, isMobile && styles.mobileDetailGrid]}>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailValue}>{userDetail.receiptCount ?? 0}</Text>
-                    <Text style={styles.detailLabel}>Receipts</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailValue}>{userDetail.listCount ?? 0}</Text>
-                    <Text style={styles.detailLabel}>Lists</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailValue}>£{userDetail.totalSpent ?? 0}</Text>
-                    <Text style={styles.detailLabel}>Spent</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailValue}>{userDetail.scanRewards?.points?.toLocaleString() ?? 0}</Text>
-                    <Text style={styles.detailLabel}>Points</Text>
-                  </View>
-                </View>
-                {userDetail.subscriptionDisplay && (
-                  <View style={{ marginTop: spacing.sm, marginBottom: spacing.xs }}>
-                    <SubscriptionBadge display={userDetail.subscriptionDisplay} size="full" />
-                  </View>
-                )}
-                <Text style={styles.metricText}>
-                  Tier: {userDetail.scanRewards?.tier || "bronze"} ({userDetail.scanRewards?.lifetimeScans || 0} scans)
-                </Text>
-                {canEdit && (
-                  <View style={[styles.actionRow, isMobile && styles.mobileActionRow, { flexWrap: "wrap" }]}>
-                    {getContextualActions(userDetail.subscriptionDisplay?.effectiveStatus).map((action) => (
-                      <Pressable
-                        key={action.key}
-                        style={[styles.actionBtn, action.danger && styles.dangerBtn]}
-                        onPress={() => {
-                          switch (action.key) {
-                            case "start_trial": return handleStartTrial(selectedUser);
-                            case "extend_7": return handleExtendTrial(selectedUser, 7);
-                            case "extend_14": return handleExtendTrial(selectedUser, 14);
-                            case "grant_premium": return handleGrantAccess(selectedUser);
-                            case "downgrade": return handleDowngrade(selectedUser);
-                          }
-                        }}
-                      >
-                        <MaterialCommunityIcons
-                          name={action.icon}
-                          size={16}
-                          color={action.danger ? colors.semantic.danger : colors.accent.primary}
-                        />
-                        <Text style={[styles.actionBtnText, action.danger && { color: colors.semantic.danger }]}>
-                          {action.label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                    <Pressable style={styles.actionBtn} onPress={() => handleAdjustPoints(selectedUser)}>
-                      <MaterialCommunityIcons name="star-plus-outline" size={16} color={colors.accent.secondary} />
-                      <Text style={styles.actionBtnText}>Adjust Pts</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.actionBtn, styles.suspendBtn]}
-                      onPress={() => handleToggleSuspension(selectedUser)}
-                    >
-                      <MaterialCommunityIcons
-                        name={userDetail.suspended ? "account-check-outline" : "account-off-outline"}
-                        size={16}
-                        color={colors.semantic.danger}
-                      />
-                      <Text style={[styles.actionBtnText, { color: colors.semantic.danger }]}>
-                        {userDetail.suspended ? "Unsuspend" : "Suspend"}
-                      </Text>
-                    </Pressable>
-                  </View>
-                )}
-              </>
-            ) : (
-              <ActivityTimeline userId={selectedUser} />
-            )}
-          </GlassCard>
-        )}
-
-        {/* Section title for user list */}
-        {Array.isArray(displayUsers) && displayUsers.length > 0 && (
-          <GlassCard style={[styles.section, { paddingBottom: 0 }]}>
-            <Text style={styles.sectionTitle}>
-              {search.length >= 2 ? `Results (${displayUsers.length})` : `Users (${displayUsers.length})`}
-            </Text>
-          </GlassCard>
-        )}
-      </View>
+      <UserListHeader
+        search={search}
+        setSearch={setSearch}
+        selectedUsers={selectedUsers}
+        setSelectedUsers={setSelectedUsers}
+        canBulk={canBulk}
+        canEdit={canEdit}
+        selectedUser={selectedUser}
+        setSelectedUser={setSelectedUser}
+        currentUserId={currentUserId}
+        userDetail={userDetail}
+        userTags={userTags}
+        detailTab={detailTab}
+        setDetailTab={setDetailTab}
+        isMobile={isMobile}
+        displayUsers={displayUsers}
+        newTag={newTag}
+        setNewTag={setNewTag}
+        onSavePreset={handleSavePreset}
+        onApplyPreset={handleApplyPreset}
+        onBulkExtend={handleBulkExtend}
+        onExportCSV={handleExportCSV}
+        onImpersonate={handleImpersonate}
+        onRemoveTag={handleRemoveTag}
+        onAddTag={handleAddTag}
+        onExtendTrial={handleExtendTrial}
+        onStartTrial={handleStartTrial}
+        onDowngrade={handleDowngrade}
+        onAdjustPoints={handleAdjustPoints}
+        onGrantAccess={handleGrantAccess}
+        onToggleSuspension={handleToggleSuspension}
+      />
     ),
-    [search, selectedUsers, canBulk, canEdit, selectedUser, userDetail, userTags, detailTab, isMobile, displayUsers, newTag, handleSavePreset, handleApplyPreset, handleBulkExtend, handleExportCSV, handleImpersonate, handleRemoveTag, handleAddTag, handleExtendTrial, handleStartTrial, handleDowngrade, handleAdjustPoints, handleGrantAccess, handleToggleSuspension]
+    [search, setSearch, selectedUsers, setSelectedUsers, canBulk, canEdit, selectedUser, setSelectedUser, currentUserId, userDetail, userTags, detailTab, setDetailTab, isMobile, displayUsers, newTag, setNewTag, handleSavePreset, handleApplyPreset, handleBulkExtend, handleExportCSV, handleImpersonate, handleRemoveTag, handleAddTag, handleExtendTrial, handleStartTrial, handleDowngrade, handleAdjustPoints, handleGrantAccess, handleToggleSuspension]
   );
 
   const userListData = useMemo(
@@ -646,7 +271,7 @@ export function UsersTab({
     [displayUsers]
   );
 
-  const UserListFooter = useMemo(
+  const listFooter = useMemo(
     () => (
       <View>
         {status === "CanLoadMore" && (
@@ -657,10 +282,10 @@ export function UsersTab({
             style={{ marginTop: spacing.md }}
           >Load More Users</GlassButton>
         )}
-        <View style={{ height: 140 }} />
+        <View style={{ height: listBottomPadding }} />
       </View>
     ),
-    [status, loadMore]
+    [status, loadMore, listBottomPadding]
   );
 
   return (
@@ -669,9 +294,9 @@ export function UsersTab({
         data={userListData}
         renderItem={userRenderItem}
         keyExtractor={userKeyExtractor}
-        ListHeaderComponent={UserListHeader}
-        ListFooterComponent={UserListFooter}
-        extraData={{ selectedUsers, selectedUser }}
+        ListHeaderComponent={listHeader}
+        ListFooterComponent={listFooter}
+        extraData={{ selectedUsers, selectedUser, canBulk, canEdit }}
         contentContainerStyle={styles.scrollContent}
       />
     </View>

@@ -6,7 +6,7 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
@@ -239,10 +239,14 @@ function AdminScreenInner() {
         onSearchPress={() => setSearchVisible(true)}
       />
 
-      <Breadcrumbs 
-        activeTab={activeTab} 
+      <Breadcrumbs
+        activeTab={activeTab}
         selectionLabel={selectionLabel}
         onResetSelection={handleResetSelection}
+        onHome={() => {
+          if (router.canGoBack()) router.back();
+          else router.replace("/(app)/(tabs)/profile");
+        }}
       />
 
       <GlobalSearchModal

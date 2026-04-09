@@ -51,6 +51,11 @@ const VARIANT_STYLES: Record<SubscriptionBadgeVariant, VariantStyle> = {
     fg: colors.semantic.warning,
     icon: "close-circle-outline",
   },
+  admin: {
+    bg: `${colors.accent.primary}20`,
+    fg: colors.accent.primary,
+    icon: "shield-check",
+  },
 };
 
 export function SubscriptionBadge({ display, size = "full" }: SubscriptionBadgeProps) {

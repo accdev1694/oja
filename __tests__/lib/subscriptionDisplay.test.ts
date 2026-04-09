@@ -145,6 +145,43 @@ describe("getSubscriptionDisplay", () => {
     });
   });
 
+  describe("admin override", () => {
+    it("returns admin variant when isAdmin=true, even with null subscription", () => {
+      const result = getSubscriptionDisplay(null, NOW, { isAdmin: true });
+      expect(result.variant).toBe("admin");
+      expect(result.label).toBe("Admin");
+      expect(result.shortLabel).toBe("Admin");
+      expect(result.effectiveStatus).toBe("admin");
+      expect(result.plan).toBe("none");
+    });
+
+    it("returns admin variant for admin with a stale/expired trial", () => {
+      const sub = makeSub({ status: "trial", trialEndsAt: NOW - 5 * DAY });
+      const result = getSubscriptionDisplay(sub, NOW, { isAdmin: true });
+      expect(result.variant).toBe("admin");
+      expect(result.effectiveStatus).toBe("admin");
+      // Plan carries through from the subscription record
+      expect(result.plan).toBe("free");
+    });
+
+    it("returns admin variant for admin with an active premium subscription", () => {
+      const sub = makeSub({
+        status: "active",
+        plan: "premium_annual",
+        currentPeriodEnd: NOW + 300 * DAY,
+      });
+      const result = getSubscriptionDisplay(sub, NOW, { isAdmin: true });
+      expect(result.variant).toBe("admin");
+      expect(result.plan).toBe("premium_annual");
+    });
+
+    it("does not apply admin override when isAdmin is false or omitted", () => {
+      const sub = makeSub({ status: "trial", trialEndsAt: NOW + 5 * DAY });
+      expect(getSubscriptionDisplay(sub, NOW, { isAdmin: false }).variant).toBe("trial");
+      expect(getSubscriptionDisplay(sub, NOW).variant).toBe("trial");
+    });
+  });
+
   describe("edge cases", () => {
     it("uses Date.now() by default when nowMs is omitted", () => {
       const sub = makeSub({ status: "trial", trialEndsAt: Date.now() + 3 * DAY });

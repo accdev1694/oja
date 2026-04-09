@@ -173,7 +173,7 @@ export const adminStyles = StyleSheet.create({
   detailTabActive: { borderBottomColor: colors.accent.primary },
   detailTabText: { ...typography.bodyMedium, color: colors.text.tertiary },
   detailTabTextActive: { color: colors.accent.primary, fontWeight: "700" },
-  actionRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
+  actionRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
   actionBtn: {
     flex: 1,
     flexDirection: "row",
@@ -385,6 +385,9 @@ export const adminStyles = StyleSheet.create({
   mobileGridItem: { width: "45%" },
   mobileMetricCard: { width: "47%" },
   mobileDetailGrid: { flexDirection: "column", gap: spacing.sm },
-  mobileActionRow: { flexDirection: "column", gap: spacing.sm },
+  // Explicit flexWrap: "nowrap" + alignItems: "stretch" — without these, the
+  // row-mode flexWrap: "wrap" persists and each button gets its own "line" at
+  // its content's intrinsic width instead of filling the column.
+  mobileActionRow: { flexDirection: "column", flexWrap: "nowrap", alignItems: "stretch", gap: spacing.sm },
   mobileRevenueGrid: { flexDirection: "column", gap: spacing.md },
 });
