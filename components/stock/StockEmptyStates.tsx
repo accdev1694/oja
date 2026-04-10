@@ -8,7 +8,6 @@ import {
   EmptyPantry,
   colors,
 } from "@/components/ui/glass";
-import { TypewriterHint } from "@/components/pantry";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { stockStyles as styles } from "./stockStyles";
 
@@ -61,20 +60,23 @@ export function StockEmptyPantry() {
 }
 
 // =============================================================================
-// LIST HEADER CONTENT (no results / all stocked / swipe hint)
+// LIST HEADER CONTENT (no results / all stocked)
 // =============================================================================
+//
+// Note: tap/swipe usage hints previously rendered here have been removed. The
+// contextual `TipBanner` (see StockBanners) already covers the same guidance
+// and is now auto-appearing / auto-dismissing, so a second inline hint row was
+// both redundant and visually noisy.
 
 interface StockListHeaderProps {
   filteredCount: number;
   viewMode: "attention" | "all";
-  hasExpandedCategory: boolean;
   searchQuery: string;
 }
 
 export const StockListHeader = React.memo(function StockListHeader({
   filteredCount,
   viewMode,
-  hasExpandedCategory,
   searchQuery,
 }: StockListHeaderProps) {
   if (filteredCount === 0) {
@@ -113,15 +115,5 @@ export const StockListHeader = React.memo(function StockListHeader({
     }
   }
 
-  return (
-    <View style={styles.hintRow}>
-      <TypewriterHint
-        text={
-          hasExpandedCategory
-            ? "Swipe left/right to adjust stock level"
-            : "Tap a category to see what\u2019s inside"
-        }
-      />
-    </View>
-  );
+  return null;
 });

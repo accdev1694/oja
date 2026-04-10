@@ -19,7 +19,7 @@ import {
   GuidedBorder,
 } from "@/components/ui/glass";
 import { haptic } from "@/lib/haptics/safeHaptics";
-import { TypewriterHint } from "@/components/pantry/TypewriterHint";
+import { WhisperBubble } from "@/components/ui/hints/WhisperBubble";
 import { getAllStores, getStoreInfoSafe } from "@/convex/lib/storeNormalizer";
 import type { StoreInfo } from "@/convex/lib/storeNormalizer";
 
@@ -92,8 +92,14 @@ export const ListActionRow = memo(function ListActionRow({
   return (
     <View style={styles.wrapper}>
       <View style={styles.row}>
-        {/* Store Selector + hint */}
+        {/* Store Selector + floating whisper */}
         <View style={styles.btnColumn}>
+          <WhisperBubble
+            hintId="list/pick-store"
+            text="Pick a store"
+            visible={!hasStore}
+            placement="above"
+          />
           <GuidedBorder
             active={!hasStore}
             borderRadius={borderRadius.md}
@@ -126,11 +132,22 @@ export const ListActionRow = memo(function ListActionRow({
               />
             </Pressable>
           </GuidedBorder>
-          {!hasStore && <TypewriterHint text="Pick a store" />}
         </View>
 
-        {/* Add Items Button + hint */}
+        {/* Add Items Button + floating whispers */}
         <View style={styles.btnColumn}>
+          <WhisperBubble
+            hintId="list/add-items"
+            text="Add items to list"
+            visible={hasStore && itemCount === 0}
+            placement="above"
+          />
+          <WhisperBubble
+            hintId="list/keep-adding"
+            text="Add more or go shopping"
+            visible={hasStore && itemCount > 0}
+            placement="above"
+          />
           <GuidedBorder
             active={hasStore}
             borderRadius={borderRadius.md}
@@ -165,15 +182,8 @@ export const ListActionRow = memo(function ListActionRow({
               </Text>
             </Pressable>
           </GuidedBorder>
-          {hasStore && itemCount === 0 && (
-            <TypewriterHint text="Add items to list" />
-          )}
         </View>
       </View>
-
-      {hasStore && itemCount > 0 && (
-        <TypewriterHint text="Add more items or go shopping" />
-      )}
 
       {/* Inline Store Dropdown — at wrapper level so it spans full width */}
       {showStoreDropdown && (

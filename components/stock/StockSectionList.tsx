@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React from "react";
 import { View, Text, SectionList } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Id, Doc } from "@/convex/_generated/dataModel";
@@ -25,7 +25,6 @@ interface StockSectionListProps {
   animationKey: number;
   viewMode: "attention" | "all";
   searchQuery: string;
-  hasExpandedCategory: boolean;
   archivedCount: number;
   bottomInset: number;
   expandingCategory: string | null;
@@ -46,7 +45,6 @@ export const StockSectionList = React.memo(function StockSectionList({
   animationKey,
   viewMode,
   searchQuery,
-  hasExpandedCategory,
   archivedCount,
   bottomInset,
   expandingCategory,
@@ -64,7 +62,6 @@ export const StockSectionList = React.memo(function StockSectionList({
       <StockListHeader
         filteredCount={filteredItems.length}
         viewMode={viewMode}
-        hasExpandedCategory={hasExpandedCategory}
         searchQuery={searchQuery}
       />
     </AnimatedSection>
