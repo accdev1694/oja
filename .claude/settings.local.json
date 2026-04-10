@@ -218,7 +218,9 @@
       "Bash(cp /tmp/ui-ux-pro-max-skill/.claude/skills/ui-ux-pro-max/SKILL.md .claude/skills/ui-ux-pro-max/SKILL.md)",
       "Bash(cp -r /tmp/ui-ux-pro-max-skill/src/ui-ux-pro-max/data .claude/skills/ui-ux-pro-max/data)",
       "Bash(cp -r /tmp/ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts .claude/skills/ui-ux-pro-max/scripts)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(magick \"c:/Users/diloc/Desktop/refresh-pound-price-flat-icon-symbol-vector-7970589.avif\" \"c:/Users/diloc/Desktop/_refresh-pound-tmp.png\")",
+      "Bash(ffmpeg -i \"c:/Users/diloc/Desktop/refresh-pound-price-flat-icon-symbol-vector-7970589.avif\" \"c:/Users/diloc/Desktop/_refresh-pound-tmp.png\" -y)"
     ]
   },
   "enableAllProjectMcpServers": true,
