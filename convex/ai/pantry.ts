@@ -57,16 +57,34 @@ export const generateHybridSeedItems = action({
     const { country, cuisines } = args;
     const totalItems = 200;
 
+    // Cuisine fallback is computed once and reused in every code path below.
+    // Reusing a single array keeps the ordering / dedup / quota math coherent
+    // and avoids redundant calls to getCuisineFoods.
+    const cuisineFallback = getFallbackItems(country, cuisines);
+
+    // Reserve a cuisine quota so culturally-specific items always land in the
+    // pantry. Without this, the globally-popular crowdsourced pool (dominated
+    // by UK staples) would saturate the budget and squeeze cuisine content out.
+    // The quota is sized to the actual cuisine fallback length (with a cap so
+    // very-many-cuisine users still get enough popular variants to fill slots).
+    const hasNonBritishCuisine = cuisines.some(
+      (c) => c.trim().toLowerCase() !== "british"
+    );
+    const cuisineQuota = hasNonBritishCuisine
+      ? Math.min(cuisineFallback.length, 140)
+      : 0;
+    const globalItemsLimit = totalItems - cuisineQuota;
+
     // Check per-user monthly cap — fall back to hardcoded items if exceeded
     const usageCheck = await ctx.runQuery(api.aiUsage.canUseFeature, { feature: "pantry_seed" });
-    if (!usageCheck.allowed) return getFallbackItems(country, cuisines);
+    if (!usageCheck.allowed) return cuisineFallback;
 
     // Enforce Gemini free tier RPD quota — fall back to hardcoded items if exhausted
     try {
       await enforceGeminiQuota(ctx);
     } catch (e) {
       if (e instanceof GeminiQuotaExhaustedError) {
-        return getFallbackItems(country, cuisines);
+        return cuisineFallback;
       }
       throw e;
     }
@@ -75,7 +93,7 @@ export const generateHybridSeedItems = action({
     try {
       const popularVariants = await ctx.runQuery(
         internal.itemVariants.getPopularForSeeding,
-        { limit: totalItems }
+        { limit: globalItemsLimit }
       );
 
       if (popularVariants.length > 0) {
@@ -109,7 +127,10 @@ export const generateHybridSeedItems = action({
 
     const remainingSlots = totalItems - globalItems.length;
     if (remainingSlots <= 0) {
-      return deduplicateItems(globalItems).slice(0, totalItems);
+      // Even if the crowdsourced pool filled the quota, still inject the cuisine
+      // fallback FIRST so slicing preserves cultural content. Without this branch
+      // cuisine-specific items would be dropped entirely on busy-catalogue days.
+      return deduplicateItems([...cuisineFallback, ...globalItems]).slice(0, totalItems);
     }
 
     // H1 fix: Sanitize user inputs before injecting into AI prompt
@@ -117,12 +138,30 @@ export const generateHybridSeedItems = action({
     const safeCountry = sanitize(country);
     const safeCuisines = cuisines.map(sanitize).filter(Boolean);
     if (safeCuisines.length === 0) {
-      return deduplicateItems([...globalItems, ...getFallbackItems(country, cuisines)]).slice(0, totalItems);
+      return deduplicateItems([...globalItems, ...cuisineFallback]).slice(0, totalItems);
     }
     const cuisineList = safeCuisines.join(", ");
-    const existingNames = new Set(globalItems.map((i) => i.name.toLowerCase().trim()));
+    // existingNames must include BOTH globalItems and cuisineFallback names —
+    // otherwise the AI can return duplicates of curated cuisine items and waste
+    // generation slots that would be silently deduped away downstream.
+    const existingNames = new Set([
+      ...globalItems.map((i) => i.name.toLowerCase().trim()),
+      ...cuisineFallback.map((i) => i.name.toLowerCase().trim()),
+    ]);
     const isFullGeneration = remainingSlots === totalItems;
-    const itemCount = isFullGeneration ? totalItems : remainingSlots;
+    // Gap-path itemCount must subtract cuisineFallback.length because those
+    // items will occupy the leading slots of the final dedup+slice. Without
+    // this, the AI is asked for N items but only ~(N - cuisineFallback) survive.
+    const effectiveAiSlots = isFullGeneration
+      ? totalItems
+      : Math.max(0, remainingSlots - cuisineFallback.length);
+    const itemCount = effectiveAiSlots;
+
+    // Gap path with no remaining AI slots: skip the AI call entirely and
+    // return the curated fallback + popular variants directly.
+    if (!isFullGeneration && effectiveAiSlots === 0) {
+      return deduplicateItems([...cuisineFallback, ...globalItems]).slice(0, totalItems);
+    }
 
     let prompt: string;
     if (isFullGeneration) {
@@ -139,11 +178,14 @@ ${cuisineBreakdown}
 
 CATEGORIES: ${AI_CATEGORY_PROMPT}
 
-Return ONLY JSON array of items with name, category, stockLevel, source, estimatedPrice, hasVariants, defaultSize, defaultUnit.`;
+Return ONLY a JSON array of items. Each item MUST include these fields:
+name, category, stockLevel, source, estimatedPrice, hasVariants, defaultSize, defaultUnit.
+The "source" field is REQUIRED and MUST be exactly "local" for local staples and exactly "cultural" for items from the selected cuisines (${cuisineList}).`;
     } else {
       prompt = `Generate exactly ${remainingSlots} additional household stock items for ${safeCountry} / ${cuisineList}.
+Prioritise ingredients specific to these cuisines: ${cuisineList}.
 DO NOT duplicate: ${globalItems.slice(0, 50).map(i => i.name).join(", ")}.
-Return ONLY JSON array.`;
+Return ONLY a JSON array. Each item MUST include a "source" field set to "local" for staples and "cultural" for cuisine-specific items.`;
     }
 
     function parseSeedResponse(responseText: string): SeedItem[] {
@@ -199,14 +241,14 @@ Return ONLY JSON array.`;
         isVision: false,
         isFallback: aiMetrics.isFallback,
       });
-      // Supplement with cuisine-specific items to fill any gaps
-      const cuisineFallback = getFallbackItems(country, cuisines);
-      return deduplicateItems([...globalItems, ...aiItems, ...cuisineFallback]).slice(0, totalItems);
+      // Supplement with cuisine-specific items. Order matters: cuisineFallback
+      // goes FIRST so the final slice(totalItems) preserves cultural content
+      // even when globalItems + aiItems would otherwise saturate the budget.
+      return deduplicateItems([...cuisineFallback, ...aiItems, ...globalItems]).slice(0, totalItems);
     } catch (error) {
       console.error("AI generation failed:", error);
       try { await ctx.runMutation(api.aiUsage.trackAICallError, { feature: "pantry_seed" }); } catch (trackErr) { console.error("[pantry seed] Failed to track AI error:", trackErr); }
-      const fallback = getFallbackItems(country, cuisines);
-      return deduplicateItems([...globalItems, ...fallback]).slice(0, totalItems);
+      return deduplicateItems([...cuisineFallback, ...globalItems]).slice(0, totalItems);
     }
   },
 });

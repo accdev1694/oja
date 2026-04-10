@@ -48,7 +48,7 @@ export default function PantrySeedingScreen() {
       -1,
       false
     );
-  }, []);
+  }, [rotation]);
 
   const spinStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],

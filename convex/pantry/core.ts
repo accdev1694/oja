@@ -209,11 +209,16 @@ export const bulkCreate = mutation({
       return false;
     });
 
-    // Onboarding seed: allow up to 100 items regardless of tier so free users
+    // Onboarding seed: allow up to 250 items regardless of tier so free users
     // get a useful starting pantry. Uses onboardingComplete flag (not empty-pantry
     // heuristic) to avoid TOCTOU races with concurrent requests.
-    const isOnboardingSeed = user.onboardingComplete === false;
-    const ONBOARDING_CAP = 100;
+    // The AI seed flow targets 200 items (British staples + cuisine specifics);
+    // the prior 100 cap silently dropped half the generated content — especially
+    // cuisine-specific items that are ordered toward the tail of the response.
+    // `!user.onboardingComplete` catches both `false` AND `undefined` — legacy
+    // accounts created before the flag existed must still get the seed cap.
+    const isOnboardingSeed = !user.onboardingComplete;
+    const ONBOARDING_CAP = 250;
 
     let remainingSlots: number;
     if (isOnboardingSeed) {

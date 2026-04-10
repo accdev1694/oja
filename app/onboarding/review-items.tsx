@@ -93,12 +93,11 @@ export default function ReviewItemsScreen() {
     [items]
   );
 
-  const localCutoff = Math.floor(items.length * 0.6);
   const grouped: GroupedBySource = { local: {}, cultural: {} };
-  items.forEach((item, index) => {
-    const source: SourceGroup = item.source
-      ? item.source
-      : index < localCutoff ? "local" : "cultural";
+  items.forEach((item) => {
+    // The seed flow always tags items with a source; default to "local" as a
+    // defensive guard for any legacy payload without the field.
+    const source: SourceGroup = item.source ?? "local";
     if (!grouped[source][item.category]) {
       grouped[source][item.category] = [];
     }
