@@ -1,6 +1,13 @@
 /**
  * Cuisine food data: African, Caribbean, and South Asian cuisines.
  * Units must be valid: ml, l, g, kg, pt, pint, pints, pack, pk, x, oz
+ *
+ * NOTE on the `defaultSize` format: entries here use *bare numbers* (e.g.
+ * "250", "2") with the unit in `defaultUnit`. `cleanItemForStorage` canonicalises
+ * these into the embedded form ("250g", "2pint") at ingest time — so the stored
+ * pantry row is always in the canonical "{number}{unit}" shape. Keep the bare-
+ * number style here because it's more readable at a glance; the parser handles
+ * the conversion.
  */
 
 export interface CuisineSeedItem {

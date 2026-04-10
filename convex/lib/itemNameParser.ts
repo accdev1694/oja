@@ -12,102 +12,28 @@
  * - Size must contain meaningful measurement (number + unit)
  * - Extract size from beginning of names (e.g., "500ml Milk" → "Milk", "500ml")
  * - Always display: "500ml Milk" ✅ not "Milk 500ml" ❌
+ *
+ * Low-level helpers (pattern constants, canonicalisation, dual-unit stripping)
+ * live in `./itemNameParserHelpers.ts` to keep this file under the 400-line
+ * limit (CLAUDE.md rule #10).
  */
 
-const VAGUE_SIZES = ["per item", "item", "each", "unit", "piece"] as const;
-
-// Common UK grocery units
-const VALID_UNITS = ["ml", "l", "g", "kg", "pt", "pint", "pints", "pack", "pk", "x", "oz"] as const;
-
-const SIZE_PATTERN = /^(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz)s?)\s+(.+)$/i;
-const SIZE_END_PATTERN = /^(.+?)\s+(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz)s?)$/i;
+import {
+  VAGUE_SIZES,
+  VALID_UNITS,
+  SIZE_PATTERN,
+  SIZE_END_PATTERN,
+  MAX_DISPLAY_CHARS,
+  canonicaliseBareNumberSize,
+  cleanDuplicateUnits,
+  stripDualUnitFromName,
+  extractUnitFromSize,
+} from "./itemNameParserHelpers";
 
 export interface ParsedItem {
   name: string;
   size?: string;
   unit?: string;
-}
-
-// Max characters for the final display string "{size} {name}"
-const MAX_DISPLAY_CHARS = 40;
-
-// Pattern to find a metric measurement anywhere in a string
-const METRIC_EXTRACT = /(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz))/i;
-
-/**
- * Clean duplicate/imperial measurements from a size string.
- * Handles both metric-first and imperial-first patterns:
- * "227g (8oz)" → "227g", "347ml/12 fl oz" → "347ml",
- * "8 FL OZ / 237 mL" → "237ml", "500g / 1.1lb" → "500g"
- */
-function cleanDuplicateUnits(size: string): string {
-  let cleaned = size.trim();
-
-  // Strip parenthetical duplicates: "227g (8oz)" → "227g"
-  cleaned = cleaned.replace(/\s*\([^)]*\)\s*$/, "").trim();
-
-  // If the string contains a slash or pipe separator, find the metric measurement
-  if (/[/|]/.test(cleaned)) {
-    // Try metric-first: "347ml/12 fl oz" → "347ml"
-    const metricFirst = cleaned.match(/^(\d+(?:\.\d+)?\s*(?:ml|l|g|kg|pt|pint|pints|pack|pk|x|oz))\s*[/|]/i);
-    if (metricFirst) {
-      return metricFirst[1].trim().toLowerCase();
-    }
-    // Try metric anywhere (handles imperial-first): "8 FL OZ / 237 mL" → "237ml"
-    const metricAnywhere = cleaned.match(METRIC_EXTRACT);
-    if (metricAnywhere) {
-      return metricAnywhere[1].trim().toLowerCase();
-    }
-  }
-
-  return cleaned;
-}
-
-/**
- * Strip dual-unit measurement prefixes from a name string.
- * "8 FL OZ / 237 mL Leave-in Conditioner" → { cleaned: "Leave-in Conditioner", size: "237ml" }
- * "237ml Cantu Leave-in Conditioner" is handled by SIZE_PATTERN already.
- * This catches imperial/dual-unit prefixes that SIZE_PATTERN misses.
- */
-function stripDualUnitFromName(name: string): { cleaned: string; size: string } | null {
-  // Pattern: optional number+imperial, separator, number+metric, then the real name
-  // e.g. "8 FL OZ / 237 mL Leave-in Conditioning Treatment"
-  const dualUnitPrefix = name.match(
-    /^\d+(?:\.\d+)?\s*(?:fl\.?\s*oz|oz|lb|lbs?)\s*[/|]\s*(\d+(?:\.\d+)?\s*(?:ml|l|g|kg))\s+(.+)$/i
-  );
-  if (dualUnitPrefix) {
-    return { cleaned: dualUnitPrefix[2].trim(), size: dualUnitPrefix[1].trim().toLowerCase() };
-  }
-
-  // Reverse: metric first, then imperial: "237 mL / 8 FL OZ Leave-in..."
-  const dualUnitPrefixReverse = name.match(
-    /^(\d+(?:\.\d+)?\s*(?:ml|l|g|kg))\s*[/|]\s*\d+(?:\.\d+)?\s*(?:fl\.?\s*oz|oz|lb|lbs?)\s+(.+)$/i
-  );
-  if (dualUnitPrefixReverse) {
-    return { cleaned: dualUnitPrefixReverse[2].trim(), size: dualUnitPrefixReverse[1].trim().toLowerCase() };
-  }
-
-  return null;
-}
-
-/**
- * Extract unit from a size string (e.g., "500ml" → "ml", "2 kg" → "kg")
- */
-function extractUnitFromSize(size: string): string | undefined {
-  const trimmed = size.trim();
-
-  // Try to match unit at the end (with or without space)
-  // Examples: "500ml", "500 ml", "2kg", "2 kg"
-  const unitMatch = trimmed.match(/\d+(?:\.\d+)?\s*([a-z]+)$/i);
-  if (unitMatch) {
-    const extractedUnit = unitMatch[1].toLowerCase();
-    // Validate it's a known unit
-    if ((VALID_UNITS as readonly string[]).includes(extractedUnit)) {
-      return extractedUnit;
-    }
-  }
-
-  return undefined;
 }
 
 /**
@@ -272,6 +198,23 @@ export function formatItemDisplay(
     cleanedUnit = extractUnitFromSize(cleanedSize) || null;
   }
 
+  // Heal legacy rows where size="250" and unit="g" were stored separately:
+  // concatenate them into "250g" so the display shows "250g Butter" instead
+  // of "250 Butter". Only touches bare-number sizes — shapes like "500ml" or
+  // "237 ml" are left alone so existing dedup/format logic keeps working.
+  // Track whether we canonicalised so we can also strip the leftover bare
+  // number from the name below (otherwise "500 Milk" + "500"/"ml" renders
+  // as "500ml 500 Milk" because the dedup patterns only match "500ml" etc).
+  let canonicalisedBareNumber: string | null = null;
+  if (cleanedSize && cleanedUnit) {
+    const canonical = canonicaliseBareNumberSize(cleanedSize, cleanedUnit);
+    if (canonical) {
+      canonicalisedBareNumber = cleanedSize.trim();
+      cleanedSize = canonical.size;
+      cleanedUnit = canonical.unit;
+    }
+  }
+
   // Validate and filter out vague sizes
   if (!isValidSize(cleanedSize, cleanedUnit)) {
     // Even without valid size, strip dual-unit prefix from name for display
@@ -288,6 +231,18 @@ export function formatItemDisplay(
   const dualStrip = stripDualUnitFromName(cleanName);
   if (dualStrip) {
     cleanName = dualStrip.cleaned;
+  }
+  // Capture the post-dual-strip name so the empty-name fallback below
+  // doesn't fall back to the raw (possibly still-dirty) argument.
+  const dualStrippedName = cleanName;
+
+  // If the caller passed a bare-number size (pre-canonicalisation), strip
+  // any leading bare number from the name so we don't render "500ml 500 Milk".
+  // Narrow to leading position + whitespace boundary so arbitrary digits
+  // inside a product name (e.g. "Heinz 57 Sauce") aren't touched.
+  if (canonicalisedBareNumber) {
+    const bareEsc = canonicalisedBareNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    cleanName = cleanName.replace(new RegExp(`^${bareEsc}\\s+`), "").trim();
   }
 
   // Extract the numeric part and unit separately for more robust matching
@@ -326,13 +281,17 @@ export function formatItemDisplay(
         .trim();
     }
   } else {
-    // If size doesn't match expected pattern, just do a simple replacement
+    // If size doesn't match expected pattern, just do a simple replacement.
+    // Operate on the dual-stripped name so we don't re-introduce prefixes
+    // that were already cleaned above.
     const escapedSize = sizeLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    cleanName = name.replace(new RegExp(`\\b${escapedSize}\\b`, "gi"), "").trim();
+    cleanName = cleanName.replace(new RegExp(`\\b${escapedSize}\\b`, "gi"), "").trim();
   }
 
-  // If we ended up with an empty name after deduplication, use original
-  if (!cleanName) return name;
+  // If we ended up with an empty name after deduplication, fall back to
+  // the post-dual-strip name (never the raw arg — that could still contain
+  // an ugly "8 FL OZ / 237 mL ..." prefix).
+  if (!cleanName) return dualStrippedName || name;
 
   // Hard cap: truncate name (never size) to fit MAX_DISPLAY_CHARS
   const full = `${normalizedSize} ${cleanName}`;
@@ -396,12 +355,26 @@ export function cleanItemForStorage(
     };
   }
 
+  // Canonicalize bare-number sizes so "250" + "g" is stored as "250g".
+  // Without this, legacy writers (itemVariants) populate defaultSize with a
+  // bare number, and the display layer renders "250 Butter" — confusing.
+  if (parsed.size && parsed.unit) {
+    const canonical = canonicaliseBareNumberSize(parsed.size, parsed.unit);
+    if (canonical) {
+      return {
+        name: parsed.name,
+        size: canonical.size,
+        unit: canonical.unit,
+      };
+    }
+  }
+
   // Normalize size casing for consistency (e.g., "500ML" → "500ml")
   if (parsed.size) {
     return {
       name: parsed.name,
       size: parsed.size.toLowerCase(),
-      unit: parsed.unit,
+      unit: parsed.unit?.toLowerCase(),
     };
   }
 

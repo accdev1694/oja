@@ -11,4 +11,4 @@
 export { getByBaseItem, getWithPrices, getSizesForStore } from "./itemVariants/queries";
 export { getPopularForSeeding } from "./itemVariants/seeding";
 export { upsert, enrichFromScan, bulkUpsert } from "./itemVariants/mutations";
-export { mergeVariants } from "./itemVariants/admin";
+export { mergeVariants, backfillVariantSizes } from "./itemVariants/admin";

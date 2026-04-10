@@ -166,14 +166,18 @@ export const createFromTemplate = mutation({
         console.warn(`[createFromTemplate] Could not refresh price for ${item.name}:`, err);
       }
 
+      // Re-clean on template copy. Source rows may predate canonicalisation
+      // (e.g. size="250" + unit="g" from an older list), so we run them
+      // through the parser before writing the child list. Rule #13.
+      const cleanedTemplateItem = cleanItemForStorage(item.name, item.size, item.unit);
       await ctx.db.insert("listItems", {
         listId: newListId,
         userId: user._id,
-        name: item.name,
+        name: cleanedTemplateItem.name,
         category: item.category,
         quantity: item.quantity,
-        size: item.size,
-        unit: item.unit,
+        size: cleanedTemplateItem.size,
+        unit: cleanedTemplateItem.unit,
         estimatedPrice: price,
         priceSource: source,
         priceConfidence: confidence,

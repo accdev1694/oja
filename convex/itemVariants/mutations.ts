@@ -6,6 +6,7 @@ import {
 } from "../lib/communityHelpers";
 import { toGroceryTitleCase } from "../lib/titleCase";
 import { trackFunnelEvent } from "../lib/analytics";
+import { cleanItemForStorage } from "../lib/itemNameParser";
 
 /**
  * Insert a new variant (from AI seeding or receipt discovery).
@@ -23,6 +24,12 @@ export const upsert = mutation({
     estimatedPrice: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // Canonicalize name/size/unit — rejects bare-number sizes like "250"
+    // that would otherwise leak into the global catalogue.
+    const cleaned = cleanItemForStorage(args.variantName, args.size, args.unit);
+    if (!cleaned.size || !cleaned.unit) {
+      throw new Error("itemVariants.upsert: size and unit are required and must be valid");
+    }
     const normalizedBase = args.baseItem.toLowerCase().trim();
 
     // Check for existing variant
@@ -32,7 +39,7 @@ export const upsert = mutation({
       .collect();
 
     const duplicate = existing.find(
-      (v) => v.variantName.toLowerCase() === args.variantName.toLowerCase()
+      (v) => v.variantName.toLowerCase() === cleaned.name.toLowerCase()
     );
 
     if (duplicate) {
@@ -54,9 +61,9 @@ export const upsert = mutation({
 
     return await ctx.db.insert("itemVariants", {
       baseItem: normalizedBase,
-      variantName: toGroceryTitleCase(args.variantName),
-      size: args.size,
-      unit: args.unit,
+      variantName: toGroceryTitleCase(cleaned.name),
+      size: cleaned.size,
+      unit: cleaned.unit,
       category: args.category,
       source: args.source,
       commonality: args.commonality,
@@ -89,8 +96,25 @@ export const enrichFromScan = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
+    // Canonicalize upfront. Use productName-or-baseItem as the seed name so
+    // the parser can split "250" + "g" into "250g" before it reaches the DB.
+    const cleaned = cleanItemForStorage(
+      args.productName ?? args.baseItem,
+      args.size,
+      args.unit,
+    );
+    // Silently skip malformed rows instead of throwing. The client calls
+    // this opportunistically (`.catch(() => {})`) and throwing here just
+    // spams Convex error logs without any user benefit. A bad size/unit
+    // pair means we can't build a canonical variant row, so the only safe
+    // thing is to do nothing.
+    if (!cleaned.size || !cleaned.unit) {
+      return null;
+    }
+    const cleanedSize = cleaned.size;
+    const cleanedUnit = cleaned.unit;
     const normalizedBase = args.baseItem.toLowerCase().trim();
-    const normalizedSize = args.size.toLowerCase().trim();
+    const normalizedSize = cleanedSize.toLowerCase().trim();
 
     // Determine if community enrichment is allowed
     const confidenceOk = (args.confidence ?? 0) >= 70;
@@ -134,7 +158,7 @@ export const enrichFromScan = mutation({
     // Compute variant key for community dedup
     const scanKey = variantKey(
       args.productName ?? args.baseItem,
-      args.size
+      cleanedSize
     );
 
     // Match by size (normalized) OR by variant key for community matching
@@ -178,14 +202,14 @@ export const enrichFromScan = mutation({
     // otherwise use the scanned name
     const targetBase = existing.length > 0 ? existing[0].baseItem : normalizedBase;
     const newVariantName = args.productName
-      ? `${args.productName} ${args.size}`
-      : `${args.baseItem} ${args.size}`;
+      ? `${args.productName} ${cleanedSize}`
+      : `${args.baseItem} ${cleanedSize}`;
 
     return await ctx.db.insert("itemVariants", {
       baseItem: targetBase,
       variantName: toGroceryTitleCase(newVariantName),
-      size: args.size,
-      unit: args.unit,
+      size: cleanedSize,
+      unit: cleanedUnit,
       category: args.category,
       source: "scan_enriched",
       brand: args.brand,
@@ -229,7 +253,17 @@ export const bulkUpsert = mutation({
     let inserted = 0;
     let updated = 0;
 
+    let skipped = 0;
+
     for (const variant of args.variants) {
+      // Canonicalize before touching the table. Silently skip (don't throw)
+      // on bad rows — bulk callers shouldn't fail the whole batch for one
+      // malformed item, and pollution here affects every future seed.
+      const cleaned = cleanItemForStorage(variant.variantName, variant.size, variant.unit);
+      if (!cleaned.size || !cleaned.unit) {
+        skipped++;
+        continue;
+      }
       const normalizedBase = variant.baseItem.toLowerCase().trim();
 
       const existing = await ctx.db
@@ -238,7 +272,7 @@ export const bulkUpsert = mutation({
         .collect();
 
       const duplicate = existing.find(
-        (v) => v.variantName.toLowerCase() === variant.variantName.toLowerCase()
+        (v) => v.variantName.toLowerCase() === cleaned.name.toLowerCase()
       );
 
       if (duplicate) {
@@ -252,9 +286,9 @@ export const bulkUpsert = mutation({
       } else {
         await ctx.db.insert("itemVariants", {
           baseItem: normalizedBase,
-          variantName: toGroceryTitleCase(variant.variantName),
-          size: variant.size,
-          unit: variant.unit,
+          variantName: toGroceryTitleCase(cleaned.name),
+          size: cleaned.size,
+          unit: cleaned.unit,
           category: variant.category,
           source: variant.source,
           commonality: variant.commonality,
@@ -264,6 +298,6 @@ export const bulkUpsert = mutation({
       }
     }
 
-    return { inserted, updated };
+    return { inserted, updated, skipped };
   },
 });

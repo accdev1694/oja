@@ -87,6 +87,7 @@ import type * as lib_globalEnrichment from "../lib/globalEnrichment.js";
 import type * as lib_itemDeduplicator from "../lib/itemDeduplicator.js";
 import type * as lib_itemMatcher from "../lib/itemMatcher.js";
 import type * as lib_itemNameParser from "../lib/itemNameParser.js";
+import type * as lib_itemNameParserHelpers from "../lib/itemNameParserHelpers.js";
 import type * as lib_matching_index from "../lib/matching/index.js";
 import type * as lib_matching_matcher from "../lib/matching/matcher.js";
 import type * as lib_matching_scoring from "../lib/matching/scoring.js";
@@ -313,6 +314,7 @@ declare const fullApi: ApiFromModules<{
   "lib/itemDeduplicator": typeof lib_itemDeduplicator;
   "lib/itemMatcher": typeof lib_itemMatcher;
   "lib/itemNameParser": typeof lib_itemNameParser;
+  "lib/itemNameParserHelpers": typeof lib_itemNameParserHelpers;
   "lib/matching/index": typeof lib_matching_index;
   "lib/matching/matcher": typeof lib_matching_matcher;
   "lib/matching/scoring": typeof lib_matching_scoring;

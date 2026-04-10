@@ -12,6 +12,7 @@ import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { isValidProductName, variantKey } from "./communityHelpers";
 import { normalizeItemName } from "./fuzzyMatch";
+import { cleanItemForStorage } from "./itemNameParser";
 
 /**
  * Enrich global product DB from a scanned product.
@@ -31,15 +32,23 @@ export async function enrichGlobalFromProductScan(
   },
   userId: Id<"users">,
 ): Promise<void> {
+  // Normalize name/size/unit through the canonical parser so legacy callers
+  // that pass "250" + "g" (separate) become "250g" + "g" here. Without this,
+  // the variant row gets a bare-number size and every downstream seed/display
+  // renders "250 Butter" instead of "250g Butter".
+  const cleaned = cleanItemForStorage(item.name, item.size, item.unit);
   // Skip if no size/unit — can't create a meaningful variant
-  if (!item.size || !item.unit) return;
+  if (!cleaned.size || !cleaned.unit) return;
+  const cleanedItemName = cleaned.name;
+  const cleanedSize = cleaned.size;
+  const cleanedUnit = cleaned.unit;
 
-  const normalizedBase = item.name.toLowerCase().trim();
-  const normalizedSize = item.size.toLowerCase().trim();
+  const normalizedBase = cleanedItemName.toLowerCase().trim();
+  const normalizedSize = cleanedSize.toLowerCase().trim();
 
   // Quality gates (same as enrichFromScan in itemVariants.ts)
   const confidenceOk = (item.confidence ?? 0) >= 70;
-  const nameValid = isValidProductName(item.name);
+  const nameValid = isValidProductName(cleanedItemName);
   const communityEnrich = confidenceOk && nameValid;
 
   // Find existing variants for this base item
@@ -66,7 +75,7 @@ export async function enrichGlobalFromProductScan(
   }
 
   // Compute variant key for community dedup
-  const scanKey = variantKey(item.name, item.size);
+  const scanKey = variantKey(cleanedItemName, cleanedSize);
 
   // Match by size (normalized) OR by variant key for community matching
   const match =
@@ -101,17 +110,17 @@ export async function enrichGlobalFromProductScan(
     // Create new variant under the existing baseItem if we found one,
     // otherwise use the scanned name
     const targetBase = existing.length > 0 ? existing[0].baseItem : normalizedBase;
-    const newVariantName = `${item.name} ${item.size}`;
+    const newVariantName = `${cleanedItemName} ${cleanedSize}`;
 
     await ctx.db.insert("itemVariants", {
       baseItem: targetBase,
       variantName: newVariantName,
-      size: item.size,
-      unit: item.unit,
+      size: cleanedSize,
+      unit: cleanedUnit,
       category: item.category,
       source: "scan_enriched",
       brand: item.brand,
-      productName: item.name,
+      productName: cleanedItemName,
       estimatedPrice: item.estimatedPrice,
       scanCount: 1,
       // Community fields on new variants (if gating passes)
@@ -146,14 +155,14 @@ export async function enrichGlobalFromProductScan(
           averagePrice: item.estimatedPrice,
           confidence: 0.05,
           updatedAt: now,
-          ...(item.size ? { size: item.size } : {}),
-          ...(item.unit ? { unit: item.unit } : {}),
+          size: cleanedSize,
+          unit: cleanedUnit,
         });
       }
     } else {
       await ctx.db.insert("currentPrices", {
         normalizedName: normalizedBase,
-        itemName: item.name,
+        itemName: cleanedItemName,
         storeName,
         unitPrice: item.estimatedPrice,
         averagePrice: item.estimatedPrice,
@@ -162,8 +171,8 @@ export async function enrichGlobalFromProductScan(
         lastSeenDate: now,
         lastReportedBy: userId,
         updatedAt: now,
-        ...(item.size ? { size: item.size } : {}),
-        ...(item.unit ? { unit: item.unit } : {}),
+        size: cleanedSize,
+        unit: cleanedUnit,
       });
     }
   }
@@ -200,47 +209,59 @@ export async function enrichGlobalFromReceipt(
     const nameValid = isValidProductName(item.name);
     if (!nameValid) continue;
 
-    const normalizedBase = item.name.toLowerCase().trim();
+    // Canonicalize before touching the shared catalogue. Receipt OCR often
+    // hands us a bare-number size and a separate unit; without cleaning, the
+    // variant ends up unusable downstream.
+    const cleaned = cleanItemForStorage(item.name, item.size, item.unit);
+    const cleanedItemName = cleaned.name;
+    const cleanedSize = cleaned.size;
+    const cleanedUnit = cleaned.unit;
+
+    const normalizedBase = cleanedItemName.toLowerCase().trim();
     const now = Date.now();
 
     // ── 1. Update/Create Item Variant ────────────────────────────────────────
-    // We reuse some logic but focus on receipt_discovered source
-    let existingVariants = await ctx.db
-      .query("itemVariants")
-      .withIndex("by_base_item", (q) => q.eq("baseItem", normalizedBase))
-      .collect();
+    // Only write a variant row when we have a valid size+unit pair — a variant
+    // with placeholder "Standard" + "unit" is meaningless and pollutes the
+    // global catalogue (CLAUDE.md rule #13: size without unit is UNACCEPTABLE).
+    if (cleanedSize && cleanedUnit) {
+      const existingVariants = await ctx.db
+        .query("itemVariants")
+        .withIndex("by_base_item", (q) => q.eq("baseItem", normalizedBase))
+        .collect();
 
-    const scanKey = variantKey(item.name, item.size || "");
-    const match = existingVariants.find(
-      (v) => variantKey(v.productName ?? v.variantName, v.size) === scanKey
-    );
+      const scanKey = variantKey(cleanedItemName, cleanedSize);
+      const match = existingVariants.find(
+        (v) => variantKey(v.productName ?? v.variantName, v.size) === scanKey
+      );
 
-    if (match) {
-      await ctx.db.patch(match._id, {
-        scanCount: (match.scanCount ?? 0) + 1,
-        userCount: (match.userCount ?? 0) + 1,
-        lastSeenAt: now,
-        // If we found a real price, update the estimate
-        estimatedPrice: item.unitPrice,
-        source: "receipt_discovered",
-        region,
-      });
-    } else {
-      const targetBase = existingVariants.length > 0 ? existingVariants[0].baseItem : normalizedBase;
-      await ctx.db.insert("itemVariants", {
-        baseItem: targetBase,
-        variantName: item.size ? `${item.name} ${item.size}` : item.name,
-        size: item.size || "Standard",
-        unit: item.unit || "unit",
-        category: item.category || "Other",
-        source: "receipt_discovered",
-        productName: item.name,
-        estimatedPrice: item.unitPrice,
-        scanCount: 1,
-        userCount: 1,
-        lastSeenAt: now,
-        region,
-      });
+      if (match) {
+        await ctx.db.patch(match._id, {
+          scanCount: (match.scanCount ?? 0) + 1,
+          userCount: (match.userCount ?? 0) + 1,
+          lastSeenAt: now,
+          // If we found a real price, update the estimate
+          estimatedPrice: item.unitPrice,
+          source: "receipt_discovered",
+          region,
+        });
+      } else {
+        const targetBase = existingVariants.length > 0 ? existingVariants[0].baseItem : normalizedBase;
+        await ctx.db.insert("itemVariants", {
+          baseItem: targetBase,
+          variantName: `${cleanedItemName} ${cleanedSize}`,
+          size: cleanedSize,
+          unit: cleanedUnit,
+          category: item.category || "Other",
+          source: "receipt_discovered",
+          productName: cleanedItemName,
+          estimatedPrice: item.unitPrice,
+          scanCount: 1,
+          userCount: 1,
+          lastSeenAt: now,
+          region,
+        });
+      }
     }
 
     // ── 2. Update Communal Prices (The "Price Engine") ───────────────────────
@@ -268,14 +289,14 @@ export async function enrichGlobalFromReceipt(
         normalizedStoreId: receipt.normalizedStoreId,
         region,
         updatedAt: now,
-        // Update size/unit if provided
-        ...(item.size ? { size: item.size } : {}),
-        ...(item.unit ? { unit: item.unit } : {}),
+        // Update size/unit only when the cleaned pair is valid — avoid
+        // overwriting a good size with a stray bare-number entry.
+        ...(cleanedSize && cleanedUnit ? { size: cleanedSize, unit: cleanedUnit } : {}),
       });
     } else {
       await ctx.db.insert("currentPrices", {
         normalizedName: normalizedBase,
-        itemName: item.name,
+        itemName: cleanedItemName,
         storeName: receipt.storeName,
         normalizedStoreId: receipt.normalizedStoreId,
         region,
@@ -288,8 +309,7 @@ export async function enrichGlobalFromReceipt(
         lastSeenDate: receipt.purchaseDate,
         lastReportedBy: receipt.userId,
         updatedAt: now,
-        ...(item.size ? { size: item.size } : {}),
-        ...(item.unit ? { unit: item.unit } : {}),
+        ...(cleanedSize && cleanedUnit ? { size: cleanedSize, unit: cleanedUnit } : {}),
       });
     }
   }

@@ -5,6 +5,7 @@ import { canCreateList } from "../lib/featureGating";
 import { trackActivity } from "../lib/analytics";
 import { resolveVariantWithPrice, PriceSource } from "../lib/priceResolver";
 import { deduplicateItems, ListItemInput } from "../lib/itemDeduplicator";
+import { cleanItemForStorage } from "../lib/itemNameParser";
 
 export const createFromMultipleLists = mutation({
   args: {
@@ -85,14 +86,17 @@ export const createFromMultipleLists = mutation({
         console.warn(`[createFromMultipleLists] Could not refresh price for ${item.name}:`, err);
       }
 
+      // Re-clean on batch copy — source lists may contain rows with
+      // bare-number sizes ("250" + "g") from before canonicalisation. Rule #13.
+      const cleanedBatchItem = cleanItemForStorage(item.name, item.size, item.unit);
       await ctx.db.insert("listItems", {
         listId: newListId,
         userId: user._id,
-        name: item.name,
+        name: cleanedBatchItem.name,
         category: item.category,
         quantity: item.quantity,
-        size: item.size,
-        unit: item.unit,
+        size: cleanedBatchItem.size,
+        unit: cleanedBatchItem.unit,
         estimatedPrice: price,
         priceSource: source,
         priceConfidence: confidence,

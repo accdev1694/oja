@@ -4,6 +4,7 @@ import { normalizeStoreName } from "../lib/storeNormalizer";
 import { computeConfidence, computeWeightedAverage } from "../lib/priceValidator";
 import { isValidProductName } from "../lib/communityHelpers";
 import { toGroceryTitleCase } from "../lib/titleCase";
+import { cleanItemForStorage } from "../lib/itemNameParser";
 
 const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -52,6 +53,18 @@ export const upsertFromReceipt = mutation({
 
     for (const item of receipt.items) {
       const normalizedName = item.name.toLowerCase().trim();
+
+      // cleanItemForStorage is MANDATORY (CLAUDE.md rule #13): it canonicalises
+      // bare-number sizes like "250" + "g" → "250g" so downstream writes never
+      // store a size field that means nothing on its own. Hoisted above the
+      // price upsert so currentPrices rows also get canonical size/unit —
+      // previously only the itemVariants write used the cleaned pair.
+      const cleanedVariant = cleanItemForStorage(item.name, item.size, item.unit);
+      const canonicalSizeUnit =
+        cleanedVariant.size && cleanedVariant.unit
+          ? { size: cleanedVariant.size, unit: cleanedVariant.unit }
+          : {};
+
       const existing = await ctx.db
         .query("currentPrices")
         .withIndex("by_item_store_region", (q) =>
@@ -69,8 +82,7 @@ export const upsertFromReceipt = mutation({
           await ctx.db.patch(existing._id, {
             unitPrice: item.unitPrice,
             itemName: toGroceryTitleCase(item.name),
-            ...(item.size && { size: item.size }),
-            ...(item.unit && { unit: item.unit }),
+            ...canonicalSizeUnit,
             ...(normalizedStoreId && { normalizedStoreId }),
             region,
             minPrice: existing.minPrice !== undefined ? Math.min(existing.minPrice, item.unitPrice) : item.unitPrice,
@@ -94,8 +106,7 @@ export const upsertFromReceipt = mutation({
           storeName: receipt.storeName,
           ...(normalizedStoreId && { normalizedStoreId }),
           region,
-          ...(item.size && { size: item.size }),
-          ...(item.unit && { unit: item.unit }),
+          ...canonicalSizeUnit,
           unitPrice: item.unitPrice,
           averagePrice: item.unitPrice,
           minPrice: item.unitPrice,
@@ -110,19 +121,19 @@ export const upsertFromReceipt = mutation({
       }
 
       // Variant discovery / Bracket matching logic could be extracted further if needed
-      // Keeping it here for now as part of the core upsert flow
-      if (item.size && item.unit) {
+      // Keeping it here for now as part of the core upsert flow.
+      if (cleanedVariant.size && cleanedVariant.unit) {
         const baseItem = normalizedName.replace(/\d+\s*(ml|l|g|kg|pt|pint|pints|pack|oz|lb)\b/gi, "").replace(/\s+/g, " ").trim();
         const existingVariants = await ctx.db.query("itemVariants").withIndex("by_base_item", (q) => q.eq("baseItem", baseItem || normalizedName)).collect();
-        const isDuplicate = existingVariants.some((v) => v.variantName.toLowerCase() === item.name.toLowerCase());
+        const isDuplicate = existingVariants.some((v) => v.variantName.toLowerCase() === cleanedVariant.name.toLowerCase());
 
         if (!isDuplicate) {
-          if (isValidProductName(item.name)) {
+          if (isValidProductName(cleanedVariant.name)) {
             await ctx.db.insert("itemVariants", {
               baseItem: baseItem || normalizedName,
-              variantName: toGroceryTitleCase(item.name),
-              size: item.size,
-              unit: item.unit,
+              variantName: toGroceryTitleCase(cleanedVariant.name),
+              size: cleanedVariant.size,
+              unit: cleanedVariant.unit,
               category: item.category || "Other",
               source: "receipt_discovered",
               scanCount: 1,
@@ -132,7 +143,7 @@ export const upsertFromReceipt = mutation({
             variantsDiscovered++;
           }
         } else {
-          const matchingVariant = existingVariants.find((v) => v.variantName.toLowerCase() === item.name.toLowerCase());
+          const matchingVariant = existingVariants.find((v) => v.variantName.toLowerCase() === cleanedVariant.name.toLowerCase());
           if (matchingVariant) {
             await ctx.db.patch(matchingVariant._id, {
               scanCount: (matchingVariant.scanCount ?? 0) + 1,
@@ -161,16 +172,30 @@ export const upsertAIEstimate = internalMutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     const storeName = "AI Estimate";
+
+    // Canonicalise before write — Rule #13. AI-estimated rows previously
+    // bypassed the parser and could land with bare-number sizes like "250"
+    // (missing unit) or unit="each", polluting the price cache.
+    const cleaned = cleanItemForStorage(args.itemName, args.size, args.unit);
+    const canonicalSizeUnit =
+      cleaned.size && cleaned.unit
+        ? { size: cleaned.size, unit: cleaned.unit }
+        : {};
+
     const existing = await ctx.db.query("currentPrices").withIndex("by_item_store", (q) => q.eq("normalizedName", args.normalizedName).eq("storeName", storeName)).first();
 
     if (existing) {
       await ctx.db.patch(existing._id, {
         unitPrice: args.unitPrice,
         averagePrice: args.unitPrice,
+        // AI estimate rows have a single estimated price per update, so
+        // min/max should track unitPrice too. Previous patch omitted these
+        // which let them drift from the current estimate over time.
+        minPrice: args.unitPrice,
+        maxPrice: args.unitPrice,
         confidence: args.confidence ?? 0.05,
         updatedAt: now,
-        ...(args.size && { size: args.size }),
-        ...(args.unit && { unit: args.unit }),
+        ...canonicalSizeUnit,
         ...(args.variantName && { variantName: args.variantName }),
       });
       return existing._id;
@@ -187,8 +212,7 @@ export const upsertAIEstimate = internalMutation({
       lastSeenDate: now,
       lastReportedBy: args.userId,
       updatedAt: now,
-      ...(args.size && { size: args.size }),
-      ...(args.unit && { unit: args.unit }),
+      ...canonicalSizeUnit,
       ...(args.variantName && { variantName: args.variantName }),
     });
   },

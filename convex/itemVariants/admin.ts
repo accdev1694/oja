@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation } from "../_generated/server";
+import { cleanItemForStorage } from "../lib/itemNameParser";
 
 /**
  * Admin mutation: Merge two variants into one.
@@ -75,5 +76,99 @@ export const mergeVariants = mutation({
     });
 
     return { success: true };
+  },
+});
+
+/**
+ * Admin mutation: Heal itemVariants rows whose size is a bare number like
+ * "250" (missing unit embedded) or whose unit is a non-canonical token like
+ * "eggs" / "each". Runs cleanItemForStorage over each row and patches (or
+ * deletes, if unrecoverable) the offending entries.
+ *
+ * Idempotent — safe to run repeatedly. Rows that already pass validation
+ * are skipped.
+ *
+ * Invoke from Convex dashboard as a one-off. Processes a bounded batch per
+ * call (limit param) so we don't hit the read/write cap on a big catalogue.
+ */
+export const backfillVariantSizes = mutation({
+  args: {
+    limit: v.optional(v.number()),
+    dryRun: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user?.isAdmin) throw new Error("Unauthorized: Admin only");
+
+    const limit = args.limit ?? 500;
+    const dryRun = args.dryRun ?? false;
+
+    // Full scan via the `by_base_item` index — no constraint, so it walks
+    // every row. Satisfies rule #2 (every query uses withIndex) while keeping
+    // the one-off backfill simple. The itemVariants catalogue is small
+    // (hundreds of rows), so a single `take(limit)` covers it; repeat the
+    // call with a larger limit if the table grows.
+    const variants = await ctx.db
+      .query("itemVariants")
+      .withIndex("by_base_item")
+      .take(limit);
+
+    let scanned = 0;
+    let patched = 0;
+    let deleted = 0;
+    let skipped = 0;
+
+    for (const variant of variants) {
+      scanned++;
+      const cleaned = cleanItemForStorage(
+        variant.productName ?? variant.variantName,
+        variant.size,
+        variant.unit,
+      );
+
+      // Already canonical? Nothing to do.
+      if (cleaned.size === variant.size && cleaned.unit === variant.unit) {
+        skipped++;
+        continue;
+      }
+
+      // Unrecoverable (e.g. unit was "each"/"eggs" and size was bare number
+      // so we can't rebuild the pair) — delete so it stops polluting seeds.
+      if (!cleaned.size || !cleaned.unit) {
+        if (!dryRun) await ctx.db.delete(variant._id);
+        deleted++;
+        continue;
+      }
+
+      if (!dryRun) {
+        await ctx.db.patch(variant._id, {
+          size: cleaned.size,
+          unit: cleaned.unit,
+        });
+      }
+      patched++;
+    }
+
+    if (!dryRun) {
+      // Bulk operation — no single target row, so point targetId at the
+      // acting admin's user record and use targetType "users" (a real table)
+      // so downstream log views don't choke on an unresolvable FK. The
+      // details field carries the actual counters.
+      await ctx.db.insert("adminLogs", {
+        adminUserId: user._id,
+        action: "backfill_variant_sizes",
+        targetType: "users",
+        targetId: user._id,
+        details: `Backfill: scanned=${scanned} patched=${patched} deleted=${deleted} skipped=${skipped}`,
+        createdAt: Date.now(),
+      });
+    }
+
+    return { scanned, patched, deleted, skipped, dryRun };
   },
 });

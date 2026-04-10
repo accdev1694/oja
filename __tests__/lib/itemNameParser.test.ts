@@ -509,4 +509,78 @@ describe("Item Name Parser", () => {
       expect(result).toBe("500ml Organic Whole Milk");
     });
   });
+
+  // Regression: legacy data and cuisine seed data store sizes as bare numbers
+  // like "250" + separate unit "g". The parser must canonicalise these to
+  // "250g" on both write AND read paths, otherwise pantry items render as
+  // "250 Butter" and "6 Free Range Eggs" (confusing the user).
+  describe("bare-number size canonicalisation", () => {
+    it("cleanItemForStorage should embed unit when size is a bare number (grams)", () => {
+      const result = cleanItemForStorage("Butter", "250", "g");
+      expect(result.name).toBe("Butter");
+      expect(result.size).toBe("250g");
+      expect(result.unit).toBe("g");
+    });
+
+    it("cleanItemForStorage should embed unit for bare-number pints", () => {
+      const result = cleanItemForStorage("Whole Milk", "2", "pint");
+      expect(result.size).toBe("2pint");
+      expect(result.unit).toBe("pint");
+    });
+
+    it("cleanItemForStorage should embed unit for bare-number pack count", () => {
+      const result = cleanItemForStorage("Free Range Eggs", "6", "pack");
+      expect(result.size).toBe("6pack");
+      expect(result.unit).toBe("pack");
+    });
+
+    it("cleanItemForStorage should handle decimal bare numbers", () => {
+      const result = cleanItemForStorage("Olive Oil", "1.5", "l");
+      expect(result.size).toBe("1.5l");
+      expect(result.unit).toBe("l");
+    });
+
+    it("cleanItemForStorage should preserve already-canonical sizes", () => {
+      const result = cleanItemForStorage("Milk", "500ml", "ml");
+      expect(result.size).toBe("500ml");
+      expect(result.unit).toBe("ml");
+    });
+
+    it("cleanItemForStorage should reject bare number with invalid unit", () => {
+      const result = cleanItemForStorage("Eggs", "6", "eggs");
+      expect(result.size).toBeUndefined();
+      expect(result.unit).toBeUndefined();
+    });
+
+    it("formatItemDisplay should render embedded unit for legacy bare-number rows (g)", () => {
+      // Simulates old DB rows where size="250" and unit="g" were stored separately.
+      // The display layer must heal this so the user sees "250g Butter" not "250 Butter".
+      expect(formatItemDisplay("Butter", "250", "g")).toBe("250g Butter");
+    });
+
+    it("formatItemDisplay should render embedded unit for legacy bare-number rows (pint)", () => {
+      expect(formatItemDisplay("Whole Milk", "2", "pint")).toBe("2pint Whole Milk");
+    });
+
+    it("formatItemDisplay should render embedded unit for legacy bare-number rows (pack)", () => {
+      expect(formatItemDisplay("Free Range Eggs", "6", "pack")).toBe("6pack Free Range Eggs");
+    });
+
+    it("formatItemDisplay should dedup leading bare number from name after canonicalisation", () => {
+      // Regression: legacy rows where the AI glued the size into the name
+      // AND stored the bare number in the size field. Without dedup the
+      // display was "500ml 500 Milk". After canonicalisation we also strip
+      // the leading bare-number token from the name.
+      expect(formatItemDisplay("500 Milk", "500", "ml")).toBe("500ml Milk");
+    });
+
+    it("formatItemDisplay should dedup leading bare number with grams", () => {
+      expect(formatItemDisplay("250 Butter", "250", "g")).toBe("250g Butter");
+    });
+
+    it("formatItemDisplay should not strip digits embedded in product names", () => {
+      // "Heinz 57 Sauce" with a real size should keep the 57 intact.
+      expect(formatItemDisplay("Heinz 57 Sauce", "500", "ml")).toBe("500ml Heinz 57 Sauce");
+    });
+  });
 });
