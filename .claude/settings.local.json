@@ -208,7 +208,17 @@
       "mcp__firecrawl__firecrawl_search",
       "Skill(commit)",
       "Skill(bmad:core:tasks:shard-doc)",
-      "Bash([ -f debug.md ])"
+      "Bash([ -f debug.md ])",
+      "mcp__convex__status",
+      "mcp__convex__runOneoffQuery",
+      "mcp__convex__envSet",
+      "mcp__convex__envGet",
+      "WebFetch(domain:docs.convex.dev)",
+      "Bash(mkdir -p .claude/skills/ui-ux-pro-max)",
+      "Bash(cp /tmp/ui-ux-pro-max-skill/.claude/skills/ui-ux-pro-max/SKILL.md .claude/skills/ui-ux-pro-max/SKILL.md)",
+      "Bash(cp -r /tmp/ui-ux-pro-max-skill/src/ui-ux-pro-max/data .claude/skills/ui-ux-pro-max/data)",
+      "Bash(cp -r /tmp/ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts .claude/skills/ui-ux-pro-max/scripts)",
+      "Bash(git:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
