@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useWindowDimensions } from "react-native";
 import {
   notificationAsync,
   impactAsync,
@@ -10,7 +11,6 @@ import {
   STOCK_LEVEL_ORDER,
   type StockLevel,
 } from "@/components/pantry";
-import { SCREEN_WIDTH } from "@/components/stock/stockStyles";
 import { defaultListName } from "@/lib/list/helpers";
 import type { PantryItem, ShoppingList } from "./types";
 import type { useStockData } from "./useStockData";
@@ -74,6 +74,10 @@ export function useStockActions(input: StockActionsInput) {
     dismissGestureOnboarding,
     lowHint,
   } = input;
+
+  // Live window width for the fly-to-list animation start position. Module-
+  // level `Dimensions.get()` returns a stale snapshot that misses rotations.
+  const { width: windowWidth } = useWindowDimensions();
 
   // Delegate long-press, merge-duplicates, toggle-essentials to extracted hook
   const { handleMergeDuplicates, handleItemLongPress, toggleEssentials } =
@@ -181,7 +185,7 @@ export function useStockActions(input: StockActionsInput) {
         await handleStockUpdateWithHint(item._id, nextLevel);
         if (nextLevel === "out") {
           await autoAddToShoppingList(item, {
-            x: SCREEN_WIDTH / 2,
+            x: windowWidth / 2,
             y: 300,
           });
         }
@@ -196,6 +200,7 @@ export function useStockActions(input: StockActionsInput) {
       getNextLowerLevel,
       handleStockUpdateWithHint,
       autoAddToShoppingList,
+      windowWidth,
     ]
   );
 

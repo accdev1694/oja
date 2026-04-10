@@ -1,12 +1,10 @@
-import { StyleSheet, Dimensions } from "react-native";
+import { StyleSheet } from "react-native";
 import {
   colors,
   typography,
   spacing,
   borderRadius,
 } from "@/components/ui/glass";
-
-export const SCREEN_WIDTH = Dimensions.get("window").width;
 
 /** Sentinel value for the Essentials section title */
 export const ESSENTIALS_SECTION_TITLE = "\u2605 Essentials";
@@ -87,10 +85,6 @@ export const stockStyles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
   },
-  searchContainer: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xs,
-  },
   listWrapper: {
     flex: 1,
   },
@@ -121,10 +115,6 @@ export const stockStyles = StyleSheet.create({
     ...typography.labelSmall,
     color: colors.text.inverse,
     fontSize: 10,
-  },
-  hintRow: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xs,
   },
   scrollView: {
     flex: 1,
@@ -173,6 +163,10 @@ export const stockStyles = StyleSheet.create({
     borderColor: `${colors.accent.primary}40`,
     alignItems: "center",
     justifyContent: "center",
+  },
+  refreshPriceIcon: {
+    width: 22,
+    height: 22,
   },
   essentialsSectionTitle: {
     color: colors.accent.primary,

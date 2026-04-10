@@ -9,6 +9,7 @@ import {
   SimpleHeader,
   colors,
 } from "@/components/ui/glass";
+import type { FlashMessage } from "@/components/ui/FlashInsightBanner";
 
 import { Doc } from "@/convex/_generated/dataModel";
 import { haptic } from "@/lib/haptics/safeHaptics";
@@ -18,6 +19,7 @@ import { StockLoadingSkeleton, StockEmptyPantry } from "@/components/stock/Stock
 import { StockSectionList } from "@/components/stock/StockSectionList";
 import { StockHeaderButtons } from "@/components/stock/StockHeaderButtons";
 import { StockBanners } from "@/components/stock/StockBanners";
+import { ExpandableSearchHeader } from "@/components/stock/ExpandableSearchHeader";
 import { StockModalsAndOverlays } from "@/components/stock/StockModalsAndOverlays";
 import { useStockScreen } from "@/hooks/useStockScreen";
 
@@ -46,7 +48,6 @@ export default function PantryScreen() {
     sections,
     attentionCount,
     activeFilterCount,
-    hasExpandedCategory,
     capsuleActiveIndex,
 
     // UI state
@@ -90,6 +91,9 @@ export default function PantryScreen() {
 
   const refreshPantryPrices = useMutation(api.pantryItems.refreshPantryPrices);
   const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
+  const [flashMessage, setFlashMessage] = useState<FlashMessage | null>(null);
+
+  const handleFlashFinish = useCallback(() => setFlashMessage(null), []);
 
   const handleRefreshPantryPrices = useCallback(async () => {
     haptic("light");
@@ -97,9 +101,40 @@ export default function PantryScreen() {
     try {
       const result = await refreshPantryPrices({});
       haptic("success");
-      console.log(`Pantry prices refreshed: ${result.updated} of ${result.total}`);
+      const { updated, total } = result;
+      const id = `refresh-${Date.now()}`;
+      if (total === 0) {
+        setFlashMessage({
+          id,
+          tone: "info",
+          icon: "package-variant",
+          title: "Nothing to refresh",
+          body: "Your pantry is empty, so there are no prices to update yet.",
+        });
+      } else if (updated === 0) {
+        setFlashMessage({
+          id,
+          tone: "info",
+          title: "Prices already up to date",
+          body: `Checked ${total} pantry item${total !== 1 ? "s" : ""} — nothing has changed since the last refresh.`,
+        });
+      } else {
+        setFlashMessage({
+          id,
+          tone: "success",
+          title: "Prices refreshed",
+          body: `Updated ${updated} of ${total} pantry item${total !== 1 ? "s" : ""} with the latest prices.`,
+        });
+      }
     } catch (error) {
       console.error("Pantry price refresh failed:", error);
+      haptic("error");
+      setFlashMessage({
+        id: `refresh-error-${Date.now()}`,
+        tone: "error",
+        title: "Couldn't refresh prices",
+        body: "Something went wrong updating your pantry prices. Please try again in a moment.",
+      });
     } finally {
       setIsRefreshingPrices(false);
     }
@@ -121,10 +156,17 @@ export default function PantryScreen() {
         <SimpleHeader
           title={getGreeting(firstName)}
           accentColor={colors.semantic.pantry}
-          subtitle={
-            viewMode === "attention"
-              ? `What you have in your pantry at home`
-              : `What's in your pantry \u00b7 ${filteredItems.length} of ${items.length}`
+          subtitleElement={
+            <ExpandableSearchHeader
+              subtitle={
+                viewMode === "attention"
+                  ? "Your pantry items"
+                  : `Your pantry \u00b7 ${filteredItems.length} of ${items.length}`
+              }
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              placeholder="Search stock..."
+            />
           }
           rightElement={
             <StockHeaderButtons
@@ -135,7 +177,7 @@ export default function PantryScreen() {
               isRefreshingPrices={isRefreshingPrices}
             />
           }
-          style={{ marginBottom: 4 }}
+          style={{ marginBottom: 0 }}
         />
 
         <View key={pageAnimationKey} style={styles.animationWrapper}>
@@ -154,8 +196,8 @@ export default function PantryScreen() {
             capsuleActiveIndex={capsuleActiveIndex}
             onViewModeSwitch={handleViewModeSwitch}
             tabsRef={tabsRef}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
+            flashMessage={flashMessage}
+            onFlashFinish={handleFlashFinish}
           />
 
           <StockSectionList
@@ -165,7 +207,6 @@ export default function PantryScreen() {
             animationKey={animationKey}
             viewMode={viewMode}
             searchQuery={searchQuery}
-            hasExpandedCategory={hasExpandedCategory}
             archivedCount={archivedCount}
             bottomInset={insets.bottom}
             expandingCategory={expandingCategory}

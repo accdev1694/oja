@@ -3,12 +3,12 @@ import { View, Text, Pressable } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   GlassCapsuleSwitcher,
-  GlassSearchInput,
   AnimatedSection,
   TrialNudgeBanner,
   colors,
 } from "@/components/ui/glass";
 import { TipBanner } from "@/components/ui/TipBanner";
+import { FlashInsightBanner, type FlashMessage } from "@/components/ui/FlashInsightBanner";
 import { stockStyles as styles } from "./stockStyles";
 
 interface DuplicateGroup {
@@ -26,8 +26,10 @@ interface StockBannersProps {
   capsuleActiveIndex: number;
   onViewModeSwitch: (index: number) => void;
   tabsRef: React.RefObject<View | null>;
-  searchQuery: string;
-  onSearchChange: (text: string) => void;
+  /** When set, preempts the contextual TipBanner and shows this flash message
+   *  in the same slot. Cleared via onFlashFinish when the animation completes. */
+  flashMessage: FlashMessage | null;
+  onFlashFinish: () => void;
 }
 
 export const StockBanners = React.memo(function StockBanners({
@@ -40,8 +42,8 @@ export const StockBanners = React.memo(function StockBanners({
   capsuleActiveIndex,
   onViewModeSwitch,
   tabsRef,
-  searchQuery,
-  onSearchChange,
+  flashMessage,
+  onFlashFinish,
 }: StockBannersProps) {
   return (
     <>
@@ -50,9 +52,15 @@ export const StockBanners = React.memo(function StockBanners({
         <TrialNudgeBanner />
       </AnimatedSection>
 
-      {/* Contextual Tips */}
+      {/* Contextual Tips — when a flash message is active it preempts the
+          regular TipBanner so only one insight occupies the slot at a time.
+          When the flash finishes the normal tip cycle resumes. */}
       <AnimatedSection key={`tip-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={50}>
-        <TipBanner context="pantry" />
+        {flashMessage ? (
+          <FlashInsightBanner message={flashMessage} onFinish={onFlashFinish} />
+        ) : (
+          <TipBanner context="pantry" />
+        )}
       </AnimatedSection>
 
       {/* Duplicate Detection Banner */}
@@ -96,17 +104,6 @@ export const StockBanners = React.memo(function StockBanners({
         </View>
       </AnimatedSection>
 
-      {/* Search field */}
-      <AnimatedSection key={`search-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={200}>
-        <View style={styles.searchContainer}>
-          <GlassSearchInput
-            value={searchQuery}
-            onChangeText={onSearchChange}
-            onClear={() => onSearchChange("")}
-            placeholder="Search stock..."
-          />
-        </View>
-      </AnimatedSection>
     </>
   );
 });

@@ -1,8 +1,10 @@
 import React from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, Image } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "@/components/ui/glass";
 import { stockStyles as styles } from "./stockStyles";
+
+const REFRESH_PRICE_ICON = require("@/assets/icons/refresh-price.png");
 
 interface StockHeaderButtonsProps {
   activeFilterCount: number;
@@ -27,10 +29,15 @@ export const StockHeaderButtons = React.memo(function StockHeaderButtons({
           onPress={onRefreshPrices}
           disabled={isRefreshingPrices}
         >
-          <MaterialCommunityIcons
-            name="cash-sync"
-            size={22}
-            color={isRefreshingPrices ? colors.text.disabled : colors.accent.primary}
+          {/* Custom "refresh £ price" glyph (pre-processed to black alpha so
+              tintColor can recolor it). */}
+          <Image
+            source={REFRESH_PRICE_ICON}
+            style={[
+              styles.refreshPriceIcon,
+              { tintColor: isRefreshingPrices ? colors.text.disabled : colors.accent.primary },
+            ]}
+            resizeMode="contain"
           />
         </Pressable>
       )}
