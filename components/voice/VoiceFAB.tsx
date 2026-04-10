@@ -19,6 +19,7 @@ import Animated, {
   withSequence,
   withSpring,
   runOnJS,
+  Easing,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -35,10 +36,15 @@ import type { LayoutChangeEvent } from "react-native";
 
 const FAB_SIZE = 52;
 const STORAGE_KEY = "@oja_voice_fab_position";
-/** Minimum Y from top of screen — keeps the FAB below any header variant. */
-const MIN_TOP_PX = 180;
+/** Preferred gap below the status bar before the FAB is allowed to sit. */
+const TOP_HEADER_CLEARANCE = 80;
+/** Minimum vertical drag range we guarantee even on pathological layouts. */
+const MIN_VERTICAL_RANGE = 120;
 /** Extra bottom padding on list detail to clear the footer buttons. */
 const LIST_DETAIL_FOOTER_HEIGHT = 100;
+/** Idle bob animation amplitude (px) and half-period (ms). */
+const BOB_AMPLITUDE = 5;
+const BOB_HALF_PERIOD = 1800;
 
 interface Props {
   activeListId?: Id<"shoppingLists">;
@@ -57,6 +63,7 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
   const boundsMaxX = useSharedValue(0);
   const baseMaxY = useSharedValue(0);
   const boundsMaxY = useSharedValue(0);
+  const boundsMinY = useSharedValue(0);
   const boundsSnapRight = useSharedValue(0);
   const boundsMidX = useSharedValue(0);
 
@@ -68,6 +75,9 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
   const isPressed = useSharedValue(false);
   const isDragging = useSharedValue(false);
 
+  // Idle bob animation offset (added on top of translateY)
+  const bobOffset = useSharedValue(0);
+
   const isListDetail = /^\/list\/[^/]+$/.test(pathname || "");
 
   // Called when the full-screen overlay measures itself
@@ -76,18 +86,32 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
       const { width, height } = e.nativeEvent.layout;
 
       const maxX = width - FAB_SIZE;
-      const maxY = height - TAB_BAR_HEIGHT - FAB_SIZE - insets.bottom;
+      const rawMaxY = height - TAB_BAR_HEIGHT - FAB_SIZE - insets.bottom;
+      const effectiveMaxY = isListDetail
+        ? rawMaxY - LIST_DETAIL_FOOTER_HEIGHT
+        : rawMaxY;
+
+      // minY derived from the actual status-bar inset, then clamped so there
+      // is ALWAYS at least MIN_VERTICAL_RANGE of travel between min and max.
+      // (Without this clamp, a hardcoded floor larger than maxY pins Y in
+      // place every update, leaving only horizontal movement.)
+      const preferredMinY = insets.top + TOP_HEADER_CLEARANCE;
+      const minY = Math.max(
+        0,
+        Math.min(preferredMinY, effectiveMaxY - MIN_VERTICAL_RANGE)
+      );
 
       boundsMaxX.value = maxX;
-      baseMaxY.value = maxY;
-      boundsMaxY.value = isListDetail ? maxY - LIST_DETAIL_FOOTER_HEIGHT : maxY;
+      baseMaxY.value = rawMaxY;
+      boundsMaxY.value = effectiveMaxY;
+      boundsMinY.value = minY;
       boundsSnapRight.value = maxX - spacing.md;
       boundsMidX.value = width / 2;
 
       if (!layoutReady) {
         // First layout: set default position (bottom-right, above tab bar)
         const defaultX = maxX - spacing.md;
-        const defaultY = maxY - spacing.md;
+        const defaultY = effectiveMaxY - spacing.md;
 
         // Check for saved position
         AsyncStorage.getItem(STORAGE_KEY)
@@ -96,7 +120,7 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
               try {
                 const { x, y } = JSON.parse(saved);
                 translateX.value = Math.max(0, Math.min(x, maxX));
-                translateY.value = Math.max(MIN_TOP_PX, Math.min(y, maxY));
+                translateY.value = Math.max(minY, Math.min(y, effectiveMaxY));
               } catch {
                 translateX.value = defaultX;
                 translateY.value = defaultY;
@@ -114,7 +138,7 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
           });
       }
     },
-    [layoutReady, insets.bottom, isListDetail]
+    [layoutReady, insets.top, insets.bottom, isListDetail]
   );
 
   // Adjust bounds when entering/leaving list detail (footer overlaps FAB zone)
@@ -123,12 +147,18 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
     const newMaxY = isListDetail
       ? baseMaxY.value - LIST_DETAIL_FOOTER_HEIGHT
       : baseMaxY.value;
+    const preferredMinY = insets.top + TOP_HEADER_CLEARANCE;
+    const newMinY = Math.max(
+      0,
+      Math.min(preferredMinY, newMaxY - MIN_VERTICAL_RANGE)
+    );
     boundsMaxY.value = newMaxY;
+    boundsMinY.value = newMinY;
     // Nudge FAB up if it's now below the new limit
     if (translateY.value > newMaxY) {
       translateY.value = withSpring(newMaxY, { damping: 15, stiffness: 150 });
     }
-  }, [isListDetail, layoutReady]);
+  }, [isListDetail, layoutReady, insets.top]);
 
   // Save position helper
   const savePosition = (x: number, y: number) => {
@@ -164,6 +194,31 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
     }
   }, [voice.isListening, pulseScale]);
 
+  // Idle bob — a gentle vertical sway when Tobi is just chilling there.
+  // Paused while listening (so the pulse reads cleanly) and suppressed
+  // via isDragging in the animated style while the user is dragging.
+  useEffect(() => {
+    if (!layoutReady) return;
+    if (voice.isListening) {
+      bobOffset.value = withTiming(0, { duration: 200 });
+      return;
+    }
+    bobOffset.value = withRepeat(
+      withSequence(
+        withTiming(-BOB_AMPLITUDE, {
+          duration: BOB_HALF_PERIOD,
+          easing: Easing.inOut(Easing.sin),
+        }),
+        withTiming(0, {
+          duration: BOB_HALF_PERIOD,
+          easing: Easing.inOut(Easing.sin),
+        })
+      ),
+      -1,
+      false
+    );
+  }, [voice.isListening, layoutReady, bobOffset]);
+
   // Pan gesture for dragging
   const panGesture = Gesture.Pan()
     .activeOffsetX([-8, 8])
@@ -178,7 +233,10 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
       const newY = contextY.value + e.translationY;
 
       translateX.value = Math.max(0, Math.min(newX, boundsMaxX.value));
-      translateY.value = Math.max(MIN_TOP_PX, Math.min(newY, boundsMaxY.value));
+      translateY.value = Math.max(
+        boundsMinY.value,
+        Math.min(newY, boundsMaxY.value)
+      );
     })
     .onEnd(() => {
       const finalX =
@@ -191,6 +249,7 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
         stiffness: 150,
       });
 
+      isDragging.value = false;
       runOnJS(savePosition)(finalX, translateY.value);
     });
 
@@ -212,7 +271,10 @@ export function VoiceFAB({ activeListId, activeListName }: Props) {
   const animatedContainerStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
-      { translateY: translateY.value },
+      {
+        translateY:
+          translateY.value + (isDragging.value ? 0 : bobOffset.value),
+      },
       { scale: pulseScale.value * (isPressed.value ? 0.95 : 1) },
     ],
   }));
