@@ -18,14 +18,14 @@ import {
   AnimatedSection,
   colors,
   spacing,
-  SkeletonCard,
 } from "@/components/ui/glass";
 import { PlatformAIUsageMonitor } from "@/components/admin/PlatformAIUsageMonitor";
 import { adminStyles as styles } from "./styles";
-import { 
-  MonitoringSummary, 
-  Experiment, 
-  Workflow 
+import { AdminTabShell } from "./components/AdminTabShell";
+import {
+  MonitoringSummary,
+  Experiment,
+  Workflow
 } from "./types";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAdminToast } from "./hooks";
@@ -102,10 +102,19 @@ export function MonitoringTab({ hasPermission }: MonitoringTabProps) {
     } catch (e) { showToast((e as Error).message, "error"); }
   }, [experimentForm, createExperiment, showToast]);
 
-  if (!summary) return <View style={styles.loading}><SkeletonCard /></View>;
+  if (summary === undefined) return <AdminTabShell loading />;
+  if (summary === null) {
+    return (
+      <AdminTabShell
+        empty
+        emptyMessage="No monitoring data available."
+        emptyIcon="monitor-off"
+      />
+    );
+  }
 
   return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+    <AdminTabShell>
       {/* Platform AI Consumption */}
       <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
         <PlatformAIUsageMonitor data={platformAIUsage} todayData={todayAIRequests} capacityData={capacityPlanning} />
@@ -288,6 +297,6 @@ export function MonitoringTab({ hasPermission }: MonitoringTabProps) {
       </Modal>
 
       <View style={{ height: 140 }} />
-    </ScrollView>
+    </AdminTabShell>
   );
 }

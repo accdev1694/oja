@@ -147,7 +147,10 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
   
   const flaggedReceipts = useQuery(api.admin.getFlaggedReceipts, {}) as Receipt[] | undefined;
   const priceAnomaliesData = useQuery(api.admin.getPriceAnomalies, {}) as { anomalies: PriceAnomaly[], hasMore: boolean } | undefined;
-  const priceAnomalies = priceAnomaliesData?.anomalies || [];
+  const priceAnomalies = useMemo(
+    () => priceAnomaliesData?.anomalies || [],
+    [priceAnomaliesData]
+  );
 
   // Find selected receipt for breadcrumb label
   const selectedReceipt = useMemo(() => {
@@ -176,18 +179,30 @@ export function ReceiptsTab({ hasPermission, initialReceiptId, onSelectionChange
   const updateReceipt = useMutation(api.receipts.update);
   const saveFilter = useMutation(api.admin.saveFilter);
 
-  const statusOptions = [
-    { label: "All", value: null },
-    { label: "Pending", value: "pending" },
-    { label: "Processing", value: "processing" },
-    { label: "Completed", value: "completed" },
-    { label: "Failed", value: "failed" },
-  ];
+  const statusOptions = useMemo(
+    () => [
+      { label: "All", value: null },
+      { label: "Pending", value: "pending" },
+      { label: "Processing", value: "processing" },
+      { label: "Completed", value: "completed" },
+      { label: "Failed", value: "failed" },
+    ],
+    []
+  );
 
   const handleApplyPreset = useCallback((filterData: FilterData) => {
     if (filterData.type === "receipts") {
       if (filterData.statusFilter !== undefined) setStatusFilter(filterData.statusFilter);
-      // Note: receipts don't use searchQuery in the FilterData schema
+      if (filterData.dateRange) {
+        setDateRange({
+          startDate: filterData.dateRange.from,
+          endDate: filterData.dateRange.to,
+        });
+      }
+      // storeFilter from saved presets is currently ignored — the receipts
+      // list is filtered by status + date range + search term; store filtering
+      // happens via the catalog tab. Intentional no-op to avoid silently
+      // mis-applying a preset.
     }
     showToast("Preset applied", "info");
   }, [showToast]);
@@ -566,12 +581,10 @@ const localStyles = StyleSheet.create({
   queueLabel: {
     ...typography.labelSmall,
     color: colors.text.secondary,
-    fontSize: 9,
   },
   queueValue: {
     ...typography.labelSmall,
     color: colors.accent.primary,
     fontWeight: "700",
-    fontSize: 10,
   },
 });

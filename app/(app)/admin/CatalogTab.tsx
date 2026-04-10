@@ -1,10 +1,5 @@
 import React, { useCallback } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-} from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { safeHaptics } from "@/lib/haptics/safeHaptics";
@@ -16,6 +11,7 @@ import {
   useGlassAlert,
 } from "@/components/ui/glass";
 import { adminStyles as styles } from "./styles";
+import { AdminTabShell } from "./components/AdminTabShell";
 import { CategoryCount, DuplicateStoreGroup } from "./types";
 import { useAdminToast } from "./hooks";
 
@@ -57,7 +53,7 @@ export function CatalogTab({ hasPermission }: CatalogTabProps) {
   }, [mergeStores, showAlert, showToast]);
 
   return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+    <AdminTabShell>
       {/* Duplicate Stores */}
       {Array.isArray(duplicateStores) && duplicateStores.length > 0 && (
         <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
@@ -66,8 +62,8 @@ export function CatalogTab({ hasPermission }: CatalogTabProps) {
               <MaterialCommunityIcons name="store-alert" size={24} color={colors.semantic.warning} />
               <Text style={styles.sectionTitle}>Duplicate Stores ({duplicateStores.length})</Text>
             </View>
-            {duplicateStores.map((d, i) => (
-              <View key={i} style={styles.storeRow}>
+            {duplicateStores.map((d) => (
+              <View key={`${d.suggested}\x00${[...(d.variants || [])].sort().join("\x00")}`} style={styles.storeRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.userName}>{(d.variants || []).join(" / ")}</Text>
                   <Text style={styles.userEmail}>Suggested: {d.suggested}</Text>
@@ -104,6 +100,6 @@ export function CatalogTab({ hasPermission }: CatalogTabProps) {
       )}
 
       <View style={{ height: 140 }} />
-    </ScrollView>
+    </AdminTabShell>
   );
 }

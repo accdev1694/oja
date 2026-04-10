@@ -1,7 +1,7 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import type { useRouter } from "expo-router";
 
 import {
   GlassCard,
@@ -158,24 +158,6 @@ export function AdminControlCenter({
           >
             Enter Admin Dashboard
           </GlassButton>
-
-          <View style={styles.quickActionRow}>
-            <Pressable
-              onPress={() => router.push("/(app)/admin?tab=users")}
-              style={({ pressed }) => [styles.quickActionBtn, pressed && { opacity: 0.7 }]}
-            >
-              <MaterialCommunityIcons name="account-search" size={24} color={colors.accent.primary} />
-              <Text style={styles.quickActionText}>Search Users</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.push("/(app)/admin?tab=receipts")}
-              style={({ pressed }) => [styles.quickActionBtn, pressed && { opacity: 0.7 }]}
-            >
-              <MaterialCommunityIcons name="receipt" size={24} color={colors.accent.primary} />
-              <Text style={styles.quickActionText}>Review Data</Text>
-            </Pressable>
-          </View>
         </View>
       </AnimatedSection>
     </View>
@@ -256,27 +238,6 @@ const styles = StyleSheet.create({
   adminAlertText: {
     ...typography.labelSmall,
     flex: 1,
-    fontWeight: "700",
-  },
-  quickActionRow: {
-    flexDirection: "row",
-    gap: spacing.md,
-  },
-  quickActionBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    backgroundColor: `${colors.glass.border}20`,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.glass.border,
-  },
-  quickActionText: {
-    ...typography.labelSmall,
-    color: colors.text.primary,
     fontWeight: "700",
   },
 });

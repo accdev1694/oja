@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FlashList } from "@shopify/flash-list";
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
+import { useRouter } from "expo-router";
 import { api } from "@/convex/_generated/api";
 import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import {
@@ -14,7 +15,7 @@ import {
 import { adminStyles as styles } from "./styles";
 import { User } from "./types";
 import type { Id } from "@/convex/_generated/dataModel";
-import { useAdminToast, useResponsive } from "./hooks";
+import { useAdminToast } from "./hooks";
 import { useUserActions } from "./hooks/useUserActions";
 import type { FilterData } from "./components/SavedFilterPills";
 import { UserRow } from "./components/UserRow";
@@ -25,10 +26,6 @@ interface UsersTabProps {
   hasPermission: (p: string) => boolean;
   /** CSV export handler */
   handleExportCSV: (type: "users" | "receipts" | "prices" | "analytics") => Promise<void>;
-  /** Optional initial user ID to select (from global search) */
-  initialUserId?: string;
-  /** Callback when selection changes for breadcrumbs */
-  onSelectionChange?: (label: string | null) => void;
 }
 
 /**
@@ -40,10 +37,8 @@ interface UsersTabProps {
 export function UsersTab({
   hasPermission,
   handleExportCSV,
-  initialUserId,
-  onSelectionChange,
 }: UsersTabProps) {
-  const { isMobile } = useResponsive();
+  const router = useRouter();
   const { alert: showAlert } = useGlassAlert();
   const { showToast } = useAdminToast();
   const insets = useSafeAreaInsets();
@@ -57,22 +52,10 @@ export function UsersTab({
   // VoiceFAB which overlays the bottom-left corner and can hide the last row.
   const listBottomPadding = TAB_BAR_HEIGHT + insets.bottom + 40;
   const [search, setSearch] = useState("");
-  const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
-  const [detailTab, setDetailTab] = useState<"info" | "activity">("info");
-  const [newTag, setNewTag] = useState("");
 
   const canEdit = hasPermission("edit_users");
   const canBulk = hasPermission("bulk_operation");
-
-  // Handle selection from global search or breadcrumb reset
-  useEffect(() => {
-    if (initialUserId === "RESET") {
-      setSelectedUser(null);
-    } else if (initialUserId) {
-      setSelectedUser(initialUserId);
-    }
-  }, [initialUserId]);
 
   // Data fetching with pagination
   const { results: users, status, loadMore } = usePaginatedQuery(
@@ -87,37 +70,14 @@ export function UsersTab({
     search.length >= 2 ? { searchTerm: search } : "skip"
   ) as User[] | undefined;
 
-  // Memoized user detail query args
-  const userQueryArgs = useMemo(() =>
-    selectedUser ? { userId: selectedUser as Id<"users"> } : "skip",
-  [selectedUser]);
-
-  const userDetail = useQuery(api.admin.getUserDetail, userQueryArgs) as User | undefined | null;
-  const userTags = useQuery(api.admin.getUserTags, userQueryArgs) as string[] | undefined;
-
-  // Sync breadcrumb label when selection changes
-  useEffect(() => {
-    if (onSelectionChange) {
-      onSelectionChange(userDetail?.name || (selectedUser ? "Loading..." : null));
-    }
-  }, [userDetail, selectedUser, onSelectionChange]);
-
   // Mutations — only those that depend on component-local state remain here.
   // Mutation-wrapping action handlers live in useUserActions.
   const bulkExtendTrial = useMutation(api.admin.bulkExtendTrial);
-  const addTag = useMutation(api.tags.addUserTag);
-  const removeTag = useMutation(api.tags.removeUserTag);
   const saveFilter = useMutation(api.admin.saveFilter);
 
   const {
     handleImpersonate,
     handleToggleAdmin,
-    handleExtendTrial,
-    handleStartTrial,
-    handleDowngrade,
-    handleAdjustPoints,
-    handleGrantAccess,
-    handleToggleSuspension,
   } = useUserActions({ showAlert, showToast });
 
   // Determine which users to display based on search
@@ -151,9 +111,9 @@ export function UsersTab({
   }, [search, saveFilter, showAlert, showToast]);
 
   const handleSelectUser = useCallback((userId: string) => {
-    setSelectedUser(userId);
     safeHaptics.selection();
-  }, []);
+    router.push({ pathname: "/admin/users/[id]", params: { id: userId } });
+  }, [router]);
 
   const toggleUserSelection = useCallback((userId: string) => {
     setSelectedUsers(prev => {
@@ -186,29 +146,6 @@ export function UsersTab({
     ]);
   }, [selectedUsers, bulkExtendTrial, showAlert, showToast]);
 
-  const handleAddTag = useCallback(async () => {
-    if (!selectedUser || !newTag.trim()) return;
-    try {
-      await addTag({ userId: selectedUser as Id<"users">, tag: newTag.trim() });
-      setNewTag("");
-      safeHaptics.success();
-      showToast("Tag added", "success");
-    } catch (e) {
-      showToast((e as Error).message, "error");
-    }
-  }, [selectedUser, newTag, addTag, showToast]);
-
-  const handleRemoveTag = useCallback(async (tag: string) => {
-    if (!selectedUser) return;
-    try {
-      await removeTag({ userId: selectedUser as Id<"users">, tag });
-      safeHaptics.success();
-      showToast("Tag removed", "success");
-    } catch (e) {
-      showToast((e as Error).message, "error");
-    }
-  }, [selectedUser, removeTag, showToast]);
-
   const userRenderItem = useCallback(
     ({ item }: { item: User }) => (
       <UserRow
@@ -236,34 +173,14 @@ export function UsersTab({
         selectedUsers={selectedUsers}
         setSelectedUsers={setSelectedUsers}
         canBulk={canBulk}
-        canEdit={canEdit}
-        selectedUser={selectedUser}
-        setSelectedUser={setSelectedUser}
-        currentUserId={currentUserId}
-        userDetail={userDetail}
-        userTags={userTags}
-        detailTab={detailTab}
-        setDetailTab={setDetailTab}
-        isMobile={isMobile}
         displayUsers={displayUsers}
-        newTag={newTag}
-        setNewTag={setNewTag}
         onSavePreset={handleSavePreset}
         onApplyPreset={handleApplyPreset}
         onBulkExtend={handleBulkExtend}
         onExportCSV={handleExportCSV}
-        onImpersonate={handleImpersonate}
-        onRemoveTag={handleRemoveTag}
-        onAddTag={handleAddTag}
-        onExtendTrial={handleExtendTrial}
-        onStartTrial={handleStartTrial}
-        onDowngrade={handleDowngrade}
-        onAdjustPoints={handleAdjustPoints}
-        onGrantAccess={handleGrantAccess}
-        onToggleSuspension={handleToggleSuspension}
       />
     ),
-    [search, setSearch, selectedUsers, setSelectedUsers, canBulk, canEdit, selectedUser, setSelectedUser, currentUserId, userDetail, userTags, detailTab, setDetailTab, isMobile, displayUsers, newTag, setNewTag, handleSavePreset, handleApplyPreset, handleBulkExtend, handleExportCSV, handleImpersonate, handleRemoveTag, handleAddTag, handleExtendTrial, handleStartTrial, handleDowngrade, handleAdjustPoints, handleGrantAccess, handleToggleSuspension]
+    [search, setSearch, selectedUsers, setSelectedUsers, canBulk, displayUsers, handleSavePreset, handleApplyPreset, handleBulkExtend, handleExportCSV]
   );
 
   const userListData = useMemo(
@@ -296,7 +213,7 @@ export function UsersTab({
         keyExtractor={userKeyExtractor}
         ListHeaderComponent={listHeader}
         ListFooterComponent={listFooter}
-        extraData={{ selectedUsers, selectedUser, canBulk, canEdit }}
+        extraData={{ selectedUsers, canBulk, canEdit }}
         contentContainerStyle={styles.scrollContent}
       />
     </View>

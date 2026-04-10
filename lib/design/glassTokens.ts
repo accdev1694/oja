@@ -35,6 +35,7 @@ export const colors = {
     borderStrong: "rgba(255, 255, 255, 0.3)",
     shadow: "rgba(0, 0, 0, 0.25)",
     shadowDeep: "rgba(0, 0, 0, 0.4)",
+    scrim: "rgba(0, 0, 0, 0.6)", // Modal/overlay dimmer
   },
 
   // Accent Colors

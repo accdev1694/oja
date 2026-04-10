@@ -1,8 +1,7 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
-  ScrollView,
   Switch,
   TextInput,
   Pressable,
@@ -15,18 +14,18 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   GlassCard,
   GlassButton,
-  GlassInput,
   AnimatedSection,
   colors,
   spacing,
   useGlassAlert,
 } from "@/components/ui/glass";
 import { adminStyles as styles } from "./styles";
-import { 
-  FeatureFlag, 
-  Announcement, 
-  PricingConfig, 
-  AdminSession 
+import { AdminTabShell } from "./components/AdminTabShell";
+import {
+  FeatureFlag,
+  Announcement,
+  PricingConfig,
+  AdminSession
 } from "./types";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAdminToast } from "./hooks";
@@ -77,6 +76,9 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
   // Image optimization migration state
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizeProgress, setOptimizeProgress] = useState({ processed: 0, total: 0, saved: 0 });
+  // Synchronous guard: prevents double-invocation on fast taps before the
+  // alert modal appears and `isOptimizing` state propagates.
+  const optimizeLockRef = useRef(false);
 
   // Image migration queries/mutations
   const imagesToOptimize = useQuery(api.migrations.optimizeImages.getImagesToOptimize);
@@ -132,7 +134,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
         onPress: async () => {
           setIsSimulating(true);
           try {
-            const result = await simulateLoad({ intensity: 50 });
+            await simulateLoad({ intensity: 50 });
             safeHaptics.success();
             showToast("Scale test complete", "success");
           } catch (e) {
@@ -242,11 +244,14 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
   // Handle image optimization migration (receipts only)
   const handleOptimizeImages = useCallback(async () => {
     if (!imagesToOptimize || !getStorageUrls || isOptimizing) return;
+    if (optimizeLockRef.current) return;
+    optimizeLockRef.current = true;
 
     // Only receipts have imageStorageId - listItems and pantryItems use itemVariants
     const receiptImages = imagesToOptimize.receipts.map((r: { imageStorageId: string; _id: string }) => ({ ...r, targetWidth: 1600 }));
 
     if (receiptImages.length === 0) {
+      optimizeLockRef.current = false;
       showToast("No images to optimize", "info");
       return;
     }
@@ -335,18 +340,26 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
               await new Promise(resolve => setTimeout(resolve, 100));
             }
 
-            await markMigrationComplete({ imagesOptimized: processed, bytesFreed: totalSaved });
-
-            setIsOptimizing(false);
-            safeHaptics.success();
-            showToast(
-              `Optimized ${processed} images, freed ${(totalSaved / 1024 / 1024).toFixed(1)} MB`,
-              "success"
-            );
+            try {
+              await markMigrationComplete({ imagesOptimized: processed, bytesFreed: totalSaved });
+              safeHaptics.success();
+              showToast(
+                `Optimized ${processed} images, freed ${(totalSaved / 1024 / 1024).toFixed(1)} MB`,
+                "success"
+              );
+            } finally {
+              setIsOptimizing(false);
+            }
           },
         },
       ]
     );
+    // The alert modal is now up; release the synchronous tap-guard. Any
+    // subsequent taps on Optimize will be blocked by `isOptimizing` once the
+    // user presses the alert's Optimize button. Releasing here guarantees the
+    // lock never stays stuck if the user dismisses the alert by tapping the
+    // backdrop (which does not fire either button's onPress handler).
+    optimizeLockRef.current = false;
   }, [
     imagesToOptimize,
     getStorageUrls,
@@ -359,7 +372,7 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
   ]);
 
   return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+    <AdminTabShell>
       {/* Active Sessions */}
       <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
         <GlassCard style={styles.section}>
@@ -626,6 +639,6 @@ export function SettingsTab({ hasPermission }: SettingsTabProps) {
       )}
 
       <View style={{ height: 140 }} />
-    </ScrollView>
+    </AdminTabShell>
   );
 }

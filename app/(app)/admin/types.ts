@@ -1,3 +1,11 @@
+// Re-exported from the backend lib so the `plan` field stays anchored to the
+// Convex schema's subscriptions.plan enum. Don't redeclare these types here.
+import type {
+  BadgeVariant,
+  EffectiveStatus,
+  SubscriptionDisplay,
+} from "@/convex/lib/subscriptionDisplay";
+
 export type AdminTab = "overview" | "users" | "analytics" | "support" | "monitoring" | "receipts" | "catalog" | "settings" | "webhooks" | "points";
 
 export interface AnalyticsData {
@@ -65,14 +73,6 @@ export interface TimelineEvent {
   metadata?: Record<string, unknown>;
   timestamp: number;
 }
-
-// Re-exported from the backend lib so the `plan` field stays anchored to the
-// Convex schema's subscriptions.plan enum. Don't redeclare these types here.
-import type {
-  BadgeVariant,
-  EffectiveStatus,
-  SubscriptionDisplay,
-} from "@/convex/lib/subscriptionDisplay";
 
 export type SubscriptionBadgeVariant = BadgeVariant;
 export type SubscriptionEffectiveStatus = EffectiveStatus;

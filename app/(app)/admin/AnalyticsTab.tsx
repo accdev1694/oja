@@ -13,16 +13,15 @@ import {
   AnimatedSection,
   colors,
   spacing,
-  useGlassAlert,
-  SkeletonCard,
 } from "@/components/ui/glass";
 import { adminStyles as styles } from "./styles";
-import { 
-  CohortMetric, 
-  FunnelStep, 
-  ChurnMetric, 
-  LTVMetric, 
-  UserSegment 
+import { AdminTabShell } from "./components/AdminTabShell";
+import {
+  CohortMetric,
+  FunnelStep,
+  ChurnMetric,
+  LTVMetric,
+  UserSegment
 } from "./types";
 import { RetentionCell } from "./components/RetentionCell";
 import { useResponsive } from "./hooks";
@@ -43,19 +42,38 @@ export function AnalyticsTab({
   const ltvMetrics = useQuery(api.admin.getLTVMetrics) as LTVMetric[] | undefined;
   const segmentSummary = useQuery(api.admin.getUserSegmentSummary) as UserSegment[] | undefined;
   
-  const loading = !cohortMetrics || !funnelAnalytics || !churnMetrics || !ltvMetrics || !segmentSummary;
+  // Distinguish loading (`undefined`) from empty (`null`). Treating null as
+  // loading would render a permanent spinner when the backend legitimately
+  // returns no data.
+  const loading =
+    cohortMetrics === undefined ||
+    funnelAnalytics === undefined ||
+    churnMetrics === undefined ||
+    ltvMetrics === undefined ||
+    segmentSummary === undefined;
 
   if (loading) {
+    return <AdminTabShell loading />;
+  }
+
+  if (
+    !cohortMetrics ||
+    !funnelAnalytics ||
+    !churnMetrics ||
+    !ltvMetrics ||
+    !segmentSummary
+  ) {
     return (
-      <View style={styles.loading}>
-        <SkeletonCard />
-        <SkeletonCard style={{ marginTop: spacing.md }} />
-      </View>
+      <AdminTabShell
+        empty
+        emptyMessage="No analytics data available yet."
+        emptyIcon="chart-line-variant"
+      />
     );
   }
 
   return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+    <AdminTabShell>
       {/* Funnel Analytics */}
       <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
         <GlassCard style={styles.section}>
@@ -226,6 +244,6 @@ export function AnalyticsTab({
       </AnimatedSection>
 
       <View style={{ height: 140 }} />
-    </ScrollView>
+    </AdminTabShell>
   );
 }

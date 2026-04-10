@@ -86,7 +86,6 @@ const styles = StyleSheet.create({
   label: {
     ...typography.labelSmall,
     color: colors.text.tertiary,
-    fontSize: 10,
   },
   scroll: {
     gap: spacing.xs,
@@ -110,7 +109,6 @@ const styles = StyleSheet.create({
   pillText: {
     ...typography.labelSmall,
     color: colors.text.secondary,
-    fontSize: 11,
   },
   deleteBtn: {
     padding: 4,

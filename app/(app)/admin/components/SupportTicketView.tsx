@@ -16,7 +16,7 @@ import { adminStyles as styles } from "../styles";
 interface SupportTicketViewProps {
   ticket: SupportTicketDetail;
   onSendReply: (message: string) => Promise<void>;
-  onUpdateStatus: (status: "open" | "in_progress" | "resolved" | "closed") => Promise<void>;
+  onUpdateStatus: (status: "open" | "in_progress" | "waiting_on_user" | "resolved" | "closed") => Promise<void>;
   onClose: () => void;
 }
 

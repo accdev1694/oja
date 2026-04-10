@@ -22,6 +22,7 @@ import {
   useGlassAlert,
 } from "@/components/ui/glass";
 import { adminStyles as styles } from "./styles";
+import { AdminTabShell } from "./components/AdminTabShell";
 import { Webhook } from "./types";
 import { useAdminToast } from "./hooks";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -45,11 +46,22 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
   const testWebhook = useAction(api.admin.testWebhook);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [revealedSecrets, setRevealedSecrets] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({
     url: "",
     description: "",
     events: ["receipt.completed", "user.subscribed"],
   });
+
+  const toggleSecretVisibility = useCallback((id: string) => {
+    setRevealedSecrets(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    safeHaptics.selection();
+  }, []);
 
   const availableEvents = [
     "user.signup",
@@ -114,7 +126,7 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
   }, [deleteWebhook, showAlert, showToast]);
 
   return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+    <AdminTabShell>
       <AnimatedSection animation="fadeInDown" duration={400}>
         <GlassCard style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -164,8 +176,28 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
             </View>
 
             <View style={{ marginTop: spacing.md, padding: spacing.sm, backgroundColor: `${colors.glass.border}20`, borderRadius: 8 }}>
-              <Text style={styles.fieldLabel}>Signing Secret (keep private)</Text>
-              <Text style={[styles.logTime, { color: colors.text.primary }]}>{wh.secret}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={styles.fieldLabel}>Signing Secret (keep private)</Text>
+                <Pressable
+                  onPress={() => toggleSecretVisibility(wh._id)}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel={revealedSecrets.has(wh._id) ? "Hide signing secret" : "Reveal signing secret"}
+                >
+                  <MaterialCommunityIcons
+                    name={revealedSecrets.has(wh._id) ? "eye-off-outline" : "eye-outline"}
+                    size={18}
+                    color={colors.text.tertiary}
+                  />
+                </Pressable>
+              </View>
+              <Text style={[styles.logTime, { color: colors.text.primary }]}>
+                {wh.secret
+                  ? revealedSecrets.has(wh._id)
+                    ? wh.secret
+                    : "•".repeat(Math.min(wh.secret.length, 24))
+                  : "(no secret set)"}
+              </Text>
             </View>
 
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.md }}>
@@ -267,6 +299,6 @@ export function WebhooksTab({ hasPermission }: WebhooksTabProps) {
       </Modal>
 
       <View style={{ height: 140 }} />
-    </ScrollView>
+    </AdminTabShell>
   );
 }

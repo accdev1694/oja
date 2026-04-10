@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
   Modal,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, typography } from "@/components/ui/glass";
 import { safeHaptics } from "@/lib/haptics/safeHaptics";
@@ -25,22 +26,30 @@ interface AdminTabBarProps {
   activeTab: AdminTab;
   onTabPress: (tab: AdminTab) => void;
   onSearchPress: () => void;
+  /** Exit the admin screen entirely (to previous route or profile). */
+  onExit?: () => void;
 }
 
-// Primary tabs always visible, rest go in "More" menu
-// On mobile, only 3 items fit comfortably (2 tabs + More button)
-const PRIMARY_TAB_COUNT = 2;
+// Primary tabs always visible, rest go in "More" menu.
+// On mobile, 4 primary items + More + search + exit still fits comfortably
+// at 375px viewport. Previously this was 2, which pushed 80% of tabs behind
+// an overflow menu — now the core workflow tabs are inline.
+const PRIMARY_TAB_COUNT = 4;
 
 /**
  * AdminTabBar Component
- * A responsive navigation bar that shows primary tabs + "More" overflow menu on mobile.
+ * Responsive navigation bar: primary tabs + overflow "More" menu, search, exit.
  */
-export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: AdminTabBarProps) {
+export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress, onExit }: AdminTabBarProps) {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const isMobile = width < 768;
-  const shortcutLabel =
-    Platform.OS === "ios" || (isWeb && /Mac/i.test(navigator.userAgent)) ? "⌘K" : "Ctrl+K";
+  // `navigator` only exists on web. Guard with `typeof` so native bundlers
+  // don't treat the reference as a runtime dependency.
+  const isMacWeb =
+    isWeb && typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent);
+  const shortcutLabel = Platform.OS === "ios" || isMacWeb ? "⌘K" : "Ctrl+K";
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
@@ -77,6 +86,9 @@ export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: Admi
                   safeHaptics.selection();
                 }}
                 style={[styles.tabItem, isActive && styles.tabItemActive]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={`${tab.label} tab`}
               >
                 <MaterialCommunityIcons
                   name={tab.icon}
@@ -99,6 +111,9 @@ export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: Admi
                 safeHaptics.selection();
               }}
               style={[styles.tabItem, activeInOverflow && styles.tabItemActive]}
+              accessibilityRole="button"
+              accessibilityLabel={`More tabs (${overflowTabs.length} more)`}
+              accessibilityHint="Opens menu with additional admin tabs"
             >
               <MaterialCommunityIcons
                 name="dots-horizontal"
@@ -119,6 +134,9 @@ export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: Admi
             safeHaptics.selection();
           }}
           style={styles.searchButton}
+          accessibilityRole="button"
+          accessibilityLabel="Search admin"
+          accessibilityHint={isWeb ? `Keyboard shortcut ${shortcutLabel}` : undefined}
         >
           <MaterialCommunityIcons name="magnify" size={22} color={colors.text.tertiary} />
           {isWeb && (
@@ -127,6 +145,20 @@ export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: Admi
             </View>
           )}
         </Pressable>
+
+        {onExit && (
+          <Pressable
+            onPress={() => {
+              onExit();
+              safeHaptics.selection();
+            }}
+            style={styles.exitButton}
+            accessibilityRole="button"
+            accessibilityLabel="Exit admin dashboard"
+          >
+            <MaterialCommunityIcons name="close" size={22} color={colors.text.tertiary} />
+          </Pressable>
+        )}
       </View>
 
       {/* More Menu Modal */}
@@ -136,11 +168,21 @@ export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: Admi
         animationType="fade"
         onRequestClose={() => setShowMoreMenu(false)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setShowMoreMenu(false)}>
+        <Pressable
+          style={[styles.modalOverlay, { paddingTop: insets.top + spacing.xl }]}
+          onPress={() => setShowMoreMenu(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss more menu"
+        >
           <View style={styles.moreMenu}>
             <View style={styles.moreMenuHeader}>
               <Text style={styles.moreMenuTitle}>More</Text>
-              <Pressable onPress={() => setShowMoreMenu(false)} hitSlop={8}>
+              <Pressable
+                onPress={() => setShowMoreMenu(false)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close more menu"
+              >
                 <MaterialCommunityIcons name="close" size={20} color={colors.text.secondary} />
               </Pressable>
             </View>
@@ -151,6 +193,9 @@ export function AdminTabBar({ tabs, activeTab, onTabPress, onSearchPress }: Admi
                   key={tab.key}
                   onPress={() => handleOverflowTabPress(tab.key)}
                   style={[styles.moreMenuItem, isActive && styles.moreMenuItemActive]}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`${tab.label} tab`}
                 >
                   <MaterialCommunityIcons
                     name={tab.icon}
@@ -203,6 +248,16 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderLeftColor: colors.glass.border,
   },
+  exitButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
+    height: 48,
+    minWidth: 44,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.glass.border,
+  },
   shortcutBadge: {
     backgroundColor: `${colors.glass.border}60`,
     paddingHorizontal: 4,
@@ -212,7 +267,7 @@ const styles = StyleSheet.create({
     borderColor: colors.glass.border,
   },
   shortcutText: {
-    fontSize: 9,
+    ...typography.labelSmall,
     color: colors.text.tertiary,
     fontWeight: "700",
   },
@@ -251,9 +306,8 @@ const styles = StyleSheet.create({
   // More Menu styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: colors.glass.scrim,
     justifyContent: "flex-start",
-    paddingTop: 100,
     paddingHorizontal: spacing.lg,
   },
   moreMenu: {

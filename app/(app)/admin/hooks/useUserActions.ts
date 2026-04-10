@@ -176,15 +176,32 @@ export function useUserActions({ showAlert, showToast }: UseUserActionsArgs) {
     ]);
   }, [grantAccess, showAlert, showToast]);
 
+  // Suspension is destructive and irreversible from the user's perspective
+  // (they lose access immediately). Require explicit confirmation — all
+  // other mutations in this hook already do this; suspension was the lone
+  // one-tap hole.
   const handleToggleSuspension = useCallback(async (userId: string) => {
-    try {
-      await toggleSuspension({ userId: userId as Id<"users"> });
-      safeHaptics.warning();
-      showToast("User status updated", "success");
-    } catch (error) {
-      showToast((error as Error).message || "Failed to toggle suspension", "error");
-    }
-  }, [toggleSuspension, showToast]);
+    showAlert(
+      "Toggle Suspension",
+      "Suspended users are signed out and blocked from signing back in. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await toggleSuspension({ userId: userId as Id<"users"> });
+              safeHaptics.warning();
+              showToast("User status updated", "success");
+            } catch (error) {
+              showToast((error as Error).message || "Failed to toggle suspension", "error");
+            }
+          },
+        },
+      ]
+    );
+  }, [toggleSuspension, showAlert, showToast]);
 
   return {
     handleImpersonate,

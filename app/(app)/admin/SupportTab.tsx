@@ -69,7 +69,7 @@ export function SupportTab({ hasPermission }: SupportTabProps) {
     }
   }, [selectedTicketId, addMessage, showToast]);
 
-  const handleUpdateStatus = useCallback(async (status: "open" | "in_progress" | "waiting_on_user" | "resolved" | "closed" = "open") => {
+  const handleUpdateStatus = useCallback(async (status: "open" | "in_progress" | "waiting_on_user" | "resolved" | "closed") => {
     if (!selectedTicketId) return;
     try {
       await updateStatus({ ticketId: selectedTicketId as Id<"supportTickets">, status });
@@ -83,13 +83,16 @@ export function SupportTab({ hasPermission }: SupportTabProps) {
     }
   }, [selectedTicketId, updateStatus, showToast]);
 
-  const statusOptions = [
-    { label: "All", value: null },
-    { label: "Open", value: "open" },
-    { label: "In Progress", value: "in_progress" },
-    { label: "Resolved", value: "resolved" },
-    { label: "Closed", value: "closed" },
-  ];
+  const statusOptions = useMemo(
+    () => [
+      { label: "All", value: null },
+      { label: "Open", value: "open" },
+      { label: "In Progress", value: "in_progress" },
+      { label: "Resolved", value: "resolved" },
+      { label: "Closed", value: "closed" },
+    ],
+    []
+  );
 
   const ticketRenderItem = useCallback(
     ({ item: t }: { item: SupportTicket }) => (

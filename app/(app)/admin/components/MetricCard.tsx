@@ -1,7 +1,7 @@
 import React, { ComponentProps } from "react";
 import { View, Text, StyleSheet, ViewStyle, StyleProp } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { colors } from "@/components/ui/glass";
+import { colors, typography } from "@/components/ui/glass";
 import { adminStyles as styles } from "../styles";
 
 interface MetricCardProps {
@@ -50,7 +50,7 @@ const localStyles = StyleSheet.create({
     marginBottom: 2,
   },
   trendText: {
-    fontSize: 10,
+    ...typography.labelSmall,
     fontWeight: "700",
   },
 });

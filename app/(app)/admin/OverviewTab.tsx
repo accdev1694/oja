@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import {
   View,
   Text,
-  ScrollView,
   Switch,
   ActivityIndicator,
   Pressable,
@@ -19,10 +18,12 @@ import {
   GlassSegmentedControl,
   colors,
   spacing,
+  typography,
   GlassDateRangePicker,
   type DateRange,
 } from "@/components/ui/glass";
 import { adminStyles as styles } from "./styles";
+import { AdminTabShell } from "./components/AdminTabShell";
 import { 
   AnalyticsData, 
   RevenueReport, 
@@ -159,11 +160,9 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
     if (!isVisible && !isCustomizing) return null;
 
     let content = null;
-    let title = "";
 
     switch (widgetId) {
       case "health":
-        title = "System Health";
         if (health) {
           content = (
             <AnimatedSection animation="fadeInDown" duration={400} delay={0}>
@@ -201,7 +200,6 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
         break;
 
       case "analytics":
-        title = "Analytics";
         if (analytics) {
           content = (
             <AnimatedSection animation="fadeInDown" duration={400} delay={100}>
@@ -273,7 +271,6 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
         break;
 
       case "revenue":
-        title = "Revenue";
         if (revenue) {
           content = (
             <AnimatedSection animation="fadeInDown" duration={400} delay={200}>
@@ -324,7 +321,7 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
                   </View>
                 )}
                 {financial && (
-                  <Text style={[styles.metricText, { fontSize: 10 }]}>
+                  <Text style={[styles.metricText, typography.labelSmall]}>
                     Estimated tax (VAT 20%): £{financial.estimatedTax.toFixed(2)} • COGS: £{financial.estimatedCOGS.toFixed(2)}
                   </Text>
                 )}
@@ -335,7 +332,6 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
         break;
 
       case "audit_logs":
-        title = "Audit Logs";
         if (canViewLogs && Array.isArray(auditLogs) && auditLogs.length > 0) {
           content = (
             <AnimatedSection animation="fadeInDown" duration={400} delay={300}>
@@ -385,13 +381,20 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
           );
         }
         break;
+      default:
+        // Unknown widget id returned by the backend — log once so the missing
+        // case surfaces during development instead of silently rendering nothing.
+        if (__DEV__) {
+          console.warn(`[OverviewTab] Unknown widget id: ${widgetId}`);
+        }
+        break;
     }
 
     return content;
   };
 
   return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+    <AdminTabShell>
       {/* Date Range Picker */}
       <GlassDateRangePicker 
         value={dateRange} 
@@ -453,6 +456,6 @@ export function OverviewTab({ hasPermission }: OverviewTabProps) {
       )}
 
       <View style={{ height: 140 }} />
-    </ScrollView>
+    </AdminTabShell>
   );
 }

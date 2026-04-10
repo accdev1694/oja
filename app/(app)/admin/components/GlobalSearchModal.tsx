@@ -9,6 +9,7 @@ import {
   TextInput,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { colors, spacing, typography, GlassCard } from "@/components/ui/glass";
 import { safeHaptics } from "@/lib/haptics/safeHaptics";
 import { useAdminSearch } from "../hooks";
@@ -17,6 +18,8 @@ import { AdminTab } from "../types";
 interface GlobalSearchModalProps {
   visible: boolean;
   onClose: () => void;
+  /** Callback used for result types that still live inside the admin tabs
+   * (receipts, settings). User results are handled via router.push directly. */
   onSelectResult: (tab: AdminTab, id: string) => void;
 }
 
@@ -25,6 +28,7 @@ interface GlobalSearchModalProps {
  * Provides a Cmd+K style search overlay for the Admin Dashboard.
  */
 export function GlobalSearchModal({ visible, onClose, onSelectResult }: GlobalSearchModalProps) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const results = useAdminSearch(query);
 
@@ -66,10 +70,23 @@ export function GlobalSearchModal({ visible, onClose, onSelectResult }: GlobalSe
                 key={`${item.type}-${item.id}`}
                 style={styles.resultItem}
                 onPress={() => {
-                  onSelectResult(item.tab, item.id);
+                  // Users have a dedicated detail route; push directly
+                  // instead of routing through the parent tab-state hack.
+                  // Other result types (receipts, settings) still hand
+                  // off to the admin tabs screen via callback.
+                  if (item.type === "user") {
+                    router.push({
+                      pathname: "/admin/users/[id]",
+                      params: { id: item.id },
+                    });
+                  } else {
+                    onSelectResult(item.tab, item.id);
+                  }
                   onClose();
                   safeHaptics.selection();
                 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${item.type} ${item.title}`}
               >
                 <View style={styles.iconCircle}>
                   <MaterialCommunityIcons 
@@ -167,7 +184,7 @@ const styles = StyleSheet.create({
     backgroundColor: `${colors.glass.border}40`,
   },
   tabText: {
-    fontSize: 9,
+    ...typography.labelSmall,
     color: colors.text.secondary,
     textTransform: "uppercase",
     fontWeight: "700",
@@ -192,7 +209,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   shortcutLabel: {
-    fontSize: 10,
+    ...typography.labelSmall,
     color: colors.text.tertiary,
   },
 });

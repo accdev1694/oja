@@ -61,6 +61,8 @@ export function BackButton({ onPress }: { onPress: () => void }) {
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         style={styles.backButton}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
       >
         <MaterialCommunityIcons
           name="chevron-left"
@@ -118,8 +120,15 @@ export function SimpleHeader({
   const handleBack = () => {
     if (onBack) {
       onBack();
-    } else {
+      return;
+    }
+    // Deep-link safety: router.back() on an empty history stack pops into
+    // the Expo Router root (which may render an unexpected screen). Fall
+    // back to the profile tab when there is no history to pop.
+    if (router.canGoBack()) {
       router.back();
+    } else {
+      router.replace("/(app)/(tabs)/profile");
     }
   };
 

@@ -106,12 +106,10 @@ const styles = StyleSheet.create({
   },
   textCompact: {
     ...typography.labelSmall,
-    fontSize: 10,
     fontWeight: "700",
   },
   textFull: {
-    ...typography.labelSmall,
-    fontSize: 12,
+    ...typography.labelMedium,
     fontWeight: "700",
   },
 });

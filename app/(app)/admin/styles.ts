@@ -45,7 +45,7 @@ export const adminStyles = StyleSheet.create({
   gridItemActive: { opacity: 1 },
   gridIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: `${colors.glass.border}40`, alignItems: "center", justifyContent: "center" },
   gridIconCircleActive: { backgroundColor: colors.accent.primary },
-  gridLabel: { fontSize: 10, color: colors.text.tertiary, textAlign: "center" },
+  gridLabel: { ...typography.labelSmall, color: colors.text.tertiary, textAlign: "center" },
   gridLabelActive: { color: colors.accent.primary, fontWeight: "700" },
 
   // Overview
@@ -64,19 +64,19 @@ export const adminStyles = StyleSheet.create({
     gap: 4,
   },
   metricValue: { ...typography.headlineSmall, color: colors.text.primary },
-  metricLabel: { ...typography.bodySmall, color: colors.text.tertiary, textAlign: "center", fontSize: 10 },
+  metricLabel: { ...typography.bodySmall, color: colors.text.tertiary, textAlign: "center" },
   gmvSection: { paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border, gap: spacing.xs },
   gmvFilterRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
   gmvRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.sm },
   gmvLabel: { ...typography.labelSmall, color: colors.text.tertiary, textTransform: "uppercase", marginBottom: 2 },
   gmvValue: { ...typography.headlineMedium, color: colors.semantic.success, fontWeight: "700" },
-  gmvValueLarge: { ...typography.headlineLarge, color: colors.semantic.success, fontWeight: "800", fontSize: 26 },
+  gmvValueLarge: { ...typography.headlineLarge, color: colors.semantic.success, fontWeight: "800" },
 
   // Revenue
   revenueGrid: { flexDirection: "row", gap: spacing.lg, marginBottom: spacing.sm },
   revenueItem: { alignItems: "center" },
   revenueValue: { ...typography.headlineMedium, color: colors.semantic.success },
-  revenueValueLarge: { ...typography.headlineLarge, color: colors.semantic.success, fontSize: 28, fontWeight: "800" },
+  revenueValueLarge: { ...typography.headlineLarge, color: colors.semantic.success, fontWeight: "800" },
   revenueLabel: { ...typography.bodySmall, color: colors.text.tertiary },
 
   // Funnel
@@ -86,35 +86,35 @@ export const adminStyles = StyleSheet.create({
   funnelBar: { height: 16, borderRadius: 8 },
   funnelCount: { ...typography.labelSmall, color: colors.text.primary, fontWeight: "700" },
   funnelLabelRow: { flexDirection: "row", justifyContent: "space-between" },
-  funnelLabel: { ...typography.labelSmall, color: colors.text.tertiary, fontSize: 8 },
-  funnelPercentage: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 8 },
+  funnelLabel: { ...typography.labelSmall, color: colors.text.tertiary },
+  funnelPercentage: { ...typography.labelSmall, color: colors.accent.primary },
 
   // Segments
   segmentGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   segmentCard: { width: "47%", backgroundColor: colors.glass.background, borderRadius: 12, padding: spacing.md, alignItems: "center", gap: 2 },
   segmentValue: { ...typography.headlineSmall, color: colors.text.primary },
-  segmentName: { ...typography.labelSmall, color: colors.text.tertiary, textTransform: "uppercase", fontSize: 9 },
-  segmentPercent: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 9 },
+  segmentName: { ...typography.labelSmall, color: colors.text.tertiary, textTransform: "uppercase" },
+  segmentPercent: { ...typography.labelSmall, color: colors.accent.primary },
 
   // Retention Table
   retentionTable: { gap: 4, minWidth: 400 },
   retentionHeader: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.glass.border, paddingBottom: 4 },
   retentionRow: { flexDirection: "row" },
-  retentionCell: { width: 50, textAlign: "center", color: colors.text.secondary, fontSize: 10, paddingVertical: 4 },
+  retentionCell: { ...typography.labelSmall, width: 50, textAlign: "center", color: colors.text.secondary, paddingVertical: 4 },
   retentionHeaderCell: { color: colors.text.tertiary, fontWeight: "700" },
-  retentionCellText: { fontSize: 9, fontWeight: "600" },
+  retentionCellText: { ...typography.labelSmall },
 
   // LTV & Churn
   ltvRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
   ltvValue: { ...typography.headlineSmall, color: colors.semantic.success },
-  ltvLabel: { ...typography.bodySmall, color: colors.text.tertiary, fontSize: 10 },
+  ltvLabel: { ...typography.bodySmall, color: colors.text.tertiary },
   churnRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
 
   // Support
   ticketRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
   priorityDot: { width: 8, height: 8, borderRadius: 4 },
   assignBadge: { backgroundColor: `${colors.accent.primary}20`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  assignBadgeText: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 9 },
+  assignBadgeText: { ...typography.labelSmall, color: colors.accent.primary },
   
   // Chat
   chatContainer: { gap: spacing.md, paddingBottom: spacing.xl },
@@ -123,7 +123,7 @@ export const adminStyles = StyleSheet.create({
   adminBubble: { alignSelf: "flex-end", backgroundColor: `${colors.accent.primary}15`, borderBottomRightRadius: 2 },
   chatName: { ...typography.labelSmall, color: colors.text.tertiary, marginBottom: 2 },
   chatMessage: { ...typography.bodyMedium, color: colors.text.primary },
-  chatTime: { ...typography.labelSmall, color: colors.text.tertiary, alignSelf: "flex-end", fontSize: 8, marginTop: 2 },
+  chatTime: { ...typography.labelSmall, color: colors.text.tertiary, alignSelf: "flex-end", marginTop: 2 },
   chatInputRow: { flexDirection: "row", padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.glass.border, gap: spacing.sm, alignItems: "flex-end" },
   chatInput: { flex: 1, backgroundColor: colors.glass.background, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, color: colors.text.primary, maxHeight: 100 },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: `${colors.accent.primary}10`, alignItems: "center", justifyContent: "center" },
@@ -136,7 +136,7 @@ export const adminStyles = StyleSheet.create({
   timelineLine: { width: 2, flex: 1, backgroundColor: `${colors.accent.primary}20`, marginVertical: -2 },
   timelineContent: { flex: 1, paddingBottom: spacing.lg },
   timelineType: { ...typography.labelSmall, color: colors.text.primary, fontWeight: "700" },
-  timelineTime: { ...typography.labelSmall, color: colors.text.tertiary, fontSize: 9 },
+  timelineTime: { ...typography.labelSmall, color: colors.text.tertiary },
 
   // Alerts & SLA
   alertRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.glass.border },
@@ -147,7 +147,7 @@ export const adminStyles = StyleSheet.create({
 
   // Tags
   tagBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: `${colors.accent.primary}15`, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  tagBadgeText: { ...typography.labelSmall, color: colors.accent.primary, fontSize: 10 },
+  tagBadgeText: { ...typography.labelSmall, color: colors.accent.primary },
   tagInput: { ...typography.labelSmall, color: colors.text.primary, padding: 0, minWidth: 40 },
   addTagRow: { backgroundColor: colors.glass.background, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: colors.glass.border },
 
@@ -167,7 +167,7 @@ export const adminStyles = StyleSheet.create({
   detailGrid: { flexDirection: "row", gap: spacing.md, marginVertical: spacing.md },
   detailItem: { flex: 1, alignItems: "center", backgroundColor: colors.glass.background, borderRadius: 12, padding: spacing.sm },
   detailValue: { ...typography.headlineSmall, color: colors.text.primary },
-  detailLabel: { ...typography.bodySmall, color: colors.text.tertiary, fontSize: 10 },
+  detailLabel: { ...typography.labelSmall, color: colors.text.tertiary },
   detailTabs: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.md },
   detailTab: { paddingBottom: 4, borderBottomWidth: 2, borderBottomColor: "transparent" },
   detailTabActive: { borderBottomColor: colors.accent.primary },
@@ -204,7 +204,7 @@ export const adminStyles = StyleSheet.create({
   warningBadge: { backgroundColor: `${colors.semantic.warning}20` },
   promoBadge: { backgroundColor: `${colors.semantic.success}20` },
   infoBadge: { backgroundColor: `${colors.accent.primary}20` },
-  statusBadgeText: { ...typography.labelSmall, color: colors.text.secondary, fontSize: 10 },
+  statusBadgeText: { ...typography.labelSmall, color: colors.text.secondary },
 
   // Catalog
   storeRow: {
@@ -327,7 +327,7 @@ export const adminStyles = StyleSheet.create({
   refreshHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   refreshToggle: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   toggleLabel: { ...typography.bodySmall, color: colors.text.tertiary },
-  lastUpdatedText: { ...typography.bodySmall, color: colors.text.tertiary, fontSize: 10 },
+  lastUpdatedText: { ...typography.labelSmall, color: colors.text.tertiary },
   customizeBtn: {
     width: 36,
     height: 36,

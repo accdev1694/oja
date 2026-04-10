@@ -67,7 +67,6 @@ export { ToastContext };
  * Hook for managing global admin state and permissions
  */
 export function useAdminAuth() {
-  // @ts-ignore
   const myPerms = useQuery(api.admin.getMyPermissions, {}) as PermissionData | undefined | null;
   
   const hasPermission = useCallback((p: string) => {

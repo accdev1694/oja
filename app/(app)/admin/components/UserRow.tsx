@@ -39,12 +39,17 @@ export const UserRow = React.memo(function UserRow({
     <Pressable
       style={[styles.userRow, isBulkSelected && { backgroundColor: `${colors.accent.primary}05` }]}
       onPress={() => onSelect(u._id)}
+      accessibilityRole="button"
+      accessibilityLabel={`Open details for ${u.name || u.email || "user"}`}
     >
       <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
         {canBulk && (
           <Pressable
             onPress={() => onToggleBulk(u._id)}
             style={{ padding: 4, marginRight: spacing.xs }}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: isBulkSelected }}
+            accessibilityLabel={`${isBulkSelected ? "Deselect" : "Select"} ${u.name || u.email || "user"} for bulk actions`}
           >
             <MaterialCommunityIcons
               name={isBulkSelected ? "checkbox-marked" : "checkbox-blank-outline"}
@@ -76,6 +81,8 @@ export const UserRow = React.memo(function UserRow({
               onPress={() => onImpersonate(u._id)}
               hitSlop={12}
               style={{ padding: 4 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Impersonate ${u.name || u.email || "user"}`}
             >
               <MaterialCommunityIcons name="incognito" size={18} color={colors.text.tertiary} />
             </Pressable>
@@ -83,6 +90,8 @@ export const UserRow = React.memo(function UserRow({
               onPress={() => onToggleAdmin(u._id)}
               hitSlop={12}
               style={{ padding: 4 }}
+              accessibilityRole="button"
+              accessibilityLabel={u.isAdmin ? `Remove admin role from ${u.name || u.email || "user"}` : `Grant admin role to ${u.name || u.email || "user"}`}
             >
               <MaterialCommunityIcons
                 name={u.isAdmin ? "shield-check" : "shield-outline"}
@@ -95,7 +104,13 @@ export const UserRow = React.memo(function UserRow({
         {/* For the self row we still show the shield as a non-interactive
             badge so the admin can see their own admin status at a glance. */}
         {isSelf && u.isAdmin && (
-          <MaterialCommunityIcons name="shield-check" size={18} color={colors.accent.primary} />
+          <MaterialCommunityIcons
+            name="shield-check"
+            size={18}
+            color={colors.accent.primary}
+            accessibilityRole="image"
+            accessibilityLabel="You are an admin"
+          />
         )}
         <MaterialCommunityIcons name="chevron-right" size={18} color={colors.text.tertiary} />
       </View>
