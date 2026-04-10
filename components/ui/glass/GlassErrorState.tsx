@@ -61,6 +61,10 @@ export interface GlassErrorStateProps {
   secondaryText?: string;
   /** Size variant */
   size?: "compact" | "default" | "large";
+  /** Override icon size (px) — overrides the size preset's iconSize */
+  iconSize?: number;
+  /** Override icon container size (px) — overrides the size preset's iconContainerSize */
+  iconContainerSize?: number;
   /** Additional styles */
   style?: ViewStyle;
   /** Whether to show in a card */
@@ -162,11 +166,15 @@ export function GlassErrorState({
   onSecondaryAction,
   secondaryText,
   size = "default",
+  iconSize,
+  iconContainerSize,
   style,
   showCard = false,
 }: GlassErrorStateProps) {
   const preset = ERROR_PRESETS[type];
   const sizePreset = SIZE_PRESETS[size];
+  const resolvedIconSize = iconSize ?? sizePreset.iconSize;
+  const resolvedIconContainerSize = iconContainerSize ?? sizePreset.iconContainerSize;
 
   const finalIcon = icon ?? preset.icon;
   const finalTitle = title ?? preset.title;
@@ -186,16 +194,16 @@ export function GlassErrorState({
         style={[
           styles.iconContainer,
           {
-            width: sizePreset.iconContainerSize,
-            height: sizePreset.iconContainerSize,
-            borderRadius: sizePreset.iconContainerSize / 2,
+            width: resolvedIconContainerSize,
+            height: resolvedIconContainerSize,
+            borderRadius: resolvedIconContainerSize / 2,
             backgroundColor: `${iconColor}20`,
           },
         ]}
       >
         <MaterialCommunityIcons
           name={finalIcon}
-          size={sizePreset.iconSize}
+          size={resolvedIconSize}
           color={iconColor}
         />
       </View>
@@ -296,6 +304,8 @@ export function EmptyLists({ title, message, onAction, actionText, style }: Empt
       message={message ?? "Create a list and set a budget — UK shoppers save an average of £35/month by tracking their spending."}
       onRetry={onAction}
       retryText={actionText ?? "Create List"}
+      iconSize={40}
+      iconContainerSize={64}
       style={style}
     />
   );
