@@ -16,7 +16,10 @@ import {
   AlertButton,
 } from "@/components/ui/glass";
 import { GlassToast } from "@/components/ui/glass/GlassToast";
+import { TipBanner } from "@/components/ui/TipBanner";
+import { FlashInsightBanner } from "@/components/ui/FlashInsightBanner";
 import { useScanLogic } from "@/hooks";
+import { useScanFlash } from "@/hooks/useScanFlash";
 import { ReceiptMode } from "@/components/scan/ReceiptMode";
 import { ProductMode } from "@/components/scan/ProductMode";
 import { ScanOnboardingTip } from "@/components/scan/ScanOnboardingTip";
@@ -71,6 +74,11 @@ export default function ScanScreen() {
   const [animationKey, setAnimationKey] = useState(0);
   const [pageAnimationKey, setPageAnimationKey] = useState(0);
   const { alert } = useGlassAlert();
+
+  // Post-scan flash feedback. Extracted to a hook since the detection
+  // logic (tracking completed-transition state across Convex updates) is
+  // non-trivial and would blow the 400-line ceiling of this screen file.
+  const { flashMessage, handleFlashFinish } = useScanFlash(allReceipts);
 
   // Mutations
   const deleteReceipt = useMutation(api.receipts.remove);
@@ -245,10 +253,18 @@ export default function ScanScreen() {
           </View>
         </AnimatedSection>
 
-        <ScanOnboardingTip 
-          visible={showOnboardingTip} 
-          onDismiss={dismissOnboardingTip} 
+        <ScanOnboardingTip
+          visible={showOnboardingTip}
+          onDismiss={dismissOnboardingTip}
         />
+
+        <AnimatedSection animation="fadeInDown" duration={400} delay={50}>
+          {flashMessage ? (
+            <FlashInsightBanner message={flashMessage} onFinish={handleFlashFinish} />
+          ) : (
+            <TipBanner context="scan" />
+          )}
+        </AnimatedSection>
 
         {scanMode === "receipt" ? (
           <ReceiptMode 

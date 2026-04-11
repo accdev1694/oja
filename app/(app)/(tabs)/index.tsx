@@ -22,6 +22,7 @@ import { ListsHeaderActions } from "@/components/lists/ListsHeaderActions";
 import { ListsModals } from "@/components/lists/ListsModals";
 import { ListsTutorialHints } from "@/components/lists/ListsTutorialHints";
 import { HistoryStatsStrip } from "@/components/lists/HistoryStatsStrip";
+import { ActiveStatsStrip } from "@/components/lists/ActiveStatsStrip";
 import { HistoryFilters } from "@/components/lists/HistoryFilters";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { SeasonalEventBanner } from "@/components/ui/SeasonalEventBanner";
@@ -125,6 +126,11 @@ export default function ListsScreen() {
       <AnimatedSection key={`tip-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={100}>
         <TipBanner context="lists" />
       </AnimatedSection>
+
+      {/* Active Stats Strip (only in active mode — mirrors HistoryStatsStrip) */}
+      {tabMode === "active" && (
+        <ActiveStatsStrip key={`active-stats-${pageAnimationKey}`} animationDelay={125} />
+      )}
 
       {/* History Stats Strip + Filters (only in history mode) */}
       {tabMode === "history" && (

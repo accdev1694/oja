@@ -279,3 +279,40 @@ export const switchStore = mutation({
   },
 });
 
+/**
+ * Active-tab "ready to go" stats — shown on the Lists tab above active lists.
+ *
+ * Returns this week's budget usage aggregated from completed trips in the
+ * last 7 days. Single responsibility keeps the query cheap: only touches
+ * `shoppingLists` by a user index.
+ */
+export const getActiveListsStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await optionalUser(ctx);
+    if (!user) return null;
+
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+    const allLists = await ctx.db
+      .query("shoppingLists")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    let weekBudget = 0;
+    let weekSpent = 0;
+    for (const list of allLists) {
+      if (list.status !== "completed") continue;
+      if (!list.completedAt || list.completedAt < weekAgo) continue;
+      if (list.budget && list.budget > 0) weekBudget += list.budget;
+      if (list.actualTotal && list.actualTotal > 0) weekSpent += list.actualTotal;
+    }
+
+    return {
+      weekBudget: Math.round(weekBudget * 100) / 100,
+      weekSpent: Math.round(weekSpent * 100) / 100,
+      weekRemaining: Math.round((weekBudget - weekSpent) * 100) / 100,
+      hasWeekBudget: weekBudget > 0,
+    };
+  },
+});

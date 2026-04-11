@@ -55,15 +55,19 @@ export const getWeeklyDigest = query({
     let totalBudget = 0;
     let totalSpent = 0;
 
-    // Batch fetch all listItems for completed lists (avoid N+1)
+    // Fetch listItems per completed list using the `by_list` index. Previously
+    // this used `.withIndex("by_list")` with no equality filter, which falls
+    // back to a full-table scan of `listItems` — expensive now that
+    // ProfileInsightsCard calls this query whenever the Profile tab renders.
     const listIds = completedThisWeek.map(l => l._id);
-    const allListItems = listIds.length > 0
-      ? await ctx.db
-          .query("listItems")
-          .withIndex("by_list")
-          .collect()
-          .then(items => items.filter(item => listIds.includes(item.listId)))
-      : [];
+    const allListItems: Doc<"listItems">[] = [];
+    for (const listId of listIds) {
+      const items = await ctx.db
+        .query("listItems")
+        .withIndex("by_list", q => q.eq("listId", listId))
+        .collect();
+      allListItems.push(...items);
+    }
 
     for (const list of completedThisWeek) {
       if (list.budget) totalBudget += list.budget;
