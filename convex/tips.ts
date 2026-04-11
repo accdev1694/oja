@@ -1,141 +1,9 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { TIPS } from "./lib/tipsConfig";
 
-// =============================================================================
-// CONTEXTUAL TIPS CONFIGURATION
-// =============================================================================
-
-/**
- * Tips shown in-app at relevant moments.
- * Each tip has a context (where to show) and conditions.
- */
-export const TIPS = {
-  // Pantry Screen Tips
-  pantry_swipe_stock: {
-    context: "pantry",
-    title: "Swipe to change stock",
-    body: "Swipe left on any item to mark it as running low or out of stock.",
-    showAfterSessions: 1,
-    showIfCondition: "has_pantry_items",
-    priority: 1,
-  },
-
-  pantry_tap_add_list: {
-    context: "pantry",
-    title: "Quick add to list",
-    body: "Tap the {{icon:plus}} icon on any low-stock item to add it to your shopping list.",
-    showAfterSessions: 2,
-    showIfCondition: "has_low_stock",
-    priority: 2,
-  },
-
-  pantry_voice_check: {
-    context: "pantry",
-    title: "Ask Tobi",
-    body: "Tap the mic and ask \"What am I running low on?\" for a quick summary.",
-    showAfterSessions: 3,
-    showIfCondition: "no_voice_usage",
-    priority: 3,
-  },
-
-  // Lists Screen Tips
-  lists_budget_dial: {
-    context: "lists",
-    title: "Set a budget",
-    body: "Tap 'Set Budget' to track spending as you shop. Oja will warn you before you go over.",
-    showAfterSessions: 1,
-    showIfCondition: "has_list_no_budget",
-    priority: 1,
-  },
-
-  lists_share_partner: {
-    context: "lists",
-    title: "Shop together",
-    body: "Tap the {{icon:account-group}} icon to invite a partner. They can add items and see your progress in real-time.",
-    showAfterSessions: 2,
-    showIfCondition: "no_partners",
-    priority: 2,
-  },
-
-  lists_check_off: {
-    context: "list_detail",
-    title: "Check off as you shop",
-    body: "Tap items to check them off. Your budget updates live as you go.",
-    showAfterSessions: 1,
-    showIfCondition: "has_unchecked_items",
-    priority: 1,
-  },
-
-  lists_health_analysis: {
-    context: "list_detail",
-    title: "Get AI Health Insights",
-    body: "Your list is ready for a health check! Tap the {{icon:heart-pulse}} heart icon to see your nutrition score and get healthy swap suggestions.",
-    showAfterSessions: 0,
-    showIfCondition: "first_list_with_5_items",
-    priority: 2,
-  },
-
-  // Scan Screen Tips
-  scan_first_receipt: {
-    context: "scan",
-    title: "Scan to save",
-    body: "Every receipt you scan helps Oja learn local prices. Scan more to get better estimates!",
-    showAfterSessions: 1,
-    showIfCondition: "no_receipts",
-    priority: 1,
-  },
-
-  scan_earn_credits: {
-    context: "scan",
-    title: "Earn scan credits",
-    body: "Each scan earns credits toward your subscription. Bronze tier starts at just 5 scans!",
-    showAfterSessions: 2,
-    showIfCondition: "has_receipts_no_tier",
-    priority: 2,
-  },
-
-  // Profile Screen Tips
-  profile_insights: {
-    context: "profile",
-    title: "Weekly Insights",
-    body: "Check your spending trends and see where you can save money each week.",
-    showAfterSessions: 2,
-    showIfCondition: "has_spending_data",
-    priority: 1,
-  },
-
-  profile_voice_settings: {
-    context: "profile",
-    title: "Voice Assistant Settings",
-    body: "Customise Tobi's voice and manage your AI usage in Settings.",
-    showAfterSessions: 3,
-    showIfCondition: "always",
-    priority: 2,
-  },
-
-  // Voice Assistant Tips
-  voice_commands: {
-    context: "voice",
-    title: "Try these commands",
-    body: "\"Add milk to my list\", \"What's my budget?\", \"Create a new list for Aldi\"",
-    showAfterSessions: 1,
-    showIfCondition: "first_voice_use",
-    priority: 1,
-  },
-
-  // General/Global Tips
-  general_trial_ending: {
-    context: "global",
-    title: "Trial ending soon",
-    body: "Don't lose your price history and AI features. Subscribe to keep all your data.",
-    showAfterSessions: 0,
-    showIfCondition: "trial_ending_soon",
-    priority: 10,
-  },
-} as const;
-
-export type TipKey = keyof typeof TIPS;
-export type TipContext = "pantry" | "lists" | "list_detail" | "scan" | "profile" | "voice" | "global";
+export { TIPS } from "./lib/tipsConfig";
+export type { TipKey, TipContext } from "./lib/tipsConfig";
 
 // =============================================================================
 // QUERIES
@@ -147,6 +15,11 @@ export type TipContext = "pantry" | "lists" | "list_detail" | "scan" | "profile"
 export const getNextTip = query({
   args: {
     context: v.string(),
+    // Client-supplied rotation cursor. Each time the caller bumps this
+    // number, the eligible-tip pool is re-indexed so the returned tip
+    // changes — this is how variety is achieved *within* a session.
+    // Callers typically bump on tab focus / resurface.
+    rotation: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -239,24 +112,36 @@ export const getNextTip = query({
       }
     };
 
-    // Find the best tip for this context
+    // Collect eligible tips for this context. Ordering inside the pool is
+    // priority-first (tie-broken by key) so the rotation is stable — an
+    // eligible global-priority-10 tip like `general_trial_ending` will
+    // always sit at a fixed index.
     const contextTips = Object.entries(TIPS)
       .filter(([key, tip]) => {
-        // Match context (or global)
         if (tip.context !== args.context && tip.context !== "global") return false;
-        // Not dismissed
         if (dismissedKeys.has(key)) return false;
-        // Session requirement met
         if (sessionCount < tip.showAfterSessions) return false;
-        // Condition met
         if (!checkCondition(tip.showIfCondition)) return false;
         return true;
       })
-      .sort((a, b) => a[1].priority - b[1].priority);
+      .sort((a, b) => a[1].priority - b[1].priority || a[0].localeCompare(b[0]));
 
     if (contextTips.length === 0) return null;
 
-    const [tipKey, tipConfig] = contextTips[0];
+    // Seed = sessionCount + context hash + client rotation cursor.
+    //   • sessionCount varies the starting point across app launches
+    //   • contextHash desyncs rotation across tabs so Lists and Pantry
+    //     don't show the same-index tip at the same time
+    //   • rotation is bumped by the client on focus/resurface so users
+    //     see variety *within* a single session
+    let contextHash = 0;
+    for (let i = 0; i < args.context.length; i++) {
+      contextHash = (contextHash * 31 + args.context.charCodeAt(i)) | 0;
+    }
+    const seed = sessionCount + contextHash + (args.rotation ?? 0);
+    const rotationIndex =
+      ((seed % contextTips.length) + contextTips.length) % contextTips.length;
+    const [tipKey, tipConfig] = contextTips[rotationIndex];
     return {
       key: tipKey,
       title: tipConfig.title,

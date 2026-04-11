@@ -23,7 +23,9 @@ import { AccountSection } from "@/components/profile/AccountSection";
 import { AdminControlCenter } from "@/components/profile/AdminControlCenter";
 import { MilestonePath } from "@/components/profile/MilestonePath";
 import { NavigationLinks } from "@/components/profile/NavigationLinks";
+import { ProfileInsightsCard } from "@/components/profile/ProfileInsightsCard";
 import { SettingsSection } from "@/components/profile/SettingsSection";
+import { TipBanner } from "@/components/ui/TipBanner";
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
@@ -55,6 +57,7 @@ export default function ProfileScreen() {
   const updateNotificationSettings = useMutation(api.users.updateNotificationSettings);
   const updateUser = useMutation(api.users.update);
   const generateReferralCode = useMutation(api.referrals.generateReferralCode);
+  const resetTipDismissals = useMutation(api.tips.resetTips);
 
   const skipArg = !isSwitchingUsers ? {} : "skip";
   const allLists = useQuery(api.shoppingLists.getByUser, skipArg);
@@ -131,8 +134,9 @@ export default function ProfileScreen() {
   };
 
   const handleResetHints = () => {
-    confirmAction("Reset All Hints", "This will show all tutorial hints again as you use the app.", async () => {
+    confirmAction("Reset All Hints", "This brings back every tutorial hint and tip banner as you use the app.", async () => {
       resetAllHints();
+      await resetTipDismissals().catch((err) => console.warn("Tip reset failed:", err));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     });
   };
@@ -242,6 +246,8 @@ export default function ProfileScreen() {
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View key={animationKey}>
+        <TipBanner context="profile" />
+
         {isAdmin && (
           <AdminControlCenter adminAnalytics={adminAnalytics} systemHealth={systemHealth} platformAIUsage={platformAIUsage} gmvFilter={gmvFilter} setGmvFilter={setGmvFilter} router={router} />
         )}
@@ -286,6 +292,8 @@ export default function ProfileScreen() {
             </View>
           </GlassCard>
         </AnimatedSection>
+
+        <ProfileInsightsCard animationDelay={125} />
 
         <NavigationLinks router={router} convexUser={convexUser} myAdminPerms={myAdminPerms} subscription={subscription} pointsBalance={pointsBalance} aiUsage={aiUsage} outOfStockItems={outOfStockItems} lowStockItems={lowStockItems} handleSupportPress={handleSupportPress} animationDelay={150} />
 

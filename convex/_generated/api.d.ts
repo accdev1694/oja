@@ -108,6 +108,7 @@ import type * as lib_stores_specialtyStores from "../lib/stores/specialtyStores.
 import type * as lib_stores_storeData from "../lib/stores/storeData.js";
 import type * as lib_stores_types from "../lib/stores/types.js";
 import type * as lib_subscriptionDisplay from "../lib/subscriptionDisplay.js";
+import type * as lib_tipsConfig from "../lib/tipsConfig.js";
 import type * as lib_titleCase from "../lib/titleCase.js";
 import type * as lib_voiceParser from "../lib/voiceParser.js";
 import type * as lib_voice_declarations from "../lib/voice/declarations.js";
@@ -335,6 +336,7 @@ declare const fullApi: ApiFromModules<{
   "lib/stores/storeData": typeof lib_stores_storeData;
   "lib/stores/types": typeof lib_stores_types;
   "lib/subscriptionDisplay": typeof lib_subscriptionDisplay;
+  "lib/tipsConfig": typeof lib_tipsConfig;
   "lib/titleCase": typeof lib_titleCase;
   "lib/voiceParser": typeof lib_voiceParser;
   "lib/voice/declarations": typeof lib_voice_declarations;

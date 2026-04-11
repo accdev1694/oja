@@ -22,10 +22,11 @@
  * and invisible to the user).
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
+import { useFocusEffect } from "@react-navigation/native";
 import { api } from "@/convex/_generated/api";
 import * as Haptics from "expo-haptics";
 import Animated, {
@@ -40,12 +41,11 @@ import Animated, {
 
 import { colors, spacing, borderRadius, typography } from "@/components/ui/glass";
 import { useIdleResurface } from "@/hooks/useIdleResurface";
+import { renderBodyWithIcons } from "@/components/ui/tipBannerBody";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
-
-const ICON_TOKEN_RE = /\{\{icon:([a-z0-9-]+)\}\}/g;
 
 // Cycle timings
 const INITIAL_DELAY = 800;
@@ -70,37 +70,6 @@ const EASE_IN_SHARP = Easing.bezier(0.4, 0, 1, 1);
 const VERTICAL_GAP = spacing.xs;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Body text with inline icon tokens
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Splits tip body text on {{icon:name}} tokens, rendering inline icons. */
-function renderBodyWithIcons(body: string): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  ICON_TOKEN_RE.lastIndex = 0;
-  while ((match = ICON_TOKEN_RE.exec(body)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(body.slice(lastIndex, match.index));
-    }
-    parts.push(
-      <MaterialCommunityIcons
-        key={match.index}
-        name={match[1] as keyof typeof MaterialCommunityIcons.glyphMap}
-        size={14}
-        color={colors.accent.warm}
-      />,
-    );
-    lastIndex = ICON_TOKEN_RE.lastIndex;
-  }
-  if (lastIndex < body.length) {
-    parts.push(body.slice(lastIndex));
-  }
-  return parts.length > 1 ? parts : body;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -109,8 +78,31 @@ interface TipBannerProps {
 }
 
 export function TipBanner({ context }: TipBannerProps) {
-  const tip = useQuery(api.tips.getNextTip, { context });
+  // Rotation cursor — bumped on every tab focus and every resurface cycle
+  // so the tip the server returns actually changes as the user moves
+  // around. Seeded from Date.now() so two different mounts of this
+  // component (e.g. Scan vs. Lists) start at different points in the pool
+  // rather than both landing on index 0.
+  const [rotation, setRotation] = useState(() =>
+    Math.floor(Date.now() / 1000) & 0xffff,
+  );
+  const tip = useQuery(api.tips.getNextTip, { context, rotation });
   const dismissTip = useMutation(api.tips.dismissTip);
+
+  // Bump rotation on every subsequent tab focus so returning to this tab
+  // always produces a new tip. Skip the very first focus — the random
+  // initial seed already gave us a varied starting point, and bumping on
+  // mount would fire a redundant second query.
+  const isInitialFocusRef = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (isInitialFocusRef.current) {
+        isInitialFocusRef.current = false;
+        return;
+      }
+      setRotation((prev) => prev + 1);
+    }, []),
+  );
 
   const [contentHeight, setContentHeight] = useState(0);
   const [isDismissing, setIsDismissing] = useState(false);
