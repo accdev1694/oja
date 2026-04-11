@@ -51,7 +51,8 @@ export const refreshListPrices = mutation({
 
     // Filter to items that need price refresh
     const refreshableItems = items.filter(item => !item.isChecked && !item.priceOverride);
-    if (refreshableItems.length === 0) return { updated: 0, total: items.length };
+    const emptyChanges: { name: string; oldPrice?: number; newPrice: number }[] = [];
+    if (refreshableItems.length === 0) return { updated: 0, total: items.length, changes: emptyChanges };
 
     // Batch fetch: user's priceHistory for all item names (single query)
     const allPersonalHistory = await ctx.db
@@ -85,6 +86,7 @@ export const refreshListPrices = mutation({
 
     let updated = 0;
     const now = Date.now();
+    const changes: { name: string; oldPrice?: number; newPrice: number }[] = [];
 
     for (const item of refreshableItems) {
       const normalizedItemName = item.name.toLowerCase().trim();
@@ -124,18 +126,25 @@ export const refreshListPrices = mutation({
       }
 
       if (newPrice !== undefined && newPrice !== item.estimatedPrice) {
+        // Patch first — if this throws we do NOT want to report the item as
+        // changed in the banner payload. Record the change only on success.
         await ctx.db.patch(item._id, {
           estimatedPrice: newPrice,
           priceSource: newSource,
           priceConfidence: newConfidence,
           updatedAt: now,
         });
+        changes.push({
+          name: item.name,
+          oldPrice: item.estimatedPrice,
+          newPrice,
+        });
         updated++;
       }
     }
 
     if (updated > 0) await recalculateListTotal(ctx, args.listId);
-    return { updated, total: items.length };
+    return { updated, total: items.length, changes };
   },
 });
 

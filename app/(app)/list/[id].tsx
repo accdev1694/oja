@@ -20,6 +20,7 @@ import {
   spacing,
 } from "@/components/ui/glass";
 import { ShoppingListItem, type ListItem } from "@/components/list/ShoppingListItem";
+import { FlashInsightBanner, type FlashMessage } from "@/components/ui/FlashInsightBanner";
 import type { TripStats } from "@/hooks/useTripSummary";
 
 import { haptic } from "@/lib/haptics/safeHaptics";
@@ -67,6 +68,15 @@ export default function ListDetailScreen() {
   const [editingItem, setEditingItem] = useState<ListItem | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [commentItem, setCommentItem] = useState<{ id: Id<"listItems">; name: string } | null>(null);
+  const [flashMessage, setFlashMessage] = useState<FlashMessage | null>(null);
+
+  // A newer flash result replaces any currently-dwelling message (the banner
+  // remeasures + re-enters on id change), so rapid clicks always surface the
+  // latest outcome without a manual queue.
+  const handleShowFlash = useCallback((message: FlashMessage) => {
+    setFlashMessage(message);
+  }, []);
+  const handleFlashFinish = useCallback(() => setFlashMessage(null), []);
 
   // ── Queries & Mutations ────────────────────────────────────────────────────
   const list = useQuery(api.shoppingLists.getById, { id });
@@ -121,7 +131,7 @@ export default function ListDetailScreen() {
     useMultiSelect(removeMultiple, alert, showToast);
 
   const { isRefreshingPrices, handleRefreshPrices } =
-    useListPriceRefresh(refreshPrices, id, showToast);
+    useListPriceRefresh(refreshPrices, id, handleShowFlash);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleToggleItem = useCallback(async (itemId: Id<"listItems">) => {
@@ -249,6 +259,8 @@ export default function ListDetailScreen() {
         onHealthCheck={() => setShowHealthModal(true)} hasItems={(items?.length ?? 0) > 0}
         isShared={isShared} onOpenChat={() => setShowChat(true)} unreadChatCount={chatMessageCount ?? 0}
       />
+
+      <FlashInsightBanner message={flashMessage} onFinish={handleFlashFinish} />
 
       <FlashList
         data={displayItems} renderItem={renderListItem} keyExtractor={listKeyExtractor}
