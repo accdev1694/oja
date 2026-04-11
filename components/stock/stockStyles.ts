@@ -64,7 +64,8 @@ export const stockStyles = StyleSheet.create({
   },
   viewModeTabs: {
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
   attentionEmptyContainer: {
     flex: 1,
@@ -198,7 +199,8 @@ export const stockStyles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,

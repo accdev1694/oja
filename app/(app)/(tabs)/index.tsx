@@ -286,14 +286,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: spacing.sm,
+    paddingTop: 0,
   },
   bottomSpacer: {
     height: 140,
   },
   tabContainer: {
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   historyHeaderContent: {
     paddingHorizontal: spacing.lg,

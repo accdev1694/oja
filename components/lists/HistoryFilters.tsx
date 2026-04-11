@@ -91,6 +91,7 @@ export { HistoryFilters };
 const styles = StyleSheet.create({
   container: {
     gap: spacing.sm,
+    marginTop: spacing.sm,
     marginBottom: spacing.md,
   },
   searchBar: {

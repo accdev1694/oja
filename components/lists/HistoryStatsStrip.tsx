@@ -97,7 +97,8 @@ export { HistoryStatsStrip };
 const styles = StyleSheet.create({
   container: {
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
   },
   statsRow: {
     flexDirection: "row",

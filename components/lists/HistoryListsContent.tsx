@@ -145,7 +145,7 @@ export { HistoryListsContent };
 const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 140,
-    paddingTop: spacing.sm,
+    paddingTop: 0,
   },
   itemWrapper: {
     paddingHorizontal: spacing.lg,

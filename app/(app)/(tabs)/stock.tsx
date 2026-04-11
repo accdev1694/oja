@@ -8,6 +8,7 @@ import {
   GlassScreen,
   SimpleHeader,
   colors,
+  spacing,
 } from "@/components/ui/glass";
 import type { FlashMessage } from "@/components/ui/FlashInsightBanner";
 
@@ -177,7 +178,7 @@ export default function PantryScreen() {
               isRefreshingPrices={isRefreshingPrices}
             />
           }
-          style={{ marginBottom: 0 }}
+          style={{ marginBottom: spacing.sm }}
         />
 
         <View key={pageAnimationKey} style={styles.animationWrapper}>
