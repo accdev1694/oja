@@ -16,15 +16,16 @@ import { DEFAULT_CONFIG } from "./types";
 
 /** Category aliases for flexible matching */
 const CATEGORY_ALIASES: Record<string, string[]> = {
-  "clothing": ["clothes", "apparel", "fashion", "wear"],
   "food": ["groceries", "grocery", "edible"],
   "dairy": ["milk", "cheese", "yogurt", "butter"],
   "meat": ["poultry", "beef", "pork", "chicken", "fish", "seafood"],
   "produce": ["fruit", "vegetable", "vegetables", "fruits", "fresh"],
   "bakery": ["bread", "baked", "pastry", "pastries"],
   "drinks": ["beverages", "beverage", "drink"],
+  "alcohol": ["beer", "wine", "spirits"],
   "household": ["home", "cleaning", "laundry"],
-  "toiletries": ["personal care", "hygiene", "beauty"],
+  "health & beauty": ["personal care", "hygiene", "beauty", "toiletries"],
+  "world foods": ["international", "ethnic"],
 };
 
 /**

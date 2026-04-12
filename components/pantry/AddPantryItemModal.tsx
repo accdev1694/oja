@@ -26,9 +26,11 @@ import {
 } from "@/components/ui/glass";
 
 const STOCK_CATEGORIES = [
-  "Dairy", "Bakery", "Produce", "Meat", "Pantry Staples", "Spices & Seasonings",
-  "Condiments", "Beverages", "Snacks", "Frozen", "Canned Goods", "Grains & Pasta",
-  "Oils & Vinegars", "Baking", "Household", "Personal Care", "Health & Wellness",
+  "Dairy & Eggs", "Bread & Bakery", "Fruits & Vegetables", "Meat & Seafood",
+  "Rice, Pasta & Grains", "Cereals & Breakfast", "Tinned & Canned", "Frozen",
+  "Chilled & Deli", "Drinks", "Alcohol", "Snacks & Sweets",
+  "Condiments & Sauces", "Spices & Seasonings", "Cooking & Baking",
+  "World Foods", "Health & Beauty", "Household & Cleaning", "Baby & Kids", "Pets",
 ];
 
 const STOCK_LEVELS: { level: StockLevel; label: string; color: string }[] = [
@@ -51,13 +53,13 @@ export const AddPantryItemModal = React.memo(function AddPantryItemModal({
   const createPantryItem = useMutation(api.pantryItems.create);
 
   const [newItemName, setNewItemName] = useState("");
-  const [newItemCategory, setNewItemCategory] = useState("Pantry Staples");
+  const [newItemCategory, setNewItemCategory] = useState("Other");
   const [newItemStock, setNewItemStock] = useState<StockLevel>("stocked");
 
   const handleClose = useCallback(() => {
     onClose();
     setNewItemName("");
-    setNewItemCategory("Pantry Staples");
+    setNewItemCategory("Other");
     setNewItemStock("stocked");
   }, [onClose]);
 

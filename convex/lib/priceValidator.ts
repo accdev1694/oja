@@ -49,14 +49,26 @@ export function getEmergencyPriceEstimate(
 
   // Category-based emergency pricing
   const categoryPrices: Record<string, number> = {
-    "Dairy": 2.50,
-    "Bakery": 1.50,
-    "Produce": 1.00,
-    "Meat": 4.00,
-    "Beverages": 1.50,
-    "Snacks": 2.00,
+    "Dairy & Eggs": 2.50,
+    "Bread & Bakery": 1.50,
+    "Fruits & Vegetables": 1.00,
+    "Meat & Seafood": 4.00,
+    "Drinks": 1.50,
+    "Alcohol": 5.00,
+    "Snacks & Sweets": 2.00,
     "Frozen": 2.50,
-    "Pantry Staples": 1.50,
+    "Chilled & Deli": 3.00,
+    "Rice, Pasta & Grains": 1.50,
+    "Cereals & Breakfast": 2.50,
+    "Tinned & Canned": 1.00,
+    "Condiments & Sauces": 2.00,
+    "Spices & Seasonings": 1.50,
+    "Cooking & Baking": 1.50,
+    "World Foods": 3.00,
+    "Health & Beauty": 3.00,
+    "Household & Cleaning": 2.50,
+    "Baby & Kids": 4.00,
+    "Pets": 3.00,
   };
 
   const basePrice = categoryPrices[category || ""] || 1.50;
