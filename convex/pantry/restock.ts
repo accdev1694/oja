@@ -275,7 +275,7 @@ export const addFromReceipt = mutation({
     await enforceActiveCap(ctx, user._id);
 
     const cleaned = cleanItemForStorage(toGroceryTitleCase(args.name), args.size, args.unit);
-    const normCat = normalizeCategory(args.category || "Pantry Staples");
+    const normCat = normalizeCategory(args.category || "Other");
     const itemId = await ctx.db.insert("pantryItems", {
       userId: user._id,
       name: cleaned.name,

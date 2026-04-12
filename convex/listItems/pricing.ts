@@ -168,7 +168,7 @@ export const applyHealthSwap = mutation({
 
     const variantResult = await resolveVariantWithPrice(ctx, args.suggestedName, list.normalizedStoreId, user._id);
 
-    let category = args.suggestedCategory || variantResult?.variant.category || originalItem.category || "Pantry Staples";
+    let category = args.suggestedCategory || variantResult?.variant.category || originalItem.category || "Other";
     let size = variantResult?.variant.size || args.suggestedSize || "per item";
     let unit = variantResult?.variant.unit || args.suggestedUnit || "each";
     let estimatedPrice = variantResult?.price ?? undefined;

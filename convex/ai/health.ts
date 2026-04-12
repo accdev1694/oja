@@ -197,7 +197,7 @@ Return ONLY valid JSON in this exact format:
         ...swap,
         suggestedName: cleaned.name,
         originalId: highestSimilarity > 60 ? bestMatch?._id : undefined,
-        suggestedCategory: normalizeCategory(swap.suggestedCategory || bestMatch?.category || "Pantry Staples"),
+        suggestedCategory: normalizeCategory(swap.suggestedCategory || bestMatch?.category || "Other"),
         suggestedSize: cleaned.size,
         suggestedUnit: cleaned.unit,
         priceDelta: swap.priceDelta ? parseFloat(String(swap.priceDelta).replace(/^\+/, '')) : undefined,

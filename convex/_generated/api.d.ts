@@ -135,6 +135,7 @@ import type * as migrations_backfillListStores from "../migrations/backfillListS
 import type * as migrations_collapseShoppingModes from "../migrations/collapseShoppingModes.js";
 import type * as migrations_grantAdminAccess from "../migrations/grantAdminAccess.js";
 import type * as migrations_migrateAdminsToRBAC from "../migrations/migrateAdminsToRBAC.js";
+import type * as migrations_migrateCategoryNames from "../migrations/migrateCategoryNames.js";
 import type * as migrations_migrateToPoints from "../migrations/migrateToPoints.js";
 import type * as migrations_optimizeImages from "../migrations/optimizeImages.js";
 import type * as migrations_pantryStatusBackfill from "../migrations/pantryStatusBackfill.js";
@@ -363,6 +364,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/collapseShoppingModes": typeof migrations_collapseShoppingModes;
   "migrations/grantAdminAccess": typeof migrations_grantAdminAccess;
   "migrations/migrateAdminsToRBAC": typeof migrations_migrateAdminsToRBAC;
+  "migrations/migrateCategoryNames": typeof migrations_migrateCategoryNames;
   "migrations/migrateToPoints": typeof migrations_migrateToPoints;
   "migrations/optimizeImages": typeof migrations_optimizeImages;
   "migrations/pantryStatusBackfill": typeof migrations_pantryStatusBackfill;
