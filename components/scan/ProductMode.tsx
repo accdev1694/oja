@@ -21,17 +21,19 @@ interface ProductModeProps {
   onScanPress: () => void;
   onProductPress: (product: ScannedProduct, index: number) => void;
   onClearAll: () => void;
-  onAddAll: () => void;
+  onAddAllToList: () => void;
+  onAddAllToPantry: () => void;
   scanButtonRef?: React.RefObject<View | null>;
 }
 
-export function ProductMode({ 
-  scannedProducts, 
-  isScanning, 
-  onScanPress, 
+export function ProductMode({
+  scannedProducts,
+  isScanning,
+  onScanPress,
   onProductPress,
   onClearAll,
-  onAddAll,
+  onAddAllToList,
+  onAddAllToPantry,
   scanButtonRef
 }: ProductModeProps) {
   const insets = useSafeAreaInsets();
@@ -72,10 +74,16 @@ export function ProductMode({
             )}
 
             {hasProducts && !isScanning && (
-              <Pressable onPress={onAddAll} style={styles.addAllButton}>
-                <MaterialCommunityIcons name="plus-box-multiple" size={20} color={colors.accent.primary} />
-                <Text style={styles.addAllText}>Add All ({scannedProducts.length}) to Shopping List</Text>
-              </Pressable>
+              <View style={styles.bulkActions}>
+                <Pressable onPress={onAddAllToList} style={styles.addAllButton}>
+                  <MaterialCommunityIcons name="plus-box-multiple" size={20} color={colors.accent.primary} />
+                  <Text style={styles.addAllText}>Add All ({scannedProducts.length}) to Shopping List</Text>
+                </Pressable>
+                <Pressable onPress={onAddAllToPantry} style={styles.addAllPantryButton}>
+                  <MaterialCommunityIcons name="fridge-outline" size={20} color={colors.accent.warm} />
+                  <Text style={styles.addAllPantryText}>Add All ({scannedProducts.length}) to Pantry</Text>
+                </Pressable>
+              </View>
             )}
 
             {scannedProducts.map((item, index) => (
@@ -140,6 +148,10 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
   },
   clearButtonText: { ...typography.labelSmall, color: colors.accent.error, fontWeight: "600" },
+  bulkActions: {
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
   addAllButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -151,9 +163,21 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     padding: spacing.md,
     gap: spacing.sm,
-    marginBottom: spacing.sm,
   },
   addAllText: { ...typography.labelLarge, color: colors.accent.primary, fontWeight: "700" },
+  addAllPantryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${colors.accent.warm}10`,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.accent.warm,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  addAllPantryText: { ...typography.labelLarge, color: colors.accent.warm, fontWeight: "700" },
   emptyContainer: { 
     flex: 1, 
     justifyContent: "center", 

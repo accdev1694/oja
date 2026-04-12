@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, TextInput, StyleSheet } from "react-native";
+import { View, Text, TextInput, StyleSheet, Pressable } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
@@ -16,27 +16,28 @@ import { cleanItemForStorage } from "@/convex/lib/itemNameParser";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+export interface EditedScannedItem {
+  name: string;
+  category: string;
+  quantity: number;
+  size?: string;
+  unit?: string;
+  brand?: string;
+  estimatedPrice?: number;
+  confidence: number;
+  imageStorageId: string;
+}
+
 export interface EditScannedItemModalProps {
-  /** The scanned product being edited, or null if modal is closed */
   product: ScannedProduct | null;
   onClose: () => void;
-  /** Called when user confirms - returns the edited product data */
-  onConfirm: (editedProduct: {
-    name: string;
-    category: string;
-    quantity: number;
-    size?: string;
-    unit?: string;
-    brand?: string;
-    estimatedPrice?: number;
-    confidence: number;
-    imageStorageId: string;
-  }) => void;
+  onAddToList: (editedProduct: EditedScannedItem) => void;
+  onAddToPantry: (editedProduct: EditedScannedItem) => void;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function EditScannedItemModal({ product, onClose, onConfirm }: EditScannedItemModalProps) {
+export function EditScannedItemModal({ product, onClose, onAddToList, onAddToPantry }: EditScannedItemModalProps) {
   const [editName, setEditName] = useState("");
   const [editQuantity, setEditQuantity] = useState("1");
   const [editPrice, setEditPrice] = useState("");
@@ -63,10 +64,8 @@ export function EditScannedItemModal({ product, onClose, onConfirm }: EditScanne
     onClose();
   }
 
-  function handleConfirm() {
-    if (!product || !editName.trim()) return;
-
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  function buildEdited(): EditedScannedItem | null {
+    if (!product || !editName.trim()) return null;
 
     const qty = parseInt(editQuantity);
     const price = parseFloat(editPrice);
@@ -78,7 +77,7 @@ export function EditScannedItemModal({ product, onClose, onConfirm }: EditScanne
       product.unit
     );
 
-    onConfirm({
+    return {
       name: cleaned.name,
       category: product.category,
       quantity: !isNaN(qty) && qty > 0 ? qty : 1,
@@ -88,8 +87,22 @@ export function EditScannedItemModal({ product, onClose, onConfirm }: EditScanne
       estimatedPrice: !isNaN(price) && price >= 0 ? price : undefined,
       confidence: product.confidence,
       imageStorageId: product.imageStorageId,
-    });
+    };
+  }
 
+  function handleAddToList() {
+    const edited = buildEdited();
+    if (!edited) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    onAddToList(edited);
+    handleClose();
+  }
+
+  function handleAddToPantry() {
+    const edited = buildEdited();
+    if (!edited) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    onAddToPantry(edited);
     handleClose();
   }
 
@@ -118,6 +131,16 @@ export function EditScannedItemModal({ product, onClose, onConfirm }: EditScanne
       maxWidth={360}
       avoidKeyboard
     >
+      <Pressable
+        onPress={handleClose}
+        style={styles.closeIcon}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
+        <MaterialCommunityIcons name="close" size={20} color={colors.text.secondary} />
+      </Pressable>
+
       <View style={styles.header}>
         <MaterialCommunityIcons name="package-variant-closed" size={28} color={colors.accent.primary} />
         <Text style={styles.title}>Review Scanned Item</Text>
@@ -240,20 +263,20 @@ export function EditScannedItemModal({ product, onClose, onConfirm }: EditScanne
         <GlassButton
           variant="ghost"
           size="md"
-          onPress={handleClose}
-          style={{ flex: 1 }}
+          onPress={handleAddToList}
+          style={styles.actionButton}
+          disabled={!editName.trim()}
         >
-          Cancel
+          Add to List
         </GlassButton>
         <GlassButton
           variant="primary"
           size="md"
-          icon="plus"
-          onPress={handleConfirm}
-          style={{ flex: 1 }}
+          onPress={handleAddToPantry}
+          style={styles.actionButton}
           disabled={!editName.trim()}
         >
-          Add to List
+          Add to Pantry
         </GlassButton>
       </View>
     </GlassModal>
@@ -351,7 +374,26 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
     marginTop: spacing.md,
+  },
+  actionButton: {
+    flex: 1,
+    paddingHorizontal: spacing.sm,
+  },
+  closeIcon: {
+    position: "absolute",
+    top: spacing.md,
+    right: spacing.md,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.glass.backgroundStrong,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
   },
 });

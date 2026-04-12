@@ -13,20 +13,20 @@ import {
   colors,
   spacing,
   useGlassAlert,
-  AlertButton,
 } from "@/components/ui/glass";
 import { GlassToast } from "@/components/ui/glass/GlassToast";
 import { TipBanner } from "@/components/ui/TipBanner";
 import { FlashInsightBanner } from "@/components/ui/FlashInsightBanner";
 import { useScanLogic } from "@/hooks";
 import { useScanFlash } from "@/hooks/useScanFlash";
+import { useScanCommitHandlers } from "@/hooks/useScanCommitHandlers";
 import { ReceiptMode } from "@/components/scan/ReceiptMode";
 import { ProductMode } from "@/components/scan/ProductMode";
 import { ScanOnboardingTip } from "@/components/scan/ScanOnboardingTip";
 import { EditScannedItemModal } from "@/components/scan/EditScannedItemModal";
+import { AddToListPickerModal } from "@/components/scan/AddToListPickerModal";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id, Doc } from "@/convex/_generated/dataModel";
 
 import { useHint } from "@/hooks/useHint";
 import { HintOverlay } from "@/components/tutorial/HintOverlay";
@@ -75,6 +75,9 @@ export default function ScanScreen() {
   const [pageAnimationKey, setPageAnimationKey] = useState(0);
   const { alert } = useGlassAlert();
 
+  // All five commit callbacks (bulk + single-item) plus pending-picker state
+  const commit = useScanCommitHandlers({ productScanner, viewingProduct, alert });
+
   // Post-scan flash feedback. Extracted to a hook since the detection
   // logic (tracking completed-transition state across Convex updates) is
   // non-trivial and would blow the 400-line ceiling of this screen file.
@@ -98,62 +101,6 @@ export default function ScanScreen() {
       { text: "Clear", style: "destructive", onPress: () => productScanner.clearAll() }
     ]);
   }, [alert, productScanner]);
-
-  const addItemsToList = useMutation(api.listItems.addBatchFromScan);
-
-  const handleAddAllToList = useCallback(async () => {
-    if (!shoppingLists || shoppingLists.length === 0) {
-      alert("No Active Lists", "Create a shopping list first before adding items.", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Create List", onPress: () => router.push("/") }
-      ]);
-      return;
-    }
-
-    const executeAdd = async (listId: Id<"shoppingLists">) => {
-      try {
-        const itemsToAdd = productScanner.scannedProducts.map((p) => ({
-          name: p.name,
-          category: p.category || "Other",
-          quantity: p.quantity || 1,
-          size: p.size,
-          unit: p.unit,
-          brand: p.brand,
-          estimatedPrice: p.estimatedPrice,
-          confidence: p.confidence,
-          imageStorageId: p.imageStorageId,
-        }));
-        
-        await addItemsToList({ listId, items: itemsToAdd });
-        productScanner.clearAll();
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        
-        alert("Success", `Added ${itemsToAdd.length} items to your list!`, [
-          { text: "Stay Here", style: "cancel" },
-          { text: "View List", onPress: () => router.push(`/list/${listId}`) }
-        ]);
-      } catch (err) {
-        console.error("Bulk add failed:", err);
-        alert("Error", "Failed to add items to list. Please try again.");
-      }
-    };
-
-    if (shoppingLists.length === 1) {
-      executeAdd(shoppingLists[0]._id);
-    } else {
-      // Prompt user to pick a list
-      const buttons: AlertButton[] = shoppingLists.map((list: Doc<"shoppingLists">) => ({
-        text: list.name,
-        onPress: () => executeAdd(list._id)
-      }));
-      
-      alert(
-        "Choose List",
-        "Which list should these items be added to?",
-        [...buttons, { text: "Cancel", style: "cancel" }]
-      );
-    }
-  }, [shoppingLists, productScanner, addItemsToList, alert, router]);
 
   async function handleScanAction() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -281,7 +228,8 @@ export default function ScanScreen() {
             onScanPress={handleScanAction}
             onProductPress={(product, index) => setViewingProduct({ product, index })}
             onClearAll={handleClearAllProducts}
-            onAddAll={handleAddAllToList}
+            onAddAllToList={commit.handleAddAllToList}
+            onAddAllToPantry={commit.handleAddAllToPantry}
             scanButtonRef={scanButtonRef}
           />
         )}
@@ -310,11 +258,16 @@ export default function ScanScreen() {
       <EditScannedItemModal
         product={viewingProduct?.product ?? null}
         onClose={() => setViewingProduct(null)}
-        onConfirm={(edited) => {
-          if (viewingProduct) {
-            productScanner.updateProduct(viewingProduct.index, edited);
-          }
-        }}
+        onAddToList={commit.handleModalAddToList}
+        onAddToPantry={commit.handleModalAddToPantry}
+      />
+
+      <AddToListPickerModal
+        visible={commit.pendingListAdd !== null}
+        onClose={commit.cancelListPicker}
+        lists={shoppingLists ?? []}
+        itemCount={commit.pendingListAdd?.items.length ?? 0}
+        onSelect={commit.handleListPicked}
       />
 
       {/* Persistence and Global Feedback */}
