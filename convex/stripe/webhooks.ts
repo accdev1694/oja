@@ -248,12 +248,22 @@ export const handleCheckoutCompleted = internalMutation({
       )
       .first();
 
+    // Restore any pantry items that were pruned when this user's trial expired.
+    const restoreResult = await ctx.runMutation(
+      internal.pantry.lifecycle.restoreDowngradePrunedItems,
+      { userId }
+    );
+
     if (!existingNotification) {
+      const restoreSuffix =
+        restoreResult.restored > 0
+          ? ` We restored ${restoreResult.restored} previously archived pantry ${restoreResult.restored === 1 ? "item" : "items"}.`
+          : "";
       await ctx.db.insert("notifications", {
         userId,
         type: "subscription_activated",
         title: "Premium Activated!",
-        body: "Welcome to Oja Premium. Enjoy all features!",
+        body: `Welcome to Oja Premium. Enjoy all features!${restoreSuffix}`,
         read: false,
         createdAt: now,
       });
@@ -284,6 +294,7 @@ export const handleSubscriptionUpdated = internalMutation({
     if (!sub) return;
 
     const previousPlan = sub.plan;
+    const previousStatus = sub.status;
     const newPlan = args.plan ?? sub.plan;
 
     await ctx.db.patch(sub._id, {
@@ -294,6 +305,30 @@ export const handleSubscriptionUpdated = internalMutation({
       currentPeriodEnd: args.currentPeriodEnd,
       updatedAt: Date.now(),
     });
+
+    // If the user just came back from expired/cancelled to active/trial, restore
+    // any pantry items that were pruned at the previous downgrade.
+    const wasPremium = previousStatus === "active" || previousStatus === "trial";
+    const isNowPremium = args.status === "active" || args.status === "trial";
+    const wasDowngraded = previousStatus === "expired" || previousStatus === "cancelled";
+    const isNowDowngraded = args.status === "expired" || args.status === "cancelled";
+    if (isNowPremium && wasDowngraded) {
+      await ctx.runMutation(internal.pantry.lifecycle.restoreDowngradePrunedItems, {
+        userId: sub.userId,
+      });
+    }
+    // Catch downgrades that arrive via `customer.subscription.updated` (e.g.
+    // cancel-at-period-end → cancelled, past_due → cancelled). Only skip prune
+    // for the trial→expired path — that's the one the trial-expiry cron
+    // handles. `trial → cancelled` must still prune here because `expireTrials`
+    // only scans `status === "trial"` rows, so a trial user who cancels
+    // mid-trial would otherwise keep all their items indefinitely.
+    const cronWillHandle = previousStatus === "trial" && args.status === "expired";
+    if (wasPremium && isNowDowngraded && !cronWillHandle) {
+      await ctx.runMutation(internal.pantry.lifecycle.prunePantryOnDowngrade, {
+        userId: sub.userId,
+      });
+    }
 
     // Award 500pt bonus when upgrading from monthly to annual
     if (previousPlan === "premium_monthly" && newPlan === "premium_annual") {
@@ -315,12 +350,36 @@ export const handleSubscriptionDeleted = internalMutation({
   handler: async (ctx, args) => {
     const sub = await ctx.db.query("subscriptions").withIndex("by_stripe_customer", q => q.eq("stripeCustomerId", args.stripeCustomerId)).first();
     if (!sub) return;
+    const wasPremium = sub.status === "active" || sub.status === "trial";
     await ctx.db.patch(sub._id, { status: "expired", updatedAt: Date.now() });
+
+    // Mirror the trial-expiry cron's prune behaviour so users who cancel mid-
+    // cycle also get their pantry trimmed to the free-tier cap. Skip if the
+    // sub was already downgraded — prune is idempotent but the extra query is
+    // wasteful.
+    let pruneArchived = 0;
+    let pruneCap = 0;
+    if (wasPremium) {
+      const pruneResult = await ctx.runMutation(
+        internal.pantry.lifecycle.prunePantryOnDowngrade,
+        { userId: sub.userId }
+      );
+      pruneArchived = pruneResult.archived;
+      pruneCap = pruneResult.cap;
+    }
+
+    const bodySuffix =
+      pruneArchived > 0
+        ? ` We archived ${pruneArchived} pantry ${pruneArchived === 1 ? "item" : "items"} to fit the free plan's ${pruneCap}-item limit — resubscribe to restore them instantly.`
+        : "";
     await ctx.db.insert("notifications", {
       userId: sub.userId,
-      type: "subscription_expired",
+      type: pruneArchived > 0 ? "subscription_expired_prune" : "subscription_expired",
       title: "Subscription Ended",
-      body: "Your premium subscription has ended. Upgrade to keep all features.",
+      body: `Your premium subscription has ended. Upgrade to keep all features.${bodySuffix}`,
+      ...(pruneArchived > 0
+        ? { data: { archived: pruneArchived, cap: pruneCap, deeplink: "/subscription" } }
+        : {}),
       read: false,
       createdAt: Date.now(),
     });

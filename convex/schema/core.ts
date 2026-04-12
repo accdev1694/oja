@@ -139,6 +139,12 @@ export const coreTables = {
     purchaseCount: v.optional(v.number()),      // rolling 90-day purchase count
     lastPurchasedAt: v.optional(v.number()),    // timestamp of last receipt match
     archivedAt: v.optional(v.number()),         // when auto/manually archived
+    archiveReason: v.optional(v.union(          // why the item was archived
+      v.literal("stale"),                         //   cron archived after 90 days OOS
+      v.literal("manual"),                        //   user archived from UI
+      v.literal("downgrade_prune"),               //   trial expired, pruned to free-tier cap
+      v.literal("cap_enforce"),                   //   enforceActiveCap bumped the oldest
+    )),
 
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -148,6 +154,7 @@ export const coreTables = {
     .index("by_user_stock", ["userId", "stockLevel"])
     .index("by_user_status", ["userId", "status"])
     .index("by_status_stock", ["status", "stockLevel"])
+    .index("by_user_archive_reason", ["userId", "archiveReason"])
     .index("by_created", ["createdAt"]),
 
   // Shopping lists

@@ -3,6 +3,7 @@ import { mutation, query } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import {
+  ACTIVE_PANTRY_CAP,
   requireUser,
   optionalUser,
   enforceActiveCap,
@@ -10,7 +11,7 @@ import {
   MutationCtx,
 } from "./helpers";
 import { getIconForItem } from "../iconMapping";
-import { canAddPantryItem } from "../lib/featureGating";
+import { canAddPantryItem, checkFeatureAccess } from "../lib/featureGating";
 import { isDuplicateItem } from "../lib/fuzzyMatch";
 import { toGroceryTitleCase } from "../lib/titleCase";
 import { cleanItemForStorage } from "../lib/itemNameParser";
@@ -328,14 +329,44 @@ export const addBatchFromScan = mutation({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
+    // Compute cap upfront once to avoid N+1 `canAddPantryItem` calls inside
+    // the loop. Track `activeCount` in-memory so per-item decisions are cheap
+    // and archived→active reactivations also respect the free-tier cap.
+    const { isPremium, features } = await checkFeatureAccess(ctx, user._id);
+    const freeCap = features.maxPantryItems;
+    const hasLimit = !isPremium && freeCap !== -1;
+    let activeCount = existing.filter((p) => p.status === "active").length;
+    const capMax = hasLimit ? freeCap : undefined;
+
     let added = 0;
     let restocked = 0;
+    let skippedCap = 0;
+    const skippedIndexes: number[] = [];
 
-    for (const item of args.items) {
-      const existingItem = existing.find((p) => isDuplicateItem(item.name, item.size, p.name, p.defaultSize));
+    for (let i = 0; i < args.items.length; i++) {
+      const item = args.items[i];
+      // Don't reactivate downgrade-pruned items via scanning — they should
+      // only come back through `restoreDowngradePrunedItems` on resubscribe.
+      // If the user is on free tier and scans a pruned item, we'll create a
+      // fresh active copy (subject to the cap); on resub the restore flow
+      // will dedup-merge the stale archived copy into the active one.
+      const existingItem = existing.find((p) =>
+        p.archiveReason !== "downgrade_prune" &&
+        isDuplicateItem(item.name, item.size, p.name, p.defaultSize)
+      );
+
+      // Both new inserts and archived→active reactivations grow activeCount,
+      // so both must be gated against the free-tier cap.
+      const willIncreaseActive = !existingItem || existingItem.status === "archived";
+      if (willIncreaseActive && hasLimit && activeCount >= freeCap) {
+        skippedCap++;
+        skippedIndexes.push(i);
+        continue;
+      }
 
       if (existingItem) {
         const cleaned = cleanItemForStorage(existingItem.name, item.size ?? existingItem.defaultSize, item.unit ?? existingItem.defaultUnit);
+        const wasArchived = existingItem.status === "archived";
         await ctx.db.patch(existingItem._id, {
           stockLevel: "stocked",
           ...(item.estimatedPrice != null ? { lastPrice: item.estimatedPrice, priceSource: "receipt" } : {}),
@@ -343,15 +374,17 @@ export const addBatchFromScan = mutation({
           ...(item.quantity ? { quantity: (existingItem.quantity ?? 0) + item.quantity } : {}),
           purchaseCount: (existingItem.purchaseCount ?? 0) + 1,
           lastPurchasedAt: now,
-          ...(existingItem.status === "archived" ? { status: "active", archivedAt: undefined } : {}),
+          ...(wasArchived ? { status: "active", archivedAt: undefined, archiveReason: undefined } : {}),
           updatedAt: now,
         });
         restocked++;
+        if (wasArchived) activeCount++;
       } else {
-        const access = await canAddPantryItem(ctx, user._id);
-        if (!access.allowed) continue;
-
-        await enforceActiveCap(ctx, user._id);
+        // 150-item hard ceiling is orthogonal to free-tier cap — only call
+        // `enforceActiveCap` when we're actually near it, not per-item.
+        if (activeCount >= ACTIVE_PANTRY_CAP) {
+          await enforceActiveCap(ctx, user._id);
+        }
 
         const cleaned = cleanItemForStorage(toGroceryTitleCase(item.name), item.size, item.unit);
         const normCat = normalizeCategory(item.category);
@@ -374,18 +407,27 @@ export const addBatchFromScan = mutation({
           updatedAt: now,
         });
         added++;
+        activeCount++;
       }
 
-      await enrichGlobalFromProductScan(ctx, item, user._id);
+      // Global enrichment is best-effort — never fail the whole batch because
+      // a single item couldn't be enriched into the global catalog.
+      try {
+        await enrichGlobalFromProductScan(ctx, item, user._id);
+      } catch (err) {
+        console.error(`[addBatchFromScan] enrichment failed for "${item.name}":`, err);
+      }
     }
 
     if (added > 0 || restocked > 0) {
       await ctx.runMutation(internal.insights.checkPantryAchievements, { userId: user._id });
     }
+    // Challenge counter only counts truly-new adds, not restocks — restocking
+    // an existing item doesn't progress the "Add 10 new items" challenge.
     if (added > 0) {
       await updateAddItemsChallenge(ctx, user._id, added);
     }
 
-    return { added, restocked };
+    return { added, restocked, skippedCap, skippedIndexes, capMax };
   },
 });

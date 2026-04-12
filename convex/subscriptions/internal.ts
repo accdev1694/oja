@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "../_generated/server";
+import { internal } from "../_generated/api";
 import { getTierFromScans } from "../lib/featureGating";
 
 // =============================================
@@ -49,17 +50,59 @@ export const expireTrials = internalMutation({
       .collect();
 
     let expired = 0;
+    let totalPruned = 0;
+    let failed = 0;
     for (const sub of trialSubs) {
-      if (sub.trialEndsAt && sub.trialEndsAt <= now) {
+      if (!sub.trialEndsAt || sub.trialEndsAt > now) continue;
+
+      // Isolate per-user work: a single bad subscription (e.g. orphaned user,
+      // broken pantry ref) must not halt expiry for every other trial user.
+      try {
         await ctx.db.patch(sub._id, {
           status: "expired",
           updatedAt: now,
         });
         expired++;
+
+        // Prune pantry down to free-tier cap and notify the user.
+        const pruneResult = await ctx.runMutation(
+          internal.pantry.lifecycle.prunePantryOnDowngrade,
+          { userId: sub.userId }
+        );
+        totalPruned += pruneResult.archived;
+
+        if (pruneResult.archived > 0) {
+          await ctx.db.insert("notifications", {
+            userId: sub.userId,
+            type: "trial_expired_prune",
+            title: "Trial ended — items archived",
+            body: `Your 7-day Premium trial ended. We archived ${pruneResult.archived} pantry ${pruneResult.archived === 1 ? "item" : "items"} to fit the free plan's ${pruneResult.cap}-item limit. Upgrade to Premium to restore them instantly.`,
+            data: {
+              archived: pruneResult.archived,
+              cap: pruneResult.cap,
+              deeplink: "/subscription",
+            },
+            read: false,
+            createdAt: now,
+          });
+        } else {
+          await ctx.db.insert("notifications", {
+            userId: sub.userId,
+            type: "trial_expired",
+            title: "Trial ended",
+            body: "Your 7-day Premium trial ended. Upgrade to keep unlimited pantry items, voice assistant, and all Premium features.",
+            data: { deeplink: "/subscription" },
+            read: false,
+            createdAt: now,
+          });
+        }
+      } catch (err) {
+        failed++;
+        console.error(`[expireTrials] failed for sub ${sub._id} (user ${sub.userId}):`, err);
       }
     }
 
-    return { expired };
+    return { expired, totalPruned, failed };
   },
 });
 

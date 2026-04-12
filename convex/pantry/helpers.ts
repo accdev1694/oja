@@ -63,6 +63,7 @@ export async function enforceActiveCap(ctx: MutationCtx, userId: Id<"users">) {
       await ctx.db.patch(archivable[0]._id, {
         status: "archived",
         archivedAt: Date.now(),
+        archiveReason: "cap_enforce",
         updatedAt: Date.now(),
       });
     }
