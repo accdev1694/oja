@@ -112,10 +112,9 @@ export default function ListsScreen() {
         />
       </AnimatedSection>
 
-      {/* Trial Nudge Banner */}
-      <AnimatedSection key={`nudge-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={50}>
-        <TrialNudgeBanner />
-      </AnimatedSection>
+      {/* Trial Nudge Banner — owns its own enter/exit animation, so it's not
+          wrapped in AnimatedSection (nested layout animations get swallowed). */}
+      <TrialNudgeBanner />
 
       {/* Seasonal Event Banner */}
       <AnimatedSection key={`event-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={75}>

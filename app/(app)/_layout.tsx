@@ -24,7 +24,6 @@ import {
   TAB_CONFIG,
   TAB_BAR_HEIGHT,
   ImpersonationBanner,
-  TrialNudgeBanner,
   colors,
   spacing,
   typography,

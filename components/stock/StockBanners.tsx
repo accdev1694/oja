@@ -47,10 +47,9 @@ export const StockBanners = React.memo(function StockBanners({
 }: StockBannersProps) {
   return (
     <>
-      {/* Trial Nudge Banner */}
-      <AnimatedSection key={`nudge-${pageAnimationKey}`} animation="fadeInDown" duration={400} delay={0}>
-        <TrialNudgeBanner />
-      </AnimatedSection>
+      {/* Trial Nudge Banner — owns its own enter/exit animation, so it's not
+          wrapped in AnimatedSection (nested layout animations get swallowed). */}
+      <TrialNudgeBanner />
 
       {/* Contextual Tips — when a flash message is active it preempts the
           regular TipBanner so only one insight occupies the slot at a time.
