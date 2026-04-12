@@ -302,7 +302,7 @@ export const scanProduct = action({
 The photo shows a physical product (front, back, or side) or loose items.
 
 FIELDS:
-- name: (string) Brand + product type ONLY. MAX 25 chars. No size, no weight, no marketing copy. If over 25 chars, summarize to brand + core product. e.g. "Cantu Leave-In Conditioner", "Tesco Semi-Skimmed Milk", "Walkers Crisps", "Chicken Breast".
+- name: (string) Product type + brand. MAX 25 chars. No size, no weight, no marketing copy. If over 25 chars, drop the brand. e.g. "Leave-In Conditioner Cantu", "Semi-Skimmed Milk Tesco", "Crisps Walkers", "Chicken Breast".
 - category: (string) One of: ${AI_CATEGORY_PROMPT}.
 - quantity: (number) Usually 1. Only use > 1 if you see multiple distinct packages of the exact same product.
 - size: (string or null) ONE measurement only. e.g. "500g", "2L", "4 pack", "2pt". null if not visible.
@@ -313,9 +313,9 @@ FIELDS:
 - confidence: (number 0-100)
 
 RULES:
-- "name" must contain ONLY brand + product type. Never include size, weight, or flavour descriptions.
+- "name" must be product type FIRST, then brand. Never include size, weight, or flavour descriptions. Product type must be semantically complete — e.g. "Shower Gel" not "Shower", "Washing Up Liquid" not "Washing Up", "Fabric Softener" not "Fabric". If the label only shows a partial name, infer the full product type from the product image, packaging shape, and category context.
 - "size" must be ONE metric measurement. Prefer: ml, L, g, kg, pints, pack. If label shows both metric and imperial (e.g. "227g (8oz)"), use ONLY the metric value ("227g"). Never include both.
-- Total display will be "{size} {name}" so keep both concise.
+- Total display will be "{size} {name}" so keep both concise. When truncated, product type is more important than brand.
 
 Return ONLY valid JSON.`;
 
