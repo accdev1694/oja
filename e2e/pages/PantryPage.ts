@@ -344,7 +344,7 @@ export class PantryPage {
       .getByText("Bakery", { exact: false })
       .count();
     const hasPantryStaples = await this.page
-      .getByText("Pantry Staples", { exact: false })
+      .getByText("Other", { exact: false })
       .count();
     const hasCondiments = await this.page
       .getByText("Condiments", { exact: false })

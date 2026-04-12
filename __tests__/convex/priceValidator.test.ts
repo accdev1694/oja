@@ -126,7 +126,7 @@ describe("priceValidator", () => {
     });
 
     it("should provide category-based defaults", () => {
-      const steak = getEmergencyPriceEstimate("Generic Steak", "Meat");
+      const steak = getEmergencyPriceEstimate("Generic Steak", "Meat & Seafood");
       expect(steak.price).toBe(4.00);
     });
 

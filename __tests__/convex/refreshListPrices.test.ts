@@ -229,7 +229,7 @@ describe("refreshListPrices — changes payload", () => {
           isChecked: false,
           estimatedPrice: 2.5,
           priceSource: "ai",
-          category: "Pantry Staples",
+          category: "Other",
         },
       ],
     });

@@ -82,11 +82,11 @@ test.describe("Suite 5: Pantry/Stock Management", () => {
     // Find a visible category header
     const categories = [
       "Dairy",
-      "Bakery",
-      "Produce",
-      "Pantry Staples",
+      "Bread & Bakery",
+      "Fruits & Vegetables",
+      "Other",
       "Frozen",
-      "Meat",
+      "Meat & Seafood",
       "Beverages",
       "Snacks",
     ];
@@ -402,7 +402,7 @@ test.describe("Suite 5: Pantry/Stock Management", () => {
     const catParent = firstCat.locator("xpath=ancestor::div[contains(@style, 'cursor')]").first();
     await catParent.click().catch(async () => {
       // Try clicking the category row directly
-      const catHeaders = ["Pantry Staples", "Dairy", "Uncategorized"];
+      const catHeaders = ["Other", "Dairy & Eggs", "Uncategorized"];
       for (const cat of catHeaders) {
         const catEl = page.getByText(cat, { exact: false }).first();
         if (await catEl.isVisible().catch(() => false)) {
